@@ -1455,7 +1455,7 @@ dev = ["pytest (>=7.0.0)", "setuptools (>=68.0.0)"]
 type = "git"
 url = "https://github.com/m3rlin45/libxrk.git"
 reference = "HEAD"
-resolved_reference = "ea356031fbb8217142497cc4797f02b78793345a"
+resolved_reference = "88a6056673d3e2e32327454d0971e41922654eb2"
 
 [[package]]
 name = "markupsafe"
