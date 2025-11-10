@@ -1,0 +1,18 @@
+[project]
+name = "motorsports-data-notebook"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Christopher Dewan",email = "chris.dewan@m3rlin.net"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+]
+
+[tool.poetry]
+packages = [{include = "motorsports_data_notebook", from = "src"}]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
