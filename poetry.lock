@@ -1447,6 +1447,7 @@ develop = false
 [package.dependencies]
 cython = ">=3.0.0"
 numpy = ">=1.26.0"
+pyarrow = ">=14.0.0"
 
 [package.extras]
 dev = ["pytest (>=7.0.0)", "setuptools (>=68.0.0)"]
@@ -1455,7 +1456,7 @@ dev = ["pytest (>=7.0.0)", "setuptools (>=68.0.0)"]
 type = "git"
 url = "https://github.com/m3rlin45/libxrk.git"
 reference = "HEAD"
-resolved_reference = "88a6056673d3e2e32327454d0971e41922654eb2"
+resolved_reference = "91833022522d3d584560d405b6cf8b17e7824ce4"
 
 [[package]]
 name = "markupsafe"
