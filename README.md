@@ -1,6 +1,6 @@
 # Motorsports Data Notebook
 
-An easy toolbox to slice and dice data from AiM motorsports loggers in a comfortable Jupyter-based environment. This project uses Poetry for dependency management and ships with a curated data stack: JupyterLab, pandas, NumPy, PyArrow, matplotlib, seaborn, and Plotly.
+An easy toolbox to slice and dice data from AiM motorsports loggers in a comfortable Jupyter-based environment. This project uses Poetry for dependency management and ships with a curated data stack: JupyterLab, pandas, NumPy, PyArrow, matplotlib, seaborn, and Plotly, plus **libxrk** for reading AiM `.xrk` files.
 
 ## Quick start
 
@@ -25,7 +25,24 @@ An easy toolbox to slice and dice data from AiM motorsports loggers in a comfort
 
 ## Use it
 
-- Launch JupyterLab:
+### For Notebook Users (Quick Start) 🏁
+
+**Start here!** Navigate to the `workspace/` folder - this is your personal sandbox:
+
+```bash
+cd workspace
+poetry run jupyter lab
+```
+
+The `workspace/` directory contains:
+- `starter_notebook.ipynb` - Example workflows and tutorials
+- Your analysis notebooks (create as many as you need!)
+- Your data files (`.xrk`, `.csv`, `.parquet`, etc.)
+- **Everything here is git-ignored** - it's yours!
+
+### For Developers
+
+- Launch JupyterLab from project root:
 
   ```bash
   poetry run jupyter lab
@@ -43,6 +60,7 @@ An easy toolbox to slice and dice data from AiM motorsports loggers in a comfort
 
 Core packages pinned by Poetry:
 
+- **libxrk** (AiM XRK/XRZ file reader)
 - JupyterLab & Notebook (interactive environment)
 - ipykernel (dedicated kernel)
 - pandas (tabular data)
@@ -51,47 +69,24 @@ Core packages pinned by Poetry:
 - matplotlib & seaborn (static visualization)
 - plotly (interactive visualization)
 
-## Example: quick data wrangling & plot
-
-Create a new notebook and try:
+## Example: Loading AiM data with libxrk
 
 ```python
-import numpy as np
+from libxrk import AIMXRK
 import pandas as pd
-import pyarrow as pa
-import pyarrow.parquet as pq
-import matplotlib.pyplot as plt
-import seaborn as sns
 
-# Fake lap data example
-np.random.seed(42)
-df = pd.DataFrame({
-    "lap": np.arange(1, 11),
-    "lap_time_s": np.random.normal(loc=90, scale=2.5, size=10).round(3),
-    "max_speed_kph": np.random.normal(loc=180, scale=5, size=10).round(1),
-})
+# Load an AiM .xrk file
+xrk = AIMXRK('path/to/your/file.xrk')
 
-# Save/read with Parquet
-table = pa.Table.from_pandas(df)
-pq.write_table(table, "laps.parquet")
-df2 = pq.read_table("laps.parquet").to_pandas()
-
-print(df2.head())
-
-# Simple visualization
-plt.figure(figsize=(6, 3))
-sns.lineplot(data=df2, x="lap", y="lap_time_s", marker="o")
-plt.title("Lap Times")
-plt.xlabel("Lap")
-plt.ylabel("Time (s)")
-plt.tight_layout()
-plt.show()
+# Access data as pandas DataFrames
+# (See starter_notebook.ipynb for detailed examples)
 ```
 
 ## Tips for AiM logger data
 
-- AiM exports can be converted to CSV or directly to Parquet via pandas & PyArrow. For large logs, prefer Parquet for speed & size.
-- Consider organizing raw logs under `data/raw/` and processed tables under `data/processed/` with notebooks in `notebooks/`.
+- Use `libxrk` to directly read `.xrk` and `.xrz` files
+- For large datasets, save processed data as `.parquet` for fast reloading
+- Keep your raw AiM files and notebooks in `workspace/` - they won't be committed to git
 
 ## Common commands
 
@@ -102,11 +97,14 @@ poetry install
 # Add a new package
 poetry add <package>
 
-# Update packages (watch reproducibility)
+# Update packages
 poetry update
 
-# Run Python / Jupyter
-poetry run python -V
+# Update libxrk specifically
+poetry update libxrk
+
+# Run Python / Jupyter from workspace
+cd workspace
 poetry run jupyter lab
 ```
 

@@ -17,6 +17,7 @@ dependencies = [
     "matplotlib (>=3.10.7,<4.0.0)",
     "seaborn (>=0.13.2,<0.14.0)",
     "plotly (>=6.4.0,<7.0.0)",
+    "poethepoet (>=0.24.0,<1.0.0)",
     "libxrk @ git+https://github.com/m3rlin45/libxrk.git"
 ]
 
@@ -26,3 +27,8 @@ packages = [{include = "motorsports_data_notebook", from = "src"}]
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.poe.tasks]
+clean = { shell = "rm -f workspace/*.* && cp workspace_template/starter_notebook.ipynb workspace/starter_notebook.ipynb && cp workspace_template/'CMD_Inferno 86_Fuji GP Sh_Generic testing_a_2248.xrk' workspace/'CMD_Inferno 86_Fuji GP Sh_Generic testing_a_2248.xrk'", help = "Clean workspace and copy fresh starter notebook" }
+run = { cmd = "jupyter lab workspace/starter_notebook.ipynb", help = "Start Jupyter notebook" }
+run_clean = ["clean", "run"]

@@ -51,9 +51,7 @@ workspace/
 # Data files
 *.csv
 *.parquet
-*.xrk
-*.xrz
-*.drk
+
 
 # Poetry
 poetry.lock
