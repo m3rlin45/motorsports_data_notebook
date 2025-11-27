@@ -43,7 +43,22 @@ The `workspace/` directory contains:
 
 ### JupyterLite (Static Web Deployment) 🌐
 
-You can also build and serve this project as a static JupyterLite site that runs entirely in the browser:
+You can also build and serve this project as a static JupyterLite site that runs entirely in the browser.
+
+#### GitHub Pages Deployment
+
+This project automatically deploys to GitHub Pages:
+
+- **Preview builds**: Every push to `master` deploys to the `github-pages-preview` environment
+- **Release builds**: Tagged releases (`v*`) deploy to the production `github-pages` environment
+
+To create a release:
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+#### Local Development
 
 ```bash
 # Install JupyterLite dependencies (one time)
