@@ -4019,4 +4019,4 @@ jupyterlite = ["jupyterlite-core", "jupyterlite-pyodide-kernel", "pyodide-build"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "d1c7cac4606b8c5ed818c085f85c3431998da315ceea0ecc0c404c2af35fc61e"
+content-hash = "a68d608ef82d63ddc2a031a01617563bc6fab6c8ac321b92e5884b3e6041d3a8"
