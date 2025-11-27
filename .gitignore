@@ -19,6 +19,8 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+.cache/
+pypi/
 
 # Virtual environments
 .env
@@ -52,6 +54,11 @@ workspace/
 *.csv
 *.parquet
 
+# JupyterLite build output
+dist/
+_output/
 
 # Poetry
 poetry.lock
+
+.jupyterlite.doit.db

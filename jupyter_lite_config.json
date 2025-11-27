@@ -1,0 +1,9 @@
+{
+  "LiteBuildConfig": {
+    "contents": ["workspace_template"],
+    "output_dir": "dist"
+  },
+  "PyodideAddon": {
+    "pyodide_url": "https://github.com/pyodide/pyodide/releases/download/0.27.6/pyodide-0.27.6.tar.bz2"
+  }
+}

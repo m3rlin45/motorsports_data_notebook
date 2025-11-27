@@ -41,6 +41,55 @@ The `workspace/` directory contains:
 - Your data files (`.xrk`, `.csv`, `.parquet`, etc.)
 - **Everything here is git-ignored** - it's yours!
 
+### JupyterLite (Static Web Deployment) 🌐
+
+You can also build and serve this project as a static JupyterLite site that runs entirely in the browser:
+
+```bash
+# Install JupyterLite dependencies (one time)
+poetry install --extras jupyterlite
+
+# Build the static site (uses pre-built wheels from pypi/)
+poetry run poe build_lite
+
+# Serve locally for testing
+poetry run poe serve_lite
+
+# Or do both at once
+poetry run poe build_and_serve_lite
+```
+
+#### Building Pyodide Wheels (Advanced)
+
+To rebuild all wheels including `libxrk` for Pyodide (required after updating dependencies):
+
+1. Install the Emscripten SDK (one time):
+   ```bash
+   # Install pyodide-build and get the required Emscripten version
+   pip install pyodide-build
+   pyodide xbuildenv install 0.27.6
+   
+   # Clone and install emsdk
+   git clone https://github.com/emscripten-core/emsdk.git ~/emsdk
+   cd ~/emsdk
+   EMSCRIPTEN_VERSION=$(pyodide config get emscripten_version)
+   python3 emsdk.py install $EMSCRIPTEN_VERSION
+   python3 emsdk.py activate $EMSCRIPTEN_VERSION
+   ```
+
+2. Build all wheels and the site:
+   ```bash
+   poetry run poe build_lite_full
+   ```
+
+The built site will be in the `dist/` directory and can be deployed to any static hosting service (GitHub Pages, Netlify, Vercel, etc.). The site includes:
+- All notebooks from `workspace_template/`
+- All helper functions from the `motorsports_data_notebook` package  
+- Pre-built `libxrk` wheel compiled for Pyodide/WebAssembly
+- A Python runtime that runs entirely in the browser (via Pyodide)
+
+**Note:** JupyterLite uses Pyodide (Python in WebAssembly) which has some limitations compared to native Python. Not all packages may be available.
+
 ## Helper Functions 🛠️
 
 The package includes useful helper functions for common motorsports data analysis tasks:
