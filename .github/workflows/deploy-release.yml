@@ -1,9 +1,8 @@
 name: Deploy Release to GitHub Pages
 
 on:
-  push:
-    tags:
-      - 'v*'
+  release:
+    types: [published]
 
 # Allow only one concurrent deployment
 concurrency:

@@ -50,12 +50,11 @@ You can also build and serve this project as a static JupyterLite site that runs
 This project automatically deploys to GitHub Pages:
 
 - **Preview builds**: Every push to `master` deploys to the `github-pages-preview` environment
-- **Release builds**: Tagged releases (`v*`) deploy to the production `github-pages` environment
+- **Release builds**: Published GitHub releases deploy to the production `github-pages` environment
 
-To create a release:
+To create a release, use the GitHub UI (Releases → Create a new release) or the CLI:
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+gh release create v1.0.0 --title "v1.0.0" --notes "Release notes here"
 ```
 
 #### Local Development
