@@ -39,10 +39,20 @@ build-backend = "poetry.core.masonry.api"
 clean = { shell = "rm -f workspace/*.* && cp workspace_template/starter_notebook.ipynb workspace/starter_notebook.ipynb && cp workspace_template/'CMD_Inferno 86_Fuji GP Sh_Generic testing_a_2248.xrk' workspace/'CMD_Inferno 86_Fuji GP Sh_Generic testing_a_2248.xrk'", help = "Clean workspace and copy fresh starter notebook" }
 run = { cmd = "jupyter lab workspace/starter_notebook.ipynb", help = "Start Jupyter notebook" }
 run_clean = ["clean", "run"]
-build_wheel = { shell = "poetry build -f wheel && mkdir -p pypi && cp dist/motorsports_data_notebook*.whl pypi/", help = "Build motorsports_data_notebook wheel" }
-build_libxrk_pyodide = { shell = "rm -rf /tmp/libxrk && git clone --depth 1 https://github.com/m3rlin45/libxrk.git /tmp/libxrk && cd /tmp/libxrk && export PATH=\"$HOME/emsdk:$HOME/emsdk/upstream/emscripten:$HOME/emsdk/node/22.16.0_64bit/bin:$PATH\" && pyodide build && mkdir -p $OLDPWD/pypi && cp dist/*.whl $OLDPWD/pypi/", help = "Build libxrk wheel for Pyodide (requires emsdk installed)" }
+
+# JupyterLite wheel building tasks
+build_wheel = { shell = "poetry build -f wheel && python scripts/build_lite_wheel.py", help = "Build motorsports_data_notebook wheel (no deps for JupyterLite)" }
+_clone_libxrk = { shell = "rm -rf build/libxrk && mkdir -p build && git clone --depth 1 https://github.com/m3rlin45/libxrk.git build/libxrk", help = "Clone libxrk to build directory" }
+_build_libxrk_pyodide = { shell = "cd build/libxrk && export PATH=\"$HOME/emsdk:$HOME/emsdk/upstream/emscripten:$HOME/emsdk/node/22.16.0_64bit/bin:$PATH\" && pyodide build", help = "Build libxrk for Pyodide" }
+_copy_libxrk_wheel = { shell = "mkdir -p pypi && cp build/libxrk/dist/*.whl pypi/", help = "Copy libxrk wheel to pypi" }
+build_libxrk_pyodide = { sequence = ["_clone_libxrk", "_build_libxrk_pyodide", "_copy_libxrk_wheel"], help = "Build libxrk wheel for Pyodide (requires emsdk installed)" }
 build_wheels_lite = ["build_wheel", "build_libxrk_pyodide"]
+
+# JupyterLite site building tasks  
 build_lite = { shell = "rm -rf dist && jupyter lite build --contents workspace_template --output-dir dist", help = "Build JupyterLite static site" }
 build_lite_full = ["build_wheels_lite", "build_lite"]
-serve_lite = { shell = "jupyter lite serve --output-dir dist", help = "Serve JupyterLite site locally" }
+serve_lite = { cmd = "jupyter lite serve --output-dir dist", help = "Serve JupyterLite site locally" }
 build_and_serve_lite = ["build_lite_full", "serve_lite"]
+
+# Cleanup tasks
+clean_build = { shell = "rm -rf build/ pypi/ dist/", help = "Clean all build artifacts" }
