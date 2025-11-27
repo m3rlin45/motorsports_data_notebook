@@ -25,7 +25,7 @@ dependencies = [
 jupyterlite = [
     "jupyterlite-core==0.6.0",
     "jupyterlite-pyodide-kernel==0.6.0",
-    "pyodide-build>=0.29.0"
+    "pyodide-build==0.27.3"
 ]
 
 [tool.poetry]
