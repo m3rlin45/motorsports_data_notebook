@@ -48,6 +48,8 @@ def get_best_lap(laps_df):
     """
     Find the best (fastest) lap by duration.
     
+    Excludes the first and last laps to avoid pit entry/exit laps.
+    
     Parameters
     ----------
     laps_df : pandas.DataFrame
@@ -61,10 +63,15 @@ def get_best_lap(laps_df):
     if not {'start_time','end_time'}.issubset(laps_df.columns):
         raise ValueError("Expected start_time and end_time columns in laps table")
     
-    laps_with_duration = laps_df.copy()
-    laps_with_duration['lap_duration_ms'] = laps_with_duration['end_time'] - laps_with_duration['start_time']
-    best_idx = laps_with_duration['lap_duration_ms'].idxmin()
-    return laps_with_duration.loc[best_idx]
+    if len(laps_df) <= 2:
+        raise ValueError("Need at least 3 laps to exclude first and last laps")
+    
+    # Exclude first and last laps
+    laps_subset = laps_df.iloc[1:-1].copy()
+    
+    laps_subset['lap_duration_ms'] = laps_subset['end_time'] - laps_subset['start_time']
+    best_idx = laps_subset['lap_duration_ms'].idxmin()
+    return laps_subset.loc[best_idx]
 
 
 def compute_start_line(lat, lon, ahead_points=100, scale=0.02):
