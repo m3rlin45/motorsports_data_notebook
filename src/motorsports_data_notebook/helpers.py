@@ -1,12 +1,47 @@
-"""
-Helper functions for motorsports data analysis.
+"""Helper functions for motorsports data analysis.
 
 This module provides utility functions for working with lap data and creating
 GPS track visualizations.
 """
 
 import math
+import sys
+
 import plotly.graph_objects as go
+import plotly.io as pio
+
+
+def show_fig(fig):
+    """
+    Display a Plotly figure with automatic environment detection.
+    
+    Handles both standard JupyterLab and JupyterLite (Pyodide) environments.
+    In JupyterLite, figures are rendered via HTML since the standard Plotly
+    renderer is not available.
+    
+    Parameters
+    ----------
+    fig : plotly.graph_objs.Figure
+        The Plotly figure to display.
+        
+    Returns
+    -------
+    None
+        Displays the figure inline.
+        
+    Examples
+    --------
+    >>> fig = px.scatter(df, x='x', y='y')
+    >>> show_fig(fig)
+    """
+    if 'pyodide' in sys.modules:
+        # In Pyodide/JupyterLite, use HTML display
+        from IPython.display import HTML, display
+        html = pio.to_html(fig, full_html=False, include_plotlyjs='cdn')
+        display(HTML(html))
+    else:
+        # Standard environment
+        fig.show()
 
 
 def get_best_lap(laps_df):

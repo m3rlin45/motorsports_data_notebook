@@ -49,8 +49,9 @@ build_libxrk_pyodide = { sequence = ["_download_libxrk", "_build_libxrk_pyodide"
 build_wheels_lite = ["build_wheel", "build_libxrk_pyodide"]
 
 # JupyterLite site building tasks  
-build_lite = { shell = "rm -rf dist && jupyter lite build --contents workspace_template --output-dir dist", help = "Build JupyterLite static site" }
-build_lite_full = ["build_wheels_lite", "build_lite"]
+_prepare_lite_contents = { shell = "rm -rf .lite_contents && mkdir -p .lite_contents && cp workspace_template/* .lite_contents/ && VERSION=$(poetry version -s) && mv .lite_contents/starter_notebook.ipynb \".lite_contents/starter_notebook_v${VERSION}.ipynb\"", help = "Prepare contents with versioned notebook" }
+build_lite = { shell = "rm -rf dist && jupyter lite build --contents .lite_contents --output-dir dist && rm -rf .lite_contents", help = "Build JupyterLite static site" }
+build_lite_full = ["build_wheels_lite", "_prepare_lite_contents", "build_lite"]
 serve_lite = { cmd = "jupyter lite serve --output-dir dist", help = "Serve JupyterLite site locally" }
 build_and_serve_lite = ["build_lite_full", "serve_lite"]
 

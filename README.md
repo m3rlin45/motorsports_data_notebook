@@ -108,6 +108,17 @@ The built site will be in the `dist/` directory and can be deployed to any stati
 
 The package includes useful helper functions for common motorsports data analysis tasks:
 
+### `show_fig(fig)`
+Displays a Plotly figure with automatic environment detection. Works seamlessly in both standard JupyterLab and JupyterLite (Pyodide) environments.
+
+```python
+from motorsports_data_notebook import show_fig
+import plotly.express as px
+
+fig = px.scatter(df, x='x', y='y')
+show_fig(fig)  # Works in both JupyterLab and JupyterLite!
+```
+
 ### `get_best_lap(laps_df)`
 Finds the fastest lap from a laps DataFrame by duration.
 
