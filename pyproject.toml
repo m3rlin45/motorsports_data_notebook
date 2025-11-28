@@ -1,6 +1,6 @@
 [project]
 name = "motorsports-data-notebook"
-version = "0.2.0"
+version = "0.3.0"
 description = ""
 authors = [
     {name = "Christopher Dewan",email = "chris.dewan@m3rlin.net"}
@@ -18,7 +18,7 @@ dependencies = [
     "seaborn (>=0.13.2,<0.14.0)",
     "plotly (>=6.4.0,<7.0.0)",
     "poethepoet (>=0.24.0,<1.0.0)",
-    "libxrk>=0.2.0"
+    "libxrk>=0.3.0"
 ]
 
 [project.optional-dependencies]
@@ -36,7 +36,7 @@ requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poe.tasks]
-clean = { shell = "rm -f workspace/*.* && cp workspace_template/starter_notebook.ipynb workspace/starter_notebook.ipynb && cp workspace_template/'CMD_Inferno 86_Fuji GP Sh_Generic testing_a_2248.xrk' workspace/'CMD_Inferno 86_Fuji GP Sh_Generic testing_a_2248.xrk'", help = "Clean workspace and copy fresh starter notebook" }
+clean = { shell = "rm -f workspace/*.* && cp workspace_template/starter_notebook.ipynb workspace/starter_notebook.ipynb && cp workspace_template/'CMD_Inferno 86_Fuji GP Sh_Generic testing_a_2248.xrz' workspace/'CMD_Inferno 86_Fuji GP Sh_Generic testing_a_2248.xrz'", help = "Clean workspace and copy fresh starter notebook" }
 run = { cmd = "jupyter lab workspace/starter_notebook.ipynb", help = "Start Jupyter notebook" }
 run_clean = ["clean", "run"]
 
@@ -49,9 +49,8 @@ build_libxrk_pyodide = { sequence = ["_download_libxrk", "_build_libxrk_pyodide"
 build_wheels_lite = ["build_wheel", "build_libxrk_pyodide"]
 
 # JupyterLite site building tasks  
-_prepare_lite_contents = { shell = "rm -rf .lite_contents && mkdir -p .lite_contents && cp workspace_template/* .lite_contents/ && VERSION=$(poetry version -s) && mv .lite_contents/starter_notebook.ipynb \".lite_contents/starter_notebook_v${VERSION}.ipynb\"", help = "Prepare contents with versioned notebook" }
-build_lite = { shell = "rm -rf dist && jupyter lite build --contents .lite_contents --output-dir dist && rm -rf .lite_contents", help = "Build JupyterLite static site" }
-build_lite_full = ["build_wheels_lite", "_prepare_lite_contents", "build_lite"]
+build_lite = { shell = "rm -rf .lite_contents dist && mkdir -p .lite_contents && cp workspace_template/* .lite_contents/ && VERSION=$(poetry version -s) && mv .lite_contents/starter_notebook.ipynb \".lite_contents/starter_notebook_v${VERSION}.ipynb\" && jupyter lite build --contents .lite_contents --output-dir dist && rm -rf .lite_contents", help = "Build JupyterLite static site with versioned notebook" }
+build_lite_full = ["build_wheels_lite", "build_lite"]
 serve_lite = { cmd = "jupyter lite serve --output-dir dist", help = "Serve JupyterLite site locally" }
 build_and_serve_lite = ["build_lite_full", "serve_lite"]
 

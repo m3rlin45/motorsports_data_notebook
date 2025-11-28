@@ -1,6 +1,5 @@
 {
   "LiteBuildConfig": {
-    "contents": ["workspace_template"],
     "output_dir": "dist"
   },
   "PyodideAddon": {
