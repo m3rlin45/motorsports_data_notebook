@@ -7,7 +7,9 @@ from .helpers import (
     plot_lap_gps,
     gps_to_local_xy,
     compute_curvature,
+    compute_lap_distance,
     identify_corners,
+    identify_corners_from_curvature,
     Corner,
 )
 
@@ -18,6 +20,8 @@ __all__ = [
     'plot_lap_gps',
     'gps_to_local_xy',
     'compute_curvature',
+    'compute_lap_distance',
     'identify_corners',
+    'identify_corners_from_curvature',
     'Corner',
 ]
