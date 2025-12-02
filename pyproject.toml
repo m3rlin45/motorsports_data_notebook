@@ -22,6 +22,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+dev = [
+    "black>=25.11.0",
+    "mypy>=1.18.0",
+    "nbqa>=1.9.0",
+    "pandas-stubs>=2.0.0",
+    "types-seaborn>=0.13.0",
+]
 jupyterlite = [
     "jupyterlite-core==0.6.0",
     "jupyterlite-pyodide-kernel==0.6.0",
@@ -35,7 +42,41 @@ packages = [{include = "motorsports_data_notebook", from = "src"}]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
+[tool.black]
+line-length = 100
+target-version = ['py312']
+include = '\.pyi?$'
+extend-exclude = '/(\.eggs|\.git|\.hg|\.mypy_cache|\.tox|\.venv|build|dist)/'
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+check_untyped_defs = true
+no_implicit_optional = true
+exclude = ["^build/", "^dist/"]
+
+[[tool.mypy.overrides]]
+module = [
+    "plotly.*",
+    "matplotlib.*",
+    "libxrk.*",
+    "numpy.*",
+]
+ignore_missing_imports = true
+
 [tool.poe.tasks]
+# Linting and type checking tasks
+format = { cmd = "black src/", help = "Format source code with black" }
+lint = { cmd = "black --check src/", help = "Check source code formatting with black" }
+typecheck = { cmd = "mypy src/", help = "Type check source code with mypy" }
+format-notebooks = { cmd = "nbqa black workspace_template/", help = "Format notebooks with black" }
+lint-notebooks = { cmd = "nbqa black --check workspace_template/", help = "Check notebook formatting with black" }
+typecheck-notebooks = { cmd = "nbqa mypy workspace_template/", help = "Type check notebooks with mypy" }
+check = { sequence = ["lint", "typecheck", "lint-notebooks", "typecheck-notebooks"], help = "Run all linting and type checking" }
+
+# Workspace tasks
 clean = { shell = "rm -f workspace/*.* && cp workspace_template/basics.ipynb workspace/ && cp workspace_template/tire_analysis.ipynb workspace/ && cp workspace_template/track_analysis.ipynb workspace/ && cp workspace_template/consistency_analysis.ipynb workspace/ && cp workspace_template/'CMD_Inferno 86_Fuji GP Sh_Generic testing_a_2248.xrz' workspace/", help = "Clean workspace and copy fresh notebooks" }
 run = { cmd = "jupyter lab workspace/", help = "Start Jupyter notebook" }
 run_clean = ["clean", "run"]
