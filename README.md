@@ -60,9 +60,33 @@ For contributors or advanced users who want to run locally or modify the code.
 # Install dependencies
 poetry install
 
+# Install dev dependencies (linting, type checking)
+poetry install --extras dev
+
 # Start JupyterLab with the workspace
 poetry run poe run_clean
 ```
+
+### Code Quality
+
+This project uses [Black](https://black.readthedocs.io/) for formatting and [mypy](https://mypy.readthedocs.io/) for type checking.
+
+```bash
+# Run all checks (linting + type checking for source and notebooks)
+poetry run poe check
+
+# Format code
+poetry run poe format            # Format source files
+poetry run poe format-notebooks  # Format notebooks
+
+# Individual checks
+poetry run poe lint              # Check source formatting
+poetry run poe typecheck         # Type check source files
+poetry run poe lint-notebooks    # Check notebook formatting
+poetry run poe typecheck-notebooks  # Type check notebooks
+```
+
+These checks run automatically on all PRs and pushes to `master` via GitHub Actions.
 
 ### Building the JupyterLite Site
 
