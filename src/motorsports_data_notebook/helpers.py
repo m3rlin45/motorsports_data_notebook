@@ -329,6 +329,43 @@ def plot_lap_gps(lat, lon, color_channels, width=800, height=800, title=None):
     return fig
 
 
+def compute_lap_distance(timecodes, speed):
+    """
+    Compute cumulative distance traveled along the lap.
+    
+    Integrates speed over time to compute distance at each point.
+    
+    Parameters
+    ----------
+    timecodes : pandas.Series or array-like
+        Timestamps in milliseconds.
+    speed : pandas.Series or array-like
+        Speed values in m/s.
+        
+    Returns
+    -------
+    numpy.ndarray
+        Cumulative distance in meters at each point.
+        
+    Examples
+    --------
+    >>> distance_m = compute_lap_distance(lap_data['timecodes'], lap_data['GPS Speed'])
+    """
+    timecodes = pd.Series(timecodes)
+    speed = pd.Series(speed)
+    
+    # Convert timecodes to seconds from start
+    time_s = (timecodes - timecodes.iloc[0]) / 1000.0
+    
+    # Compute time deltas
+    dt = time_s.diff().fillna(0)
+    
+    # Integrate speed over time to get distance
+    distance_m = (speed * dt).cumsum()
+    
+    return distance_m.values
+
+
 def gps_to_local_xy(lat, lon):
     """
     Convert GPS lat/lon to local XY coordinates in meters.
@@ -441,8 +478,84 @@ def compute_curvature(x, y, pos_smooth_window=15, curv_smooth_window=30):
     return curvature, signed_curvature, radius
 
 
-def identify_corners(distance, curvature, signed_curvature, threshold=0.006, 
-                     min_corner_length=15, min_gap=80) -> list[Corner]:
+def identify_corners(
+    lat, 
+    lon, 
+    threshold: float = 0.006,
+    min_corner_length: float = 15,
+    min_gap: float = 80,
+    pos_smooth_window: int = 15,
+    curv_smooth_window: int = 30,
+) -> list[Corner]:
+    """
+    Identify corners from GPS latitude/longitude data.
+    
+    This is a convenience function that performs all the steps needed to go from
+    raw GPS coordinates to detected corners:
+    1. Convert GPS to local XY coordinates
+    2. Compute curvature from XY positions
+    3. Identify corners from curvature
+    
+    Parameters
+    ----------
+    lat : pandas.Series or array-like
+        Latitude values in degrees.
+    lon : pandas.Series or array-like
+        Longitude values in degrees.
+    threshold : float, default=0.006
+        Minimum curvature to consider as corner (1/m). 0.006 ≈ 167m radius.
+    min_corner_length : float, default=15
+        Minimum corner length in meters.
+    min_gap : float, default=80
+        Minimum gap between same-direction corners to keep them separate.
+        Corners closer than this with same direction will be merged.
+    pos_smooth_window : int, default=15
+        Rolling average window for position smoothing in curvature computation.
+    curv_smooth_window : int, default=30
+        Rolling average window for curvature output smoothing.
+        
+    Returns
+    -------
+    list[Corner]
+        List of Corner dataclass instances.
+        
+    Examples
+    --------
+    >>> corners = identify_corners(
+    ...     lat=lap_data['GPS Latitude'],
+    ...     lon=lap_data['GPS Longitude']
+    ... )
+    >>> for c in corners:
+    ...     print(f"{c.name} ({c.direction}): {c.start_dist:.0f}m - {c.end_dist:.0f}m")
+    """
+    # Step 1: Convert GPS to local XY coordinates
+    x, y = gps_to_local_xy(lat, lon)
+    
+    # Step 2: Compute distance along track
+    dx = np.diff(x, prepend=x[0])
+    dy = np.diff(y, prepend=y[0])
+    distance = np.cumsum(np.sqrt(dx**2 + dy**2))
+    
+    # Step 3: Compute curvature
+    curvature, signed_curvature, _ = compute_curvature(
+        x, y, 
+        pos_smooth_window=pos_smooth_window, 
+        curv_smooth_window=curv_smooth_window
+    )
+    
+    # Step 4: Identify corners from curvature
+    return identify_corners_from_curvature(
+        distance=distance,
+        curvature=curvature,
+        signed_curvature=signed_curvature,
+        threshold=threshold,
+        min_corner_length=min_corner_length,
+        min_gap=min_gap,
+    )
+
+
+def identify_corners_from_curvature(distance, curvature, signed_curvature, threshold=0.006, 
+                                    min_corner_length=15, min_gap=80) -> list[Corner]:
     """
     Identify corners where curvature exceeds threshold.
     
@@ -472,7 +585,7 @@ def identify_corners(distance, curvature, signed_curvature, threshold=0.006,
         
     Examples
     --------
-    >>> corners = identify_corners(
+    >>> corners = identify_corners_from_curvature(
     ...     distance=lap_data['distance_m'].values,
     ...     curvature=lap_data['curvature'].values,
     ...     signed_curvature=lap_data['signed_curvature'].values
@@ -620,7 +733,7 @@ def create_track_segments(
     Parameters
     ----------
     corners : list[Corner]
-        List of detected corners from identify_corners().
+        List of detected corners from identify_corners() or identify_corners_from_curvature().
     braking_zones : list[tuple[float, float]]
         List of (start_dist, end_dist) tuples for braking zones.
     accel_zones : list[tuple[float, float]]
