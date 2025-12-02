@@ -1,178 +1,98 @@
 # Inferno Racing Notebook Analysis
 
-An easy toolbox to slice and dice data from AiM motorsports loggers in a comfortable Jupyter-based environment. This project uses **libxrk** for reading AiM `.xrk` files directly.
+Analyze AiM motorsports telemetry data in your browser — no software installation required.
 
-## Quick start
+## 🏁 Get Started Now
+
+**[Launch the Analysis Tool →](https://analysis-preview.inferno.racing/)**
+
+Upload your `.xrk` or `.xrz` files and start analyzing immediately.
+
+---
+
+## How It Works
+
+This tool runs entirely in your browser using [JupyterLite](https://jupyterlite.readthedocs.io/) and [Pyodide](https://pyodide.org/) (Python compiled to WebAssembly).
+
+### Storage & Privacy
+
+- **Your data stays local**: All files and computations happen in your browser — nothing is uploaded to any server
+- **Browser storage**: Your notebooks and data files are saved in your browser's IndexedDB storage
+- **Persistent between sessions**: Your work persists until you clear browser data
+
+### Troubleshooting
+
+If you experience issues (notebooks not loading, kernel crashes, etc.), try clearing your browser storage:
+
+1. In JupyterLite, go to **Help** → **Clear Browser Data**
+2. Refresh the page
+
+---
+
+## Included Notebooks
+
+### 📊 Basics
+Load telemetry data, view lap times, and visualize speed and driver inputs on GPS track maps.
+
+### 🛞 Tire Analysis
+Visualize tire temperature distribution across all four tires with heatmaps, correlated with speed, G-forces, and driver inputs.
+
+### 🏎️ Track Analysis
+Automatically detect corners, braking zones, and acceleration zones from GPS data. View color-coded track segmentation.
+
+### 📈 Consistency Analysis
+Measure lap-to-lap variation in braking points, corner speeds, and throttle application with box plots and summary statistics.
+
+---
+
+## Local Development
+
+For contributors or advanced users who want to run locally or modify the code.
 
 ### Prerequisites
 
 - Python 3.12+
-- Poetry 2.x (https://python-poetry.org/docs/#installation)
+- [Poetry 2.x](https://python-poetry.org/docs/#installation)
 
-### Setup (one time)
-
-1. Install dependencies and create the virtual environment:
-
-   ```bash
-   poetry install
-   ```
-
-2. (If needed) Register the Jupyter kernel for this environment:
-
-   ```bash
-   poetry run python -m ipykernel install --user --name motorsports-data-notebook --display-name "Python (motorsports-data-notebook)"
-   ```
-
-## Use it
-
-### For Notebook Users (Quick Start) 🏁
-
-**Start here!** Populate the `workspace/` folder - this is your personal sandbox:
+### Setup
 
 ```bash
-# empty the workspace folder and copy in the starter notebook, then start the kernel
+# Install dependencies
+poetry install
+
+# Start JupyterLab with the workspace
 poetry run poe run_clean
 ```
 
-
-The `workspace/` directory contains:
-- `starter_notebook.ipynb` - Example workflows and tutorials
-- Your analysis notebooks (create as many as you need!)
-- Your data files (`.xrk`, `.csv`, `.parquet`, etc.)
-- **Everything here is git-ignored** - it's yours!
-
-### JupyterLite (Static Web Deployment) 🌐
-
-You can also build and serve this project as a static JupyterLite site that runs entirely in the browser.
-
-#### GitHub Pages Deployment
-
-This project automatically deploys to GitHub Pages:
-
-- **Preview builds**: Every push to `master` deploys to the `github-pages-preview` environment
-- **Release builds**: Published GitHub releases deploy to the production `github-pages` environment
-
-To create a release, use the GitHub UI (Releases → Create a new release) or the CLI:
-```bash
-gh release create v1.0.0 --title "v1.0.0" --notes "Release notes here"
-```
-
-#### Local Development
+### Building the JupyterLite Site
 
 ```bash
-# Install JupyterLite dependencies (one time)
+# Install JupyterLite dependencies
 poetry install --extras jupyterlite
 
-# Build the static site (uses pre-built wheels from pypi/)
-poetry run poe build_lite
-
-# Serve locally for testing
-poetry run poe serve_lite
-
-# Or do both at once
+# Build and serve locally
 poetry run poe build_and_serve_lite
 ```
 
-#### Building Pyodide Wheels (Advanced)
+### Building Pyodide Wheels
 
-To rebuild all wheels including `libxrk` for Pyodide (required after updating dependencies):
+To rebuild `libxrk` for Pyodide (after updating the C++ bindings):
 
-1. Install the Emscripten SDK (one time):
-   ```bash
-   # Install pyodide-build and get the required Emscripten version
-   pip install pyodide-build
-   pyodide xbuildenv install 0.27.6
-   
-   # Clone and install emsdk
-   git clone https://github.com/emscripten-core/emsdk.git ~/emsdk
-   cd ~/emsdk
-   EMSCRIPTEN_VERSION=$(pyodide config get emscripten_version)
-   python3 emsdk.py install $EMSCRIPTEN_VERSION
-   python3 emsdk.py activate $EMSCRIPTEN_VERSION
-   ```
+```bash
+# Install Emscripten SDK (one time)
+pip install pyodide-build
+pyodide xbuildenv install 0.27.6
 
-2. Build all wheels and the site:
-   ```bash
-   poetry run poe build_lite_full
-   ```
+git clone https://github.com/emscripten-core/emsdk.git ~/emsdk
+cd ~/emsdk
+EMSCRIPTEN_VERSION=$(pyodide config get emscripten_version)
+python3 emsdk.py install $EMSCRIPTEN_VERSION
+python3 emsdk.py activate $EMSCRIPTEN_VERSION
 
-The built site will be in the `dist/` directory and can be deployed to any static hosting service (GitHub Pages, Netlify, Vercel, etc.). The site includes:
-- All notebooks from `workspace_template/`
-- All helper functions from the `motorsports_data_notebook` package  
-- Pre-built `libxrk` wheel compiled for Pyodide/WebAssembly
-- A Python runtime that runs entirely in the browser (via Pyodide)
-
-**Note:** JupyterLite uses Pyodide (Python in WebAssembly) which has some limitations compared to native Python. Not all packages may be available.
-
-## Helper Functions 🛠️
-
-The package includes useful helper functions for common motorsports data analysis tasks:
-
-### `show_fig(fig)`
-Displays a Plotly figure with automatic environment detection. Works seamlessly in both standard JupyterLab and JupyterLite (Pyodide) environments.
-
-```python
-from motorsports_data_notebook import show_fig
-import plotly.express as px
-
-fig = px.scatter(df, x='x', y='y')
-show_fig(fig)  # Works in both JupyterLab and JupyterLite!
+# Build all wheels and site
+poetry run poe build_lite_full
 ```
 
-### `get_best_lap(laps_df)`
-Finds the fastest lap from a laps DataFrame by duration.
-
-```python
-from motorsports_data_notebook import get_best_lap
-
-best_lap = get_best_lap(laps)
-print(f"Best lap time: {best_lap['lap_duration_ms']} ms")
-```
-
-### `compute_start_line(lat, lon, ahead_points=100, scale=0.02)`
-Computes endpoints for a perpendicular start/finish line at the beginning of a GPS track.
-
-```python
-from motorsports_data_notebook import compute_start_line
-
-(lat_a, lon_a), (lat_b, lon_b) = compute_start_line(
-    lap_data['GPS Latitude'],
-    lap_data['GPS Longitude']
-)
-```
-
-### `plot_lap_gps(lat, lon, color_channels, width=800, height=800, title=None)`
-Creates an interactive Plotly visualization of GPS track data with multi-layer color-coded channels.
-
-**Single channel example:**
-```python
-from motorsports_data_notebook import plot_lap_gps
-
-fig = plot_lap_gps(
-    lat=lap_data['GPS Latitude'],
-    lon=lap_data['GPS Longitude'],
-    color_channels=[
-        (lap_data['speed_kmh'], 'Speed (km/h)', 'Viridis')
-    ],
-    title='Lap Speed Analysis'
-)
-fig.show()
-```
-
-**Multi-channel example (overlaid layers):**
-```python
-fig = plot_lap_gps(
-    lat=lap_data['GPS Latitude'],
-    lon=lap_data['GPS Longitude'],
-    color_channels=[
-        (lap_data['BrakePress'], 'Brake Pressure', 'Reds'),
-        (lap_data['speed_kmh'], 'Speed (km/h)', 'Viridis')
-    ],
-    title='Speed and Braking Analysis'
-)
-fig.show()
-```
-
-Color channels are layered with the first in the list on top (smallest markers) and the last on bottom (largest markers). Each channel displays its own colorbar.
+---
 
 Licensed under the terms in `LICENSE`.
