@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - master
+  pull_request:
+    branches:
+      - master
 
 # Allow only one concurrent deployment per branch
 concurrency:
@@ -52,12 +55,14 @@ jobs:
         run: poetry run poe build_lite_full
 
       - name: Upload artifact
+        if: github.event_name == 'push'
         uses: actions/upload-pages-artifact@v3
         with:
           path: dist/
 
   deploy:
     needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     permissions:
       pages: write
