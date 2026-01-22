@@ -12,6 +12,7 @@ from .helpers import (
     identify_corners_from_curvature,
     Corner,
     find_throttle_acceptance,
+    FileUpload,
 )
 
 __all__ = [
@@ -26,4 +27,5 @@ __all__ = [
     "identify_corners_from_curvature",
     "Corner",
     "find_throttle_acceptance",
+    "FileUpload",
 ]
