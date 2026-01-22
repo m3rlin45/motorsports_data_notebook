@@ -1,6 +1,6 @@
 [project]
 name = "motorsports-data-notebook"
-version = "0.3.1"
+version = "0.4.0"
 description = ""
 authors = [
     {name = "Christopher Dewan",email = "chris.dewan@m3rlin.net"}
@@ -29,6 +29,8 @@ dev = [
     "nbqa>=1.9.0",
     "pandas-stubs>=2.0.0",
     "types-seaborn>=0.13.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=6.0.0",
 ]
 jupyterlite = [
     "jupyterlite-core==0.6.0",
@@ -78,6 +80,9 @@ format-notebooks = { cmd = "nbqa black workspace_template/", help = "Format note
 lint-notebooks = { cmd = "nbqa black --check workspace_template/", help = "Check notebook formatting with black" }
 typecheck-notebooks = { cmd = "nbqa mypy workspace_template/", help = "Type check notebooks with mypy" }
 check = { sequence = ["lint", "typecheck", "lint-notebooks", "typecheck-notebooks"], help = "Run all linting and type checking" }
+
+# Testing tasks
+test = { cmd = "pytest tests/ --cov=motorsports_data_notebook --cov-report=term-missing --cov-report=html:coverage_html", help = "Run tests with coverage" }
 
 # Workspace tasks
 clean = { shell = "rm -f workspace/*.* && cp workspace_template/basics.ipynb workspace/ && cp workspace_template/tire_analysis.ipynb workspace/ && cp workspace_template/track_analysis.ipynb workspace/ && cp workspace_template/consistency_analysis.ipynb workspace/ && cp workspace_template/'CMD_Inferno 86_Fuji GP Sh_Generic testing_a_2248.xrz' workspace/", help = "Clean workspace and copy fresh notebooks" }

@@ -25,3 +25,13 @@ jobs:
 
       - name: Run linting and type checking
         run: poetry run poe check
+
+      - name: Run tests with coverage
+        run: poetry run poe test
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage_html/
+          retention-days: 7
