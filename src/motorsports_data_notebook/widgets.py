@@ -6,8 +6,8 @@ This module provides Jupyter widgets for interactive data loading and analysis.
 from typing import TYPE_CHECKING, Union
 
 import numpy as np
-import pandas as pd
 import pyarrow as pa  # type: ignore[import-untyped]
+import pyarrow.compute as pc  # type: ignore[import-untyped]
 from IPython.display import display
 
 from .corners import compute_lap_distance
@@ -48,46 +48,54 @@ def load_session(file_data: Union[str, bytes]) -> "LogFile":
 
     log = aim_xrk(file_data)
 
-    # Get channels as a single table to compute derived values
-    channels_table = log.get_channels_as_table()
-    channels_df = channels_table.to_pandas()
+    # Check if GPS Speed channel exists
+    has_gps_speed = "GPS Speed" in log.channels
 
-    # Add speed_kmh channel
-    if "GPS Speed" in channels_df.columns:
-        speed_kmh = channels_df["GPS Speed"] * 3.6
-        speed_kmh_table = pa.table(
-            {"timecodes": channels_df["timecodes"].values, "speed_kmh": speed_kmh.values}
-        )
+    if has_gps_speed:
+        gps_speed_table = log.channels["GPS Speed"]
+        timecodes = gps_speed_table.column("timecodes")
+        gps_speed = gps_speed_table.column("GPS Speed")
+
+        # Add speed_kmh channel
+        speed_kmh = pc.multiply(gps_speed, 3.6)
+        speed_kmh_table = pa.table({"timecodes": timecodes, "speed_kmh": speed_kmh})
         log.channels["speed_kmh"] = speed_kmh_table
 
+    # Compute lap_time for laps table (end_time - start_time in ms -> timedelta)
+    laps_table = log.laps
+    start_times = laps_table.column("start_time")
+    end_times = laps_table.column("end_time")
+    lap_time_ms = pc.subtract(end_times, start_times)
+    # Convert to duration in milliseconds
+    lap_time_duration = pc.multiply(lap_time_ms, 1000000)  # ms to nanoseconds
+    lap_time_duration = lap_time_duration.cast(pa.duration("ns"))
+    log.laps = laps_table.append_column("lap_time", lap_time_duration)
+
     # Compute distance_m for each lap
-    laps_df = log.laps.to_pandas()
-    laps_df["lap_time"] = pd.to_timedelta(laps_df["end_time"] - laps_df["start_time"], unit="ms")
+    if has_gps_speed:
+        timecodes_np = timecodes.to_numpy()
+        gps_speed_np = gps_speed.to_numpy()
+        start_times_np = start_times.to_numpy()
+        end_times_np = end_times.to_numpy()
 
-    # Initialize distance array
-    distance_m = np.zeros(len(channels_df))
+        distance_m = np.zeros(len(timecodes_np))
 
-    if "GPS Speed" in channels_df.columns:
-        for _, lap in laps_df.iterrows():
-            lap_mask = (channels_df["timecodes"] >= lap["start_time"]) & (
-                channels_df["timecodes"] <= lap["end_time"]
-            )
-            lap_indices = channels_df.index[lap_mask]
+        for i in range(len(start_times_np)):
+            start_time = start_times_np[i]
+            end_time = end_times_np[i]
+
+            lap_mask = (timecodes_np >= start_time) & (timecodes_np <= end_time)
+            lap_indices = np.where(lap_mask)[0]
 
             if len(lap_indices) > 0:
-                lap_timecodes = channels_df.loc[lap_indices, "timecodes"]
-                lap_speed = channels_df.loc[lap_indices, "GPS Speed"]
-                distance_values = compute_lap_distance(lap_timecodes.values, lap_speed.values)
+                lap_timecodes = timecodes_np[lap_indices]
+                lap_speed = gps_speed_np[lap_indices]
+                distance_values = compute_lap_distance(lap_timecodes, lap_speed)
                 distance_m[lap_indices] = distance_values
 
-    # Add distance_m channel
-    distance_table = pa.table(
-        {"timecodes": channels_df["timecodes"].values, "distance_m": distance_m}
-    )
-    log.channels["distance_m"] = distance_table
-
-    # Update laps table with lap_time column
-    log.laps = pa.Table.from_pandas(laps_df, preserve_index=False)
+        # Add distance_m channel
+        distance_table = pa.table({"timecodes": timecodes, "distance_m": distance_m})
+        log.channels["distance_m"] = distance_table
 
     return log
 

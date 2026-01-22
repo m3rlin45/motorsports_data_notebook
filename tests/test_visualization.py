@@ -309,9 +309,7 @@ def test_plot_track_segments_has_apex_markers(sample_lap_channels, sample_segmen
 
 def test_plot_track_segments_custom_dimensions(sample_lap_channels, sample_segments):
     """Test custom width and height are applied."""
-    fig = plot_track_segments(
-        sample_lap_channels, sample_segments, width=1200, height=800
-    )
+    fig = plot_track_segments(sample_lap_channels, sample_segments, width=1200, height=800)
 
     assert fig.layout.width == 1200
     assert fig.layout.height == 800

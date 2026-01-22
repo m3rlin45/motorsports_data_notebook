@@ -24,13 +24,14 @@ def mock_log_file():
     """Create a mock LogFile object."""
     # Create sample channel data
     n_samples = 300
-    timecodes = np.linspace(0, 180000, n_samples)  # 3 minutes of data
+    timecodes = np.linspace(0, 180000, n_samples).astype(np.int64)  # 3 minutes of data
+    gps_speed_values = np.random.uniform(20, 50, n_samples)  # m/s
 
-    # GPS Speed channel
+    # GPS Speed channel table
     gps_speed_table = pa.table(
         {
-            "timecodes": timecodes.astype(np.int64),
-            "GPS Speed": np.random.uniform(20, 50, n_samples),  # m/s
+            "timecodes": timecodes,
+            "GPS Speed": gps_speed_values,
         }
     )
 
@@ -48,15 +49,6 @@ def mock_log_file():
     mock_log.laps = laps_table
     mock_log.metadata = {}
     mock_log.file_name = "test.xrz"
-
-    # Mock get_channels_as_table to return combined table
-    combined_table = pa.table(
-        {
-            "timecodes": timecodes.astype(np.int64),
-            "GPS Speed": np.random.uniform(20, 50, n_samples),
-        }
-    )
-    mock_log.get_channels_as_table.return_value = combined_table
 
     return mock_log
 
@@ -90,16 +82,14 @@ class TestLoadSession:
             result = load_session(b"fake_data")
 
         speed_kmh_table = result.channels["speed_kmh"]
-        speed_kmh_df = speed_kmh_table.to_pandas()
+        speed_kmh_arr = speed_kmh_table.column("speed_kmh").to_numpy()
 
-        # Get original GPS Speed
-        combined = mock_log_file.get_channels_as_table().to_pandas()
+        # Get original GPS Speed from channels dict
+        gps_speed_arr = mock_log_file.channels["GPS Speed"].column("GPS Speed").to_numpy()
 
         # speed_kmh should be GPS Speed * 3.6
-        expected = combined["GPS Speed"] * 3.6
-        np.testing.assert_array_almost_equal(
-            speed_kmh_df["speed_kmh"].values, expected.values, decimal=5
-        )
+        expected = gps_speed_arr * 3.6
+        np.testing.assert_array_almost_equal(speed_kmh_arr, expected, decimal=5)
 
     def test_load_session_adds_distance_m_channel(self, mock_log_file):
         """Test that distance_m channel is added."""
@@ -123,9 +113,7 @@ class TestLoadSession:
         # Find lap boundaries and check distance resets
         laps_df = result.laps.to_pandas()
         for _, lap in laps_df.iterrows():
-            lap_mask = (timecodes >= lap["start_time"]) & (
-                timecodes <= lap["end_time"]
-            )
+            lap_mask = (timecodes >= lap["start_time"]) & (timecodes <= lap["end_time"])
             lap_distances = distance_m[lap_mask]
 
             if len(lap_distances) > 0:
@@ -192,24 +180,23 @@ class TestLoadSessionEdgeCases:
             }
         )
 
-        # Mock get_channels_as_table to return table without GPS Speed
-        combined_table = pa.table(
-            {
-                "timecodes": np.array([0, 30000, 60000], dtype=np.int64),
-            }
-        )
-        mock_log.get_channels_as_table.return_value = combined_table
-
         with patch(AIM_XRK_PATCH_PATH, return_value=mock_log):
             result = load_session(b"fake_data")
 
-        # Should still work, just without speed_kmh using GPS Speed
-        assert "distance_m" in result.channels
+        # Should still work, just without speed_kmh and distance_m
+        assert "speed_kmh" not in result.channels
+        assert "distance_m" not in result.channels
 
     def test_load_session_handles_empty_laps(self):
         """Test handling when laps table is empty."""
         mock_log = MagicMock()
-        mock_log.channels = {}
+        gps_speed_table = pa.table(
+            {
+                "timecodes": np.array([0, 1000, 2000], dtype=np.int64),
+                "GPS Speed": np.array([30.0, 35.0, 40.0]),
+            }
+        )
+        mock_log.channels = {"GPS Speed": gps_speed_table}
         mock_log.laps = pa.table(
             {
                 "num": pa.array([], type=pa.int64()),
@@ -217,14 +204,6 @@ class TestLoadSessionEdgeCases:
                 "end_time": pa.array([], type=pa.int64()),
             }
         )
-
-        combined_table = pa.table(
-            {
-                "timecodes": np.array([0, 1000, 2000], dtype=np.int64),
-                "GPS Speed": np.array([30.0, 35.0, 40.0]),
-            }
-        )
-        mock_log.get_channels_as_table.return_value = combined_table
 
         with patch(AIM_XRK_PATCH_PATH, return_value=mock_log):
             result = load_session(b"fake_data")
