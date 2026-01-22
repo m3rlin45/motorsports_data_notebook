@@ -7,7 +7,7 @@ GPS track visualizations.
 import math
 import sys
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -142,9 +142,12 @@ def find_throttle_acceptance(
     """
     # Apply smoothing to lateral G (rolling average on absolute value)
     lap_data = lap_data.copy()
-    lap_data["LateralAcc_smooth"] = lap_data["LateralAcc"].abs().rolling(
-        window=smoothing_window, center=True, min_periods=1
-    ).mean()
+    lap_data["LateralAcc_smooth"] = (
+        lap_data["LateralAcc"]
+        .abs()
+        .rolling(window=smoothing_window, center=True, min_periods=1)
+        .mean()
+    )
 
     # Get corner data for peak lateral G calculation
     corner_mask = (lap_data["distance_m"] >= corner.start_dist) & (
@@ -174,14 +177,13 @@ def find_throttle_acceptance(
     exit_data = exit_data.sort_values("timecodes").reset_index(drop=True)
 
     for i in range(len(exit_data)):
-        if exit_data.loc[i, "PPS"] >= throttle_threshold:
-            start_time = exit_data.loc[i, "timecodes"]
+        if cast(float, exit_data.loc[i, "PPS"]) >= throttle_threshold:
+            start_time = cast(float, exit_data.loc[i, "timecodes"])
             end_time = start_time + sustain_time_ms
 
             # Check if throttle stays above threshold for sustain_time_ms
-            sustain_mask = (exit_data["timecodes"] >= start_time) & (
-                exit_data["timecodes"] <= end_time
-            )
+            timecodes = cast("pd.Series[float]", exit_data["timecodes"])
+            sustain_mask = (timecodes >= start_time) & (timecodes <= end_time)
             sustain_data = exit_data[sustain_mask]
 
             if len(sustain_data) == 0:
