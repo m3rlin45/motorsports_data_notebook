@@ -7,6 +7,7 @@ from telemetry data and building track segment definitions.
 from dataclasses import dataclass
 
 import numpy as np
+import pandas as pd
 
 from .corners import Corner
 
@@ -437,3 +438,238 @@ def create_track_segments(
     segments = sorted(segments, key=lambda s: s.start_dist)
 
     return segments
+
+
+def detect_zones_averaged(
+    channels: pd.DataFrame,
+    top_laps: pd.DataFrame,
+    reference_lap_channels: pd.DataFrame,
+    resolution: float = 1.0,
+    threshold: float = 0.5,
+    max_gap_time: float = 1.5,
+    brake_threshold: float = 5,
+    throttle_threshold: float = 20,
+) -> tuple[list[tuple[float, float]], list[tuple[float, float]]]:
+    """Detect and average braking/acceleration zones across top laps.
+
+    This is a convenience function that combines the full zone detection pipeline:
+    1. Iterate over top laps and call identify_zones_single_lap()
+    2. Average zones across laps with average_zones_across_laps()
+    3. Merge acceleration zones with merge_accel_zones_by_time()
+
+    Parameters
+    ----------
+    channels : pd.DataFrame
+        Full channel data with 'timecodes', 'distance_m', 'BrakePress', 'PPS', 'GPS Speed'.
+    top_laps : pd.DataFrame
+        Laps to analyze (typically from get_top_laps()).
+    reference_lap_channels : pd.DataFrame
+        Channel data for a reference lap (typically best lap) for post-processing.
+    resolution : float, default=1.0
+        Distance resolution for averaging (meters).
+    threshold : float, default=0.5
+        Fraction of laps that must agree for a zone to be included.
+    max_gap_time : float, default=1.5
+        Maximum time (seconds) to bridge across gear changes in accel zones.
+    brake_threshold : float, default=5
+        Minimum brake pressure % to consider as braking.
+    throttle_threshold : float, default=20
+        Minimum throttle % to consider as accelerating.
+
+    Returns
+    -------
+    tuple[list[tuple[float, float]], list[tuple[float, float]]]
+        (braking_zones, accel_zones) - averaged and post-processed zones.
+
+    Examples
+    --------
+    >>> top_laps = get_top_laps(laps)
+    >>> best_lap, lap_channels = get_best_lap_data(channels, laps)
+    >>> braking_zones, accel_zones = detect_zones_averaged(
+    ...     channels, top_laps, lap_channels
+    ... )
+    """
+    all_braking_zones: list[list[tuple[float, float]]] = []
+    all_accel_zones: list[list[tuple[float, float]]] = []
+
+    for _, lap in top_laps.iterrows():
+        lap_start = lap["start_time"]
+        lap_end = lap["end_time"]
+        lap_data = channels.query(f"timecodes >= @lap_start and timecodes <= @lap_end").copy()
+
+        if len(lap_data) < 10:
+            continue
+
+        braking, accel = identify_zones_single_lap(
+            np.asarray(lap_data["distance_m"]),
+            np.asarray(lap_data["BrakePress"]),
+            np.asarray(lap_data["PPS"]),
+            np.asarray(lap_data["GPS Speed"]),
+            brake_threshold=brake_threshold,
+            throttle_threshold=throttle_threshold,
+        )
+        all_braking_zones.append(braking)
+        all_accel_zones.append(accel)
+
+    if not all_braking_zones:
+        return [], []
+
+    # Average zones across laps
+    track_length = float(reference_lap_channels["distance_m"].max())
+    braking_zones, accel_zones = average_zones_across_laps(
+        all_braking_zones,
+        all_accel_zones,
+        track_length=track_length,
+        resolution=resolution,
+        threshold=threshold,
+    )
+
+    # Post-process: merge acceleration zones separated by short time gaps
+    accel_zones = merge_accel_zones_by_time(
+        accel_zones,
+        braking_zones,
+        np.asarray(reference_lap_channels["distance_m"]),
+        np.asarray(reference_lap_channels["GPS Speed"]),
+        max_gap_time=max_gap_time,
+    )
+
+    return braking_zones, accel_zones
+
+
+def _find_braking_point(
+    lap_data: pd.DataFrame, segment: TrackSegment, brake_threshold: float = 5
+) -> float | None:
+    """Find the distance where braking starts within a segment."""
+    mask = (lap_data["distance_m"] >= segment.start_dist) & (
+        lap_data["distance_m"] <= segment.end_dist
+    )
+    seg_data = lap_data[mask]
+
+    if len(seg_data) == 0:
+        return None
+
+    brake_points = seg_data[seg_data["BrakePress"] > brake_threshold]
+    if len(brake_points) > 0:
+        return float(brake_points["distance_m"].iloc[0])
+    return None
+
+
+def _find_throttle_point(
+    lap_data: pd.DataFrame,
+    segment: TrackSegment,
+    throttle_threshold: float = 20,
+    brake_threshold: float = 5,
+) -> float | None:
+    """Find the distance where throttle application starts within a segment."""
+    mask = (lap_data["distance_m"] >= segment.start_dist) & (
+        lap_data["distance_m"] <= segment.end_dist
+    )
+    seg_data = lap_data[mask]
+
+    if len(seg_data) == 0:
+        return None
+
+    throttle_points = seg_data[
+        (seg_data["PPS"] > throttle_threshold) & (seg_data["BrakePress"] < brake_threshold)
+    ]
+    if len(throttle_points) > 0:
+        return float(throttle_points["distance_m"].iloc[0])
+    return None
+
+
+def _find_min_speed(lap_data: pd.DataFrame, segment: TrackSegment) -> float | None:
+    """Find minimum speed within a segment (for corners)."""
+    mask = (lap_data["distance_m"] >= segment.start_dist) & (
+        lap_data["distance_m"] <= segment.end_dist
+    )
+    seg_data = lap_data[mask]
+
+    if len(seg_data) == 0:
+        return None
+
+    return float(seg_data["speed_kmh"].min())
+
+
+def compute_segment_stats(
+    channels: pd.DataFrame,
+    laps: pd.DataFrame,
+    segments: list[TrackSegment],
+    brake_threshold: float = 5,
+    throttle_threshold: float = 20,
+) -> pd.DataFrame:
+    """Compute per-lap statistics for each track segment.
+
+    Computes:
+    - For braking segments: braking point distance and offset from segment start
+    - For corner segments: minimum speed through the corner
+    - For acceleration segments: throttle application point and offset
+
+    Parameters
+    ----------
+    channels : pd.DataFrame
+        Full channel data with 'timecodes', 'distance_m', 'speed_kmh', 'BrakePress', 'PPS'.
+    laps : pd.DataFrame
+        Laps to analyze (with 'start_time', 'end_time', 'num', 'lap_time' columns).
+    segments : list[TrackSegment]
+        Track segments to compute statistics for.
+    brake_threshold : float, default=5
+        Minimum brake pressure % to consider as braking.
+    throttle_threshold : float, default=20
+        Minimum throttle % to consider as accelerating.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with columns:
+        - segment_id, segment_name, segment_type, corner_id
+        - lap_num, lap_time
+        - braking_point, brake_offset (for braking segments)
+        - min_speed (for corner segments)
+        - throttle_point, throttle_offset (for acceleration segments)
+
+    Examples
+    --------
+    >>> top_laps = get_top_laps(laps)
+    >>> stats_df = compute_segment_stats(channels, top_laps, segments)
+    >>> braking_stats = stats_df[stats_df["segment_type"] == "braking"]
+    """
+    all_lap_stats = []
+
+    for _, lap in laps.iterrows():
+        lap_data = channels.query(
+            f'timecodes >= {lap["start_time"]} and timecodes <= {lap["end_time"]}'
+        ).copy()
+
+        if len(lap_data) < 10:
+            continue
+
+        for seg in segments:
+            stat: dict = {
+                "segment_id": seg.id,
+                "segment_name": seg.name,
+                "segment_type": seg.segment_type,
+                "corner_id": seg.corner_id,
+                "lap_num": lap["num"],
+                "lap_time": lap["lap_time"],
+            }
+
+            if seg.segment_type == "braking":
+                braking_point = _find_braking_point(lap_data, seg, brake_threshold)
+                stat["braking_point"] = braking_point
+                if braking_point is not None:
+                    stat["brake_offset"] = braking_point - seg.start_dist
+
+            elif seg.segment_type == "corner":
+                stat["min_speed"] = _find_min_speed(lap_data, seg)
+
+            elif seg.segment_type == "acceleration":
+                throttle_point = _find_throttle_point(
+                    lap_data, seg, throttle_threshold, brake_threshold
+                )
+                stat["throttle_point"] = throttle_point
+                if throttle_point is not None:
+                    stat["throttle_offset"] = throttle_point - seg.start_dist
+
+            all_lap_stats.append(stat)
+
+    return pd.DataFrame(all_lap_stats)

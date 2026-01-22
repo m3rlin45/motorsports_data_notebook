@@ -4,13 +4,16 @@ Uses synthetic data to test braking/acceleration zone detection and segment crea
 """
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from motorsports_data_notebook.corners import Corner
 from motorsports_data_notebook.zones import (
     TrackSegment,
     average_zones_across_laps,
+    compute_segment_stats,
     create_track_segments,
+    detect_zones_averaged,
     identify_zones_single_lap,
     merge_accel_zones_by_time,
 )
@@ -389,3 +392,309 @@ class TestTrackSegmentDataclass:
         )
 
         assert segment.apex_dist is None
+
+
+# ============================================================================
+# Tests for detect_zones_averaged
+# ============================================================================
+
+
+class TestDetectZonesAveraged:
+    """Tests for detect_zones_averaged function."""
+
+    @pytest.fixture
+    def sample_channels_for_zones(self):
+        """Create sample channels with clear braking/accel patterns."""
+        # 3 laps of data, each lap 1000m
+        n_samples_per_lap = 200
+        n_laps = 3
+
+        all_data = []
+        for lap_num in range(n_laps):
+            lap_start = lap_num * 60000
+            lap_end = (lap_num + 1) * 60000
+
+            timecodes = np.linspace(lap_start, lap_end, n_samples_per_lap)
+            distance_m = np.linspace(0, 1000, n_samples_per_lap)
+            speed = np.ones(n_samples_per_lap) * 30  # 30 m/s
+
+            # Brake pressure: high at 200-300m
+            brake_press = np.zeros(n_samples_per_lap)
+            brake_mask = (distance_m >= 200) & (distance_m <= 300)
+            brake_press[brake_mask] = 60
+
+            # Throttle: high at 400-800m
+            pps = np.zeros(n_samples_per_lap)
+            throttle_mask = (distance_m >= 400) & (distance_m <= 800)
+            pps[throttle_mask] = 80
+
+            lap_df = pd.DataFrame(
+                {
+                    "timecodes": timecodes,
+                    "distance_m": distance_m,
+                    "GPS Speed": speed,
+                    "BrakePress": brake_press,
+                    "PPS": pps,
+                }
+            )
+            all_data.append(lap_df)
+
+        return pd.concat(all_data, ignore_index=True)
+
+    @pytest.fixture
+    def sample_laps_for_zones(self):
+        """Create sample laps DataFrame."""
+        return pd.DataFrame(
+            {
+                "num": [1, 2, 3],
+                "start_time": [0, 60000, 120000],
+                "end_time": [60000, 120000, 180000],
+                "lap_time": pd.to_timedelta([60, 58, 59], unit="s"),
+            }
+        )
+
+    @pytest.fixture
+    def reference_lap_channels(self):
+        """Create reference lap channel data."""
+        n_samples = 200
+        return pd.DataFrame(
+            {
+                "distance_m": np.linspace(0, 1000, n_samples),
+                "GPS Speed": np.ones(n_samples) * 30,
+            }
+        )
+
+    def test_detect_zones_averaged_basic(
+        self, sample_channels_for_zones, sample_laps_for_zones, reference_lap_channels
+    ):
+        """Test basic zone detection."""
+        braking_zones, accel_zones = detect_zones_averaged(
+            sample_channels_for_zones,
+            sample_laps_for_zones,
+            reference_lap_channels,
+        )
+
+        # Should find one braking zone around 200-300m
+        assert len(braking_zones) >= 1
+
+        # Should find acceleration zone around 400-800m
+        assert len(accel_zones) >= 1
+
+    def test_detect_zones_averaged_braking_location(
+        self, sample_channels_for_zones, sample_laps_for_zones, reference_lap_channels
+    ):
+        """Test that braking zone is in expected location."""
+        braking_zones, _ = detect_zones_averaged(
+            sample_channels_for_zones,
+            sample_laps_for_zones,
+            reference_lap_channels,
+        )
+
+        # Braking zone should be around 200-300m
+        found_braking = False
+        for start, end in braking_zones:
+            if start <= 250 <= end:
+                found_braking = True
+                break
+        assert found_braking
+
+    def test_detect_zones_averaged_returns_tuple(
+        self, sample_channels_for_zones, sample_laps_for_zones, reference_lap_channels
+    ):
+        """Test that function returns correct tuple structure."""
+        result = detect_zones_averaged(
+            sample_channels_for_zones,
+            sample_laps_for_zones,
+            reference_lap_channels,
+        )
+
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+        assert isinstance(result[0], list)
+        assert isinstance(result[1], list)
+
+
+# ============================================================================
+# Tests for compute_segment_stats
+# ============================================================================
+
+
+class TestComputeSegmentStats:
+    """Tests for compute_segment_stats function."""
+
+    @pytest.fixture
+    def sample_channels_for_stats(self):
+        """Create sample channels with known patterns."""
+        # 2 laps of data
+        n_samples_per_lap = 200
+
+        all_data = []
+        for lap_num in range(2):
+            lap_start = lap_num * 60000
+            lap_end = (lap_num + 1) * 60000
+
+            timecodes = np.linspace(lap_start, lap_end, n_samples_per_lap)
+            distance_m = np.linspace(0, 1000, n_samples_per_lap)
+
+            # Speed: slower in corner (150-250m), faster elsewhere
+            speed_kmh = np.ones(n_samples_per_lap) * 150
+            corner_mask = (distance_m >= 150) & (distance_m <= 250)
+            speed_kmh[corner_mask] = 80  # Slower through corner
+
+            # Brake at 100-150m
+            brake_press = np.zeros(n_samples_per_lap)
+            brake_mask = (distance_m >= 100) & (distance_m <= 150)
+            brake_press[brake_mask] = 60
+
+            # Throttle at 250-400m
+            pps = np.zeros(n_samples_per_lap)
+            throttle_mask = (distance_m >= 250) & (distance_m <= 400)
+            pps[throttle_mask] = 80
+
+            lap_df = pd.DataFrame(
+                {
+                    "timecodes": timecodes,
+                    "distance_m": distance_m,
+                    "speed_kmh": speed_kmh,
+                    "BrakePress": brake_press,
+                    "PPS": pps,
+                }
+            )
+            all_data.append(lap_df)
+
+        return pd.concat(all_data, ignore_index=True)
+
+    @pytest.fixture
+    def sample_laps_for_stats(self):
+        """Create sample laps."""
+        return pd.DataFrame(
+            {
+                "num": [1, 2],
+                "start_time": [0, 60000],
+                "end_time": [60000, 120000],
+                "lap_time": pd.to_timedelta([60, 58], unit="s"),
+            }
+        )
+
+    @pytest.fixture
+    def sample_segments_for_stats(self):
+        """Create sample segments matching the data."""
+        return [
+            TrackSegment(
+                id=1,
+                segment_type="braking",
+                start_dist=50,
+                end_dist=150,
+                name="Turn 1 Braking",
+                corner_id=1,
+            ),
+            TrackSegment(
+                id=2,
+                segment_type="corner",
+                start_dist=150,
+                end_dist=250,
+                name="Turn 1",
+                corner_id=1,
+                apex_dist=200,
+            ),
+            TrackSegment(
+                id=3,
+                segment_type="acceleration",
+                start_dist=250,
+                end_dist=400,
+                name="Turn 1 Exit",
+                corner_id=1,
+            ),
+        ]
+
+    def test_compute_segment_stats_returns_dataframe(
+        self, sample_channels_for_stats, sample_laps_for_stats, sample_segments_for_stats
+    ):
+        """Test that function returns a DataFrame."""
+        stats_df = compute_segment_stats(
+            sample_channels_for_stats,
+            sample_laps_for_stats,
+            sample_segments_for_stats,
+        )
+
+        assert isinstance(stats_df, pd.DataFrame)
+
+    def test_compute_segment_stats_has_expected_columns(
+        self, sample_channels_for_stats, sample_laps_for_stats, sample_segments_for_stats
+    ):
+        """Test that DataFrame has expected columns."""
+        stats_df = compute_segment_stats(
+            sample_channels_for_stats,
+            sample_laps_for_stats,
+            sample_segments_for_stats,
+        )
+
+        expected_cols = ["segment_id", "segment_name", "segment_type", "corner_id", "lap_num"]
+        for col in expected_cols:
+            assert col in stats_df.columns
+
+    def test_compute_segment_stats_braking_points(
+        self, sample_channels_for_stats, sample_laps_for_stats, sample_segments_for_stats
+    ):
+        """Test that braking points are detected."""
+        stats_df = compute_segment_stats(
+            sample_channels_for_stats,
+            sample_laps_for_stats,
+            sample_segments_for_stats,
+        )
+
+        braking_stats = stats_df[stats_df["segment_type"] == "braking"]
+        assert len(braking_stats) > 0
+        assert "braking_point" in braking_stats.columns
+
+        # Should have found braking points around 100m
+        valid_braking = braking_stats.dropna(subset=["braking_point"])
+        assert len(valid_braking) > 0
+        assert all(valid_braking["braking_point"] >= 100)
+
+    def test_compute_segment_stats_min_speed(
+        self, sample_channels_for_stats, sample_laps_for_stats, sample_segments_for_stats
+    ):
+        """Test that corner min speed is computed."""
+        stats_df = compute_segment_stats(
+            sample_channels_for_stats,
+            sample_laps_for_stats,
+            sample_segments_for_stats,
+        )
+
+        corner_stats = stats_df[stats_df["segment_type"] == "corner"]
+        assert len(corner_stats) > 0
+        assert "min_speed" in corner_stats.columns
+
+        # Min speed should be around 80 km/h (our synthetic slow speed)
+        valid_corners = corner_stats.dropna(subset=["min_speed"])
+        assert len(valid_corners) > 0
+        assert all(valid_corners["min_speed"] < 100)
+
+    def test_compute_segment_stats_throttle_points(
+        self, sample_channels_for_stats, sample_laps_for_stats, sample_segments_for_stats
+    ):
+        """Test that throttle points are detected."""
+        stats_df = compute_segment_stats(
+            sample_channels_for_stats,
+            sample_laps_for_stats,
+            sample_segments_for_stats,
+        )
+
+        accel_stats = stats_df[stats_df["segment_type"] == "acceleration"]
+        assert len(accel_stats) > 0
+        assert "throttle_point" in accel_stats.columns
+
+    def test_compute_segment_stats_rows_per_lap(
+        self, sample_channels_for_stats, sample_laps_for_stats, sample_segments_for_stats
+    ):
+        """Test that we get correct number of rows (segments × laps)."""
+        stats_df = compute_segment_stats(
+            sample_channels_for_stats,
+            sample_laps_for_stats,
+            sample_segments_for_stats,
+        )
+
+        n_laps = len(sample_laps_for_stats)
+        n_segments = len(sample_segments_for_stats)
+        assert len(stats_df) == n_laps * n_segments
