@@ -44,9 +44,7 @@ def execute_notebook(notebook_path: Path) -> None:
     )
 
     # Execute with cwd set to the notebook's directory (for data file access)
-    nb, _ = execute_preprocessor.preprocess(
-        nb, {"metadata": {"path": str(notebook_path.parent)}}
-    )
+    nb, _ = execute_preprocessor.preprocess(nb, {"metadata": {"path": str(notebook_path.parent)}})
 
     # Write the executed notebook back
     with open(notebook_path, "w", encoding="utf-8") as f:
