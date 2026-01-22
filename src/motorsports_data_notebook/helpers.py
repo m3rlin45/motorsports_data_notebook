@@ -1237,7 +1237,7 @@ def merge_accel_zones_by_time(
 class FileUpload:
     """Interactive file upload widget for Jupyter notebooks.
 
-    Provides a drag-and-drop file upload interface with status feedback.
+    Provides a file upload interface with status feedback.
     Falls back to a default file if no file is uploaded.
 
     Parameters
@@ -1258,21 +1258,30 @@ class FileUpload:
         self._default_file = default_file
         self._uploaded_data: bytes | None = None
         self._uploaded_filename: str | None = None
+        self._widgets = widgets
 
-        # Create widgets
+        # Instruction label
+        self._instruction = widgets.HTML(
+            value="<b>📁 Upload your own .xrk/.xrz file:</b> (or skip to use the sample data)"
+        )
+
+        # Create the file upload widget
         self._upload_widget = widgets.FileUpload(
             accept=".xrk,.xrz",
             multiple=False,
-            description="Upload file",
+            description="Choose File",
             button_style="primary",
         )
-        self._status_label = widgets.HTML(value=f"<b>Using:</b> {default_file} <i>(default)</i>")
+
+        self._status_label = widgets.HTML(
+            value=f"<span style='color: #666;'>Using: {default_file} (default)</span>"
+        )
 
         # Set up callback for upload changes
         self._upload_widget.observe(self._on_upload, names="value")
 
         # Container for layout
-        self._container = widgets.VBox([self._upload_widget, self._status_label])
+        self._container = widgets.VBox([self._instruction, self._upload_widget, self._status_label])
 
     def _on_upload(self, change: dict) -> None:  # type: ignore[type-arg]
         """Handle file upload event."""
@@ -1280,7 +1289,9 @@ class FileUpload:
             uploaded = self._upload_widget.value[0]
             self._uploaded_filename = uploaded["name"]
             self._uploaded_data = uploaded["content"].tobytes()
-            self._status_label.value = f"<b>Using:</b> {self._uploaded_filename} ✓"
+            self._status_label.value = (
+                f"<span style='color: green;'><b>✓ Using:</b> {self._uploaded_filename}</span>"
+            )
 
     def display(self) -> None:
         """Display the upload widget and status label."""
