@@ -6,10 +6,40 @@ of lap data and GPS track data.
 
 import math
 import sys
+from typing import TYPE_CHECKING
 
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio
+from plotly.subplots import make_subplots
+
+if TYPE_CHECKING:
+    from .zones import TrackSegment
+
+
+def format_lap_time(lap_time: pd.Timedelta) -> str:
+    """Format a lap time as 'M:SS.mmm'.
+
+    Parameters
+    ----------
+    lap_time : pd.Timedelta
+        The lap time to format.
+
+    Returns
+    -------
+    str
+        Formatted lap time string.
+
+    Examples
+    --------
+    >>> format_lap_time(pd.Timedelta(minutes=1, seconds=23, milliseconds=456))
+    '1:23.456'
+    """
+    total_seconds = lap_time.total_seconds()
+    minutes = int(total_seconds // 60)
+    seconds = total_seconds % 60
+    return f"{minutes}:{seconds:06.3f}"
 
 
 def show_fig(fig):
@@ -74,6 +104,72 @@ def get_best_lap(laps_df):
     laps_subset["lap_duration_ms"] = laps_subset["end_time"] - laps_subset["start_time"]
     best_idx = laps_subset["lap_duration_ms"].idxmin()
     return laps_subset.loc[best_idx]
+
+
+def get_best_lap_data(channels: pd.DataFrame, laps: pd.DataFrame) -> tuple[pd.Series, pd.DataFrame]:
+    """Extract best lap info and corresponding channel data.
+
+    Parameters
+    ----------
+    channels : pd.DataFrame
+        Channel data with 'timecodes' column.
+    laps : pd.DataFrame
+        Laps table with 'start_time', 'end_time' columns.
+
+    Returns
+    -------
+    tuple[pd.Series, pd.DataFrame]
+        (best_lap, lap_channels) - best lap info and channel data for that lap.
+
+    Examples
+    --------
+    >>> best_lap, lap_channels = get_best_lap_data(channels, laps)
+    >>> print(f"Best lap: {best_lap['num']}")
+    """
+    best_lap = get_best_lap(laps)
+    start_ts = best_lap["start_time"]
+    end_ts = best_lap["end_time"]
+    # Use < for end_ts to exclude the first sample of the next lap
+    lap_channels = channels.query(f"timecodes >= @start_ts and timecodes < @end_ts").copy()
+    return best_lap, lap_channels
+
+
+def get_top_laps(laps: pd.DataFrame, threshold_pct: float = 1.03) -> pd.DataFrame:
+    """Get laps within threshold percentage of best lap time.
+
+    Excludes first and last laps, and laps with zero or negative duration.
+
+    Parameters
+    ----------
+    laps : pd.DataFrame
+        Laps table with 'lap_time' column (as Timedelta).
+    threshold_pct : float, default=1.03
+        Threshold as multiplier (e.g., 1.03 for within 103% of best).
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame of qualifying laps.
+
+    Examples
+    --------
+    >>> top_laps = get_top_laps(laps, threshold_pct=1.03)
+    >>> print(f"Using {len(top_laps)} laps for analysis")
+    """
+    if "lap_time" not in laps.columns:
+        raise ValueError("Expected lap_time column in laps table")
+
+    # Exclude first/last laps and zero-duration laps
+    valid_laps: pd.DataFrame = laps[laps["lap_time"] > pd.Timedelta(0)][1:-1].copy()
+
+    if len(valid_laps) == 0:
+        return valid_laps
+
+    best_lap_time = valid_laps["lap_time"].min()
+    threshold_time = best_lap_time * threshold_pct
+    top_laps: pd.DataFrame = valid_laps[valid_laps["lap_time"] <= threshold_time]
+
+    return top_laps
 
 
 def compute_start_line(lat, lon, ahead_points=100, scale=0.02):
@@ -238,6 +334,399 @@ def plot_lap_gps(lat, lon, color_channels, width=800, height=800, title=None):
         yaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
         plot_bgcolor="white",
         hovermode="closest",
+    )
+
+    return fig
+
+
+def plot_tire_thermography(
+    lap_channels: pd.DataFrame,
+    title: str = "Tire Temperatures",
+    width: int = 900,
+    height: int = 900,
+) -> go.Figure:
+    """Create tire temperature heatmap with speed, G-force, and driver inputs.
+
+    Creates a 6-row subplot figure showing:
+    - Rows 1-4: Tire temperature heatmaps (FL, FR, RL, RR)
+    - Row 5: Speed and combined G-force
+    - Row 6: Driver inputs (throttle, brake, steering)
+
+    Parameters
+    ----------
+    lap_channels : pd.DataFrame
+        Channel data for a single lap. Must contain:
+        - distance_m: Distance along lap (meters)
+        - FL_Ch1 through FL_Ch8: Front left tire temps (Ch1=outside, Ch8=inside)
+        - FR_Ch1 through FR_Ch8: Front right tire temps (Ch1=inside, Ch8=outside)
+        - RL_Ch1 through RL_Ch8: Rear left tire temps (Ch1=outside, Ch8=inside)
+        - RR_Ch1 through RR_Ch8: Rear right tire temps (Ch1=inside, Ch8=outside)
+        - speed_kmh: Speed in km/h
+        - LateralAcc: Lateral acceleration (G)
+        - InlineAcc: Longitudinal acceleration (G)
+        - BrakePress: Brake pressure (%)
+        - PPS: Throttle position (%)
+        - SteerAngle: Steering angle (degrees)
+    title : str, default="Tire Temperatures"
+        Plot title.
+    width : int, default=900
+        Figure width in pixels.
+    height : int, default=900
+        Figure height in pixels.
+
+    Returns
+    -------
+    go.Figure
+        Plotly figure object.
+
+    Raises
+    ------
+    ValueError
+        If required tire temperature channels are missing.
+
+    Examples
+    --------
+    >>> fig = plot_tire_thermography(lap_channels, title="Best Lap Tire Temps")
+    >>> show_fig(fig)
+    """
+    # Validate required channels
+    tire_positions = ["FL", "FR", "RL", "RR"]
+    required_channels = []
+    for pos in tire_positions:
+        required_channels.extend([f"{pos}_Ch{i}" for i in range(1, 9)])
+
+    missing = [ch for ch in required_channels if ch not in lap_channels.columns]
+    if missing:
+        raise ValueError(
+            f"Missing tire temperature channels: {missing[:5]}{'...' if len(missing) > 5 else ''}. "
+            f"Expected channels like FL_Ch1 through FL_Ch8 for each tire position."
+        )
+
+    # Extract tire temperature data
+    fl_channel_names = [f"FL_Ch{i}" for i in range(1, 9)]
+    fr_channel_names = [f"FR_Ch{i}" for i in range(1, 9)]
+    rl_channel_names = [f"RL_Ch{i}" for i in range(1, 9)]
+    rr_channel_names = [f"RR_Ch{i}" for i in range(1, 9)]
+
+    fl_temps = lap_channels[fl_channel_names].values.T  # Shape: (8, n_samples)
+    fr_temps = lap_channels[fr_channel_names].values.T
+    rl_temps = lap_channels[rl_channel_names].values.T
+    rr_temps = lap_channels[rr_channel_names].values.T
+
+    distance_m = np.asarray(lap_channels["distance_m"])
+
+    # Calculate Sum of G
+    sum_of_g = np.sqrt(
+        np.asarray(lap_channels["LateralAcc"]) ** 2 + np.asarray(lap_channels["InlineAcc"]) ** 2
+    )
+
+    # Get color scale range across all tires
+    vmin = float(min(fl_temps.min(), fr_temps.min(), rl_temps.min(), rr_temps.min()))
+    vmax = float(max(fl_temps.max(), fr_temps.max(), rl_temps.max(), rr_temps.max()))
+
+    # Create subplots
+    fig = make_subplots(
+        rows=6,
+        cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.04,
+        subplot_titles=(
+            "Front Left (Outside at top)",
+            "Front Right (Outside at bottom)",
+            "Rear Left (Outside at top)",
+            "Rear Right (Outside at bottom)",
+            "Speed & Sum of G",
+            "Driver Inputs",
+        ),
+        row_heights=[0.17, 0.17, 0.17, 0.17, 0.16, 0.16],
+        specs=[[{}], [{}], [{}], [{}], [{"secondary_y": True}], [{"secondary_y": True}]],
+    )
+
+    y_labels = ["1", "2", "3", "4", "5", "6", "7", "8"]
+
+    # Extract arrays for speed/brake/throttle/steering
+    speed_kmh = np.asarray(lap_channels["speed_kmh"])
+    brake_press = np.asarray(lap_channels["BrakePress"])
+    throttle_pps = np.asarray(lap_channels["PPS"])
+    steer_angle = np.asarray(lap_channels["SteerAngle"])
+
+    # Front Left heatmap
+    fig.add_trace(
+        go.Heatmap(
+            z=fl_temps,
+            x=distance_m,
+            y=y_labels,
+            colorscale="Inferno",
+            zmin=vmin,
+            zmax=vmax,
+            showscale=False,
+        ),
+        row=1,
+        col=1,
+    )
+    fig.update_yaxes(autorange="reversed", row=1, col=1)
+
+    # Front Right heatmap
+    fig.add_trace(
+        go.Heatmap(
+            z=fr_temps,
+            x=distance_m,
+            y=y_labels,
+            colorscale="Inferno",
+            zmin=vmin,
+            zmax=vmax,
+            showscale=False,
+        ),
+        row=2,
+        col=1,
+    )
+    fig.update_yaxes(autorange="reversed", row=2, col=1)
+
+    # Rear Left heatmap
+    fig.add_trace(
+        go.Heatmap(
+            z=rl_temps,
+            x=distance_m,
+            y=y_labels,
+            colorscale="Inferno",
+            zmin=vmin,
+            zmax=vmax,
+            showscale=False,
+        ),
+        row=3,
+        col=1,
+    )
+    fig.update_yaxes(autorange="reversed", row=3, col=1)
+
+    # Rear Right heatmap
+    fig.add_trace(
+        go.Heatmap(
+            z=rr_temps,
+            x=distance_m,
+            y=y_labels,
+            colorscale="Inferno",
+            zmin=vmin,
+            zmax=vmax,
+            colorbar=dict(title="Temp (°C)"),
+        ),
+        row=4,
+        col=1,
+    )
+    fig.update_yaxes(autorange="reversed", row=4, col=1)
+
+    # Speed trace
+    fig.add_trace(
+        go.Scatter(
+            x=distance_m,
+            y=speed_kmh,
+            mode="lines",
+            name="Speed",
+            line=dict(color="black", width=1),
+        ),
+        row=5,
+        col=1,
+        secondary_y=False,
+    )
+
+    # Sum of G trace
+    fig.add_trace(
+        go.Scatter(
+            x=distance_m,
+            y=sum_of_g,
+            mode="lines",
+            name="Sum of G",
+            line=dict(color="red", width=1),
+        ),
+        row=5,
+        col=1,
+        secondary_y=True,
+    )
+
+    # Brake trace
+    fig.add_trace(
+        go.Scatter(
+            x=distance_m,
+            y=brake_press,
+            mode="lines",
+            name="Brake",
+            line=dict(color="red", width=1),
+        ),
+        row=6,
+        col=1,
+        secondary_y=False,
+    )
+
+    # Throttle trace
+    fig.add_trace(
+        go.Scatter(
+            x=distance_m,
+            y=throttle_pps,
+            mode="lines",
+            name="Throttle",
+            line=dict(color="green", width=1),
+        ),
+        row=6,
+        col=1,
+        secondary_y=False,
+    )
+
+    # Steering trace
+    fig.add_trace(
+        go.Scatter(
+            x=distance_m,
+            y=steer_angle,
+            mode="lines",
+            name="Steering",
+            line=dict(color="black", width=1),
+        ),
+        row=6,
+        col=1,
+        secondary_y=True,
+    )
+
+    fig.update_layout(
+        title=title,
+        xaxis6_title="Distance (m)",
+        yaxis_title="FL",
+        yaxis2_title="FR",
+        yaxis3_title="RL",
+        yaxis4_title="RR",
+        width=width,
+        height=height,
+        showlegend=False,
+    )
+
+    # Set y-axis titles for speed/G subplot
+    fig.update_yaxes(title_text="km/h", row=5, col=1, secondary_y=False)
+    fig.update_yaxes(title_text="G", row=5, col=1, secondary_y=True)
+
+    # Set y-axis titles for driver inputs subplot
+    fig.update_yaxes(title_text="%", row=6, col=1, secondary_y=False)
+    fig.update_yaxes(title_text="deg", row=6, col=1, secondary_y=True)
+
+    # Hide tick labels on heatmap y-axes
+    for row in range(1, 5):
+        fig.update_yaxes(showticklabels=False, row=row, col=1)
+
+    return fig
+
+
+def plot_track_segments(
+    lap_channels: pd.DataFrame,
+    segments: list["TrackSegment"],
+    title: str = "Track Segments",
+    width: int = 900,
+    height: int = 700,
+) -> go.Figure:
+    """Plot GPS map with color-coded braking, corner, and acceleration zones.
+
+    Parameters
+    ----------
+    lap_channels : pd.DataFrame
+        Channel data for a single lap. Must contain:
+        - distance_m: Distance along lap (meters)
+        - GPS Latitude: Latitude values
+        - GPS Longitude: Longitude values
+    segments : list[TrackSegment]
+        List of TrackSegment objects defining track zones.
+    title : str, default="Track Segments"
+        Plot title.
+    width : int, default=900
+        Figure width in pixels.
+    height : int, default=700
+        Figure height in pixels.
+
+    Returns
+    -------
+    go.Figure
+        Plotly figure object with mapbox layout.
+
+    Examples
+    --------
+    >>> fig = plot_track_segments(lap_channels, segments)
+    >>> show_fig(fig)
+    """
+    distance_arr = np.asarray(lap_channels["distance_m"])
+    lat_arr = np.asarray(lap_channels["GPS Latitude"])
+    lon_arr = np.asarray(lap_channels["GPS Longitude"])
+
+    def get_indices_for_range(start_dist: float, end_dist: float) -> np.ndarray:
+        mask = (distance_arr >= start_dist) & (distance_arr <= end_dist)
+        return np.where(mask)[0]
+
+    segment_colors = {"braking": "red", "corner": "orange", "acceleration": "green"}
+
+    fig = go.Figure()
+
+    # Plot base track (gray)
+    fig.add_trace(
+        go.Scattermapbox(
+            lat=lat_arr,
+            lon=lon_arr,
+            mode="lines",
+            line=dict(width=3, color="lightgray"),
+            name="Track",
+            showlegend=True,
+        )
+    )
+
+    # Track which segment types we've added to legend
+    legend_added = {"braking": False, "corner": False, "acceleration": False}
+
+    legend_names = {
+        "braking": "Braking Zone",
+        "corner": "Corner",
+        "acceleration": "Acceleration Zone",
+    }
+
+    # Plot all segments
+    for seg in segments:
+        indices = get_indices_for_range(seg.start_dist, seg.end_dist)
+        if len(indices) > 0:
+            color = segment_colors.get(seg.segment_type, "gray")
+            show_in_legend = not legend_added[seg.segment_type]
+            legend_added[seg.segment_type] = True
+
+            fig.add_trace(
+                go.Scattermapbox(
+                    lat=lat_arr[indices],
+                    lon=lon_arr[indices],
+                    mode="lines",
+                    line=dict(width=6, color=color),
+                    name=legend_names.get(seg.segment_type) if show_in_legend else None,
+                    showlegend=show_in_legend,
+                    legendgroup=seg.segment_type,
+                )
+            )
+
+    # Add corner apex markers with labels
+    for seg in segments:
+        if seg.segment_type == "corner" and seg.apex_dist is not None:
+            apex_idx = int(np.argmin(np.abs(distance_arr - seg.apex_dist)))
+            fig.add_trace(
+                go.Scattermapbox(
+                    lat=[lat_arr[apex_idx]],
+                    lon=[lon_arr[apex_idx]],
+                    mode="markers+text",
+                    marker=dict(size=12, color="darkred", symbol="circle"),
+                    text=[seg.name],
+                    textposition="top right",
+                    textfont=dict(size=11, color="darkred"),
+                    name=None,
+                    showlegend=False,
+                )
+            )
+
+    fig.update_layout(
+        mapbox=dict(
+            style="open-street-map",
+            center=dict(lat=np.mean(lat_arr), lon=np.mean(lon_arr)),
+            zoom=14,
+        ),
+        title=title,
+        legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01, bgcolor="rgba(255,255,255,0.8)"),
+        width=width,
+        height=height,
     )
 
     return fig

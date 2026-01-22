@@ -68,6 +68,7 @@ module = [
     "libxrk.*",
     "numpy.*",
     "ipywidgets.*",
+    "pyarrow.*",
 ]
 ignore_missing_imports = true
 

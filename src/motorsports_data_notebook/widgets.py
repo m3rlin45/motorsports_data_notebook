@@ -5,10 +5,91 @@ This module provides Jupyter widgets for interactive data loading and analysis.
 
 from typing import TYPE_CHECKING, Union
 
+import numpy as np
+import pandas as pd
+import pyarrow as pa  # type: ignore[import-untyped]
 from IPython.display import display
+
+from .corners import compute_lap_distance
 
 if TYPE_CHECKING:
     import ipywidgets as widgets
+    from libxrk.base import LogFile
+
+
+def load_session(file_data: Union[str, bytes]) -> "LogFile":
+    """Load and prepare session data from XRK/XRZ file.
+
+    Loads the file using libxrk and adds derived columns:
+    - speed_kmh: Speed in km/h (from GPS Speed * 3.6)
+    - distance_m: Per-lap cumulative distance in meters
+    - lap_time: Lap duration as timedelta (added to laps table)
+
+    Parameters
+    ----------
+    file_data : str or bytes
+        Path to the XRK/XRZ file, or bytes containing file data.
+
+    Returns
+    -------
+    LogFile
+        The enriched LogFile object with derived channels and lap_time column.
+
+    Examples
+    --------
+    >>> from motorsports_data_notebook.widgets import load_session, FileUpload
+    >>> file_upload = FileUpload("sample.xrz")
+    >>> file_upload.display()
+    >>> log = load_session(file_upload.get_file_data())
+    >>> channels = log.get_channels_as_table().to_pandas()
+    >>> laps = log.laps.to_pandas()
+    """
+    from libxrk import aim_xrk
+
+    log = aim_xrk(file_data)
+
+    # Get channels as a single table to compute derived values
+    channels_table = log.get_channels_as_table()
+    channels_df = channels_table.to_pandas()
+
+    # Add speed_kmh channel
+    if "GPS Speed" in channels_df.columns:
+        speed_kmh = channels_df["GPS Speed"] * 3.6
+        speed_kmh_table = pa.table(
+            {"timecodes": channels_df["timecodes"].values, "speed_kmh": speed_kmh.values}
+        )
+        log.channels["speed_kmh"] = speed_kmh_table
+
+    # Compute distance_m for each lap
+    laps_df = log.laps.to_pandas()
+    laps_df["lap_time"] = pd.to_timedelta(laps_df["end_time"] - laps_df["start_time"], unit="ms")
+
+    # Initialize distance array
+    distance_m = np.zeros(len(channels_df))
+
+    if "GPS Speed" in channels_df.columns:
+        for _, lap in laps_df.iterrows():
+            lap_mask = (channels_df["timecodes"] >= lap["start_time"]) & (
+                channels_df["timecodes"] <= lap["end_time"]
+            )
+            lap_indices = channels_df.index[lap_mask]
+
+            if len(lap_indices) > 0:
+                lap_timecodes = channels_df.loc[lap_indices, "timecodes"]
+                lap_speed = channels_df.loc[lap_indices, "GPS Speed"]
+                distance_values = compute_lap_distance(lap_timecodes.values, lap_speed.values)
+                distance_m[lap_indices] = distance_values
+
+    # Add distance_m channel
+    distance_table = pa.table(
+        {"timecodes": channels_df["timecodes"].values, "distance_m": distance_m}
+    )
+    log.channels["distance_m"] = distance_table
+
+    # Update laps table with lap_time column
+    log.laps = pa.Table.from_pandas(laps_df, preserve_index=False)
+
+    return log
 
 
 class FileUpload:
