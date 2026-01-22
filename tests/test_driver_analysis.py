@@ -219,12 +219,8 @@ class TestFindThrottleAcceptance:
         throttle_start_idx = lap_data[lap_data["distance_m"] >= 250].index[0]
         lap_data.loc[throttle_start_idx:, "PPS"] = 100
 
-        result_no_smooth = find_throttle_acceptance(
-            lap_data.copy(), corner, smoothing_window=1
-        )
-        result_smoothed = find_throttle_acceptance(
-            lap_data.copy(), corner, smoothing_window=25
-        )
+        result_no_smooth = find_throttle_acceptance(lap_data.copy(), corner, smoothing_window=1)
+        result_smoothed = find_throttle_acceptance(lap_data.copy(), corner, smoothing_window=25)
 
         # Both should return results
         assert result_no_smooth is not None
