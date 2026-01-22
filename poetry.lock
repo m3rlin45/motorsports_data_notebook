@@ -4421,9 +4421,9 @@ type = ["pytest-mypy"]
 
 [extras]
 dev = ["black", "mypy", "nbqa", "pandas-stubs", "types-seaborn"]
-jupyterlite = ["jupyterlite-core", "jupyterlite-pyodide-kernel", "pyodide-build"]
+jupyterlite = ["jupyterlite-core", "jupyterlite-pyodide-kernel", "nbconvert", "pyodide-build"]
 
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "d90270f9b06aae60c27d359d8ee26bd8014de2bd2d1eb23fc81dec87b94abdfa"
+content-hash = "eeaddaef8b1fc11d0791ed01e0219fa74ef432525514979440d4c63f68600d0e"

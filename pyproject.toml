@@ -32,7 +32,8 @@ dev = [
 jupyterlite = [
     "jupyterlite-core==0.6.0",
     "jupyterlite-pyodide-kernel==0.6.0",
-    "pyodide-build==0.27.3"
+    "pyodide-build==0.27.3",
+    "nbconvert>=7.0.0"
 ]
 
 [tool.poetry]
@@ -90,7 +91,10 @@ build_libxrk_pyodide = { sequence = ["_download_libxrk", "_build_libxrk_pyodide"
 build_wheels_lite = ["build_wheel", "build_libxrk_pyodide"]
 
 # JupyterLite site building tasks  
-build_lite = { shell = "rm -rf .lite_contents dist && mkdir -p .lite_contents && cp workspace_template/*.xrz .lite_contents/ && VERSION=$(poetry version -s) && for nb in basics tire_analysis track_analysis consistency_analysis; do cp workspace_template/${nb}.ipynb \".lite_contents/${nb}_v${VERSION}.ipynb\"; done && jupyter lite build --contents .lite_contents --output-dir dist && rm -rf .lite_contents", help = "Build JupyterLite static site with versioned notebooks" }
+_prepare_lite_contents = { shell = "rm -rf .lite_contents dist && mkdir -p .lite_contents && cp workspace_template/*.xrz .lite_contents/ && VERSION=$(poetry version -s) && for nb in basics tire_analysis track_analysis consistency_analysis; do cp workspace_template/${nb}.ipynb \".lite_contents/${nb}_v${VERSION}.ipynb\"; done", help = "Prepare .lite_contents directory with versioned notebooks" }
+_execute_lite_notebooks = { shell = "cd .lite_contents && python ../scripts/execute_notebooks.py", help = "Execute notebooks in .lite_contents to populate outputs" }
+_build_lite_site = { shell = "jupyter lite build --contents .lite_contents --output-dir dist && rm -rf .lite_contents", help = "Build JupyterLite site from .lite_contents" }
+build_lite = ["_prepare_lite_contents", "_execute_lite_notebooks", "_build_lite_site"]
 build_lite_full = ["build_wheels_lite", "build_lite"]
 serve_lite = { cmd = "jupyter lite serve --output-dir dist", help = "Serve JupyterLite site locally" }
 build_and_serve_lite = ["build_lite_full", "serve_lite"]
