@@ -44,3 +44,23 @@ Template notebooks in `workspace_template/` are:
 - Executed during CI to populate outputs before deployment
 - Renamed with version suffix (e.g., `basics_v0.3.0.ipynb`) when packaged
 - Must be able to run with the sample `.xrz` data file in the same directory
+
+## CI/CD Debugging Tips
+
+When checking GitHub Actions CI failures:
+
+1. **List recent runs** (include limit 2+ to see both CI and Deploy jobs):
+   ```bash
+   gh run list --branch <branch> --limit 3 --json databaseId,conclusion,name
+   ```
+
+2. **Get failed job logs**:
+   ```bash
+   gh run view <run-id> --log-failed 2>&1 | tail -80
+   ```
+
+3. **Common issues**:
+   - Poetry uses `--extras <name>` for `[project.optional-dependencies]` (PEP 621 style)
+   - Poetry uses `--with <name>` for `[tool.poetry.group.<name>.dependencies]` (Poetry groups)
+   - CI installs via `poetry install --extras dev` to use locked versions from `poetry.lock`
+   - If CI uses `pip install .[dev]`, it ignores `poetry.lock` and gets latest allowed versions
