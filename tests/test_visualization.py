@@ -10,9 +10,11 @@ from motorsports_data_notebook.visualization import (
     get_best_lap,
     get_best_lap_data,
     get_top_laps,
+    plot_corner_inputs,
     plot_tire_thermography,
     plot_track_segments,
 )
+from motorsports_data_notebook.corners import Corner
 from motorsports_data_notebook.zones import TrackSegment
 
 
@@ -313,3 +315,165 @@ def test_plot_track_segments_custom_dimensions(sample_lap_channels, sample_segme
 
     assert fig.layout.width == 1200
     assert fig.layout.height == 800
+
+
+# ============================================================================
+# Tests for plot_corner_inputs
+# ============================================================================
+
+
+@pytest.fixture
+def sample_corner():
+    """Create a sample corner for plotting tests."""
+    return Corner(
+        id=1,
+        name="Turn 1",
+        direction="L",
+        start_idx=50,
+        end_idx=150,
+        start_dist=500,
+        end_dist=700,
+        apex_idx=100,
+        apex_dist=600,
+        max_curvature=0.01,
+    )
+
+
+@pytest.fixture
+def sample_corner_data():
+    """Create sample corner data arrays."""
+    n_samples = 100
+    distance = np.linspace(450, 750, n_samples)
+    throttle = np.concatenate([
+        np.linspace(100, 0, 30),  # Lift off
+        np.zeros(40),              # Coast
+        np.linspace(0, 100, 30),   # Back on throttle
+    ])
+    brake = np.concatenate([
+        np.zeros(10),
+        np.linspace(0, 80, 20),    # Braking
+        np.linspace(80, 0, 30),    # Trail brake
+        np.zeros(40),
+    ])
+    steering = np.concatenate([
+        np.zeros(20),
+        np.linspace(0, -90, 30),   # Turn in
+        np.linspace(-90, -45, 30), # Unwinding
+        np.linspace(-45, 0, 20),   # Exit
+    ])
+    return {
+        "distance": distance,
+        "throttle": throttle,
+        "brake": brake,
+        "steering": steering,
+    }
+
+
+def test_plot_corner_inputs_returns_figure(sample_corner_data, sample_corner):
+    """Test that plot_corner_inputs returns a Plotly figure."""
+    fig = plot_corner_inputs(
+        sample_corner_data["distance"],
+        sample_corner,
+        throttle=sample_corner_data["throttle"],
+        brake=sample_corner_data["brake"],
+        steering=sample_corner_data["steering"],
+    )
+
+    assert isinstance(fig, go.Figure)
+
+
+def test_plot_corner_inputs_has_three_subplots(sample_corner_data, sample_corner):
+    """Test that figure has traces for all three channels."""
+    fig = plot_corner_inputs(
+        sample_corner_data["distance"],
+        sample_corner,
+        throttle=sample_corner_data["throttle"],
+        brake=sample_corner_data["brake"],
+        steering=sample_corner_data["steering"],
+    )
+
+    # Should have at least 3 traces (one per channel)
+    assert len(fig.data) >= 3
+
+
+def test_plot_corner_inputs_custom_title(sample_corner_data, sample_corner):
+    """Test that custom title is applied."""
+    fig = plot_corner_inputs(
+        sample_corner_data["distance"],
+        sample_corner,
+        throttle=sample_corner_data["throttle"],
+        title="Custom Title",
+    )
+
+    assert fig.layout.title.text == "Custom Title"
+
+
+def test_plot_corner_inputs_default_title(sample_corner_data, sample_corner):
+    """Test that default title includes corner name."""
+    fig = plot_corner_inputs(
+        sample_corner_data["distance"],
+        sample_corner,
+        throttle=sample_corner_data["throttle"],
+    )
+
+    assert "Turn 1" in fig.layout.title.text
+
+
+def test_plot_corner_inputs_custom_dimensions(sample_corner_data, sample_corner):
+    """Test that custom dimensions are applied."""
+    fig = plot_corner_inputs(
+        sample_corner_data["distance"],
+        sample_corner,
+        throttle=sample_corner_data["throttle"],
+        width=800,
+        height=400,
+    )
+
+    assert fig.layout.width == 800
+    assert fig.layout.height == 400
+
+
+def test_plot_corner_inputs_single_channel(sample_corner_data, sample_corner):
+    """Test that plot works with only one channel."""
+    fig = plot_corner_inputs(
+        sample_corner_data["distance"],
+        sample_corner,
+        throttle=sample_corner_data["throttle"],
+    )
+
+    # Should have 1 trace
+    assert len(fig.data) == 1
+
+
+def test_plot_corner_inputs_two_channels(sample_corner_data, sample_corner):
+    """Test that plot works with two channels."""
+    fig = plot_corner_inputs(
+        sample_corner_data["distance"],
+        sample_corner,
+        throttle=sample_corner_data["throttle"],
+        brake=sample_corner_data["brake"],
+    )
+
+    # Should have 2 traces
+    assert len(fig.data) == 2
+
+
+def test_plot_corner_inputs_no_channels_raises(sample_corner_data, sample_corner):
+    """Test that having no input channels raises an error."""
+    with pytest.raises(ValueError, match="At least one input channel"):
+        plot_corner_inputs(sample_corner_data["distance"], sample_corner)
+
+
+def test_plot_corner_inputs_has_corner_annotations(sample_corner_data, sample_corner):
+    """Test that figure includes corner boundary and apex annotations."""
+    fig = plot_corner_inputs(
+        sample_corner_data["distance"],
+        sample_corner,
+        throttle=sample_corner_data["throttle"],
+        brake=sample_corner_data["brake"],
+        steering=sample_corner_data["steering"],
+    )
+
+    # Check for vrect (corner boundary) and vline (apex) shapes
+    shapes = fig.layout.shapes if fig.layout.shapes else []
+    assert len(shapes) > 0

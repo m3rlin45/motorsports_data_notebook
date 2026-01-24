@@ -6,7 +6,8 @@ of lap data and GPS track data.
 
 import math
 import sys
-from typing import TYPE_CHECKING
+import warnings
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
@@ -15,6 +16,7 @@ import plotly.io as pio
 from plotly.subplots import make_subplots
 
 if TYPE_CHECKING:
+    from .corners import Corner
     from .zones import TrackSegment
 
 
@@ -74,6 +76,336 @@ def show_fig(fig):
     else:
         # Standard environment
         fig.show()
+
+
+# Type alias for array-like inputs (using Any for flexibility with .values return types)
+ArrayLike = Any
+
+
+def plot_corner_inputs(
+    distance: ArrayLike,
+    corner: "Corner",
+    *,
+    throttle: ArrayLike | None = None,
+    brake: ArrayLike | None = None,
+    steering: ArrayLike | None = None,
+    title: str | None = None,
+    width: int = 1000,
+    height: int = 600,
+) -> go.Figure:
+    """Plot driver inputs (throttle, brake, steering) over distance for a corner.
+
+    Creates a subplot with shared x-axis (distance) showing the provided input
+    channels. Each channel has its own y-axis row.
+
+    Parameters
+    ----------
+    distance : array-like
+        Distance values in meters (x-axis).
+    corner : Corner
+        The corner object with start_dist, end_dist, apex_dist, and name.
+    throttle : array-like, optional
+        Throttle values (e.g., PPS channel). Omit to skip throttle row.
+    brake : array-like, optional
+        Brake pressure values. Omit to skip brake row.
+    steering : array-like, optional
+        Steering angle values. Omit to skip steering row.
+    title : str, optional
+        Plot title. Defaults to "Driver Inputs - {corner.name}".
+    width : int, default=1000
+        Figure width in pixels.
+    height : int, default=600
+        Figure height in pixels.
+
+    Returns
+    -------
+    go.Figure
+        Plotly figure with the corner inputs visualization.
+
+    Raises
+    ------
+    ValueError
+        If no input channels are provided.
+
+    Examples
+    --------
+    >>> from motorsports_data_notebook.zones import get_corner_data
+    >>> corner_data = get_corner_data(channels, laps, segments, corner_id=1, lap_num=3, margin=50)
+    >>> fig = plot_corner_inputs(
+    ...     corner_data["distance_m"],
+    ...     corners[0],
+    ...     throttle=corner_data["PPS"],
+    ...     brake=corner_data["BrakePress"],
+    ...     steering=corner_data["Steering"],
+    ... )
+    >>> show_fig(fig)
+    """
+    # Build list of channels to plot: (data, display_name, color)
+    channel_specs: list[tuple[ArrayLike, str, str]] = []
+    if throttle is not None:
+        channel_specs.append((throttle, "Throttle (%)", "green"))
+    if brake is not None:
+        channel_specs.append((brake, "Brake Pressure", "red"))
+    if steering is not None:
+        channel_specs.append((steering, "Steering (°)", "blue"))
+
+    if not channel_specs:
+        raise ValueError(
+            "At least one input channel (throttle, brake, or steering) must be provided"
+        )
+
+    n_rows = len(channel_specs)
+
+    # Create subplots with shared x-axis
+    fig = make_subplots(
+        rows=n_rows,
+        cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.08,
+        subplot_titles=[display for _, display, _ in channel_specs],
+    )
+
+    # Add traces for each channel
+    for i, (data, display_name, color) in enumerate(channel_specs, start=1):
+        fig.add_trace(
+            go.Scatter(
+                x=distance,
+                y=data,
+                mode="lines",
+                name=display_name,
+                line=dict(color=color, width=2),
+                showlegend=False,
+            ),
+            row=i,
+            col=1,
+        )
+
+        # Add corner boundary shading to each subplot
+        fig.add_vrect(
+            x0=corner.start_dist,
+            x1=corner.end_dist,
+            fillcolor="gray",
+            opacity=0.1,
+            line_width=0,
+            row=i,
+            col=1,
+        )
+
+        # Add apex line to each subplot
+        fig.add_vline(
+            x=corner.apex_dist,
+            line_dash="dot",
+            line_color="orange",
+            opacity=0.7,
+            row=i,
+            col=1,
+        )
+
+    # Update layout
+    plot_title = title if title is not None else f"Driver Inputs - {corner.name}"
+    fig.update_layout(
+        title=plot_title,
+        width=width,
+        height=height,
+    )
+
+    # Label x-axis only on bottom subplot
+    fig.update_xaxes(title_text="Distance (m)", row=n_rows, col=1)
+
+    # Label y-axes
+    for i, (_, display_name, _) in enumerate(channel_specs, start=1):
+        fig.update_yaxes(title_text=display_name, row=i, col=1)
+
+    return fig
+
+
+def visualize_throttle_acceptance(
+    distance: ArrayLike,
+    throttle: ArrayLike,
+    lateral_g: ArrayLike,
+    corner: "Corner",
+    throttle_acceptance_result: dict[str, float],
+    *,
+    brake: ArrayLike | None = None,
+    steering: ArrayLike | None = None,
+    title: str | None = None,
+    width: int = 1000,
+    height: int = 500,
+) -> go.Figure:
+    """Visualize throttle acceptance for a corner.
+
+    Creates a visualization showing throttle, lateral G, and optionally brake
+    and steering over distance, with reference lines for peak G, throttle
+    acceptance point, and corner boundaries.
+
+    Parameters
+    ----------
+    distance : array-like
+        Distance values in meters (x-axis).
+    throttle : array-like
+        Throttle values (0-100%).
+    lateral_g : array-like
+        Lateral G values (already smoothed if desired).
+    corner : Corner
+        The corner object with start_dist, end_dist, apex_dist, and name.
+    throttle_acceptance_result : dict
+        Result from find_throttle_acceptance() containing:
+        - peak_lateral_g: Peak lateral G in the corner
+        - lateral_g_at_throttle: Lateral G when full throttle is reached
+        - throttle_acceptance_pct: Percentage of peak G at full throttle
+        - full_throttle_dist: Distance where full throttle is reached
+    brake : array-like, optional
+        Brake pressure values. Omit to skip brake trace.
+    steering : array-like, optional
+        Steering angle values. Omit to skip steering trace.
+    title : str, optional
+        Plot title. Defaults to "Throttle Acceptance - {corner.name}".
+    width : int, default=1000
+        Figure width in pixels.
+    height : int, default=500
+        Figure height in pixels.
+
+    Returns
+    -------
+    go.Figure
+        Plotly figure with the throttle acceptance visualization.
+
+    Examples
+    --------
+    >>> from motorsports_data_notebook.zones import get_corner_data
+    >>> corner_data = get_corner_data(channels, laps, corners[0], best_lap["num"])
+    >>> lateral_g_smooth = corner_data["LateralAcc"].abs().rolling(25, center=True, min_periods=1).mean()
+    >>> fig = visualize_throttle_acceptance(
+    ...     distance=corner_data["distance_m"],
+    ...     throttle=corner_data["PPS"],
+    ...     lateral_g=lateral_g_smooth,
+    ...     corner=corners[0],
+    ...     throttle_acceptance_result=result,
+    ...     brake=corner_data.get("BrakePress"),
+    ...     steering=corner_data.get("SteerAngle"),
+    ... )
+    """
+    fig = go.Figure()
+
+    # Throttle trace (scaled to fit on same axis as G)
+    fig.add_trace(
+        go.Scatter(
+            x=distance,
+            y=np.asarray(throttle) / 100 * 2,  # Scale 0-100% to 0-2 for visibility
+            mode="lines",
+            name="Throttle (scaled)",
+            line=dict(color="green", width=2),
+            hovertemplate="Distance: %{x:.0f}m<br>Throttle: %{customdata:.0f}%<extra></extra>",
+            customdata=throttle,
+        )
+    )
+
+    # Brake trace (scaled to fit on same axis as G)
+    if brake is not None:
+        brake_arr = np.asarray(brake)
+        brake_max = brake_arr.max()
+        if brake_max > 0:
+            fig.add_trace(
+                go.Scatter(
+                    x=distance,
+                    y=brake_arr / brake_max * 2,  # Scale to 0-2 for visibility
+                    mode="lines",
+                    name="Brake (scaled)",
+                    line=dict(color="red", width=2),
+                    hovertemplate="Distance: %{x:.0f}m<br>Brake: %{customdata:.0f}<extra></extra>",
+                    customdata=brake,
+                )
+            )
+
+    # Steering trace (scaled to fit on same axis as G)
+    if steering is not None:
+        steering_arr = np.asarray(steering)
+        steer_max = np.abs(steering_arr).max()
+        if steer_max > 0:
+            fig.add_trace(
+                go.Scatter(
+                    x=distance,
+                    y=steering_arr / steer_max,  # Scale to -1 to 1
+                    mode="lines",
+                    name="Steering (scaled)",
+                    line=dict(color="purple", width=2),
+                    hovertemplate="Distance: %{x:.0f}m<br>Steering: %{customdata:.1f}°<extra></extra>",
+                    customdata=steering,
+                )
+            )
+
+    # Lateral G trace
+    fig.add_trace(
+        go.Scatter(
+            x=distance,
+            y=lateral_g,
+            mode="lines",
+            name="Lateral G",
+            line=dict(color="blue", width=2),
+            hovertemplate="Distance: %{x:.0f}m<br>Lateral G: %{y:.2f}G<extra></extra>",
+        )
+    )
+
+    # Peak lateral G reference line
+    fig.add_hline(
+        y=throttle_acceptance_result["peak_lateral_g"],
+        line_dash="dash",
+        line_color="blue",
+        opacity=0.7,
+        annotation_text=f"Peak Lateral G: {throttle_acceptance_result['peak_lateral_g']:.2f}G",
+        annotation_position="top right",
+    )
+
+    # Lateral G at throttle acceptance reference line
+    fig.add_hline(
+        y=throttle_acceptance_result["lateral_g_at_throttle"],
+        line_dash="dash",
+        line_color="red",
+        opacity=0.7,
+        annotation_text=f"Lateral G at Full Throttle: {throttle_acceptance_result['lateral_g_at_throttle']:.2f}G ({throttle_acceptance_result['throttle_acceptance_pct']:.0f}%)",
+        annotation_position="bottom right",
+    )
+
+    # Full throttle point vertical line
+    fig.add_vline(
+        x=throttle_acceptance_result["full_throttle_dist"],
+        line_dash="dash",
+        line_color="green",
+        opacity=0.7,
+        annotation_text="Full Throttle Point",
+        annotation_position="top",
+    )
+
+    # Corner boundaries
+    fig.add_vrect(
+        x0=corner.start_dist,
+        x1=corner.end_dist,
+        fillcolor="gray",
+        opacity=0.1,
+        line_width=0,
+        annotation_text=corner.name,
+        annotation_position="top left",
+    )
+
+    # Apex line
+    fig.add_vline(
+        x=corner.apex_dist,
+        line_dash="dot",
+        line_color="orange",
+        opacity=0.5,
+        annotation_text="Apex",
+    )
+
+    fig.update_layout(
+        title=title if title is not None else f"Throttle Acceptance - {corner.name}",
+        xaxis_title="Distance (m)",
+        yaxis_title="Lateral G / Inputs (scaled)",
+        width=width,
+        height=height,
+        legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01),
+    )
+
+    return fig
 
 
 def get_best_lap(laps_df):

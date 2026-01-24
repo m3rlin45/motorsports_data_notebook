@@ -12,7 +12,9 @@ from .driver_analysis import find_throttle_acceptance
 from .visualization import (
     compute_start_line,
     get_best_lap,
+    plot_corner_inputs,
     plot_lap_gps,
+    visualize_throttle_acceptance,
     show_fig,
 )
 from .widgets import FileUpload
@@ -20,6 +22,8 @@ from .zones import (
     TrackSegment,
     average_zones_across_laps,
     create_track_segments,
+    get_corner_data,
+    get_segment_mask,
     identify_zones_single_lap,
     merge_accel_zones_by_time,
 )
@@ -37,7 +41,9 @@ __all__ = [
     # visualization
     "compute_start_line",
     "get_best_lap",
+    "plot_corner_inputs",
     "plot_lap_gps",
+    "visualize_throttle_acceptance",
     "show_fig",
     # widgets
     "FileUpload",
@@ -45,6 +51,8 @@ __all__ = [
     "TrackSegment",
     "average_zones_across_laps",
     "create_track_segments",
+    "get_corner_data",
+    "get_segment_mask",
     "identify_zones_single_lap",
     "merge_accel_zones_by_time",
 ]

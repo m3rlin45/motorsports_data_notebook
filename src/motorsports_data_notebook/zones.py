@@ -4,12 +4,16 @@ This module provides functions for detecting braking and acceleration zones
 from telemetry data and building track segment definitions.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 
-from .corners import Corner
+if TYPE_CHECKING:
+    from .corners import Corner
 
 
 @dataclass
@@ -46,6 +50,183 @@ class TrackSegment:
     def length(self) -> float:
         """Segment length in meters."""
         return self.end_dist - self.start_dist
+
+
+def get_segment_mask(
+    channels: pd.DataFrame,
+    segment: TrackSegment,
+    *,
+    margin: float = 0.0,
+) -> pd.Series:
+    """Return a boolean mask for rows within a segment's distance range.
+
+    The caller is responsible for pre-filtering by lap (e.g., using timecodes).
+    This function only filters by distance within the segment boundaries.
+
+    Parameters
+    ----------
+    channels : pd.DataFrame
+        Channel data with a 'distance_m' column.
+    segment : TrackSegment
+        The segment to create a mask for.
+    margin : float, default=0.0
+        Extra distance (meters) to include before and after the segment.
+
+    Returns
+    -------
+    pd.Series
+        Boolean mask where True indicates rows within the segment range.
+
+    Examples
+    --------
+    >>> # Get data for Turn 1 with 50m margin
+    >>> mask = get_segment_mask(lap_channels, turn1_segment, margin=50)
+    >>> turn1_data = lap_channels[mask]
+    """
+    return (channels["distance_m"] >= segment.start_dist - margin) & (
+        channels["distance_m"] <= segment.end_dist + margin
+    )
+
+
+def get_corner_data(
+    channels: pd.DataFrame,
+    laps: pd.DataFrame,
+    corner: "Corner",
+    lap_num: int,
+    *,
+    margin: float = 50.0,
+) -> pd.DataFrame:
+    """Get channel data for a specific corner and lap combination.
+
+    Convenience function that filters channels by lap timecodes and corner
+    distance range in one call.
+
+    Parameters
+    ----------
+    channels : pd.DataFrame
+        Channel data with 'timecodes' and 'distance_m' columns.
+    laps : pd.DataFrame
+        Laps table with 'num', 'start_time', 'end_time' columns.
+    corner : Corner
+        The corner object with start_dist and end_dist.
+    lap_num : int
+        Lap number to select.
+    margin : float, default=50.0
+        Extra distance (meters) to include before and after the corner.
+
+    Returns
+    -------
+    pd.DataFrame
+        Filtered channel data for the specified corner and lap.
+
+    Raises
+    ------
+    ValueError
+        If the lap number is not found.
+
+    Examples
+    --------
+    >>> corner_data = get_corner_data(channels, laps, corners[0], lap_num=3, margin=50)
+    >>> fig = visualize_throttle_acceptance(
+    ...     distance=corner_data["distance_m"],
+    ...     throttle=corner_data["PPS"],
+    ...     lateral_g=corner_data["LateralAcc"].abs(),
+    ...     corner=corners[0],
+    ...     throttle_acceptance_result=result,
+    ... )
+    """
+    # Find the lap
+    lap_row = laps[laps["num"] == lap_num]
+    if len(lap_row) == 0:
+        raise ValueError(f"Lap {lap_num} not found in laps table")
+    lap = lap_row.iloc[0]
+
+    # Filter by lap timecodes
+    lap_mask = (channels["timecodes"] >= lap["start_time"]) & (
+        channels["timecodes"] <= lap["end_time"]
+    )
+    lap_data = channels[lap_mask]
+
+    # Filter by corner distance
+    corner_mask = (lap_data["distance_m"] >= corner.start_dist - margin) & (
+        lap_data["distance_m"] <= corner.end_dist + margin
+    )
+
+    result: pd.DataFrame = lap_data[corner_mask].copy()
+    return result
+
+
+def get_corner_data_from_segments(
+    channels: pd.DataFrame,
+    laps: pd.DataFrame,
+    segments: list[TrackSegment],
+    corner_id: int,
+    lap_num: int,
+    *,
+    margin: float = 0.0,
+) -> pd.DataFrame:
+    """Get channel data for a specific corner and lap using segment definitions.
+
+    Convenience function that filters channels by lap timecodes and segment
+    distance range in one call. Use get_corner_data() for simpler usage with
+    Corner objects directly.
+
+    Parameters
+    ----------
+    channels : pd.DataFrame
+        Channel data with 'timecodes' and 'distance_m' columns.
+    laps : pd.DataFrame
+        Laps table with 'num', 'start_time', 'end_time' columns.
+    segments : list[TrackSegment]
+        List of track segments from create_track_segments().
+    corner_id : int
+        Corner ID (1-indexed) to select.
+    lap_num : int
+        Lap number to select.
+    margin : float, default=0.0
+        Extra distance (meters) to include before and after the corner.
+
+    Returns
+    -------
+    pd.DataFrame
+        Filtered channel data for the specified corner and lap.
+
+    Raises
+    ------
+    ValueError
+        If the lap number or corner ID is not found.
+
+    Examples
+    --------
+    >>> corner_data = get_corner_data_from_segments(channels, laps, segments, corner_id=1, lap_num=3)
+    """
+    # Find the lap
+    lap_row = laps[laps["num"] == lap_num]
+    if len(lap_row) == 0:
+        raise ValueError(f"Lap {lap_num} not found in laps table")
+    lap = lap_row.iloc[0]
+
+    # Find the corner segment
+    corner_segment = None
+    for seg in segments:
+        if seg.segment_type == "corner" and seg.corner_id == corner_id:
+            corner_segment = seg
+            break
+
+    if corner_segment is None:
+        raise ValueError(f"Corner {corner_id} not found in segments")
+
+    # Filter by lap timecodes
+    lap_mask = (channels["timecodes"] >= lap["start_time"]) & (
+        channels["timecodes"] <= lap["end_time"]
+    )
+    lap_data = channels[lap_mask]
+
+    # Filter by segment distance
+    segment_mask = get_segment_mask(lap_data, corner_segment, margin=margin)
+
+    result: pd.DataFrame = lap_data[segment_mask].copy()
+    return result
 
 
 def identify_zones_single_lap(
