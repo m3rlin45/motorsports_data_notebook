@@ -14,6 +14,8 @@ from motorsports_data_notebook.zones import (
     compute_segment_stats,
     create_track_segments,
     detect_zones_averaged,
+    get_corner_data,
+    get_segment_mask,
     identify_zones_single_lap,
     merge_accel_zones_by_time,
 )
@@ -698,3 +700,191 @@ class TestComputeSegmentStats:
         n_laps = len(sample_laps_for_stats)
         n_segments = len(sample_segments_for_stats)
         assert len(stats_df) == n_laps * n_segments
+
+
+class TestGetSegmentMask:
+    """Tests for get_segment_mask function."""
+
+    @pytest.fixture
+    def sample_channels(self):
+        """Create sample channel data with distance."""
+        return pd.DataFrame({
+            "distance_m": np.linspace(0, 1000, 500),
+            "speed_kmh": np.random.uniform(50, 150, 500),
+        })
+
+    @pytest.fixture
+    def sample_segment(self):
+        """Create a sample segment."""
+        return TrackSegment(
+            id=1,
+            segment_type="corner",
+            start_dist=200,
+            end_dist=400,
+            name="Turn 1",
+            corner_id=1,
+            apex_dist=300,
+        )
+
+    def test_basic_mask(self, sample_channels, sample_segment):
+        """Test that mask correctly filters to segment distance range."""
+        mask = get_segment_mask(sample_channels, sample_segment)
+
+        assert isinstance(mask, pd.Series)
+        assert mask.dtype == bool
+
+        # Check that masked data is within segment bounds
+        masked_data = sample_channels[mask]
+        assert masked_data["distance_m"].min() >= 200
+        assert masked_data["distance_m"].max() <= 400
+
+    def test_mask_with_margin(self, sample_channels, sample_segment):
+        """Test that margin extends the masked region."""
+        mask = get_segment_mask(sample_channels, sample_segment, margin=50)
+        masked_data = sample_channels[mask]
+
+        # With 50m margin, range should be 150-450
+        assert masked_data["distance_m"].min() >= 150
+        assert masked_data["distance_m"].max() <= 450
+
+    def test_mask_no_margin_vs_margin(self, sample_channels, sample_segment):
+        """Test that margin includes more data."""
+        mask_no_margin = get_segment_mask(sample_channels, sample_segment)
+        mask_with_margin = get_segment_mask(sample_channels, sample_segment, margin=100)
+
+        assert mask_with_margin.sum() > mask_no_margin.sum()
+
+    def test_mask_empty_when_no_overlap(self, sample_channels):
+        """Test that mask is empty when segment is outside data range."""
+        segment_outside = TrackSegment(
+            id=1,
+            segment_type="corner",
+            start_dist=1500,  # Beyond our 0-1000 data
+            end_dist=1700,
+            name="Turn Far",
+            corner_id=1,
+        )
+
+        mask = get_segment_mask(sample_channels, segment_outside)
+        assert mask.sum() == 0
+
+    def test_mask_preserves_index(self, sample_channels, sample_segment):
+        """Test that mask can be used to filter original DataFrame."""
+        mask = get_segment_mask(sample_channels, sample_segment)
+        filtered = sample_channels[mask]
+
+        # Should be able to access filtered data without errors
+        assert len(filtered) > 0
+        assert "distance_m" in filtered.columns
+        assert "speed_kmh" in filtered.columns
+
+
+class TestGetCornerData:
+    """Tests for get_corner_data function."""
+
+    @pytest.fixture
+    def sample_channels(self):
+        """Create sample channel data spanning multiple laps."""
+        n_samples = 600
+        return pd.DataFrame({
+            "timecodes": np.concatenate([
+                np.linspace(0, 60000, 200),      # Lap 1
+                np.linspace(60000, 120000, 200), # Lap 2
+                np.linspace(120000, 180000, 200), # Lap 3
+            ]),
+            "distance_m": np.tile(np.linspace(0, 1000, 200), 3),  # Reset each lap
+            "PPS": np.random.uniform(0, 100, n_samples),
+            "BrakePress": np.random.uniform(0, 100, n_samples),
+            "Steering": np.random.uniform(-90, 90, n_samples),
+        })
+
+    @pytest.fixture
+    def sample_laps(self):
+        """Create sample laps table."""
+        return pd.DataFrame({
+            "num": [1, 2, 3],
+            "start_time": [0, 60000, 120000],
+            "end_time": [60000, 120000, 180000],
+        })
+
+    @pytest.fixture
+    def sample_corners(self):
+        """Create sample Corner objects."""
+        return [
+            Corner(
+                id=1,
+                name="Turn 1",
+                direction="L",
+                start_idx=100,
+                end_idx=200,
+                start_dist=200,
+                end_dist=400,
+                apex_idx=150,
+                apex_dist=300,
+                max_curvature=0.01,
+            ),
+            Corner(
+                id=2,
+                name="Turn 2",
+                direction="R",
+                start_idx=350,
+                end_idx=450,
+                start_dist=700,
+                end_dist=900,
+                apex_idx=400,
+                apex_dist=800,
+                max_curvature=0.01,
+            ),
+        ]
+
+    def test_get_corner_data_returns_dataframe(self, sample_channels, sample_laps, sample_corners):
+        """Test that get_corner_data returns a DataFrame."""
+        result = get_corner_data(sample_channels, sample_laps, sample_corners[0], lap_num=2)
+        assert isinstance(result, pd.DataFrame)
+
+    def test_get_corner_data_filters_by_lap(self, sample_channels, sample_laps, sample_corners):
+        """Test that data is filtered to the correct lap."""
+        result = get_corner_data(sample_channels, sample_laps, sample_corners[0], lap_num=2)
+
+        # All timecodes should be in lap 2 range (60000-120000)
+        assert result["timecodes"].min() >= 60000
+        assert result["timecodes"].max() <= 120000
+
+    def test_get_corner_data_filters_by_corner(self, sample_channels, sample_laps, sample_corners):
+        """Test that data is filtered to the correct corner distance."""
+        result = get_corner_data(sample_channels, sample_laps, sample_corners[0], lap_num=2, margin=0)
+
+        # All distances should be in Turn 1 range (200-400)
+        assert result["distance_m"].min() >= 200
+        assert result["distance_m"].max() <= 400
+
+    def test_get_corner_data_with_margin(self, sample_channels, sample_laps, sample_corners):
+        """Test that margin extends the distance range."""
+        result = get_corner_data(sample_channels, sample_laps, sample_corners[0], lap_num=2, margin=50)
+
+        # With 50m margin, distances should be in range 150-450
+        assert result["distance_m"].min() >= 150
+        assert result["distance_m"].max() <= 450
+
+    def test_get_corner_data_different_corners(self, sample_channels, sample_laps, sample_corners):
+        """Test selecting different corners."""
+        turn1_data = get_corner_data(sample_channels, sample_laps, sample_corners[0], lap_num=2, margin=0)
+        turn2_data = get_corner_data(sample_channels, sample_laps, sample_corners[1], lap_num=2, margin=0)
+
+        # Turn 1 is 200-400, Turn 2 is 700-900
+        assert turn1_data["distance_m"].max() < turn2_data["distance_m"].min()
+
+    def test_get_corner_data_invalid_lap_raises(self, sample_channels, sample_laps, sample_corners):
+        """Test that invalid lap number raises ValueError."""
+        with pytest.raises(ValueError, match="Lap 99 not found"):
+            get_corner_data(sample_channels, sample_laps, sample_corners[0], lap_num=99)
+
+    def test_get_corner_data_preserves_columns(self, sample_channels, sample_laps, sample_corners):
+        """Test that all original columns are preserved."""
+        result = get_corner_data(sample_channels, sample_laps, sample_corners[0], lap_num=2)
+
+        assert "timecodes" in result.columns
+        assert "distance_m" in result.columns
+        assert "PPS" in result.columns
+        assert "BrakePress" in result.columns
+        assert "Steering" in result.columns
