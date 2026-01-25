@@ -12,7 +12,11 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
+from .channels import get_lap_channels, interpolate_channels
+
 if TYPE_CHECKING:
+    from libxrk.base import LogFile
+
     from .corners import Corner
 
 
@@ -88,29 +92,35 @@ def get_segment_mask(
     )
 
 
+# Channels typically needed for corner data analysis
+CORNER_DATA_CHANNELS = ["distance_m", "PPS", "BrakePress", "LateralAcc", "SteerAngle"]
+
+
 def get_corner_data(
-    channels: pd.DataFrame,
+    log: "LogFile",
     laps: pd.DataFrame,
     corner: "Corner",
     lap_num: int,
+    channel_names: list[str] | None = None,
     *,
     margin: float = 50.0,
 ) -> pd.DataFrame:
     """Get channel data for a specific corner and lap combination.
 
-    Convenience function that filters channels by lap timecodes and corner
-    distance range in one call.
+    Efficiently extracts only the required channels for a corner's time range.
 
     Parameters
     ----------
-    channels : pd.DataFrame
-        Channel data with 'timecodes' and 'distance_m' columns.
+    log : LogFile
+        The loaded log file with channels dict.
     laps : pd.DataFrame
         Laps table with 'num', 'start_time', 'end_time' columns.
     corner : Corner
         The corner object with start_dist and end_dist.
     lap_num : int
         Lap number to select.
+    channel_names : list[str], optional
+        Names of channels to extract. If None, uses CORNER_DATA_CHANNELS.
     margin : float, default=50.0
         Extra distance (meters) to include before and after the corner.
 
@@ -126,7 +136,7 @@ def get_corner_data(
 
     Examples
     --------
-    >>> corner_data = get_corner_data(channels, laps, corners[0], lap_num=3, margin=50)
+    >>> corner_data = get_corner_data(log, laps, corners[0], lap_num=3, margin=50)
     >>> fig = visualize_throttle_acceptance(
     ...     distance=corner_data["distance_m"],
     ...     throttle=corner_data["PPS"],
@@ -141,11 +151,21 @@ def get_corner_data(
         raise ValueError(f"Lap {lap_num} not found in laps table")
     lap = lap_row.iloc[0]
 
-    # Filter by lap timecodes
-    lap_mask = (channels["timecodes"] >= lap["start_time"]) & (
-        channels["timecodes"] <= lap["end_time"]
-    )
-    lap_data = channels[lap_mask]
+    lap_start = int(lap["start_time"])
+    lap_end = int(lap["end_time"])
+
+    # Use default channels if not specified
+    if channel_names is None:
+        channel_names = CORNER_DATA_CHANNELS.copy()
+
+    # Extract channels for this lap
+    lap_channels = get_lap_channels(log, channel_names, lap_start, lap_end)
+
+    # Interpolate to distance_m timebase
+    aligned = interpolate_channels(lap_channels, reference_channel="distance_m")
+
+    # Convert to DataFrame
+    lap_data = pd.DataFrame({name: aligned[name].column(name).to_numpy() for name in channel_names})
 
     # Filter by corner distance
     corner_mask = (lap_data["distance_m"] >= corner.start_dist - margin) & (
@@ -621,10 +641,13 @@ def create_track_segments(
     return segments
 
 
+# Channels required for zone detection
+ZONE_DETECTION_CHANNELS = ["distance_m", "BrakePress", "PPS", "GPS Speed"]
+
+
 def detect_zones_averaged(
-    channels: pd.DataFrame,
+    log: "LogFile",
     top_laps: pd.DataFrame,
-    reference_lap_channels: pd.DataFrame,
     resolution: float = 1.0,
     threshold: float = 0.5,
     max_gap_time: float = 1.5,
@@ -634,18 +657,17 @@ def detect_zones_averaged(
     """Detect and average braking/acceleration zones across top laps.
 
     This is a convenience function that combines the full zone detection pipeline:
-    1. Iterate over top laps and call identify_zones_single_lap()
-    2. Average zones across laps with average_zones_across_laps()
-    3. Merge acceleration zones with merge_accel_zones_by_time()
+    1. Iterate over top laps and extract only required channels per-lap
+    2. Call identify_zones_single_lap() for each lap
+    3. Average zones across laps with average_zones_across_laps()
+    4. Merge acceleration zones with merge_accel_zones_by_time()
 
     Parameters
     ----------
-    channels : pd.DataFrame
-        Full channel data with 'timecodes', 'distance_m', 'BrakePress', 'PPS', 'GPS Speed'.
+    log : LogFile
+        The loaded log file with channels dict.
     top_laps : pd.DataFrame
         Laps to analyze (typically from get_top_laps()).
-    reference_lap_channels : pd.DataFrame
-        Channel data for a reference lap (typically best lap) for post-processing.
     resolution : float, default=1.0
         Distance resolution for averaging (meters).
     threshold : float, default=0.5
@@ -665,38 +687,55 @@ def detect_zones_averaged(
     Examples
     --------
     >>> top_laps = get_top_laps(laps)
-    >>> best_lap, lap_channels = get_best_lap_data(channels, laps)
-    >>> braking_zones, accel_zones = detect_zones_averaged(
-    ...     channels, top_laps, lap_channels
-    ... )
+    >>> braking_zones, accel_zones = detect_zones_averaged(log, top_laps)
     """
     all_braking_zones: list[list[tuple[float, float]]] = []
     all_accel_zones: list[list[tuple[float, float]]] = []
 
-    for _, lap in top_laps.iterrows():
-        lap_start = lap["start_time"]
-        lap_end = lap["end_time"]
-        lap_data = channels.query(f"timecodes >= @lap_start and timecodes <= @lap_end").copy()
+    # Store reference lap data for post-processing (first lap processed)
+    reference_distance: np.ndarray | None = None
+    reference_speed: np.ndarray | None = None
 
-        if len(lap_data) < 10:
+    for _, lap in top_laps.iterrows():
+        lap_start = int(lap["start_time"])
+        lap_end = int(lap["end_time"])
+
+        # Extract only required channels for this lap
+        lap_channels = get_lap_channels(log, ZONE_DETECTION_CHANNELS, lap_start, lap_end)
+
+        # Interpolate to distance_m timebase
+        aligned = interpolate_channels(lap_channels, reference_channel="distance_m")
+
+        # Extract arrays
+        distance = aligned["distance_m"].column("distance_m").to_numpy()
+        brake_press = aligned["BrakePress"].column("BrakePress").to_numpy()
+        pps = aligned["PPS"].column("PPS").to_numpy()
+        speed = aligned["GPS Speed"].column("GPS Speed").to_numpy()
+
+        if len(distance) < 10:
             continue
 
+        # Store first lap as reference for post-processing
+        if reference_distance is None:
+            reference_distance = distance
+            reference_speed = speed
+
         braking, accel = identify_zones_single_lap(
-            np.asarray(lap_data["distance_m"]),
-            np.asarray(lap_data["BrakePress"]),
-            np.asarray(lap_data["PPS"]),
-            np.asarray(lap_data["GPS Speed"]),
+            distance,
+            brake_press,
+            pps,
+            speed,
             brake_threshold=brake_threshold,
             throttle_threshold=throttle_threshold,
         )
         all_braking_zones.append(braking)
         all_accel_zones.append(accel)
 
-    if not all_braking_zones:
+    if not all_braking_zones or reference_distance is None:
         return [], []
 
     # Average zones across laps
-    track_length = float(reference_lap_channels["distance_m"].max())
+    track_length = float(reference_distance.max())
     braking_zones, accel_zones = average_zones_across_laps(
         all_braking_zones,
         all_accel_zones,
@@ -706,11 +745,12 @@ def detect_zones_averaged(
     )
 
     # Post-process: merge acceleration zones separated by short time gaps
+    assert reference_speed is not None
     accel_zones = merge_accel_zones_by_time(
         accel_zones,
         braking_zones,
-        np.asarray(reference_lap_channels["distance_m"]),
-        np.asarray(reference_lap_channels["GPS Speed"]),
+        reference_distance,
+        reference_speed,
         max_gap_time=max_gap_time,
     )
 
@@ -771,8 +811,12 @@ def _find_min_speed(lap_data: pd.DataFrame, segment: TrackSegment) -> float | No
     return float(seg_data["speed_kmh"].min())
 
 
+# Channels required for segment stats
+SEGMENT_STATS_CHANNELS = ["distance_m", "speed_kmh", "BrakePress", "PPS"]
+
+
 def compute_segment_stats(
-    channels: pd.DataFrame,
+    log: "LogFile",
     laps: pd.DataFrame,
     segments: list[TrackSegment],
     brake_threshold: float = 5,
@@ -787,8 +831,8 @@ def compute_segment_stats(
 
     Parameters
     ----------
-    channels : pd.DataFrame
-        Full channel data with 'timecodes', 'distance_m', 'speed_kmh', 'BrakePress', 'PPS'.
+    log : LogFile
+        The loaded log file with channels dict.
     laps : pd.DataFrame
         Laps to analyze (with 'start_time', 'end_time', 'num', 'lap_time' columns).
     segments : list[TrackSegment]
@@ -811,15 +855,30 @@ def compute_segment_stats(
     Examples
     --------
     >>> top_laps = get_top_laps(laps)
-    >>> stats_df = compute_segment_stats(channels, top_laps, segments)
+    >>> stats_df = compute_segment_stats(log, top_laps, segments)
     >>> braking_stats = stats_df[stats_df["segment_type"] == "braking"]
     """
     all_lap_stats = []
 
     for _, lap in laps.iterrows():
-        lap_data = channels.query(
-            f'timecodes >= {lap["start_time"]} and timecodes <= {lap["end_time"]}'
-        ).copy()
+        lap_start = int(lap["start_time"])
+        lap_end = int(lap["end_time"])
+
+        # Extract only required channels for this lap
+        lap_channels = get_lap_channels(log, SEGMENT_STATS_CHANNELS, lap_start, lap_end)
+
+        # Interpolate to distance_m timebase
+        aligned = interpolate_channels(lap_channels, reference_channel="distance_m")
+
+        # Convert to DataFrame for the helper functions
+        lap_data = pd.DataFrame(
+            {
+                "distance_m": aligned["distance_m"].column("distance_m").to_numpy(),
+                "speed_kmh": aligned["speed_kmh"].column("speed_kmh").to_numpy(),
+                "BrakePress": aligned["BrakePress"].column("BrakePress").to_numpy(),
+                "PPS": aligned["PPS"].column("PPS").to_numpy(),
+            }
+        )
 
         if len(lap_data) < 10:
             continue
