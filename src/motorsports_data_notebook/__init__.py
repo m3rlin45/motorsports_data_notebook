@@ -1,5 +1,12 @@
 """Motorsports data analysis utilities."""
 
+from .channels import (
+    get_best_lap,
+    get_best_lap_channels,
+    get_lap_channels,
+    get_top_laps,
+    interpolate_channels,
+)
 from .corners import (
     Corner,
     compute_curvature,
@@ -11,21 +18,22 @@ from .corners import (
 from .driver_analysis import find_throttle_acceptance
 from .visualization import (
     compute_start_line,
-    get_best_lap,
-    get_best_lap_channels,
-    get_lap_channels,
-    interpolate_channels,
+    format_lap_time,
+    get_best_lap_data,
     plot_corner_inputs,
     plot_gps_channels,
     plot_lap_gps,
-    visualize_throttle_acceptance,
+    plot_track_segments,
     show_fig,
+    visualize_throttle_acceptance,
 )
 from .widgets import FileUpload
 from .zones import (
     TrackSegment,
     average_zones_across_laps,
+    compute_segment_stats,
     create_track_segments,
+    detect_zones_averaged,
     get_corner_data,
     get_segment_mask,
     identify_zones_single_lap,
@@ -33,6 +41,12 @@ from .zones import (
 )
 
 __all__ = [
+    # channels
+    "get_best_lap",
+    "get_best_lap_channels",
+    "get_lap_channels",
+    "get_top_laps",
+    "interpolate_channels",
     # corners
     "Corner",
     "compute_curvature",
@@ -44,21 +58,22 @@ __all__ = [
     "find_throttle_acceptance",
     # visualization
     "compute_start_line",
-    "get_best_lap",
-    "get_best_lap_channels",
-    "get_lap_channels",
-    "interpolate_channels",
+    "format_lap_time",
+    "get_best_lap_data",
     "plot_corner_inputs",
     "plot_gps_channels",
     "plot_lap_gps",
-    "visualize_throttle_acceptance",
+    "plot_track_segments",
     "show_fig",
+    "visualize_throttle_acceptance",
     # widgets
     "FileUpload",
     # zones
     "TrackSegment",
     "average_zones_across_laps",
+    "compute_segment_stats",
     "create_track_segments",
+    "detect_zones_averaged",
     "get_corner_data",
     "get_segment_mask",
     "identify_zones_single_lap",

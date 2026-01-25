@@ -6,14 +6,16 @@ import plotly.graph_objects as go
 import pyarrow as pa
 import pytest
 
-from motorsports_data_notebook.visualization import (
-    format_lap_time,
+from motorsports_data_notebook.channels import (
     get_best_lap,
     get_best_lap_channels,
-    get_best_lap_data,
     get_lap_channels,
     get_top_laps,
     interpolate_channels,
+)
+from motorsports_data_notebook.visualization import (
+    format_lap_time,
+    get_best_lap_data,
     plot_corner_inputs,
     plot_gps_channels,
     plot_tire_thermography,
