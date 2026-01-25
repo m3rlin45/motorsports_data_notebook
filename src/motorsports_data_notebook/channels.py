@@ -16,6 +16,111 @@ import pyarrow.compute as pc
 if TYPE_CHECKING:
     from libxrk.base import LogFile
 
+# GPS channel names that share a common timebase and may need timing correction
+GPS_CHANNEL_NAMES = ("GPS Speed", "GPS Latitude", "GPS Longitude", "GPS Altitude")
+
+
+def fix_gps_timing_gaps(log: "LogFile", expected_dt_ms: float = 40.0) -> "LogFile":
+    """Detect and correct large timing gaps in GPS channels.
+
+    Some AIM data loggers produce GPS data with spurious timestamp jumps
+    (e.g., 65533ms gaps that should be ~40ms). This function detects such gaps
+    and corrects the timecodes by removing the excess time.
+
+    The fix is applied in-place to the LogFile's channels dict.
+
+    Parameters
+    ----------
+    log : LogFile
+        The loaded log file with channels dict.
+    expected_dt_ms : float, default=40.0
+        Expected time delta between GPS samples in milliseconds.
+        Default is 40ms (25 Hz GPS).
+
+    Returns
+    -------
+    LogFile
+        The same LogFile object with corrected GPS timecodes.
+
+    Notes
+    -----
+    All GPS channels (GPS Speed, GPS Latitude, GPS Longitude, GPS Altitude)
+    share the same timecodes array, so correcting one corrects all.
+
+    The gap threshold is set to 10x the expected_dt (400ms by default).
+    Gaps larger than this are assumed to be spurious and corrected.
+    """
+    # Find the first GPS channel that exists
+    gps_channel_name = None
+    for name in GPS_CHANNEL_NAMES:
+        if name in log.channels:
+            gps_channel_name = name
+            break
+
+    if gps_channel_name is None:
+        # No GPS channels, nothing to fix
+        return log
+
+    # Get the GPS timecodes
+    gps_table = log.channels[gps_channel_name]
+    gps_time = gps_table.column("timecodes").to_numpy()
+
+    if len(gps_time) < 2:
+        return log
+
+    # Detect gaps
+    dt = np.diff(gps_time)
+    gap_threshold = expected_dt_ms * 10  # 400ms default
+
+    # Find indices where gaps are too large
+    gap_indices = np.where(dt > gap_threshold)[0]
+
+    if len(gap_indices) == 0:
+        # No gaps to fix
+        return log
+
+    # Calculate cumulative correction
+    # For each gap, we subtract (gap_size - expected_dt) from all subsequent samples
+    gps_time_fixed = gps_time.astype(np.float64)
+
+    for gap_idx in gap_indices:
+        gap_size = dt[gap_idx]
+        correction = gap_size - expected_dt_ms
+        gps_time_fixed[gap_idx + 1 :] -= correction
+
+    # Convert back to int64
+    gps_time_fixed = gps_time_fixed.astype(np.int64)
+
+    # Update all GPS channels with corrected timecodes
+    for name in GPS_CHANNEL_NAMES:
+        if name not in log.channels:
+            continue
+
+        table = log.channels[name]
+        value_column = table.column(name)
+
+        # Preserve the schema metadata
+        field = table.schema.field(name)
+        metadata = field.metadata
+
+        # Create new table with fixed timecodes
+        new_table = pa.table(
+            {
+                "timecodes": pa.array(gps_time_fixed, type=pa.int64()),
+                name: value_column,
+            }
+        )
+
+        # Restore metadata on the value column
+        if metadata:
+            new_field = new_table.schema.field(name).with_metadata(metadata)
+            new_schema = pa.schema([new_table.schema.field("timecodes"), new_field])
+            new_table = new_table.cast(new_schema)
+
+        log.channels[name] = new_table
+
+    return log
+
 
 def get_lap_channels(
     log: "LogFile",
