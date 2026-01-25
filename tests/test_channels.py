@@ -218,6 +218,110 @@ class TestFixGpsTimingGaps:
             result_times = result.channels[name].column("timecodes").to_numpy()
             np.testing.assert_array_equal(result_times, expected)
 
+    def test_lap_times_corrected_with_gap(self):
+        """Lap start_time and end_time should be corrected when gap is present."""
+        # Gap of 65533ms at timestamp 80
+        timecodes = np.array([0, 40, 80, 65613, 65653], dtype=np.int64)
+        values = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+
+        # Lap starts before gap, ends after gap
+        laps = pa.table(
+            {
+                "num": pa.array([1, 2], type=pa.int64()),
+                "start_time": pa.array([0, 65613], type=pa.int64()),
+                "end_time": pa.array([65613, 130000], type=pa.int64()),
+            }
+        )
+
+        log = MockLogFile(
+            channels={"GPS Speed": _create_gps_table("GPS Speed", timecodes, values)},
+            laps=laps,
+        )
+        result = fix_gps_timing_gaps(log)
+
+        # Gap correction: 65533ms - 40ms = 65493ms
+        # Lap 1: start=0 (before gap, unchanged), end=65613 -> 120
+        # Lap 2: start=65613 -> 120, end=130000 -> 64507
+        result_starts = result.laps.column("start_time").to_numpy()
+        result_ends = result.laps.column("end_time").to_numpy()
+
+        np.testing.assert_array_equal(result_starts, [0, 120])
+        np.testing.assert_array_equal(result_ends, [120, 64507])
+
+    def test_lap_times_unchanged_without_gap(self):
+        """Lap times should be unchanged when no gap is present."""
+        timecodes = np.array([0, 40, 80, 120, 160], dtype=np.int64)
+        values = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+
+        laps = pa.table(
+            {
+                "num": pa.array([1], type=pa.int64()),
+                "start_time": pa.array([0], type=pa.int64()),
+                "end_time": pa.array([160], type=pa.int64()),
+            }
+        )
+
+        log = MockLogFile(
+            channels={"GPS Speed": _create_gps_table("GPS Speed", timecodes, values)},
+            laps=laps,
+        )
+        result = fix_gps_timing_gaps(log)
+
+        result_starts = result.laps.column("start_time").to_numpy()
+        result_ends = result.laps.column("end_time").to_numpy()
+
+        np.testing.assert_array_equal(result_starts, [0])
+        np.testing.assert_array_equal(result_ends, [160])
+
+    def test_empty_laps_table_handled(self):
+        """Empty laps table should not cause errors."""
+        timecodes = np.array([0, 40, 80, 65613, 65653], dtype=np.int64)
+        values = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+
+        log = MockLogFile(
+            channels={"GPS Speed": _create_gps_table("GPS Speed", timecodes, values)},
+            laps=pa.table(
+                {
+                    "num": pa.array([], type=pa.int64()),
+                    "start_time": pa.array([], type=pa.int64()),
+                    "end_time": pa.array([], type=pa.int64()),
+                }
+            ),
+        )
+        result = fix_gps_timing_gaps(log)
+
+        # Should not raise, laps table should remain empty
+        assert len(result.laps) == 0
+
+    def test_lap_times_before_gap_unchanged(self):
+        """Lap times entirely before the gap should be unchanged."""
+        # Normal samples until 160ms, then a huge gap to 65693ms
+        # Gap occurs at index 4 (between 160 and 65693)
+        timecodes = np.array([0, 40, 80, 120, 160, 65693], dtype=np.int64)
+        values = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+
+        # Lap entirely before the gap (both start=0 and end=100 are <= gap_time=160)
+        laps = pa.table(
+            {
+                "num": pa.array([1], type=pa.int64()),
+                "start_time": pa.array([0], type=pa.int64()),
+                "end_time": pa.array([100], type=pa.int64()),
+            }
+        )
+
+        log = MockLogFile(
+            channels={"GPS Speed": _create_gps_table("GPS Speed", timecodes, values)},
+            laps=laps,
+        )
+        result = fix_gps_timing_gaps(log)
+
+        result_starts = result.laps.column("start_time").to_numpy()
+        result_ends = result.laps.column("end_time").to_numpy()
+
+        # Both times are <= gap_time (160), so unchanged
+        np.testing.assert_array_equal(result_starts, [0])
+        np.testing.assert_array_equal(result_ends, [100])
+
 
 class TestGetLapChannels:
     """Tests for get_lap_channels function."""
