@@ -69,7 +69,41 @@ def sample_channels(sample_laps):
 
 @pytest.fixture
 def sample_lap_channels():
-    """Create sample channel data for a single lap with tire temps."""
+    """Create sample channel tables for a single lap with tire temps."""
+    n_samples = 300
+    timecodes = np.linspace(60000, 120000, n_samples, dtype=np.int64)
+
+    # Build dict of channel tables
+    channels: dict[str, pa.Table] = {}
+
+    # Helper to create a channel table
+    def make_table(name: str, values: np.ndarray) -> pa.Table:
+        return pa.table({
+            "timecodes": pa.array(timecodes, type=pa.int64()),
+            name: pa.array(values),
+        })
+
+    channels["distance_m"] = make_table("distance_m", np.linspace(0, 4500, n_samples))
+    channels["speed_kmh"] = make_table("speed_kmh", 100 + 50 * np.sin(np.linspace(0, 4 * np.pi, n_samples)))
+    channels["GPS Latitude"] = make_table("GPS Latitude", 35.36 + np.sin(np.linspace(0, 2 * np.pi, n_samples)) * 0.01)
+    channels["GPS Longitude"] = make_table("GPS Longitude", 138.92 + np.cos(np.linspace(0, 2 * np.pi, n_samples)) * 0.01)
+    channels["LateralAcc"] = make_table("LateralAcc", np.random.uniform(-1.5, 1.5, n_samples))
+    channels["InlineAcc"] = make_table("InlineAcc", np.random.uniform(-1.5, 1.5, n_samples))
+    channels["BrakePress"] = make_table("BrakePress", np.random.uniform(0, 100, n_samples))
+    channels["PPS"] = make_table("PPS", np.random.uniform(0, 100, n_samples))
+    channels["SteerAngle"] = make_table("SteerAngle", np.random.uniform(-180, 180, n_samples))
+
+    # Add tire temperature channels
+    for pos in ["FL", "FR", "RL", "RR"]:
+        for ch in range(1, 9):
+            channels[f"{pos}_Ch{ch}"] = make_table(f"{pos}_Ch{ch}", np.random.uniform(60, 100, n_samples))
+
+    return channels
+
+
+@pytest.fixture
+def sample_lap_channels_df():
+    """Create sample channel data as DataFrame for functions that still need it."""
     n_samples = 300
     distance_m = np.linspace(0, 4500, n_samples)
 
@@ -256,15 +290,14 @@ def test_plot_tire_thermography_has_traces(sample_lap_channels):
 
 def test_plot_tire_thermography_missing_channels():
     """Test that missing tire channels raises error."""
-    df = pd.DataFrame(
-        {
-            "distance_m": [0, 100, 200],
-            "speed_kmh": [100, 110, 105],
-        }
-    )
+    timecodes = pa.array([60000, 70000, 80000], type=pa.int64())
+    channels = {
+        "distance_m": pa.table({"timecodes": timecodes, "distance_m": pa.array([0, 100, 200])}),
+        "speed_kmh": pa.table({"timecodes": timecodes, "speed_kmh": pa.array([100, 110, 105])}),
+    }
 
-    with pytest.raises(ValueError, match="Missing tire temperature channels"):
-        plot_tire_thermography(df)
+    with pytest.raises(ValueError, match="Missing channels"):
+        plot_tire_thermography(channels)
 
 
 def test_plot_tire_thermography_custom_title(sample_lap_channels):
@@ -279,24 +312,24 @@ def test_plot_tire_thermography_custom_title(sample_lap_channels):
 # ============================================================================
 
 
-def test_plot_track_segments_returns_figure(sample_lap_channels, sample_segments):
+def test_plot_track_segments_returns_figure(sample_lap_channels_df, sample_segments):
     """Test that plot_track_segments returns a Plotly figure."""
-    fig = plot_track_segments(sample_lap_channels, sample_segments)
+    fig = plot_track_segments(sample_lap_channels_df, sample_segments)
 
     assert isinstance(fig, go.Figure)
 
 
-def test_plot_track_segments_has_base_track(sample_lap_channels, sample_segments):
+def test_plot_track_segments_has_base_track(sample_lap_channels_df, sample_segments):
     """Test that figure includes base track trace."""
-    fig = plot_track_segments(sample_lap_channels, sample_segments)
+    fig = plot_track_segments(sample_lap_channels_df, sample_segments)
 
     # First trace should be the base track
     assert fig.data[0].name == "Track"
 
 
-def test_plot_track_segments_has_segment_traces(sample_lap_channels, sample_segments):
+def test_plot_track_segments_has_segment_traces(sample_lap_channels_df, sample_segments):
     """Test that figure includes traces for each segment type."""
-    fig = plot_track_segments(sample_lap_channels, sample_segments)
+    fig = plot_track_segments(sample_lap_channels_df, sample_segments)
 
     trace_names = [t.name for t in fig.data if t.name]
     assert "Track" in trace_names
@@ -305,18 +338,18 @@ def test_plot_track_segments_has_segment_traces(sample_lap_channels, sample_segm
     assert "Acceleration Zone" in trace_names
 
 
-def test_plot_track_segments_has_apex_markers(sample_lap_channels, sample_segments):
+def test_plot_track_segments_has_apex_markers(sample_lap_channels_df, sample_segments):
     """Test that corner apex markers are included."""
-    fig = plot_track_segments(sample_lap_channels, sample_segments)
+    fig = plot_track_segments(sample_lap_channels_df, sample_segments)
 
     # Find traces with text (apex labels)
     text_traces = [t for t in fig.data if hasattr(t, "text") and t.text]
     assert len(text_traces) > 0
 
 
-def test_plot_track_segments_custom_dimensions(sample_lap_channels, sample_segments):
+def test_plot_track_segments_custom_dimensions(sample_lap_channels_df, sample_segments):
     """Test custom width and height are applied."""
-    fig = plot_track_segments(sample_lap_channels, sample_segments, width=1200, height=800)
+    fig = plot_track_segments(sample_lap_channels_df, sample_segments, width=1200, height=800)
 
     assert fig.layout.width == 1200
     assert fig.layout.height == 800
