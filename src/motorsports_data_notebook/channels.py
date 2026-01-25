@@ -141,13 +141,9 @@ def fix_gps_timing_gaps(log: "LogFile", expected_dt_ms: float = 40.0) -> "LogFil
         new_laps_data = {}
         for col_name in log.laps.column_names:
             if col_name == "start_time":
-                new_laps_data[col_name] = pa.array(
-                    start_times.astype(np.int64), type=pa.int64()
-                )
+                new_laps_data[col_name] = pa.array(start_times.astype(np.int64), type=pa.int64())
             elif col_name == "end_time":
-                new_laps_data[col_name] = pa.array(
-                    end_times.astype(np.int64), type=pa.int64()
-                )
+                new_laps_data[col_name] = pa.array(end_times.astype(np.int64), type=pa.int64())
             else:
                 new_laps_data[col_name] = log.laps.column(col_name)
 
