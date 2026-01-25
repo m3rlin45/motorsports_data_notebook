@@ -12,7 +12,11 @@ from .driver_analysis import find_throttle_acceptance
 from .visualization import (
     compute_start_line,
     get_best_lap,
+    get_best_lap_channels,
+    get_lap_channels,
+    interpolate_channels,
     plot_corner_inputs,
+    plot_gps_channels,
     plot_lap_gps,
     visualize_throttle_acceptance,
     show_fig,
@@ -41,7 +45,11 @@ __all__ = [
     # visualization
     "compute_start_line",
     "get_best_lap",
+    "get_best_lap_channels",
+    "get_lap_channels",
+    "interpolate_channels",
     "plot_corner_inputs",
+    "plot_gps_channels",
     "plot_lap_gps",
     "visualize_throttle_acceptance",
     "show_fig",
