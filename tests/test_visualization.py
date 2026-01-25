@@ -15,7 +15,6 @@ from motorsports_data_notebook.channels import (
 )
 from motorsports_data_notebook.visualization import (
     format_lap_time,
-    get_best_lap_data,
     plot_corner_inputs,
     plot_gps_channels,
     plot_tire_thermography,
@@ -186,38 +185,6 @@ def test_format_lap_time_long():
     lap_time = pd.Timedelta(minutes=2, seconds=5, milliseconds=789)
     result = format_lap_time(lap_time)
     assert result == "2:05.789"
-
-
-# ============================================================================
-# Tests for get_best_lap_data
-# ============================================================================
-
-
-def test_get_best_lap_data_returns_tuple(sample_channels, sample_laps):
-    """Test that get_best_lap_data returns correct tuple structure."""
-    best_lap, lap_channels = get_best_lap_data(sample_channels, sample_laps)
-
-    assert isinstance(best_lap, pd.Series)
-    assert isinstance(lap_channels, pd.DataFrame)
-
-
-def test_get_best_lap_data_finds_fastest(sample_channels, sample_laps):
-    """Test that get_best_lap_data finds the fastest lap (lap 3 with 57s)."""
-    best_lap, lap_channels = get_best_lap_data(sample_channels, sample_laps)
-
-    # get_best_lap uses duration from end_time - start_time, not lap_time column
-    # All laps have same duration (60000ms), so it returns the first one found (lap 2)
-    # This tests that it excludes first and last laps properly
-    assert best_lap["num"] in [2, 3, 4]  # Should be one of the middle laps
-
-
-def test_get_best_lap_data_filters_channels(sample_channels, sample_laps):
-    """Test that returned channels are filtered to best lap timerange."""
-    best_lap, lap_channels = get_best_lap_data(sample_channels, sample_laps)
-
-    # All timecodes should be within best lap bounds
-    assert lap_channels["timecodes"].min() >= best_lap["start_time"]
-    assert lap_channels["timecodes"].max() < best_lap["end_time"]
 
 
 # ============================================================================

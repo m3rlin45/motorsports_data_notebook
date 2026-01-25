@@ -28,7 +28,6 @@ if TYPE_CHECKING:
 __all__ = [
     "compute_start_line",
     "format_lap_time",
-    "get_best_lap_data",
     "plot_corner_inputs",
     "plot_gps_channels",
     "plot_lap_gps",
@@ -425,34 +424,6 @@ def visualize_throttle_acceptance(
     )
 
     return fig
-
-
-def get_best_lap_data(channels: pd.DataFrame, laps: pd.DataFrame) -> tuple[pd.Series, pd.DataFrame]:
-    """Extract best lap info and corresponding channel data.
-
-    Parameters
-    ----------
-    channels : pd.DataFrame
-        Channel data with 'timecodes' column.
-    laps : pd.DataFrame
-        Laps table with 'start_time', 'end_time' columns.
-
-    Returns
-    -------
-    tuple[pd.Series, pd.DataFrame]
-        (best_lap, lap_channels) - best lap info and channel data for that lap.
-
-    Examples
-    --------
-    >>> best_lap, lap_channels = get_best_lap_data(channels, laps)
-    >>> print(f"Best lap: {best_lap['num']}")
-    """
-    best_lap = get_best_lap(laps)
-    start_ts = best_lap["start_time"]
-    end_ts = best_lap["end_time"]
-    # Use < for end_ts to exclude the first sample of the next lap
-    lap_channels = channels.query(f"timecodes >= @start_ts and timecodes < @end_ts").copy()
-    return best_lap, lap_channels
 
 
 def plot_gps_channels(
