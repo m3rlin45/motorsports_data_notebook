@@ -79,15 +79,23 @@ def sample_lap_channels():
 
     # Helper to create a channel table
     def make_table(name: str, values: np.ndarray) -> pa.Table:
-        return pa.table({
-            "timecodes": pa.array(timecodes, type=pa.int64()),
-            name: pa.array(values),
-        })
+        return pa.table(
+            {
+                "timecodes": pa.array(timecodes, type=pa.int64()),
+                name: pa.array(values),
+            }
+        )
 
     channels["distance_m"] = make_table("distance_m", np.linspace(0, 4500, n_samples))
-    channels["speed_kmh"] = make_table("speed_kmh", 100 + 50 * np.sin(np.linspace(0, 4 * np.pi, n_samples)))
-    channels["GPS Latitude"] = make_table("GPS Latitude", 35.36 + np.sin(np.linspace(0, 2 * np.pi, n_samples)) * 0.01)
-    channels["GPS Longitude"] = make_table("GPS Longitude", 138.92 + np.cos(np.linspace(0, 2 * np.pi, n_samples)) * 0.01)
+    channels["speed_kmh"] = make_table(
+        "speed_kmh", 100 + 50 * np.sin(np.linspace(0, 4 * np.pi, n_samples))
+    )
+    channels["GPS Latitude"] = make_table(
+        "GPS Latitude", 35.36 + np.sin(np.linspace(0, 2 * np.pi, n_samples)) * 0.01
+    )
+    channels["GPS Longitude"] = make_table(
+        "GPS Longitude", 138.92 + np.cos(np.linspace(0, 2 * np.pi, n_samples)) * 0.01
+    )
     channels["LateralAcc"] = make_table("LateralAcc", np.random.uniform(-1.5, 1.5, n_samples))
     channels["InlineAcc"] = make_table("InlineAcc", np.random.uniform(-1.5, 1.5, n_samples))
     channels["BrakePress"] = make_table("BrakePress", np.random.uniform(0, 100, n_samples))
@@ -97,7 +105,9 @@ def sample_lap_channels():
     # Add tire temperature channels
     for pos in ["FL", "FR", "RL", "RR"]:
         for ch in range(1, 9):
-            channels[f"{pos}_Ch{ch}"] = make_table(f"{pos}_Ch{ch}", np.random.uniform(60, 100, n_samples))
+            channels[f"{pos}_Ch{ch}"] = make_table(
+                f"{pos}_Ch{ch}", np.random.uniform(60, 100, n_samples)
+            )
 
     return channels
 
@@ -351,23 +361,29 @@ def sample_corner_data():
     """Create sample corner data arrays."""
     n_samples = 100
     distance = np.linspace(450, 750, n_samples)
-    throttle = np.concatenate([
-        np.linspace(100, 0, 30),  # Lift off
-        np.zeros(40),              # Coast
-        np.linspace(0, 100, 30),   # Back on throttle
-    ])
-    brake = np.concatenate([
-        np.zeros(10),
-        np.linspace(0, 80, 20),    # Braking
-        np.linspace(80, 0, 30),    # Trail brake
-        np.zeros(40),
-    ])
-    steering = np.concatenate([
-        np.zeros(20),
-        np.linspace(0, -90, 30),   # Turn in
-        np.linspace(-90, -45, 30), # Unwinding
-        np.linspace(-45, 0, 20),   # Exit
-    ])
+    throttle = np.concatenate(
+        [
+            np.linspace(100, 0, 30),  # Lift off
+            np.zeros(40),  # Coast
+            np.linspace(0, 100, 30),  # Back on throttle
+        ]
+    )
+    brake = np.concatenate(
+        [
+            np.zeros(10),
+            np.linspace(0, 80, 20),  # Braking
+            np.linspace(80, 0, 30),  # Trail brake
+            np.zeros(40),
+        ]
+    )
+    steering = np.concatenate(
+        [
+            np.zeros(20),
+            np.linspace(0, -90, 30),  # Turn in
+            np.linspace(-90, -45, 30),  # Unwinding
+            np.linspace(-45, 0, 20),  # Exit
+        ]
+    )
     return {
         "distance": distance,
         "throttle": throttle,
@@ -505,34 +521,44 @@ def sample_channel_tables():
     gps_timecodes = np.arange(60000, 70000, 100, dtype=np.int64)  # 60s to 70s
     n_gps = len(gps_timecodes)
 
-    gps_lat = pa.table({
-        "timecodes": pa.array(gps_timecodes, type=pa.int64()),
-        "GPS Latitude": pa.array(35.36 + np.sin(np.linspace(0, 2 * np.pi, n_gps)) * 0.01),
-    })
+    gps_lat = pa.table(
+        {
+            "timecodes": pa.array(gps_timecodes, type=pa.int64()),
+            "GPS Latitude": pa.array(35.36 + np.sin(np.linspace(0, 2 * np.pi, n_gps)) * 0.01),
+        }
+    )
 
-    gps_lon = pa.table({
-        "timecodes": pa.array(gps_timecodes, type=pa.int64()),
-        "GPS Longitude": pa.array(138.92 + np.cos(np.linspace(0, 2 * np.pi, n_gps)) * 0.01),
-    })
+    gps_lon = pa.table(
+        {
+            "timecodes": pa.array(gps_timecodes, type=pa.int64()),
+            "GPS Longitude": pa.array(138.92 + np.cos(np.linspace(0, 2 * np.pi, n_gps)) * 0.01),
+        }
+    )
 
-    speed_kmh = pa.table({
-        "timecodes": pa.array(gps_timecodes, type=pa.int64()),
-        "speed_kmh": pa.array(100 + 50 * np.sin(np.linspace(0, 4 * np.pi, n_gps))),
-    })
+    speed_kmh = pa.table(
+        {
+            "timecodes": pa.array(gps_timecodes, type=pa.int64()),
+            "speed_kmh": pa.array(100 + 50 * np.sin(np.linspace(0, 4 * np.pi, n_gps))),
+        }
+    )
 
     # Non-GPS channels at 50Hz (20ms intervals) - 500 samples for 10 seconds
     other_timecodes = np.arange(60000, 70000, 20, dtype=np.int64)
     n_other = len(other_timecodes)
 
-    brake_press = pa.table({
-        "timecodes": pa.array(other_timecodes, type=pa.int64()),
-        "BrakePress": pa.array(np.random.uniform(0, 100, n_other)),
-    })
+    brake_press = pa.table(
+        {
+            "timecodes": pa.array(other_timecodes, type=pa.int64()),
+            "BrakePress": pa.array(np.random.uniform(0, 100, n_other)),
+        }
+    )
 
-    pps = pa.table({
-        "timecodes": pa.array(other_timecodes, type=pa.int64()),
-        "PPS": pa.array(np.random.uniform(0, 100, n_other)),
-    })
+    pps = pa.table(
+        {
+            "timecodes": pa.array(other_timecodes, type=pa.int64()),
+            "PPS": pa.array(np.random.uniform(0, 100, n_other)),
+        }
+    )
 
     return {
         "GPS Latitude": gps_lat,
@@ -552,12 +578,14 @@ def mock_log(sample_channel_tables):
 @pytest.fixture
 def sample_laps_for_channels():
     """Create sample laps DataFrame for channel-based tests."""
-    return pd.DataFrame({
-        "num": [1, 2, 3, 4, 5],
-        "start_time": [0, 60000, 120000, 180000, 240000],
-        "end_time": [60000, 120000, 180000, 240000, 300000],
-        "lap_time": pd.to_timedelta([60, 58, 57, 59, 61], unit="s"),
-    })
+    return pd.DataFrame(
+        {
+            "num": [1, 2, 3, 4, 5],
+            "start_time": [0, 60000, 120000, 180000, 240000],
+            "end_time": [60000, 120000, 180000, 240000, 300000],
+            "lap_time": pd.to_timedelta([60, 58, 57, 59, 61], unit="s"),
+        }
+    )
 
 
 # ============================================================================
@@ -621,9 +649,7 @@ def test_get_lap_channels_different_sample_rates(mock_log):
 
 def test_get_best_lap_channels_returns_tuple(mock_log, sample_laps_for_channels):
     """Test that get_best_lap_channels returns correct tuple structure."""
-    best_lap, channels = get_best_lap_channels(
-        mock_log, sample_laps_for_channels, ["GPS Latitude"]
-    )
+    best_lap, channels = get_best_lap_channels(mock_log, sample_laps_for_channels, ["GPS Latitude"])
 
     assert isinstance(best_lap, pd.Series)
     assert isinstance(channels, dict)
@@ -631,9 +657,7 @@ def test_get_best_lap_channels_returns_tuple(mock_log, sample_laps_for_channels)
 
 def test_get_best_lap_channels_finds_fastest(mock_log, sample_laps_for_channels):
     """Test that get_best_lap_channels finds the fastest lap (excludes first/last)."""
-    best_lap, channels = get_best_lap_channels(
-        mock_log, sample_laps_for_channels, ["GPS Latitude"]
-    )
+    best_lap, channels = get_best_lap_channels(mock_log, sample_laps_for_channels, ["GPS Latitude"])
 
     # Should be one of the middle laps (2, 3, or 4)
     assert best_lap["num"] in [2, 3, 4]
@@ -641,9 +665,7 @@ def test_get_best_lap_channels_finds_fastest(mock_log, sample_laps_for_channels)
 
 def test_get_best_lap_channels_filters_to_lap_time(mock_log, sample_laps_for_channels):
     """Test that returned channels are filtered to best lap timerange."""
-    best_lap, channels = get_best_lap_channels(
-        mock_log, sample_laps_for_channels, ["GPS Latitude"]
-    )
+    best_lap, channels = get_best_lap_channels(mock_log, sample_laps_for_channels, ["GPS Latitude"])
 
     timecodes = channels["GPS Latitude"].column("timecodes").to_numpy()
 
