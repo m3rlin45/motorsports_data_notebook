@@ -80,7 +80,7 @@ typecheck = { cmd = "mypy src/", help = "Type check source code with mypy" }
 format-notebooks = { cmd = "nbqa black workspace_template/", help = "Format notebooks with black" }
 lint-notebooks = { cmd = "nbqa black --check workspace_template/", help = "Check notebook formatting with black" }
 typecheck-notebooks = { cmd = "nbqa mypy workspace_template/", help = "Type check notebooks with mypy" }
-check = { sequence = ["lint", "typecheck", "lint-notebooks", "typecheck-notebooks"], help = "Run all linting and type checking" }
+check = { sequence = ["lint", "typecheck", "lint-notebooks", "typecheck-notebooks", "test"], help = "Run all linting, type checking, and tests" }
 
 # Testing tasks
 test = { cmd = "pytest tests/ --cov=motorsports_data_notebook --cov-report=term-missing --cov-report=html:coverage_html", help = "Run tests with coverage" }
