@@ -21,13 +21,13 @@ GPS_CHANNEL_NAMES = ("GPS Speed", "GPS Latitude", "GPS Longitude", "GPS Altitude
 
 
 def fix_gps_timing_gaps(log: "LogFile", expected_dt_ms: float = 40.0) -> "LogFile":
-    """Detect and correct large timing gaps in GPS channels.
+    """Detect and correct large timing gaps in GPS channels and lap boundaries.
 
     Some AIM data loggers produce GPS data with spurious timestamp jumps
     (e.g., 65533ms gaps that should be ~40ms). This function detects such gaps
     and corrects the timecodes by removing the excess time.
 
-    The fix is applied in-place to the LogFile's channels dict.
+    The fix is applied in-place to the LogFile's channels dict and laps table.
 
     Parameters
     ----------
@@ -40,12 +40,15 @@ def fix_gps_timing_gaps(log: "LogFile", expected_dt_ms: float = 40.0) -> "LogFil
     Returns
     -------
     LogFile
-        The same LogFile object with corrected GPS timecodes.
+        The same LogFile object with corrected GPS timecodes and lap boundaries.
 
     Notes
     -----
     All GPS channels (GPS Speed, GPS Latitude, GPS Longitude, GPS Altitude)
     share the same timecodes array, so correcting one corrects all.
+
+    The laps table (start_time, end_time) is also corrected since lap boundaries
+    are computed from GPS timestamps during file parsing.
 
     The gap threshold is set to 10x the expected_dt (400ms by default).
     Gaps larger than this are assumed to be spurious and corrected.
@@ -79,14 +82,20 @@ def fix_gps_timing_gaps(log: "LogFile", expected_dt_ms: float = 40.0) -> "LogFil
         # No gaps to fix
         return log
 
-    # Calculate cumulative correction
-    # For each gap, we subtract (gap_size - expected_dt) from all subsequent samples
-    gps_time_fixed = gps_time.astype(np.float64)
-
+    # Build list of (gap_time, correction) pairs for fixing timestamps
+    # gap_time is the timestamp where the gap occurs
+    # correction is the amount to subtract from timestamps after this point
+    gap_corrections = []
     for gap_idx in gap_indices:
+        gap_time = gps_time[gap_idx]
         gap_size = dt[gap_idx]
         correction = gap_size - expected_dt_ms
-        gps_time_fixed[gap_idx + 1 :] -= correction
+        gap_corrections.append((gap_time, correction))
+
+    # Fix GPS channel timecodes
+    gps_time_fixed = gps_time.astype(np.float64)
+    for gap_time, correction in gap_corrections:
+        gps_time_fixed[gps_time > gap_time] -= correction
 
     # Convert back to int64
     gps_time_fixed = gps_time_fixed.astype(np.int64)
@@ -118,6 +127,31 @@ def fix_gps_timing_gaps(log: "LogFile", expected_dt_ms: float = 40.0) -> "LogFil
             new_table = new_table.cast(new_schema)
 
         log.channels[name] = new_table
+
+    # Fix lap boundaries (start_time, end_time)
+    if log.laps is not None and len(log.laps) > 0:
+        start_times = log.laps.column("start_time").to_numpy().astype(np.float64)
+        end_times = log.laps.column("end_time").to_numpy().astype(np.float64)
+
+        for gap_time, correction in gap_corrections:
+            start_times[start_times > gap_time] -= correction
+            end_times[end_times > gap_time] -= correction
+
+        # Rebuild laps table with corrected times, preserving column order
+        new_laps_data = {}
+        for col_name in log.laps.column_names:
+            if col_name == "start_time":
+                new_laps_data[col_name] = pa.array(
+                    start_times.astype(np.int64), type=pa.int64()
+                )
+            elif col_name == "end_time":
+                new_laps_data[col_name] = pa.array(
+                    end_times.astype(np.int64), type=pa.int64()
+                )
+            else:
+                new_laps_data[col_name] = log.laps.column(col_name)
+
+        log.laps = pa.table(new_laps_data)
 
     return log
 
