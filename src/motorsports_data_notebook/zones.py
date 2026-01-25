@@ -568,13 +568,35 @@ def create_track_segments(
     return segments
 
 
-# Channels required for zone detection
-ZONE_DETECTION_CHANNELS = ["distance_m", "BrakePress", "PPS", "GPS Speed"]
+def _validate_channel_names(channel_names: dict, required_keys: list[str], func_name: str) -> None:
+    """Validate that required keys are present in channel_names dict.
+
+    Parameters
+    ----------
+    channel_names : dict
+        Channel name mapping from canonical names to actual channel names.
+    required_keys : list[str]
+        List of required keys that must be present.
+    func_name : str
+        Name of the calling function (for error messages).
+
+    Raises
+    ------
+    KeyError
+        If any required key is missing from channel_names.
+    """
+    missing = [key for key in required_keys if key not in channel_names]
+    if missing:
+        raise KeyError(
+            f"{func_name}() requires channel_names to have keys: {required_keys}. "
+            f"Missing: {missing}"
+        )
 
 
 def detect_zones_averaged(
     log: "LogFile",
     top_laps: pd.DataFrame,
+    channel_names: dict,
     resolution: float = 1.0,
     threshold: float = 0.5,
     max_gap_time: float = 1.5,
@@ -595,6 +617,11 @@ def detect_zones_averaged(
         The loaded log file with channels dict.
     top_laps : pd.DataFrame
         Laps to analyze (typically from get_top_laps()).
+    channel_names : dict
+        Channel name mapping. Required keys:
+        - "throttle": Throttle position channel name (e.g., "PPS")
+        - "brake": Brake pressure channel name (e.g., "BrakePress")
+        - "gps_speed": GPS speed channel name (e.g., "GPS Speed")
     resolution : float, default=1.0
         Distance resolution for averaging (meters).
     threshold : float, default=0.5
@@ -611,11 +638,28 @@ def detect_zones_averaged(
     tuple[list[tuple[float, float]], list[tuple[float, float]]]
         (braking_zones, accel_zones) - averaged and post-processed zones.
 
+    Raises
+    ------
+    KeyError
+        If required keys are missing from channel_names.
+
     Examples
     --------
+    >>> channel_names = {"throttle": "PPS", "brake": "BrakePress", "gps_speed": "GPS Speed"}
     >>> top_laps = get_top_laps(laps)
-    >>> braking_zones, accel_zones = detect_zones_averaged(log, top_laps)
+    >>> braking_zones, accel_zones = detect_zones_averaged(log, top_laps, channel_names)
     """
+    # Validate required channel names
+    _validate_channel_names(
+        channel_names, ["throttle", "brake", "gps_speed"], "detect_zones_averaged"
+    )
+
+    # Build list of channels to extract
+    throttle_ch = channel_names["throttle"]
+    brake_ch = channel_names["brake"]
+    speed_ch = channel_names["gps_speed"]
+    zone_channels = ["distance_m", brake_ch, throttle_ch, speed_ch]
+
     all_braking_zones: list[list[tuple[float, float]]] = []
     all_accel_zones: list[list[tuple[float, float]]] = []
 
@@ -628,16 +672,16 @@ def detect_zones_averaged(
         lap_end = int(lap["end_time"])
 
         # Extract only required channels for this lap
-        lap_channels = get_lap_channels(log, ZONE_DETECTION_CHANNELS, lap_start, lap_end)
+        lap_channels = get_lap_channels(log, zone_channels, lap_start, lap_end)
 
         # Interpolate to distance_m timebase
         aligned = interpolate_channels(lap_channels, reference_channel="distance_m")
 
         # Extract arrays
         distance = aligned["distance_m"].column("distance_m").to_numpy()
-        brake_press = aligned["BrakePress"].column("BrakePress").to_numpy()
-        pps = aligned["PPS"].column("PPS").to_numpy()
-        speed = aligned["GPS Speed"].column("GPS Speed").to_numpy()
+        brake_press = aligned[brake_ch].column(brake_ch).to_numpy()
+        pps = aligned[throttle_ch].column(throttle_ch).to_numpy()
+        speed = aligned[speed_ch].column(speed_ch).to_numpy()
 
         if len(distance) < 10:
             continue
@@ -685,7 +729,10 @@ def detect_zones_averaged(
 
 
 def _find_braking_point(
-    lap_data: pd.DataFrame, segment: TrackSegment, brake_threshold: float = 5
+    lap_data: pd.DataFrame,
+    segment: TrackSegment,
+    brake_col: str,
+    brake_threshold: float = 5,
 ) -> float | None:
     """Find the distance where braking starts within a segment."""
     mask = (lap_data["distance_m"] >= segment.start_dist) & (
@@ -696,7 +743,7 @@ def _find_braking_point(
     if len(seg_data) == 0:
         return None
 
-    brake_points = seg_data[seg_data["BrakePress"] > brake_threshold]
+    brake_points = seg_data[seg_data[brake_col] > brake_threshold]
     if len(brake_points) > 0:
         return float(brake_points["distance_m"].iloc[0])
     return None
@@ -705,6 +752,8 @@ def _find_braking_point(
 def _find_throttle_point(
     lap_data: pd.DataFrame,
     segment: TrackSegment,
+    throttle_col: str,
+    brake_col: str,
     throttle_threshold: float = 20,
     brake_threshold: float = 5,
 ) -> float | None:
@@ -718,14 +767,14 @@ def _find_throttle_point(
         return None
 
     throttle_points = seg_data[
-        (seg_data["PPS"] > throttle_threshold) & (seg_data["BrakePress"] < brake_threshold)
+        (seg_data[throttle_col] > throttle_threshold) & (seg_data[brake_col] < brake_threshold)
     ]
     if len(throttle_points) > 0:
         return float(throttle_points["distance_m"].iloc[0])
     return None
 
 
-def _find_min_speed(lap_data: pd.DataFrame, segment: TrackSegment) -> float | None:
+def _find_min_speed(lap_data: pd.DataFrame, segment: TrackSegment, speed_col: str) -> float | None:
     """Find minimum speed within a segment (for corners)."""
     mask = (lap_data["distance_m"] >= segment.start_dist) & (
         lap_data["distance_m"] <= segment.end_dist
@@ -735,17 +784,14 @@ def _find_min_speed(lap_data: pd.DataFrame, segment: TrackSegment) -> float | No
     if len(seg_data) == 0:
         return None
 
-    return float(seg_data["speed_kmh"].min())
-
-
-# Channels required for segment stats
-SEGMENT_STATS_CHANNELS = ["distance_m", "speed_kmh", "BrakePress", "PPS"]
+    return float(seg_data[speed_col].min())
 
 
 def compute_segment_stats(
     log: "LogFile",
     laps: pd.DataFrame,
     segments: list[TrackSegment],
+    channel_names: dict,
     brake_threshold: float = 5,
     throttle_threshold: float = 20,
 ) -> pd.DataFrame:
@@ -764,6 +810,10 @@ def compute_segment_stats(
         Laps to analyze (with 'start_time', 'end_time', 'num', 'lap_time' columns).
     segments : list[TrackSegment]
         Track segments to compute statistics for.
+    channel_names : dict
+        Channel name mapping. Required keys:
+        - "throttle": Throttle position channel name (e.g., "PPS")
+        - "brake": Brake pressure channel name (e.g., "BrakePress")
     brake_threshold : float, default=5
         Minimum brake pressure % to consider as braking.
     throttle_threshold : float, default=20
@@ -779,12 +829,26 @@ def compute_segment_stats(
         - min_speed (for corner segments)
         - throttle_point, throttle_offset (for acceleration segments)
 
+    Raises
+    ------
+    KeyError
+        If required keys are missing from channel_names.
+
     Examples
     --------
+    >>> channel_names = {"throttle": "PPS", "brake": "BrakePress"}
     >>> top_laps = get_top_laps(laps)
-    >>> stats_df = compute_segment_stats(log, top_laps, segments)
+    >>> stats_df = compute_segment_stats(log, top_laps, segments, channel_names)
     >>> braking_stats = stats_df[stats_df["segment_type"] == "braking"]
     """
+    # Validate required channel names
+    _validate_channel_names(channel_names, ["throttle", "brake"], "compute_segment_stats")
+
+    # Get channel names
+    throttle_ch = channel_names["throttle"]
+    brake_ch = channel_names["brake"]
+    stats_channels = ["distance_m", "speed_kmh", brake_ch, throttle_ch]
+
     all_lap_stats = []
 
     for _, lap in laps.iterrows():
@@ -792,7 +856,7 @@ def compute_segment_stats(
         lap_end = int(lap["end_time"])
 
         # Extract only required channels for this lap
-        lap_channels = get_lap_channels(log, SEGMENT_STATS_CHANNELS, lap_start, lap_end)
+        lap_channels = get_lap_channels(log, stats_channels, lap_start, lap_end)
 
         # Interpolate to distance_m timebase
         aligned = interpolate_channels(lap_channels, reference_channel="distance_m")
@@ -802,8 +866,8 @@ def compute_segment_stats(
             {
                 "distance_m": aligned["distance_m"].column("distance_m").to_numpy(),
                 "speed_kmh": aligned["speed_kmh"].column("speed_kmh").to_numpy(),
-                "BrakePress": aligned["BrakePress"].column("BrakePress").to_numpy(),
-                "PPS": aligned["PPS"].column("PPS").to_numpy(),
+                brake_ch: aligned[brake_ch].column(brake_ch).to_numpy(),
+                throttle_ch: aligned[throttle_ch].column(throttle_ch).to_numpy(),
             }
         )
 
@@ -821,17 +885,17 @@ def compute_segment_stats(
             }
 
             if seg.segment_type == "braking":
-                braking_point = _find_braking_point(lap_data, seg, brake_threshold)
+                braking_point = _find_braking_point(lap_data, seg, brake_ch, brake_threshold)
                 stat["braking_point"] = braking_point
                 if braking_point is not None:
                     stat["brake_offset"] = braking_point - seg.start_dist
 
             elif seg.segment_type == "corner":
-                stat["min_speed"] = _find_min_speed(lap_data, seg)
+                stat["min_speed"] = _find_min_speed(lap_data, seg, "speed_kmh")
 
             elif seg.segment_type == "acceleration":
                 throttle_point = _find_throttle_point(
-                    lap_data, seg, throttle_threshold, brake_threshold
+                    lap_data, seg, throttle_ch, brake_ch, throttle_threshold, brake_threshold
                 )
                 stat["throttle_point"] = throttle_point
                 if throttle_point is not None:

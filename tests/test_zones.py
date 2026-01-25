@@ -36,10 +36,24 @@ class MockLogFile:
 
 def make_channel_table(timecodes: np.ndarray, name: str, values: np.ndarray) -> pa.Table:
     """Create a PyArrow table with timecodes and a named column."""
-    return pa.table({
-        "timecodes": pa.array(timecodes, type=pa.int64()),
-        name: pa.array(values),
-    })
+    return pa.table(
+        {
+            "timecodes": pa.array(timecodes, type=pa.int64()),
+            name: pa.array(values),
+        }
+    )
+
+
+# Test channel names mapping (matches the mock data channel names)
+TEST_CHANNEL_NAMES = {
+    "throttle": "PPS",
+    "brake": "BrakePress",
+    "gps_speed": "GPS Speed",
+    "lateral_g": "LateralAcc",
+    "gps_latitude": "GPS Latitude",
+    "gps_longitude": "GPS Longitude",
+    "steering": "SteerAngle",
+}
 
 
 class TestIdentifyZonesSingleLap:
@@ -495,6 +509,7 @@ class TestDetectZonesAveraged:
         braking_zones, accel_zones = detect_zones_averaged(
             mock_log_for_zones,
             sample_laps_for_zones,
+            TEST_CHANNEL_NAMES,
         )
 
         # Should find one braking zone around 200-300m
@@ -503,11 +518,14 @@ class TestDetectZonesAveraged:
         # Should find acceleration zone around 400-800m
         assert len(accel_zones) >= 1
 
-    def test_detect_zones_averaged_braking_location(self, mock_log_for_zones, sample_laps_for_zones):
+    def test_detect_zones_averaged_braking_location(
+        self, mock_log_for_zones, sample_laps_for_zones
+    ):
         """Test that braking zone is in expected location."""
         braking_zones, _ = detect_zones_averaged(
             mock_log_for_zones,
             sample_laps_for_zones,
+            TEST_CHANNEL_NAMES,
         )
 
         # Braking zone should be around 200-300m
@@ -523,6 +541,7 @@ class TestDetectZonesAveraged:
         result = detect_zones_averaged(
             mock_log_for_zones,
             sample_laps_for_zones,
+            TEST_CHANNEL_NAMES,
         )
 
         assert isinstance(result, tuple)
@@ -645,6 +664,7 @@ class TestComputeSegmentStats:
             mock_log_for_stats,
             sample_laps_for_stats,
             sample_segments_for_stats,
+            TEST_CHANNEL_NAMES,
         )
 
         assert isinstance(stats_df, pd.DataFrame)
@@ -657,6 +677,7 @@ class TestComputeSegmentStats:
             mock_log_for_stats,
             sample_laps_for_stats,
             sample_segments_for_stats,
+            TEST_CHANNEL_NAMES,
         )
 
         expected_cols = ["segment_id", "segment_name", "segment_type", "corner_id", "lap_num"]
@@ -671,6 +692,7 @@ class TestComputeSegmentStats:
             mock_log_for_stats,
             sample_laps_for_stats,
             sample_segments_for_stats,
+            TEST_CHANNEL_NAMES,
         )
 
         braking_stats = stats_df[stats_df["segment_type"] == "braking"]
@@ -690,6 +712,7 @@ class TestComputeSegmentStats:
             mock_log_for_stats,
             sample_laps_for_stats,
             sample_segments_for_stats,
+            TEST_CHANNEL_NAMES,
         )
 
         corner_stats = stats_df[stats_df["segment_type"] == "corner"]
@@ -709,6 +732,7 @@ class TestComputeSegmentStats:
             mock_log_for_stats,
             sample_laps_for_stats,
             sample_segments_for_stats,
+            TEST_CHANNEL_NAMES,
         )
 
         accel_stats = stats_df[stats_df["segment_type"] == "acceleration"]
@@ -723,6 +747,7 @@ class TestComputeSegmentStats:
             mock_log_for_stats,
             sample_laps_for_stats,
             sample_segments_for_stats,
+            TEST_CHANNEL_NAMES,
         )
 
         n_laps = len(sample_laps_for_stats)
@@ -736,10 +761,12 @@ class TestGetSegmentMask:
     @pytest.fixture
     def sample_channels(self):
         """Create sample channel data with distance."""
-        return pd.DataFrame({
-            "distance_m": np.linspace(0, 1000, 500),
-            "speed_kmh": np.random.uniform(50, 150, 500),
-        })
+        return pd.DataFrame(
+            {
+                "distance_m": np.linspace(0, 1000, 500),
+                "speed_kmh": np.random.uniform(50, 150, 500),
+            }
+        )
 
     @pytest.fixture
     def sample_segment(self):
@@ -852,11 +879,13 @@ class TestGetCornerData:
     @pytest.fixture
     def sample_laps(self):
         """Create sample laps table."""
-        return pd.DataFrame({
-            "num": [1, 2, 3],
-            "start_time": [0, 60000, 120000],
-            "end_time": [60000, 120000, 180000],
-        })
+        return pd.DataFrame(
+            {
+                "num": [1, 2, 3],
+                "start_time": [0, 60000, 120000],
+                "end_time": [60000, 120000, 180000],
+            }
+        )
 
     @pytest.fixture
     def sample_corners(self):
@@ -888,7 +917,9 @@ class TestGetCornerData:
             ),
         ]
 
-    def test_get_corner_data_returns_dataframe(self, mock_log_for_corner, sample_laps, sample_corners):
+    def test_get_corner_data_returns_dataframe(
+        self, mock_log_for_corner, sample_laps, sample_corners
+    ):
         """Test that get_corner_data returns a DataFrame."""
         result = get_corner_data(mock_log_for_corner, sample_laps, sample_corners[0], lap_num=2)
         assert isinstance(result, pd.DataFrame)
@@ -903,9 +934,13 @@ class TestGetCornerData:
         assert result["distance_m"].min() >= sample_corners[0].start_dist - 50
         assert result["distance_m"].max() <= sample_corners[0].end_dist + 50
 
-    def test_get_corner_data_filters_by_corner(self, mock_log_for_corner, sample_laps, sample_corners):
+    def test_get_corner_data_filters_by_corner(
+        self, mock_log_for_corner, sample_laps, sample_corners
+    ):
         """Test that data is filtered to the correct corner distance."""
-        result = get_corner_data(mock_log_for_corner, sample_laps, sample_corners[0], lap_num=2, margin=0)
+        result = get_corner_data(
+            mock_log_for_corner, sample_laps, sample_corners[0], lap_num=2, margin=0
+        )
 
         # All distances should be in Turn 1 range (200-400)
         assert result["distance_m"].min() >= 200
@@ -913,26 +948,38 @@ class TestGetCornerData:
 
     def test_get_corner_data_with_margin(self, mock_log_for_corner, sample_laps, sample_corners):
         """Test that margin extends the distance range."""
-        result = get_corner_data(mock_log_for_corner, sample_laps, sample_corners[0], lap_num=2, margin=50)
+        result = get_corner_data(
+            mock_log_for_corner, sample_laps, sample_corners[0], lap_num=2, margin=50
+        )
 
         # With 50m margin, distances should be in range 150-450
         assert result["distance_m"].min() >= 150
         assert result["distance_m"].max() <= 450
 
-    def test_get_corner_data_different_corners(self, mock_log_for_corner, sample_laps, sample_corners):
+    def test_get_corner_data_different_corners(
+        self, mock_log_for_corner, sample_laps, sample_corners
+    ):
         """Test selecting different corners."""
-        turn1_data = get_corner_data(mock_log_for_corner, sample_laps, sample_corners[0], lap_num=2, margin=0)
-        turn2_data = get_corner_data(mock_log_for_corner, sample_laps, sample_corners[1], lap_num=2, margin=0)
+        turn1_data = get_corner_data(
+            mock_log_for_corner, sample_laps, sample_corners[0], lap_num=2, margin=0
+        )
+        turn2_data = get_corner_data(
+            mock_log_for_corner, sample_laps, sample_corners[1], lap_num=2, margin=0
+        )
 
         # Turn 1 is 200-400, Turn 2 is 700-900
         assert turn1_data["distance_m"].max() < turn2_data["distance_m"].min()
 
-    def test_get_corner_data_invalid_lap_raises(self, mock_log_for_corner, sample_laps, sample_corners):
+    def test_get_corner_data_invalid_lap_raises(
+        self, mock_log_for_corner, sample_laps, sample_corners
+    ):
         """Test that invalid lap number raises ValueError."""
         with pytest.raises(ValueError, match="Lap 99 not found"):
             get_corner_data(mock_log_for_corner, sample_laps, sample_corners[0], lap_num=99)
 
-    def test_get_corner_data_has_expected_columns(self, mock_log_for_corner, sample_laps, sample_corners):
+    def test_get_corner_data_has_expected_columns(
+        self, mock_log_for_corner, sample_laps, sample_corners
+    ):
         """Test that result has expected columns from CORNER_DATA_CHANNELS."""
         result = get_corner_data(mock_log_for_corner, sample_laps, sample_corners[0], lap_num=2)
 

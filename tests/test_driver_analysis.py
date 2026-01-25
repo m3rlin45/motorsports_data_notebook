@@ -11,6 +11,14 @@ from motorsports_data_notebook.corners import Corner
 from motorsports_data_notebook.driver_analysis import find_throttle_acceptance
 
 
+# Test channel names mapping (matches the test data column names)
+TEST_CHANNEL_NAMES = {
+    "throttle": "PPS",
+    "brake": "BrakePress",
+    "lateral_g": "LateralAcc",
+}
+
+
 class TestFindThrottleAcceptance:
     """Tests for find_throttle_acceptance function."""
 
@@ -69,7 +77,12 @@ class TestFindThrottleAcceptance:
         lap_data.loc[throttle_start_idx:, "PPS"] = 100
 
         result = find_throttle_acceptance(
-            lap_data, corner, throttle_threshold=98.0, sustain_time_ms=500, smoothing_window=5
+            lap_data,
+            corner,
+            TEST_CHANNEL_NAMES,
+            throttle_threshold=98.0,
+            sustain_time_ms=500,
+            smoothing_window=5,
         )
 
         assert result is not None
@@ -94,7 +107,9 @@ class TestFindThrottleAcceptance:
             }
         )
 
-        result = find_throttle_acceptance(lap_data, corner, throttle_threshold=98.0)
+        result = find_throttle_acceptance(
+            lap_data, corner, TEST_CHANNEL_NAMES, throttle_threshold=98.0
+        )
 
         assert result is None
 
@@ -112,7 +127,7 @@ class TestFindThrottleAcceptance:
             }
         )
 
-        result = find_throttle_acceptance(lap_data, corner)
+        result = find_throttle_acceptance(lap_data, corner, TEST_CHANNEL_NAMES)
 
         assert result is None
 
@@ -129,7 +144,7 @@ class TestFindThrottleAcceptance:
             }
         )
 
-        result = find_throttle_acceptance(lap_data, corner)
+        result = find_throttle_acceptance(lap_data, corner, TEST_CHANNEL_NAMES)
 
         assert result is None
 
@@ -151,7 +166,7 @@ class TestFindThrottleAcceptance:
         throttle_idx = lap_data[lap_data["distance_m"] >= 250].index[:3]  # Only 3 points
         lap_data.loc[throttle_idx, "PPS"] = 100
 
-        result = find_throttle_acceptance(lap_data, corner, sustain_time_ms=500)
+        result = find_throttle_acceptance(lap_data, corner, TEST_CHANNEL_NAMES, sustain_time_ms=500)
 
         # Should be None because throttle wasn't sustained for 500ms
         assert result is None
@@ -190,10 +205,10 @@ class TestFindThrottleAcceptance:
 
         # Test with different lateral G values at throttle point
         result_low = find_throttle_acceptance(
-            create_data(0.5), corner, sustain_time_ms=500, smoothing_window=3
+            create_data(0.5), corner, TEST_CHANNEL_NAMES, sustain_time_ms=500, smoothing_window=3
         )
         result_high = find_throttle_acceptance(
-            create_data(1.5), corner, sustain_time_ms=500, smoothing_window=3
+            create_data(1.5), corner, TEST_CHANNEL_NAMES, sustain_time_ms=500, smoothing_window=3
         )
 
         assert result_low is not None
@@ -219,8 +234,12 @@ class TestFindThrottleAcceptance:
         throttle_start_idx = lap_data[lap_data["distance_m"] >= 250].index[0]
         lap_data.loc[throttle_start_idx:, "PPS"] = 100
 
-        result_no_smooth = find_throttle_acceptance(lap_data.copy(), corner, smoothing_window=1)
-        result_smoothed = find_throttle_acceptance(lap_data.copy(), corner, smoothing_window=25)
+        result_no_smooth = find_throttle_acceptance(
+            lap_data.copy(), corner, TEST_CHANNEL_NAMES, smoothing_window=1
+        )
+        result_smoothed = find_throttle_acceptance(
+            lap_data.copy(), corner, TEST_CHANNEL_NAMES, smoothing_window=25
+        )
 
         # Both should return results
         assert result_no_smooth is not None

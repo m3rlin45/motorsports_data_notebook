@@ -70,9 +70,7 @@ class TestFixGpsTimingGaps:
         timecodes = np.array([0, 40, 80, 120, 160], dtype=np.int64)
         values = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
 
-        log = MockLogFile(
-            channels={"GPS Speed": _create_gps_table("GPS Speed", timecodes, values)}
-        )
+        log = MockLogFile(channels={"GPS Speed": _create_gps_table("GPS Speed", timecodes, values)})
         result = fix_gps_timing_gaps(log)
 
         result_times = result.channels["GPS Speed"].column("timecodes").to_numpy()
@@ -84,9 +82,7 @@ class TestFixGpsTimingGaps:
         timecodes = np.array([0, 40, 80, 65613, 65653], dtype=np.int64)
         values = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
 
-        log = MockLogFile(
-            channels={"GPS Speed": _create_gps_table("GPS Speed", timecodes, values)}
-        )
+        log = MockLogFile(channels={"GPS Speed": _create_gps_table("GPS Speed", timecodes, values)})
         result = fix_gps_timing_gaps(log)
 
         result_times = result.channels["GPS Speed"].column("timecodes").to_numpy()
@@ -99,9 +95,7 @@ class TestFixGpsTimingGaps:
         timecodes = np.array([0, 1000, 1040, 1540, 1580], dtype=np.int64)
         values = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
 
-        log = MockLogFile(
-            channels={"GPS Speed": _create_gps_table("GPS Speed", timecodes, values)}
-        )
+        log = MockLogFile(channels={"GPS Speed": _create_gps_table("GPS Speed", timecodes, values)})
         result = fix_gps_timing_gaps(log)
 
         result_times = result.channels["GPS Speed"].column("timecodes").to_numpy()
@@ -132,9 +126,7 @@ class TestFixGpsTimingGaps:
         timecodes = np.array([0, 40, 80, 65613, 65653], dtype=np.int64)
         values = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
 
-        log = MockLogFile(
-            channels={"GPS Speed": _create_gps_table("GPS Speed", timecodes, values)}
-        )
+        log = MockLogFile(channels={"GPS Speed": _create_gps_table("GPS Speed", timecodes, values)})
         result = fix_gps_timing_gaps(log)
 
         field = result.channels["GPS Speed"].schema.field("GPS Speed")
@@ -147,9 +139,7 @@ class TestFixGpsTimingGaps:
         timecodes = np.array([0, 40, 80, 65613, 65653], dtype=np.int64)
         values = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
 
-        log = MockLogFile(
-            channels={"GPS Speed": _create_gps_table("GPS Speed", timecodes, values)}
-        )
+        log = MockLogFile(channels={"GPS Speed": _create_gps_table("GPS Speed", timecodes, values)})
         result = fix_gps_timing_gaps(log)
 
         result_values = result.channels["GPS Speed"].column("GPS Speed").to_numpy()
@@ -161,9 +151,7 @@ class TestFixGpsTimingGaps:
         timecodes = np.array([0, 20, 520, 540], dtype=np.int64)
         values = np.array([1.0, 2.0, 3.0, 4.0])
 
-        log = MockLogFile(
-            channels={"GPS Speed": _create_gps_table("GPS Speed", timecodes, values)}
-        )
+        log = MockLogFile(channels={"GPS Speed": _create_gps_table("GPS Speed", timecodes, values)})
         result = fix_gps_timing_gaps(log, expected_dt_ms=20.0)
 
         result_times = result.channels["GPS Speed"].column("timecodes").to_numpy()
@@ -176,9 +164,7 @@ class TestFixGpsTimingGaps:
         timecodes = np.array([0, 40, 240, 280], dtype=np.int64)
         values = np.array([1.0, 2.0, 3.0, 4.0])
 
-        log = MockLogFile(
-            channels={"GPS Speed": _create_gps_table("GPS Speed", timecodes, values)}
-        )
+        log = MockLogFile(channels={"GPS Speed": _create_gps_table("GPS Speed", timecodes, values)})
         result = fix_gps_timing_gaps(log)
 
         result_times = result.channels["GPS Speed"].column("timecodes").to_numpy()
@@ -189,9 +175,7 @@ class TestFixGpsTimingGaps:
         timecodes = np.array([0], dtype=np.int64)
         values = np.array([1.0])
 
-        log = MockLogFile(
-            channels={"GPS Speed": _create_gps_table("GPS Speed", timecodes, values)}
-        )
+        log = MockLogFile(channels={"GPS Speed": _create_gps_table("GPS Speed", timecodes, values)})
         result = fix_gps_timing_gaps(log)
 
         result_times = result.channels["GPS Speed"].column("timecodes").to_numpy()
@@ -206,9 +190,7 @@ class TestFixGpsTimingGaps:
         log = MockLogFile(
             channels={
                 "GPS Speed": _create_gps_table("GPS Speed", timecodes.copy(), values),
-                "GPS Latitude": _create_gps_table(
-                    "GPS Latitude", timecodes.copy(), values
-                ),
+                "GPS Latitude": _create_gps_table("GPS Latitude", timecodes.copy(), values),
             }
         )
         result = fix_gps_timing_gaps(log)
@@ -416,14 +398,10 @@ class TestInterpolateChannels:
         result = interpolate_channels(channels, "ref")
 
         # Reference should be unchanged
-        np.testing.assert_array_equal(
-            result["ref"].column("timecodes").to_numpy(), [0, 100, 200]
-        )
+        np.testing.assert_array_equal(result["ref"].column("timecodes").to_numpy(), [0, 100, 200])
 
         # Other should be interpolated to ref's timebase
-        np.testing.assert_array_equal(
-            result["other"].column("timecodes").to_numpy(), [0, 100, 200]
-        )
+        np.testing.assert_array_equal(result["other"].column("timecodes").to_numpy(), [0, 100, 200])
         np.testing.assert_array_almost_equal(
             result["other"].column("other").to_numpy(), [0.0, 10.0, 20.0]
         )
