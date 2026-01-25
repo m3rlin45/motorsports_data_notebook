@@ -506,7 +506,9 @@ def get_lap_channels(
     result = {}
     for name in channel_names:
         if name not in log.channels:
-            raise KeyError(f"Channel '{name}' not found in log. Available: {list(log.channels.keys())}")
+            raise KeyError(
+                f"Channel '{name}' not found in log. Available: {list(log.channels.keys())}"
+            )
 
         table = log.channels[name]
         timecodes = table.column("timecodes")
@@ -616,10 +618,12 @@ def interpolate_channels(
             interpolated = np.interp(ref_times, source_times, source_values)
 
             # Create new table with reference timecodes
-            result[name] = pa.table({
-                "timecodes": pa.array(ref_times, type=pa.int64()),
-                name: pa.array(interpolated),
-            })
+            result[name] = pa.table(
+                {
+                    "timecodes": pa.array(ref_times, type=pa.int64()),
+                    name: pa.array(interpolated),
+                }
+            )
 
     return result
 
@@ -907,7 +911,7 @@ def plot_lap_gps(lat, lon, color_channels, width=800, height=800, title=None):
 
 
 def plot_tire_thermography(
-    lap_channels: pd.DataFrame,
+    channels: dict[str, pa.Table],
     title: str = "Tire Temperatures",
     width: int = 900,
     height: int = 900,
@@ -921,8 +925,8 @@ def plot_tire_thermography(
 
     Parameters
     ----------
-    lap_channels : pd.DataFrame
-        Channel data for a single lap. Must contain:
+    channels : dict[str, pa.Table]
+        Channel tables for a single lap (from get_best_lap_channels). Must contain:
         - distance_m: Distance along lap (meters)
         - FL_Ch1 through FL_Ch8: Front left tire temps (Ch1=outside, Ch8=inside)
         - FR_Ch1 through FR_Ch8: Front right tire temps (Ch1=inside, Ch8=outside)
@@ -953,39 +957,47 @@ def plot_tire_thermography(
 
     Examples
     --------
-    >>> fig = plot_tire_thermography(lap_channels, title="Best Lap Tire Temps")
+    >>> best_lap, channels = get_best_lap_channels(log, laps, TIRE_THERMOGRAPHY_CHANNELS)
+    >>> fig = plot_tire_thermography(channels, title="Best Lap Tire Temps")
     >>> show_fig(fig)
     """
     # Validate required channels
     tire_positions = ["FL", "FR", "RL", "RR"]
-    required_channels = []
+    required_channels = [
+        "distance_m",
+        "speed_kmh",
+        "LateralAcc",
+        "InlineAcc",
+        "BrakePress",
+        "PPS",
+        "SteerAngle",
+    ]
     for pos in tire_positions:
         required_channels.extend([f"{pos}_Ch{i}" for i in range(1, 9)])
 
-    missing = [ch for ch in required_channels if ch not in lap_channels.columns]
+    missing = [ch for ch in required_channels if ch not in channels]
     if missing:
         raise ValueError(
-            f"Missing tire temperature channels: {missing[:5]}{'...' if len(missing) > 5 else ''}. "
+            f"Missing channels: {missing[:5]}{'...' if len(missing) > 5 else ''}. "
             f"Expected channels like FL_Ch1 through FL_Ch8 for each tire position."
         )
 
-    # Extract tire temperature data
-    fl_channel_names = [f"FL_Ch{i}" for i in range(1, 9)]
-    fr_channel_names = [f"FR_Ch{i}" for i in range(1, 9)]
-    rl_channel_names = [f"RL_Ch{i}" for i in range(1, 9)]
-    rr_channel_names = [f"RR_Ch{i}" for i in range(1, 9)]
+    # Interpolate all channels to distance_m timebase
+    aligned = interpolate_channels(channels, reference_channel="distance_m")
 
-    fl_temps = lap_channels[fl_channel_names].values.T  # Shape: (8, n_samples)
-    fr_temps = lap_channels[fr_channel_names].values.T
-    rl_temps = lap_channels[rl_channel_names].values.T
-    rr_temps = lap_channels[rr_channel_names].values.T
+    # Extract distance array (reference)
+    distance_m = aligned["distance_m"].column("distance_m").to_numpy()
 
-    distance_m = np.asarray(lap_channels["distance_m"])
+    # Extract tire temperature data as 2D arrays (8, n_samples)
+    fl_temps = np.vstack([aligned[f"FL_Ch{i}"].column(f"FL_Ch{i}").to_numpy() for i in range(1, 9)])
+    fr_temps = np.vstack([aligned[f"FR_Ch{i}"].column(f"FR_Ch{i}").to_numpy() for i in range(1, 9)])
+    rl_temps = np.vstack([aligned[f"RL_Ch{i}"].column(f"RL_Ch{i}").to_numpy() for i in range(1, 9)])
+    rr_temps = np.vstack([aligned[f"RR_Ch{i}"].column(f"RR_Ch{i}").to_numpy() for i in range(1, 9)])
 
     # Calculate Sum of G
-    sum_of_g = np.sqrt(
-        np.asarray(lap_channels["LateralAcc"]) ** 2 + np.asarray(lap_channels["InlineAcc"]) ** 2
-    )
+    lateral_acc = aligned["LateralAcc"].column("LateralAcc").to_numpy()
+    inline_acc = aligned["InlineAcc"].column("InlineAcc").to_numpy()
+    sum_of_g = np.sqrt(lateral_acc**2 + inline_acc**2)
 
     # Get color scale range across all tires
     vmin = float(min(fl_temps.min(), fr_temps.min(), rl_temps.min(), rr_temps.min()))
@@ -1012,10 +1024,10 @@ def plot_tire_thermography(
     y_labels = ["1", "2", "3", "4", "5", "6", "7", "8"]
 
     # Extract arrays for speed/brake/throttle/steering
-    speed_kmh = np.asarray(lap_channels["speed_kmh"])
-    brake_press = np.asarray(lap_channels["BrakePress"])
-    throttle_pps = np.asarray(lap_channels["PPS"])
-    steer_angle = np.asarray(lap_channels["SteerAngle"])
+    speed_kmh = aligned["speed_kmh"].column("speed_kmh").to_numpy()
+    brake_press = aligned["BrakePress"].column("BrakePress").to_numpy()
+    throttle_pps = aligned["PPS"].column("PPS").to_numpy()
+    steer_angle = aligned["SteerAngle"].column("SteerAngle").to_numpy()
 
     # Front Left heatmap
     fig.add_trace(
