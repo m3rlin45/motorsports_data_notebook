@@ -16,13 +16,7 @@ import plotly.io as pio
 import pyarrow as pa
 from plotly.subplots import make_subplots
 
-from .channels import (
-    get_best_lap,
-    get_best_lap_channels,
-    get_lap_channels,
-    get_top_laps,
-    interpolate_channels,
-)
+from .channels import get_best_lap, interpolate_channels
 
 if TYPE_CHECKING:
     from libxrk.base import LogFile
@@ -31,23 +25,17 @@ if TYPE_CHECKING:
     from .zones import TrackSegment
 
 
-# Re-export channel functions for backward compatibility
 __all__ = [
-    "format_lap_time",
-    "show_fig",
-    "plot_corner_inputs",
-    "visualize_throttle_acceptance",
-    "get_best_lap",
-    "get_best_lap_data",
-    "get_best_lap_channels",
-    "get_lap_channels",
-    "interpolate_channels",
-    "plot_gps_channels",
-    "get_top_laps",
     "compute_start_line",
+    "format_lap_time",
+    "get_best_lap_data",
+    "plot_corner_inputs",
+    "plot_gps_channels",
     "plot_lap_gps",
     "plot_tire_thermography",
     "plot_track_segments",
+    "show_fig",
+    "visualize_throttle_acceptance",
 ]
 
 
