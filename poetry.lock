@@ -1997,16 +1997,16 @@ files = [
 
 [[package]]
 name = "libxrk"
-version = "0.3.0"
+version = "0.4.0"
 description = "Library for reading AIM XRK files from AIM automotive data loggers"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "libxrk-0.3.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:9958e9ca9ac5df10bb8bd270e52e78f2a599f0acd9b5bbb848c2c10d4bbe5984"},
-    {file = "libxrk-0.3.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:de006898d3aab1c70b1cf3bdaafa136c9d1768a7e850009a11adcff582c65310"},
-    {file = "libxrk-0.3.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:d297f75943c05cf729d88ae54cf77b93bf0d6dd02de00c2434b907aedc0ddf00"},
-    {file = "libxrk-0.3.0.tar.gz", hash = "sha256:15549d40405ff9c4050958b42eec45c6b2f60b4953b4597bafb7829a80c15f44"},
+    {file = "libxrk-0.4.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:bb46460389b474a9d0b847462feab4937a1412d1a621384ac55d4b569e9ad3a9"},
+    {file = "libxrk-0.4.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:d3054555748752119561788f1e5b1214e9ada303bce1f2da8deb73d279380743"},
+    {file = "libxrk-0.4.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:7409ecfdfadd3d5ff49a4f7fcdbeb5e803c3a01698cd6d752d0430237befef8c"},
+    {file = "libxrk-0.4.0.tar.gz", hash = "sha256:7ddd77336e8152402ad306ab56883aa4c389be80e8dce0b208cd12c0e681242f"},
 ]
 
 [package.dependencies]
@@ -4652,4 +4652,4 @@ jupyterlite = ["jupyterlite-core", "jupyterlite-pyodide-kernel", "nbconvert", "p
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "f427d6202dd600c063f57d548ffa415f39db56186e8642578d4a637c616495d9"
+content-hash = "2f8168e9bdfd0303f4a14a43fccfc6af656adb4d8bf2377ab2c33562aa96b2d3"

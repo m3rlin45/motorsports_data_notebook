@@ -46,12 +46,7 @@ def load_session(file_data: Union[str, bytes]) -> "LogFile":
     """
     from libxrk import aim_xrk
 
-    from .channels import fix_gps_timing_gaps
-
     log = aim_xrk(file_data)
-
-    # Fix GPS timing gaps (spurious timestamp jumps in some AIM loggers)
-    log = fix_gps_timing_gaps(log)
 
     # Check if GPS Speed channel exists
     has_gps_speed = "GPS Speed" in log.channels
