@@ -104,14 +104,8 @@ To rebuild `libxrk` for Pyodide (after updating the C++ bindings):
 
 ```bash
 # Install Emscripten SDK (one time)
-pip install pyodide-build
-pyodide xbuildenv install 0.27.6
-
-git clone https://github.com/emscripten-core/emsdk.git ~/emsdk
-cd ~/emsdk
-EMSCRIPTEN_VERSION=$(pyodide config get emscripten_version)
-python3 emsdk.py install $EMSCRIPTEN_VERSION
-python3 emsdk.py activate $EMSCRIPTEN_VERSION
+poetry install --extras jupyterlite
+poetry run poe setup_emsdk
 
 # Build all wheels and site
 poetry run poe build_lite_full

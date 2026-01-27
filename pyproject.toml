@@ -90,15 +90,17 @@ clean = { shell = "rm -f workspace/*.* && cp workspace_template/basics.ipynb wor
 run = { cmd = "jupyter lab workspace/", help = "Start Jupyter notebook" }
 run_clean = ["clean", "run"]
 
+# Emscripten SDK setup (one-time, needed for building libxrk Pyodide wheel)
+setup_emsdk = { shell = "EMSDK_VERSION=$(pyodide config get emscripten_version) && ([ -d $HOME/emsdk ] || git clone https://github.com/emscripten-core/emsdk.git $HOME/emsdk) && cd $HOME/emsdk && git config core.autocrlf false && git checkout -- . && ./emsdk install $EMSDK_VERSION && ./emsdk activate $EMSDK_VERSION && pyodide xbuildenv install", help = "Install Emscripten SDK to ~/emsdk (one-time setup for Pyodide builds)" }
+
 # JupyterLite wheel building tasks
 build_wheel = { shell = "poetry build -f wheel && python scripts/build_lite_wheel.py", help = "Build motorsports_data_notebook wheel (no deps for JupyterLite)" }
 _download_libxrk = { shell = "rm -rf build/libxrk && mkdir -p build/libxrk && pip download --no-deps --no-binary libxrk -d build/libxrk libxrk && cd build/libxrk && tar -xzf *.tar.gz --strip-components=1 && rm -f *.tar.gz", help = "Download and extract libxrk sdist from PyPI" }
-_build_libxrk_pyodide = { shell = "cd build/libxrk && export PATH=\"$HOME/emsdk:$HOME/emsdk/upstream/emscripten:$HOME/emsdk/node/22.16.0_64bit/bin:$PATH\" && pyodide build . --skip-dependency-check", help = "Build libxrk for Pyodide" }
 _copy_libxrk_wheel = { shell = "mkdir -p pypi && cp build/libxrk/dist/*.whl pypi/", help = "Copy libxrk wheel to pypi" }
-build_libxrk_pyodide = { sequence = ["_download_libxrk", "_build_libxrk_pyodide", "_copy_libxrk_wheel"], help = "Build libxrk wheel for Pyodide (requires emsdk installed)" }
+build_libxrk_pyodide = { sequence = ["_download_libxrk", "_build_libxrk_pyodide", "_copy_libxrk_wheel"], help = "Build libxrk wheel for Pyodide (requires setup_emsdk)" }
 build_wheels_lite = ["build_wheel", "build_libxrk_pyodide"]
 
-# JupyterLite site building tasks  
+# JupyterLite site building tasks
 _prepare_lite_contents = { shell = "rm -rf .lite_contents dist && mkdir -p .lite_contents && cp workspace_template/*.xrz .lite_contents/ && VERSION=$(poetry version -s) && for nb in basics tire_analysis track_analysis consistency_analysis; do cp workspace_template/${nb}.ipynb \".lite_contents/${nb}_v${VERSION}.ipynb\"; done", help = "Prepare .lite_contents directory with versioned notebooks" }
 _execute_lite_notebooks = { shell = "cd .lite_contents && python ../scripts/execute_notebooks.py", help = "Execute notebooks in .lite_contents to populate outputs" }
 _build_lite_site = { shell = "jupyter lite build --contents .lite_contents --output-dir dist && rm -rf .lite_contents", help = "Build JupyterLite site from .lite_contents" }
@@ -109,3 +111,8 @@ build_and_serve_lite = ["build_lite_full", "serve_lite"]
 
 # Cleanup tasks
 clean_build = { shell = "rm -rf build/ pypi/ dist/", help = "Clean all build artifacts" }
+
+[tool.poe.tasks._build_libxrk_pyodide]
+shell = "cd build/libxrk && . $HOME/emsdk/emsdk_env.sh && pyodide build . --skip-dependency-check"
+interpreter = "bash"
+help = "Build libxrk for Pyodide"
