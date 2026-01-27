@@ -43,13 +43,16 @@ jobs:
       - name: Install dependencies
         run: poetry install --extras jupyterlite
 
-      - name: Setup Emscripten SDK
-        uses: mymindstorm/setup-emsdk@v14
+      - name: Cache Emscripten SDK
+        uses: actions/cache@v4
         with:
-          version: '3.1.58'
+          path: ~/emsdk
+          key: emsdk-${{ runner.os }}-${{ hashFiles('poetry.lock') }}
+          restore-keys: |
+            emsdk-${{ runner.os }}-
 
-      - name: Install Pyodide xbuildenv
-        run: poetry run pyodide xbuildenv install 0.27.6
+      - name: Setup Emscripten SDK
+        run: poetry run poe setup_emsdk
 
       - name: Build wheels and JupyterLite site
         run: poetry run poe build_lite_full
