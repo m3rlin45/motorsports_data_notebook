@@ -96,7 +96,7 @@ setup_emsdk = { shell = "EMSDK_VERSION=$(pyodide config get emscripten_version) 
 # JupyterLite wheel building tasks
 build_wheel = { shell = "poetry build -f wheel && python scripts/build_lite_wheel.py", help = "Build motorsports_data_notebook wheel (no deps for JupyterLite)" }
 _download_libxrk = { shell = "rm -rf build/libxrk && mkdir -p build/libxrk && pip download --no-deps --no-binary libxrk -d build/libxrk libxrk && cd build/libxrk && tar -xzf *.tar.gz --strip-components=1 && rm -f *.tar.gz", help = "Download and extract libxrk sdist from PyPI" }
-_copy_libxrk_wheel = { shell = "mkdir -p pypi && cp build/libxrk/dist/*.whl pypi/", help = "Copy libxrk wheel to pypi" }
+_copy_libxrk_wheel = { shell = "mkdir -p pypi && rm -f pypi/libxrk-*.whl && cp build/libxrk/dist/*.whl pypi/", help = "Copy libxrk wheel to pypi (removes old wheels first)" }
 build_libxrk_pyodide = { sequence = ["_download_libxrk", "_build_libxrk_pyodide", "_copy_libxrk_wheel"], help = "Build libxrk wheel for Pyodide (requires setup_emsdk)" }
 build_wheels_lite = ["build_wheel", "build_libxrk_pyodide"]
 
