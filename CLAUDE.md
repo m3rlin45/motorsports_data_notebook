@@ -56,7 +56,13 @@ poetry run poe format-notebooks      # black on notebooks
 poetry run poe run_clean             # Reset workspace + start JupyterLab
 
 # Build JupyterLite site
-poetry run poe build_lite_full       # Full build pipeline -> dist/
+poetry run poe build_lite            # Build site (uses pre-built wheels in pypi/)
+poetry run poe build_lite_full       # Rebuild project wheel + build site
+poetry run poe build_and_serve_lite  # build_lite_full + serve locally
+
+# Emscripten SDK setup (one-time, needed for rebuilding libxrk Pyodide wheel)
+poetry run poe setup_emsdk           # Installs emsdk to ~/emsdk
+poetry run poe build_libxrk_pyodide  # Rebuild libxrk for Pyodide (requires setup_emsdk)
 ```
 
 ## Code Style & Conventions
