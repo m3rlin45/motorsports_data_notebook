@@ -19,7 +19,7 @@ Live site: https://analysis-preview.inferno.racing/
 
 ```
 src/motorsports_data_notebook/   # Main package
-  channels.py      # Channel extraction, lap filtering, interpolation
+  channels.py      # Lap selection (get_best_lap, get_top_laps, get_best_lap_channels)
   corners.py       # Corner detection from GPS via curvature analysis
   zones.py         # Braking/acceleration zone detection, track segments
   visualization.py # Plotly-based interactive visualizations (largest module)
@@ -88,7 +88,9 @@ poetry run poe build_libxrk_pyodide  # Rebuild libxrk for Pyodide (requires setu
 7. Visualize via `visualization.*` functions
 
 ### Key Design Decisions
-- **PyArrow over pandas merges:** `channels.get_lap_channels()` avoids expensive merge operations by keeping native timebases and filtering with PyArrow compute
+- **libxrk 0.5.0 method chaining:** Use `log.filter_by_lap(n).select_channels([...]).resample_to_channel(ref).channels` for efficient lap filtering and channel alignment
+- **Single-lap functions receive pre-filtered LogFile:** Functions like `get_corner_data()` and `analyze_suspension_velocity()` expect the caller to filter via `log.filter_by_lap(n)`
+- **Multi-lap functions filter internally:** Functions like `detect_zones_averaged()` and `compute_segment_stats()` loop over laps and call `log.filter_by_lap()` internally
 - **Grid-based zone averaging:** `zones.average_zones_across_laps()` uses a uniform grid with voting across laps rather than point-by-point comparison
 - **GPS smoothing:** Rolling averages on position (15 pts) and curvature (30 pts) to reduce GPS noise
 - **Time-based accel zone merging:** Merges acceleration zones separated by short time gaps (gear changes)

@@ -11,9 +11,6 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
-
-from .channels import get_lap_channels, interpolate_channels
 
 if TYPE_CHECKING:
     from libxrk.base import LogFile
@@ -471,8 +468,6 @@ def _process_corner(
 
 def analyze_suspension_velocity(
     log: "LogFile",
-    lap_start: int,
-    lap_end: int,
     channel_names: dict | None = None,
     motion_ratios: MotionRatios | None = None,
     velocity_ranges: VelocityRanges | None = None,
@@ -485,14 +480,13 @@ def analyze_suspension_velocity(
     Main analysis function that processes all four corners and returns
     comprehensive velocity histogram data and statistics.
 
+    The caller must filter the LogFile to a single lap before calling this function
+    using log.filter_by_lap(lap_num).
+
     Parameters
     ----------
     log : LogFile
-        The loaded log file with channels dict.
-    lap_start : int
-        Start timestamp in milliseconds.
-    lap_end : int
-        End timestamp in milliseconds.
+        The LogFile pre-filtered to a single lap (via log.filter_by_lap()).
     channel_names : dict, optional
         Channel name mapping. Required keys:
         - "shock_fl": Front left shock pot channel
@@ -525,11 +519,8 @@ def analyze_suspension_velocity(
     --------
     >>> from motorsports_data_notebook.channels import get_best_lap
     >>> best_lap = get_best_lap(laps)
-    >>> result = analyze_suspension_velocity(
-    ...     log,
-    ...     lap_start=best_lap["start_time"],
-    ...     lap_end=best_lap["end_time"],
-    ... )
+    >>> lap_log = log.filter_by_lap(int(best_lap["num"]))
+    >>> result = analyze_suspension_velocity(lap_log)
     >>> print(f"FL skew: {result.front_left.skew:.2f}")
     """
     # Use defaults if not provided
@@ -550,15 +541,12 @@ def analyze_suspension_velocity(
     shock_rl_name = channel_names["shock_rl"]
     shock_rr_name = channel_names["shock_rr"]
 
-    channels = get_lap_channels(
-        log,
-        [shock_fl_name, shock_fr_name, shock_rl_name, shock_rr_name],
-        lap_start,
-        lap_end,
+    # Use libxrk 0.5.0 methods to select and resample channels
+    aligned = (
+        log.select_channels([shock_fl_name, shock_fr_name, shock_rl_name, shock_rr_name])
+        .resample_to_channel(shock_fl_name)
+        .channels
     )
-
-    # Use front left as reference for interpolation (all shocks typically same rate)
-    aligned = interpolate_channels(channels, reference_channel=shock_fl_name)
 
     # Extract timecodes and displacement arrays
     timecodes = aligned[shock_fl_name].column("timecodes").to_numpy()

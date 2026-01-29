@@ -4,14 +4,14 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict
+from unittest.mock import MagicMock
 
 from motorsports_data_notebook.channels import (
     get_best_lap,
-    get_lap_channels,
+    get_best_lap_channels,
     get_top_laps,
-    interpolate_channels,
 )
 
 
@@ -30,36 +30,13 @@ class MockLogFile:
         if self.metadata is None:
             self.metadata = {}
 
+    def filter_by_lap(self, lap_num: int):
+        """Mock filter_by_lap returning self for method chaining."""
+        return self
 
-class TestGetLapChannels:
-    """Tests for get_lap_channels function."""
-
-    def test_filters_to_time_range(self):
-        """Channels should be filtered to the specified time range."""
-        timecodes = np.array([0, 100, 200, 300, 400, 500], dtype=np.int64)
-        values = np.array([0.0, 1.0, 2.0, 3.0, 4.0, 5.0])
-
-        log = MockLogFile(
-            channels={
-                "speed": pa.table(
-                    {
-                        "timecodes": pa.array(timecodes, type=pa.int64()),
-                        "speed": pa.array(values),
-                    }
-                )
-            }
-        )
-
-        result = get_lap_channels(log, ["speed"], start_time=150, end_time=450)
-        result_times = result["speed"].column("timecodes").to_numpy()
-        np.testing.assert_array_equal(result_times, [200, 300, 400])
-
-    def test_missing_channel_raises(self):
-        """Requesting a missing channel should raise KeyError."""
-        log = MockLogFile(channels={})
-
-        with pytest.raises(KeyError, match="not found"):
-            get_lap_channels(log, ["nonexistent"], start_time=0, end_time=100)
+    def select_channels(self, channel_names: list):
+        """Mock select_channels returning self for method chaining."""
+        return self
 
 
 class TestGetBestLap:
@@ -101,43 +78,48 @@ class TestGetBestLap:
             get_best_lap(laps)
 
 
-class TestInterpolateChannels:
-    """Tests for interpolate_channels function."""
+class TestGetBestLapChannels:
+    """Tests for get_best_lap_channels function."""
 
-    def test_interpolates_to_reference(self):
-        """Channels should be interpolated to reference timebase."""
+    def test_returns_best_lap_and_channels(self):
+        """Should return best lap info and filtered channels."""
+        # Create mock channels
         channels = {
-            "ref": pa.table(
+            "speed": pa.table(
                 {
-                    "timecodes": pa.array([0, 100, 200], type=pa.int64()),
-                    "ref": pa.array([1.0, 2.0, 3.0]),
+                    "timecodes": pa.array([100, 200, 300], type=pa.int64()),
+                    "speed": pa.array([10.0, 20.0, 30.0]),
                 }
-            ),
-            "other": pa.table(
-                {
-                    "timecodes": pa.array([0, 50, 100, 150, 200], type=pa.int64()),
-                    "other": pa.array([0.0, 5.0, 10.0, 15.0, 20.0]),
-                }
-            ),
+            )
         }
 
-        result = interpolate_channels(channels, "ref")
-
-        # Reference should be unchanged
-        np.testing.assert_array_equal(result["ref"].column("timecodes").to_numpy(), [0, 100, 200])
-
-        # Other should be interpolated to ref's timebase
-        np.testing.assert_array_equal(result["other"].column("timecodes").to_numpy(), [0, 100, 200])
-        np.testing.assert_array_almost_equal(
-            result["other"].column("other").to_numpy(), [0.0, 10.0, 20.0]
+        # Create laps with lap 2 being fastest (58s vs 60s)
+        laps = pd.DataFrame(
+            {
+                "num": [1, 2, 3, 4, 5],
+                "start_time": [0, 60000, 120000, 178000, 238000],
+                "end_time": [60000, 120000, 178000, 238000, 298000],
+            }
         )
 
-    def test_missing_reference_raises(self):
-        """Missing reference channel should raise KeyError."""
-        channels = {"a": pa.table({"timecodes": pa.array([0]), "a": pa.array([1.0])})}
+        # Create mock log with filter_by_lap and select_channels methods
+        mock_log = MagicMock()
+        mock_log.filter_by_lap.return_value = mock_log
+        mock_log.select_channels.return_value = mock_log
+        mock_log.channels = channels
 
-        with pytest.raises(KeyError, match="not found"):
-            interpolate_channels(channels, "nonexistent")
+        best_lap, result_channels = get_best_lap_channels(mock_log, laps, ["speed"])
+
+        # Best lap should be lap 3 (index 2, fastest middle lap)
+        assert best_lap["start_time"] == 120000
+        assert best_lap["num"] == 3
+
+        # Should have called filter_by_lap with lap number
+        mock_log.filter_by_lap.assert_called_once_with(3)
+        mock_log.select_channels.assert_called_once_with(["speed"])
+
+        # Should return channels dict
+        assert "speed" in result_channels
 
 
 class TestGetTopLaps:

@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
-from .channels import get_lap_channels, interpolate_channels
 
 if TYPE_CHECKING:
     from libxrk.base import LogFile
@@ -98,27 +97,22 @@ CORNER_DATA_CHANNELS = ["distance_m", "PPS", "BrakePress", "LateralAcc", "SteerA
 
 def get_corner_data(
     log: "LogFile",
-    laps: pd.DataFrame,
     corner: "Corner",
-    lap_num: int,
     channel_names: list[str] | None = None,
     *,
     margin: float = 50.0,
 ) -> pd.DataFrame:
-    """Get channel data for a specific corner and lap combination.
+    """Get channel data for a specific corner from a pre-filtered LogFile.
 
-    Efficiently extracts only the required channels for a corner's time range.
+    The caller must filter the LogFile to a single lap before calling this function
+    using log.filter_by_lap(lap_num).
 
     Parameters
     ----------
     log : LogFile
-        The loaded log file with channels dict.
-    laps : pd.DataFrame
-        Laps table with 'num', 'start_time', 'end_time' columns.
+        The LogFile pre-filtered to a single lap (via log.filter_by_lap()).
     corner : Corner
         The corner object with start_dist and end_dist.
-    lap_num : int
-        Lap number to select.
     channel_names : list[str], optional
         Names of channels to extract. If None, uses CORNER_DATA_CHANNELS.
     margin : float, default=50.0
@@ -127,16 +121,12 @@ def get_corner_data(
     Returns
     -------
     pd.DataFrame
-        Filtered channel data for the specified corner and lap.
-
-    Raises
-    ------
-    ValueError
-        If the lap number is not found.
+        Filtered channel data for the specified corner.
 
     Examples
     --------
-    >>> corner_data = get_corner_data(log, laps, corners[0], lap_num=3, margin=50)
+    >>> lap_log = log.filter_by_lap(3)
+    >>> corner_data = get_corner_data(lap_log, corners[0], margin=50)
     >>> fig = visualize_throttle_acceptance(
     ...     distance=corner_data["distance_m"],
     ...     throttle=corner_data["PPS"],
@@ -145,24 +135,12 @@ def get_corner_data(
     ...     throttle_acceptance_result=result,
     ... )
     """
-    # Find the lap
-    lap_row = laps[laps["num"] == lap_num]
-    if len(lap_row) == 0:
-        raise ValueError(f"Lap {lap_num} not found in laps table")
-    lap = lap_row.iloc[0]
-
-    lap_start = int(lap["start_time"])
-    lap_end = int(lap["end_time"])
-
     # Use default channels if not specified
     if channel_names is None:
         channel_names = CORNER_DATA_CHANNELS.copy()
 
-    # Extract channels for this lap
-    lap_channels = get_lap_channels(log, channel_names, lap_start, lap_end)
-
-    # Interpolate to distance_m timebase
-    aligned = interpolate_channels(lap_channels, reference_channel="distance_m")
+    # Use libxrk 0.5.0 methods to select and resample channels
+    aligned = log.select_channels(channel_names).resample_to_channel("distance_m").channels
 
     # Convert to DataFrame
     lap_data = pd.DataFrame({name: aligned[name].column(name).to_numpy() for name in channel_names})
@@ -668,14 +646,15 @@ def detect_zones_averaged(
     reference_speed: np.ndarray | None = None
 
     for _, lap in top_laps.iterrows():
-        lap_start = int(lap["start_time"])
-        lap_end = int(lap["end_time"])
+        lap_num = int(lap["num"])
 
-        # Extract only required channels for this lap
-        lap_channels = get_lap_channels(log, zone_channels, lap_start, lap_end)
-
-        # Interpolate to distance_m timebase
-        aligned = interpolate_channels(lap_channels, reference_channel="distance_m")
+        # Use libxrk 0.5.0 methods to filter by lap, select channels, and resample
+        aligned = (
+            log.filter_by_lap(lap_num)
+            .select_channels(zone_channels)
+            .resample_to_channel("distance_m")
+            .channels
+        )
 
         # Extract arrays
         distance = aligned["distance_m"].column("distance_m").to_numpy()
@@ -852,14 +831,15 @@ def compute_segment_stats(
     all_lap_stats = []
 
     for _, lap in laps.iterrows():
-        lap_start = int(lap["start_time"])
-        lap_end = int(lap["end_time"])
+        lap_num = int(lap["num"])
 
-        # Extract only required channels for this lap
-        lap_channels = get_lap_channels(log, stats_channels, lap_start, lap_end)
-
-        # Interpolate to distance_m timebase
-        aligned = interpolate_channels(lap_channels, reference_channel="distance_m")
+        # Use libxrk 0.5.0 methods to filter by lap, select channels, and resample
+        aligned = (
+            log.filter_by_lap(lap_num)
+            .select_channels(stats_channels)
+            .resample_to_channel("distance_m")
+            .channels
+        )
 
         # Convert to DataFrame for the helper functions
         lap_data = pd.DataFrame(
