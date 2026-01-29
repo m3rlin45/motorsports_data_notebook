@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from libxrk.base import LogFile
 
     from .corners import Corner
+    from .suspension import VelocityHistogramResult
     from .zones import TrackSegment
 
 
@@ -31,6 +32,7 @@ __all__ = [
     "plot_corner_inputs",
     "plot_gps_channels",
     "plot_lap_gps",
+    "plot_suspension_velocity_histogram",
     "plot_tire_thermography",
     "plot_track_segments",
     "show_fig",
@@ -1067,5 +1069,254 @@ def plot_track_segments(
         width=width,
         height=height,
     )
+
+    return fig
+
+
+def plot_suspension_velocity_histogram(
+    result: "VelocityHistogramResult",
+    title: str = "Suspension Velocity Distribution",
+    width: int = 1000,
+    height: int = 800,
+) -> go.Figure:
+    """Create 4-quadrant suspension velocity histogram with velocity range shading.
+
+    Creates a 2x2 subplot grid showing velocity histograms for all four corners
+    (FL, FR, RL, RR) with background shading indicating velocity ranges:
+    - Gray: Friction range (< 5mm/s)
+    - Light blue: Slow range (5-25mm/s)
+    - Light green: Fast range (25-200mm/s)
+    - Light coral: Curb range (> 200mm/s)
+
+    Parameters
+    ----------
+    result : VelocityHistogramResult
+        Analysis results from analyze_suspension_velocity().
+    title : str, default="Suspension Velocity Distribution"
+        Plot title.
+    width : int, default=1000
+        Figure width in pixels.
+    height : int, default=800
+        Figure height in pixels.
+
+    Returns
+    -------
+    go.Figure
+        Plotly figure with 4 velocity histogram subplots.
+
+    Examples
+    --------
+    >>> from motorsports_data_notebook.suspension import analyze_suspension_velocity
+    >>> result = analyze_suspension_velocity(log, lap_start, lap_end)
+    >>> fig = plot_suspension_velocity_histogram(result)
+    >>> show_fig(fig)
+    """
+    # Get velocity ranges for shading
+    ranges = result.velocity_ranges
+
+    # Create 2x2 subplot grid
+    fig = make_subplots(
+        rows=2,
+        cols=2,
+        shared_xaxes=True,
+        shared_yaxes=True,
+        vertical_spacing=0.1,
+        horizontal_spacing=0.08,
+        subplot_titles=("Front Left (FL)", "Front Right (FR)", "Rear Left (RL)", "Rear Right (RR)"),
+    )
+
+    # Define corner data and positions
+    corners = [
+        (result.front_left, 1, 1),
+        (result.front_right, 1, 2),
+        (result.rear_left, 2, 1),
+        (result.rear_right, 2, 2),
+    ]
+
+    # Get max y value across all histograms for consistent scaling
+    max_y = max(
+        corner_data.histogram.max()
+        for corner_data, _, _ in corners
+        if len(corner_data.histogram) > 0
+    )
+
+    # Add velocity range shading to each subplot
+    for corner_data, row, col in corners:
+        # Add background shading for velocity ranges
+        # Determine axis references for this subplot
+        subplot_idx = (row - 1) * 2 + col
+        xref = "x" if subplot_idx == 1 else f"x{subplot_idx}"
+        yref = "y" if subplot_idx == 1 else f"y{subplot_idx}"
+
+        # Friction range (gray) - center
+        fig.add_shape(
+            type="rect",
+            x0=-ranges.friction,
+            x1=ranges.friction,
+            y0=0,
+            y1=1,
+            xref=xref,
+            yref=f"{yref} domain",
+            fillcolor="gray",
+            opacity=0.15,
+            line_width=0,
+            layer="below",
+        )
+
+        # Slow range (light blue) - positive
+        fig.add_shape(
+            type="rect",
+            x0=ranges.friction,
+            x1=ranges.slow,
+            y0=0,
+            y1=1,
+            xref=xref,
+            yref=f"{yref} domain",
+            fillcolor="lightblue",
+            opacity=0.2,
+            line_width=0,
+            layer="below",
+        )
+
+        # Slow range (light blue) - negative
+        fig.add_shape(
+            type="rect",
+            x0=-ranges.slow,
+            x1=-ranges.friction,
+            y0=0,
+            y1=1,
+            xref=xref,
+            yref=f"{yref} domain",
+            fillcolor="lightblue",
+            opacity=0.2,
+            line_width=0,
+            layer="below",
+        )
+
+        # Fast range (light green) - positive
+        fig.add_shape(
+            type="rect",
+            x0=ranges.slow,
+            x1=ranges.fast,
+            y0=0,
+            y1=1,
+            xref=xref,
+            yref=f"{yref} domain",
+            fillcolor="lightgreen",
+            opacity=0.2,
+            line_width=0,
+            layer="below",
+        )
+
+        # Fast range (light green) - negative
+        fig.add_shape(
+            type="rect",
+            x0=-ranges.fast,
+            x1=-ranges.slow,
+            y0=0,
+            y1=1,
+            xref=xref,
+            yref=f"{yref} domain",
+            fillcolor="lightgreen",
+            opacity=0.2,
+            line_width=0,
+            layer="below",
+        )
+
+        # Curb range (light coral) - positive
+        fig.add_shape(
+            type="rect",
+            x0=ranges.fast,
+            x1=300,
+            y0=0,
+            y1=1,
+            xref=xref,
+            yref=f"{yref} domain",
+            fillcolor="lightcoral",
+            opacity=0.2,
+            line_width=0,
+            layer="below",
+        )
+
+        # Curb range (light coral) - negative
+        fig.add_shape(
+            type="rect",
+            x0=-300,
+            x1=-ranges.fast,
+            y0=0,
+            y1=1,
+            xref=xref,
+            yref=f"{yref} domain",
+            fillcolor="lightcoral",
+            opacity=0.2,
+            line_width=0,
+            layer="below",
+        )
+
+        # Add histogram bars
+        # Color bars: positive (bump) = blue, negative (rebound) = red
+        bar_colors = [
+            "steelblue" if center >= 0 else "indianred" for center in corner_data.bin_centers
+        ]
+
+        fig.add_trace(
+            go.Bar(
+                x=corner_data.bin_centers,
+                y=corner_data.histogram,
+                marker_color=bar_colors,
+                name=corner_data.corner_name,
+                showlegend=False,
+                hovertemplate=("Velocity: %{x:.0f} mm/s<br>" "Time: %{y:.1f}%<extra></extra>"),
+            ),
+            row=row,
+            col=col,
+        )
+
+        # Add zero reference line
+        fig.add_vline(
+            x=0,
+            line_dash="dash",
+            line_color="black",
+            line_width=1,
+            opacity=0.5,
+            row=row,
+            col=col,
+        )
+
+        # Add statistics annotation
+        stats_text = f"Skew: {corner_data.skew:.2f}<br>" f"Std: {corner_data.std:.0f} mm/s"
+        # Add annotation at top right of subplot
+        fig.add_annotation(
+            x=0.95,
+            y=0.95,
+            xref=f"x{row * 2 - 2 + col} domain" if row > 1 or col > 1 else "x domain",
+            yref=f"y{row * 2 - 2 + col} domain" if row > 1 or col > 1 else "y domain",
+            text=stats_text,
+            showarrow=False,
+            font=dict(size=10),
+            align="right",
+            bgcolor="rgba(255,255,255,0.7)",
+            row=row,
+            col=col,
+        )
+
+    # Update layout
+    fig.update_layout(
+        title=title,
+        width=width,
+        height=height,
+        bargap=0.05,
+    )
+
+    # Update x-axes labels (only bottom row)
+    fig.update_xaxes(title_text="Velocity (mm/s)", row=2, col=1)
+    fig.update_xaxes(title_text="Velocity (mm/s)", row=2, col=2)
+
+    # Update y-axes labels (only left column)
+    fig.update_yaxes(title_text="Time (%)", row=1, col=1)
+    fig.update_yaxes(title_text="Time (%)", row=2, col=1)
+
+    # Set consistent y-axis range
+    fig.update_yaxes(range=[0, max_y * 1.1])
 
     return fig
