@@ -69,11 +69,14 @@ jobs:
           git clone --depth 1 git@github.com:m3rlin45/motorsports-data-notebook-releases.git releases
           cd releases
 
-          # Remove old content (except git files)
-          find . -mindepth 1 -maxdepth 1 ! -name '.git' ! -name '.gitattributes' -exec rm -rf {} +
+          # Remove old content (except git files and .github)
+          find . -mindepth 1 -maxdepth 1 ! -name '.git' ! -name '.gitattributes' ! -name '.github' -exec rm -rf {} +
 
           # Copy new content
           cp -r ../dist/* .
+
+          # Add CNAME for custom domain
+          echo "analysis.inferno.racing" > CNAME
 
           # Commit and push with LFS
           git config user.name "GitHub Actions"
