@@ -86,7 +86,7 @@ check = { sequence = ["lint", "typecheck", "lint-notebooks", "typecheck-notebook
 test = { cmd = "pytest tests/ --cov=motorsports_data_notebook --cov-report=term-missing --cov-report=html:coverage_html", help = "Run tests with coverage" }
 
 # Workspace tasks
-clean = { shell = "rm -f workspace/*.* && cp workspace_template/basics.ipynb workspace/ && cp workspace_template/tire_analysis.ipynb workspace/ && cp workspace_template/track_analysis.ipynb workspace/ && cp workspace_template/consistency_analysis.ipynb workspace/ && cp workspace_template/'CMD_Inferno 86_Fuji GP Sh_Generic testing_a_2248.xrz' workspace/", help = "Clean workspace and copy fresh notebooks" }
+clean = { shell = "rm -f workspace/*.* && cp workspace_template/basics.ipynb workspace/ && cp workspace_template/tire_analysis.ipynb workspace/ && cp workspace_template/track_analysis.ipynb workspace/ && cp workspace_template/consistency_analysis.ipynb workspace/ && cp workspace_template/suspension_analysis.ipynb workspace/ && cp workspace_template/'CMD_Inferno 86_Fuji GP Sh_Generic testing_a_2248.xrz' workspace/", help = "Clean workspace and copy fresh notebooks" }
 run = { cmd = "jupyter lab workspace/", help = "Start Jupyter notebook" }
 run_clean = ["clean", "run"]
 
@@ -101,7 +101,7 @@ build_libxrk_pyodide = { sequence = ["_download_libxrk", "_build_libxrk_pyodide"
 build_wheels_lite = ["build_wheel", "build_libxrk_pyodide"]
 
 # JupyterLite site building tasks
-_prepare_lite_contents = { shell = "rm -rf .lite_contents dist && mkdir -p .lite_contents && cp workspace_template/*.xrz .lite_contents/ && VERSION=$(poetry version -s) && for nb in basics tire_analysis track_analysis consistency_analysis; do cp workspace_template/${nb}.ipynb \".lite_contents/${nb}_v${VERSION}.ipynb\"; done", help = "Prepare .lite_contents directory with versioned notebooks" }
+_prepare_lite_contents = { shell = "rm -rf .lite_contents dist && mkdir -p .lite_contents && cp workspace_template/*.xrz .lite_contents/ && VERSION=$(poetry version -s) && for nb in basics tire_analysis track_analysis consistency_analysis suspension_analysis; do cp workspace_template/${nb}.ipynb \".lite_contents/${nb}_v${VERSION}.ipynb\"; done", help = "Prepare .lite_contents directory with versioned notebooks" }
 _execute_lite_notebooks = { shell = "cd .lite_contents && python ../scripts/execute_notebooks.py", help = "Execute notebooks in .lite_contents to populate outputs" }
 _build_lite_site = { shell = "jupyter lite build --contents .lite_contents --output-dir dist && rm -rf .lite_contents", help = "Build JupyterLite site from .lite_contents" }
 build_lite = ["_prepare_lite_contents", "_execute_lite_notebooks", "_build_lite_site"]
