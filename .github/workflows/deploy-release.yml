@@ -57,16 +57,27 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan github.com >> ~/.ssh/known_hosts
 
+      - name: Install Git LFS
+        run: |
+          git lfs install
+
       - name: Push to releases repo
         env:
           GIT_SSH_COMMAND: ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no
         run: |
-          cd dist
-          git init
+          # Clone releases repo (has .gitattributes with LFS config)
+          git clone --depth 1 git@github.com:m3rlin45/motorsports-data-notebook-releases.git releases
+          cd releases
+
+          # Remove old content (except git files)
+          find . -mindepth 1 -maxdepth 1 ! -name '.git' ! -name '.gitattributes' -exec rm -rf {} +
+
+          # Copy new content
+          cp -r ../dist/* .
+
+          # Commit and push with LFS
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git add -A
           git commit -m "Release ${{ github.event.release.tag_name }}"
-          git branch -M main
-          git remote add origin git@github.com:m3rlin45/motorsports-data-notebook-releases.git
-          git push -f origin main
+          git push origin main
