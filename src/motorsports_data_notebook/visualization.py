@@ -16,7 +16,7 @@ import plotly.io as pio
 import pyarrow as pa
 from plotly.subplots import make_subplots
 
-from .channels import get_best_lap, interpolate_channels
+from .channels import get_best_lap
 
 if TYPE_CHECKING:
     from libxrk.base import LogFile
@@ -440,19 +440,15 @@ def plot_gps_channels(
     """Plot GPS track with color-coded data from channel tables.
 
     This is a convenience wrapper around plot_lap_gps() that accepts channel
-    tables directly (as returned by get_lap_channels or get_best_lap_channels).
-
-    All color channels are automatically interpolated to the lat_channel's
-    timebase to ensure correct spatial alignment. Only the channels needed
-    for the plot are interpolated.
+    tables directly. All channels must be pre-resampled to a common timebase
+    by the caller using log.resample_to_channel().
 
     Parameters
     ----------
     channels : dict[str, pa.Table]
-        Dictionary of channel tables (as returned by get_lap_channels).
+        Dictionary of channel tables, pre-resampled to a common timebase.
     lat_channel : str
-        Name of latitude channel (e.g., "GPS Latitude"). Also used as the
-        reference timebase for interpolation.
+        Name of latitude channel (e.g., "GPS Latitude").
     lon_channel : str
         Name of longitude channel (e.g., "GPS Longitude").
     color_channels : list[tuple[str, str, str]]
@@ -474,8 +470,10 @@ def plot_gps_channels(
 
     Examples
     --------
-    >>> best_lap, channels = get_best_lap_channels(log, laps,
-    ...     ["GPS Latitude", "GPS Longitude", "speed_kmh", "BrakePress"])
+    >>> lap_log = log.filter_by_lap(best_lap_num)
+    >>> channels = lap_log.select_channels(
+    ...     ["GPS Latitude", "GPS Longitude", "speed_kmh", "BrakePress"]
+    ... ).resample_to_channel("GPS Latitude").channels
     >>> fig = plot_gps_channels(
     ...     channels,
     ...     lat_channel="GPS Latitude",
@@ -483,23 +481,14 @@ def plot_gps_channels(
     ...     color_channels=[("speed_kmh", "Speed (km/h)", "Viridis")],
     ... )
     """
-    # Determine which channels we need
-    needed_channels = {lat_channel, lon_channel}
-    for channel_name, _, _ in color_channels:
-        needed_channels.add(channel_name)
-
-    # Filter to only needed channels and interpolate to lat_channel timebase
-    subset = {name: channels[name] for name in needed_channels}
-    aligned = interpolate_channels(subset, reference_channel=lat_channel)
-
     # Extract lat/lon arrays
-    lat = aligned[lat_channel].column(lat_channel).to_numpy()
-    lon = aligned[lon_channel].column(lon_channel).to_numpy()
+    lat = channels[lat_channel].column(lat_channel).to_numpy()
+    lon = channels[lon_channel].column(lon_channel).to_numpy()
 
     # Build color_channels list with actual arrays
     color_data = []
     for channel_name, label, colorscale in color_channels:
-        values = aligned[channel_name].column(channel_name).to_numpy()
+        values = channels[channel_name].column(channel_name).to_numpy()
         color_data.append((values, label, colorscale))
 
     return plot_lap_gps(lat, lon, color_data, width=width, height=height, title=title)
@@ -685,10 +674,14 @@ def plot_tire_thermography(
     - Row 5: Speed and combined G-force
     - Row 6: Driver inputs (throttle, brake, steering)
 
+    All channels must be pre-resampled to a common timebase by the caller
+    using log.resample_to_channel().
+
     Parameters
     ----------
     channels : dict[str, pa.Table]
-        Channel tables for a single lap (from get_best_lap_channels). Must contain:
+        Channel tables for a single lap, pre-resampled to a common timebase.
+        Must contain:
         - distance_m: Distance along lap (meters)
         - FL_Ch1 through FL_Ch8: Front left tire temps (Ch1=outside, Ch8=inside)
         - FR_Ch1 through FR_Ch8: Front right tire temps (Ch1=inside, Ch8=outside)
@@ -719,7 +712,8 @@ def plot_tire_thermography(
 
     Examples
     --------
-    >>> best_lap, channels = get_best_lap_channels(log, laps, TIRE_THERMOGRAPHY_CHANNELS)
+    >>> lap_log = log.filter_by_lap(best_lap_num)
+    >>> channels = lap_log.select_channels(TIRE_CHANNELS).resample_to_channel("distance_m").channels
     >>> fig = plot_tire_thermography(channels, title="Best Lap Tire Temps")
     >>> show_fig(fig)
     """
@@ -744,21 +738,26 @@ def plot_tire_thermography(
             f"Expected channels like FL_Ch1 through FL_Ch8 for each tire position."
         )
 
-    # Interpolate all channels to distance_m timebase
-    aligned = interpolate_channels(channels, reference_channel="distance_m")
-
     # Extract distance array (reference)
-    distance_m = aligned["distance_m"].column("distance_m").to_numpy()
+    distance_m = channels["distance_m"].column("distance_m").to_numpy()
 
     # Extract tire temperature data as 2D arrays (8, n_samples)
-    fl_temps = np.vstack([aligned[f"FL_Ch{i}"].column(f"FL_Ch{i}").to_numpy() for i in range(1, 9)])
-    fr_temps = np.vstack([aligned[f"FR_Ch{i}"].column(f"FR_Ch{i}").to_numpy() for i in range(1, 9)])
-    rl_temps = np.vstack([aligned[f"RL_Ch{i}"].column(f"RL_Ch{i}").to_numpy() for i in range(1, 9)])
-    rr_temps = np.vstack([aligned[f"RR_Ch{i}"].column(f"RR_Ch{i}").to_numpy() for i in range(1, 9)])
+    fl_temps = np.vstack(
+        [channels[f"FL_Ch{i}"].column(f"FL_Ch{i}").to_numpy() for i in range(1, 9)]
+    )
+    fr_temps = np.vstack(
+        [channels[f"FR_Ch{i}"].column(f"FR_Ch{i}").to_numpy() for i in range(1, 9)]
+    )
+    rl_temps = np.vstack(
+        [channels[f"RL_Ch{i}"].column(f"RL_Ch{i}").to_numpy() for i in range(1, 9)]
+    )
+    rr_temps = np.vstack(
+        [channels[f"RR_Ch{i}"].column(f"RR_Ch{i}").to_numpy() for i in range(1, 9)]
+    )
 
     # Calculate Sum of G
-    lateral_acc = aligned["LateralAcc"].column("LateralAcc").to_numpy()
-    inline_acc = aligned["InlineAcc"].column("InlineAcc").to_numpy()
+    lateral_acc = channels["LateralAcc"].column("LateralAcc").to_numpy()
+    inline_acc = channels["InlineAcc"].column("InlineAcc").to_numpy()
     sum_of_g = np.sqrt(lateral_acc**2 + inline_acc**2)
 
     # Get color scale range across all tires
@@ -786,10 +785,10 @@ def plot_tire_thermography(
     y_labels = ["1", "2", "3", "4", "5", "6", "7", "8"]
 
     # Extract arrays for speed/brake/throttle/steering
-    speed_kmh = aligned["speed_kmh"].column("speed_kmh").to_numpy()
-    brake_press = aligned["BrakePress"].column("BrakePress").to_numpy()
-    throttle_pps = aligned["PPS"].column("PPS").to_numpy()
-    steer_angle = aligned["SteerAngle"].column("SteerAngle").to_numpy()
+    speed_kmh = channels["speed_kmh"].column("speed_kmh").to_numpy()
+    brake_press = channels["BrakePress"].column("BrakePress").to_numpy()
+    throttle_pps = channels["PPS"].column("PPS").to_numpy()
+    steer_angle = channels["SteerAngle"].column("SteerAngle").to_numpy()
 
     # Front Left heatmap
     fig.add_trace(

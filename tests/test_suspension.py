@@ -39,6 +39,14 @@ class MockLogFile:
         if self.metadata is None:
             self.metadata = {}
 
+    def select_channels(self, channel_names: list):
+        """Mock select_channels returning self for method chaining."""
+        return self
+
+    def resample_to_channel(self, reference_channel: str):
+        """Mock resample_to_channel returning self for method chaining."""
+        return self
+
 
 class TestMotionRatios:
     """Tests for MotionRatios dataclass."""
@@ -364,7 +372,11 @@ class TestComputeVelocityStats:
 
 
 class TestAnalyzeSuspensionVelocity:
-    """Tests for analyze_suspension_velocity function."""
+    """Tests for analyze_suspension_velocity function.
+
+    Note: The function now expects a pre-filtered LogFile (via log.filter_by_lap()).
+    The caller is responsible for filtering before calling analyze_suspension_velocity.
+    """
 
     def _create_mock_log(self, timecodes, displacement):
         """Create a mock log file with shock pot channels."""
@@ -384,7 +396,7 @@ class TestAnalyzeSuspensionVelocity:
         displacement = np.cumsum(np.random.randn(len(timecodes))) + 50
         log = self._create_mock_log(timecodes, displacement)
 
-        result = analyze_suspension_velocity(log, lap_start=0, lap_end=999)
+        result = analyze_suspension_velocity(log)
 
         assert isinstance(result, VelocityHistogramResult)
         assert result.front_left is not None
@@ -399,7 +411,7 @@ class TestAnalyzeSuspensionVelocity:
         log = self._create_mock_log(timecodes, displacement)
 
         # Should not raise KeyError with default channel names
-        result = analyze_suspension_velocity(log, lap_start=0, lap_end=499)
+        result = analyze_suspension_velocity(log)
 
         assert result is not None
 
@@ -423,9 +435,7 @@ class TestAnalyzeSuspensionVelocity:
         }
         log = MockLogFile(channels=channels)
 
-        result = analyze_suspension_velocity(
-            log, lap_start=0, lap_end=499, channel_names=custom_names
-        )
+        result = analyze_suspension_velocity(log, channel_names=custom_names)
 
         assert result is not None
 
@@ -434,7 +444,7 @@ class TestAnalyzeSuspensionVelocity:
         log = MockLogFile(channels={})
 
         with pytest.raises(KeyError):
-            analyze_suspension_velocity(log, lap_start=0, lap_end=100)
+            analyze_suspension_velocity(log)
 
     def test_custom_motion_ratios(self):
         """Should use custom motion ratios when provided."""
@@ -450,9 +460,7 @@ class TestAnalyzeSuspensionVelocity:
             rear_right=0.5,
         )
 
-        result = analyze_suspension_velocity(
-            log, lap_start=0, lap_end=499, motion_ratios=custom_ratios
-        )
+        result = analyze_suspension_velocity(log, motion_ratios=custom_ratios)
 
         # Wheel velocity should be shock_velocity / motion_ratio
         # With motion_ratio=0.5, wheel velocity should be doubled

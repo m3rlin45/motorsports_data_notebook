@@ -33,6 +33,18 @@ class MockLogFile:
     def __init__(self, channels: dict[str, pa.Table]):
         self.channels = channels
 
+    def filter_by_lap(self, lap_num: int):
+        """Mock filter_by_lap returning self for method chaining."""
+        return self
+
+    def select_channels(self, channel_names: list):
+        """Mock select_channels returning self for method chaining."""
+        return self
+
+    def resample_to_channel(self, reference_channel: str):
+        """Mock resample_to_channel returning self for method chaining."""
+        return self
+
 
 def make_channel_table(timecodes: np.ndarray, name: str, values: np.ndarray) -> pa.Table:
     """Create a PyArrow table with timecodes and a named column."""
@@ -835,57 +847,36 @@ class TestGetSegmentMask:
 
 
 class TestGetCornerData:
-    """Tests for get_corner_data function."""
+    """Tests for get_corner_data function.
+
+    Note: The function now expects a pre-filtered LogFile (via log.filter_by_lap()).
+    The caller is responsible for filtering before calling get_corner_data.
+    """
 
     @pytest.fixture
     def mock_log_for_corner(self):
-        """Create a mock LogFile spanning multiple laps."""
-        # 3 laps of data
-        all_timecodes = []
-        all_distance = []
-        all_pps = []
-        all_brake = []
-        all_lateral = []
-        all_steer = []
-
+        """Create a mock LogFile for a single lap."""
         np.random.seed(42)  # For reproducible tests
-        n_samples_per_lap = 200
+        n_samples = 200
 
-        for lap_num in range(3):
-            lap_start = lap_num * 60000
-            lap_end = (lap_num + 1) * 60000
+        timecodes = np.linspace(0, 60000, n_samples, dtype=np.int64)
+        distance_m = np.linspace(0, 1000, n_samples)
 
-            timecodes = np.linspace(lap_start, lap_end - 1, n_samples_per_lap, dtype=np.int64)
-            distance_m = np.linspace(0, 1000, n_samples_per_lap)
-
-            all_timecodes.append(timecodes)
-            all_distance.append(distance_m)
-            all_pps.append(np.random.uniform(0, 100, n_samples_per_lap))
-            all_brake.append(np.random.uniform(0, 100, n_samples_per_lap))
-            all_lateral.append(np.random.uniform(-1.5, 1.5, n_samples_per_lap))
-            all_steer.append(np.random.uniform(-180, 180, n_samples_per_lap))
-
-        timecodes = np.concatenate(all_timecodes)
         channels = {
-            "distance_m": make_channel_table(timecodes, "distance_m", np.concatenate(all_distance)),
-            "PPS": make_channel_table(timecodes, "PPS", np.concatenate(all_pps)),
-            "BrakePress": make_channel_table(timecodes, "BrakePress", np.concatenate(all_brake)),
-            "LateralAcc": make_channel_table(timecodes, "LateralAcc", np.concatenate(all_lateral)),
-            "SteerAngle": make_channel_table(timecodes, "SteerAngle", np.concatenate(all_steer)),
+            "distance_m": make_channel_table(timecodes, "distance_m", distance_m),
+            "PPS": make_channel_table(timecodes, "PPS", np.random.uniform(0, 100, n_samples)),
+            "BrakePress": make_channel_table(
+                timecodes, "BrakePress", np.random.uniform(0, 100, n_samples)
+            ),
+            "LateralAcc": make_channel_table(
+                timecodes, "LateralAcc", np.random.uniform(-1.5, 1.5, n_samples)
+            ),
+            "SteerAngle": make_channel_table(
+                timecodes, "SteerAngle", np.random.uniform(-180, 180, n_samples)
+            ),
         }
 
         return MockLogFile(channels)
-
-    @pytest.fixture
-    def sample_laps(self):
-        """Create sample laps table."""
-        return pd.DataFrame(
-            {
-                "num": [1, 2, 3],
-                "start_time": [0, 60000, 120000],
-                "end_time": [60000, 120000, 180000],
-            }
-        )
 
     @pytest.fixture
     def sample_corners(self):
@@ -917,71 +908,48 @@ class TestGetCornerData:
             ),
         ]
 
-    def test_get_corner_data_returns_dataframe(
-        self, mock_log_for_corner, sample_laps, sample_corners
-    ):
+    def test_get_corner_data_returns_dataframe(self, mock_log_for_corner, sample_corners):
         """Test that get_corner_data returns a DataFrame."""
-        result = get_corner_data(mock_log_for_corner, sample_laps, sample_corners[0], lap_num=2)
+        result = get_corner_data(mock_log_for_corner, sample_corners[0])
         assert isinstance(result, pd.DataFrame)
 
-    def test_get_corner_data_filters_by_lap(self, mock_log_for_corner, sample_laps, sample_corners):
-        """Test that data is filtered to the correct lap and corner."""
-        result = get_corner_data(mock_log_for_corner, sample_laps, sample_corners[0], lap_num=2)
+    def test_get_corner_data_filters_by_corner(self, mock_log_for_corner, sample_corners):
+        """Test that data is filtered to the correct corner distance range."""
+        result = get_corner_data(mock_log_for_corner, sample_corners[0])
 
         # Should have data (the test verifies filtering works by not raising errors)
         assert len(result) > 0
-        # Distance should be within corner range with default margin
+        # Distance should be within corner range with default margin (50m)
         assert result["distance_m"].min() >= sample_corners[0].start_dist - 50
         assert result["distance_m"].max() <= sample_corners[0].end_dist + 50
 
-    def test_get_corner_data_filters_by_corner(
-        self, mock_log_for_corner, sample_laps, sample_corners
-    ):
-        """Test that data is filtered to the correct corner distance."""
-        result = get_corner_data(
-            mock_log_for_corner, sample_laps, sample_corners[0], lap_num=2, margin=0
-        )
+    def test_get_corner_data_with_zero_margin(self, mock_log_for_corner, sample_corners):
+        """Test that data is filtered to exact corner distance range."""
+        result = get_corner_data(mock_log_for_corner, sample_corners[0], margin=0)
 
         # All distances should be in Turn 1 range (200-400)
         assert result["distance_m"].min() >= 200
         assert result["distance_m"].max() <= 400
 
-    def test_get_corner_data_with_margin(self, mock_log_for_corner, sample_laps, sample_corners):
+    def test_get_corner_data_with_margin(self, mock_log_for_corner, sample_corners):
         """Test that margin extends the distance range."""
-        result = get_corner_data(
-            mock_log_for_corner, sample_laps, sample_corners[0], lap_num=2, margin=50
-        )
+        result = get_corner_data(mock_log_for_corner, sample_corners[0], margin=50)
 
         # With 50m margin, distances should be in range 150-450
         assert result["distance_m"].min() >= 150
         assert result["distance_m"].max() <= 450
 
-    def test_get_corner_data_different_corners(
-        self, mock_log_for_corner, sample_laps, sample_corners
-    ):
+    def test_get_corner_data_different_corners(self, mock_log_for_corner, sample_corners):
         """Test selecting different corners."""
-        turn1_data = get_corner_data(
-            mock_log_for_corner, sample_laps, sample_corners[0], lap_num=2, margin=0
-        )
-        turn2_data = get_corner_data(
-            mock_log_for_corner, sample_laps, sample_corners[1], lap_num=2, margin=0
-        )
+        turn1_data = get_corner_data(mock_log_for_corner, sample_corners[0], margin=0)
+        turn2_data = get_corner_data(mock_log_for_corner, sample_corners[1], margin=0)
 
         # Turn 1 is 200-400, Turn 2 is 700-900
         assert turn1_data["distance_m"].max() < turn2_data["distance_m"].min()
 
-    def test_get_corner_data_invalid_lap_raises(
-        self, mock_log_for_corner, sample_laps, sample_corners
-    ):
-        """Test that invalid lap number raises ValueError."""
-        with pytest.raises(ValueError, match="Lap 99 not found"):
-            get_corner_data(mock_log_for_corner, sample_laps, sample_corners[0], lap_num=99)
-
-    def test_get_corner_data_has_expected_columns(
-        self, mock_log_for_corner, sample_laps, sample_corners
-    ):
+    def test_get_corner_data_has_expected_columns(self, mock_log_for_corner, sample_corners):
         """Test that result has expected columns from CORNER_DATA_CHANNELS."""
-        result = get_corner_data(mock_log_for_corner, sample_laps, sample_corners[0], lap_num=2)
+        result = get_corner_data(mock_log_for_corner, sample_corners[0])
 
         # Default channels from CORNER_DATA_CHANNELS
         assert "distance_m" in result.columns
