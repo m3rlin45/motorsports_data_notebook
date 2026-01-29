@@ -1,10 +1,9 @@
-name: Deploy Release to GitHub Pages
+name: Build and Deploy Release
 
 on:
   release:
     types: [published]
 
-# Allow only one concurrent deployment
 concurrency:
   group: pages-release
   cancel-in-progress: false
@@ -13,61 +12,61 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
       - name: Install Poetry
-        uses: snok/install-poetry@v1
+        run: pipx install poetry==2.1.1
+
+      - uses: actions/cache@v4
         with:
-          version: '2.1.1'
-          virtualenvs-create: true
-          virtualenvs-in-project: true
+          path: ~/.cache/pypoetry
+          key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
 
-      - name: Cache Poetry dependencies
-        uses: actions/cache@v4
-        with:
-          path: .venv
-          key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
-          restore-keys: |
-            venv-${{ runner.os }}-
+      - run: poetry install --extras jupyterlite
 
-      - name: Install dependencies
-        run: poetry install --extras jupyterlite
-
-      - name: Cache Emscripten SDK
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
           path: ~/emsdk
-          key: emsdk-${{ runner.os }}-${{ hashFiles('poetry.lock') }}
-          restore-keys: |
-            emsdk-${{ runner.os }}-
+          key: ${{ runner.os }}-emsdk-3.1.58
 
-      - name: Setup Emscripten SDK
-        run: poetry run poe setup_emsdk
+      - run: poetry run poe setup_emsdk
+      - run: poetry run poe build_lite_full
 
-      - name: Build wheels and JupyterLite site
-        run: poetry run poe build_lite_full
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
+          name: site
           path: dist/
 
   deploy:
     needs: build
     runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: site
+          path: dist/
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.RELEASE_DEPLOY_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+      - name: Push to releases repo
+        env:
+          GIT_SSH_COMMAND: ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no
+        run: |
+          cd dist
+          git init
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add -A
+          git commit -m "Release ${{ github.event.release.tag_name }}"
+          git branch -M main
+          git remote add origin git@github.com:m3rlin45/motorsports-data-notebook-releases.git
+          git push -f origin main
