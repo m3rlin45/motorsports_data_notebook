@@ -72,8 +72,8 @@ def main() -> int:
     # Script is run with cwd=workspace_template
     template_dir = Path.cwd()
 
-    # Find all notebooks
-    notebooks = sorted(template_dir.glob("*.ipynb"))
+    # Find all notebooks (in en/ and ja/ subdirectories)
+    notebooks = sorted(template_dir.glob("**/*.ipynb"))
 
     if not notebooks:
         print(f"No notebooks found in {template_dir}")

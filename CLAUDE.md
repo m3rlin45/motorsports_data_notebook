@@ -106,3 +106,88 @@ GitHub Actions workflows:
 
 - **master** — Main branch, target for PRs
 - Development branches are feature-specific
+
+## Notebook Internationalization
+
+### Directory Structure
+
+Notebooks are organized by language under `workspace_template/`:
+```
+workspace_template/
+├── data/           # Shared sample data files (.xrz)
+├── en/             # English notebooks (source of truth)
+└── ja/             # Japanese translations
+```
+
+### Translation Workflow
+
+English notebooks in `en/` are the source of truth. When English notebooks change:
+
+1. **Identify changes**: Compare the modified English notebook with its Japanese counterpart
+2. **Update Japanese version**: Translate only the changed content:
+   - Markdown cells (headers, explanations, bullet points, tables)
+   - Code comments (lines starting with `#`)
+   - Print statements and f-string user-facing text
+   - Plot titles and axis labels
+3. **Do NOT translate**:
+   - Variable/function/class names
+   - Channel names (`GPS Latitude`, `BrakePress`, `PPS`, etc.)
+   - File paths
+   - Python keywords
+   - DataFrame column names used in code (keep English for code compatibility)
+
+### Translation Glossary
+
+Consistent terminology mapping for motorsports and technical terms:
+
+| English | Japanese | Notes |
+|---------|----------|-------|
+| lap | ラップ | |
+| lap time | ラップタイム | |
+| best lap | ベストラップ | |
+| top laps / fastest laps | 上位ラップ | Plural, not single fastest |
+| corner | コーナー | |
+| apex | エイペックス | Keep katakana |
+| braking zone | ブレーキングゾーン | |
+| acceleration zone | 加速ゾーン | |
+| throttle | スロットル | |
+| brake pressure | ブレーキ圧 | |
+| steering | ステアリング | |
+| suspension | サスペンション | |
+| damper | ダンパー | |
+| shock pot | ショックポット | |
+| bump (compression) | バンプ（圧縮） | |
+| rebound (extension) | リバウンド（伸長） | |
+| motion ratio | モーションレシオ | |
+| spring rate | スプリングレート | |
+| camber | キャンバー | |
+| tire temperature | タイヤ温度 | |
+| lateral G | 横G | |
+| inline G / longitudinal G | 縦G | |
+| throttle acceptance | アクセル踏み込み点 | Include English/katakana reference: (英語: Throttle Acceptance / スロットルアクセプタンス) |
+| consistency | 一貫性 | |
+| deviation | 偏差 | |
+| standard deviation | 標準偏差 | |
+| histogram | ヒストグラム | |
+| heatmap | ヒートマップ | |
+| overlay | オーバーレイ | |
+| segment | セグメント | |
+| channel | チャンネル | |
+| upload | アップロード | |
+| widget | ウィジェット | |
+| timebase | 時間軸 | Data alignment reference |
+| friction (suspension) | 摩擦 | Use native Japanese, not フリクション |
+
+### User Correction Workflow
+
+When users provide translation corrections:
+
+1. **Update the glossary** above if the correction affects a standard term
+2. **Apply the correction** to all Japanese notebooks consistently
+3. **Document the change** in commit message with rationale
+
+Example correction flow:
+- User says: "スロットル開度 is more natural than スロットル for throttle position"
+- Update glossary: `throttle (position)` → `スロットル開度`
+- Search and replace in all `ja/*.ipynb` files
+- Commit: "Update throttle translation to スロットル開度 per user feedback"
