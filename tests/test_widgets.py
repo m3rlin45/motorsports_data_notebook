@@ -7,7 +7,7 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 
-from motorsports_data_notebook.widgets import load_session, LapPicker, SessionPicker
+from motorsports_data_notebook.widgets import load_session, LapPicker, SessionPicker, ChannelPicker
 
 
 # Path to patch aim_xrk - it's imported inside the function
@@ -415,9 +415,19 @@ def mock_ipywidgets_session():
         mock_dropdown.observe = MagicMock()
         return mock_dropdown
 
+    def create_combobox(**kwargs):
+        mock_combo = MagicMock()
+        mock_combo.value = kwargs.get("value", "")
+        mock_combo.options = kwargs.get("options", [])
+        mock_combo.observe = MagicMock()
+        return mock_combo
+
     mock_widgets.Dropdown.side_effect = create_dropdown
+    mock_widgets.Combobox.side_effect = create_combobox
     mock_widgets.HTML.return_value = MagicMock()
+    mock_widgets.HBox.return_value = MagicMock()
     mock_widgets.VBox.return_value = MagicMock()
+    mock_widgets.Layout.return_value = MagicMock()
     mock_widgets.FileUpload.return_value = MagicMock()
     mock_widgets.FileUpload.return_value.observe = MagicMock()
     mock_widgets.FileUpload.return_value.value = None
@@ -495,3 +505,264 @@ class TestSessionPicker:
 
             with pytest.raises(RuntimeError, match="No session loaded"):
                 picker.get_selected_lap()
+
+    def test_with_channel_mapping_creates_channel_picker(
+        self, mock_log_file, mock_ipywidgets_session
+    ):
+        """Test that providing channel_mapping creates a channel picker."""
+        channel_mapping = {"throttle": "PPS", "brake": "BrakePress"}
+
+        with (
+            patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets_session}),
+            patch(AIM_XRK_PATCH_PATH, return_value=mock_log_file),
+        ):
+            picker = SessionPicker("test.xrz", channel_mapping=channel_mapping)
+
+            assert picker._channel_picker is not None
+            assert picker._channel_section is not None
+
+    def test_without_channel_mapping_no_channel_picker(
+        self, mock_log_file, mock_ipywidgets_session
+    ):
+        """Test that not providing channel_mapping doesn't create a channel picker."""
+        with (
+            patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets_session}),
+            patch(AIM_XRK_PATCH_PATH, return_value=mock_log_file),
+        ):
+            picker = SessionPicker("test.xrz")
+
+            assert picker._channel_picker is None
+            assert picker._channel_section is None
+
+    def test_get_channel_names_returns_mapping(
+        self, mock_log_file, mock_ipywidgets_session
+    ):
+        """Test that get_channel_names returns the channel mapping."""
+        channel_mapping = {"throttle": "PPS", "brake": "BrakePress"}
+
+        with (
+            patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets_session}),
+            patch(AIM_XRK_PATCH_PATH, return_value=mock_log_file),
+        ):
+            picker = SessionPicker("test.xrz", channel_mapping=channel_mapping)
+            result = picker.get_channel_names()
+
+            assert result == channel_mapping
+
+    def test_get_channel_names_raises_without_mapping(
+        self, mock_log_file, mock_ipywidgets_session
+    ):
+        """Test that get_channel_names raises error when no mapping provided."""
+        with (
+            patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets_session}),
+            patch(AIM_XRK_PATCH_PATH, return_value=mock_log_file),
+        ):
+            picker = SessionPicker("test.xrz")
+
+            with pytest.raises(RuntimeError, match="No channel_mapping provided"):
+                picker.get_channel_names()
+
+    def test_channel_picker_updates_on_file_load(
+        self, mock_log_file, mock_ipywidgets_session
+    ):
+        """Test that channel picker is updated with available channels on file load."""
+        channel_mapping = {"throttle": "PPS"}
+
+        with (
+            patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets_session}),
+            patch(AIM_XRK_PATCH_PATH, return_value=mock_log_file),
+        ):
+            picker = SessionPicker("test.xrz", channel_mapping=channel_mapping)
+
+            # The channel picker should have been updated with available channels
+            # from the log file (which has "GPS Speed" channel)
+            assert picker._channel_picker is not None
+            assert "GPS Speed" in picker._channel_picker._available_channels
+
+
+# ============================================================================
+# Fixtures for ChannelPicker
+# ============================================================================
+
+
+@pytest.fixture
+def sample_available_channels():
+    """Sample list of available channels."""
+    return [
+        "GPS Latitude",
+        "GPS Longitude",
+        "GPS Speed",
+        "PPS",
+        "BrakePress",
+        "LateralAcc",
+        "SteerAngle",
+        "speed_kmh",
+        "distance_m",
+    ]
+
+
+@pytest.fixture
+def sample_channel_mapping():
+    """Sample default channel mapping."""
+    return {
+        "gps_latitude": "GPS Latitude",
+        "gps_longitude": "GPS Longitude",
+        "throttle": "PPS",
+        "brake": "BrakePress",
+    }
+
+
+@pytest.fixture
+def mock_ipywidgets_channel():
+    """Create mock ipywidgets module for ChannelPicker tests."""
+    mock_widgets = MagicMock()
+
+    def create_combobox(**kwargs):
+        mock_combo = MagicMock()
+        mock_combo.value = kwargs.get("value", "")
+        mock_combo.options = kwargs.get("options", [])
+        mock_combo.observe = MagicMock()
+        return mock_combo
+
+    mock_widgets.Combobox.side_effect = create_combobox
+    mock_widgets.HTML.return_value = MagicMock()
+    mock_widgets.HBox.return_value = MagicMock()
+    mock_widgets.VBox.return_value = MagicMock()
+    mock_widgets.Layout.return_value = MagicMock()
+    return mock_widgets
+
+
+# ============================================================================
+# Tests for ChannelPicker
+# ============================================================================
+
+
+class TestChannelPicker:
+    """Tests for ChannelPicker widget."""
+
+    def test_initializes_with_default_mapping(
+        self, sample_channel_mapping, sample_available_channels, mock_ipywidgets_channel
+    ):
+        """Test that ChannelPicker initializes with the provided default mapping."""
+        with patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets_channel}):
+            picker = ChannelPicker(sample_channel_mapping, sample_available_channels)
+
+            # Should create comboboxes for each channel
+            assert len(picker._comboboxes) == len(sample_channel_mapping)
+            assert "gps_latitude" in picker._comboboxes
+            assert "throttle" in picker._comboboxes
+
+    def test_get_channel_names_returns_current_values(
+        self, sample_channel_mapping, sample_available_channels, mock_ipywidgets_channel
+    ):
+        """Test that get_channel_names returns the current combobox values."""
+        with patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets_channel}):
+            picker = ChannelPicker(sample_channel_mapping, sample_available_channels)
+
+            result = picker.get_channel_names()
+
+            assert result == sample_channel_mapping
+
+    def test_get_unmatched_channels_returns_empty_when_all_valid(
+        self, sample_channel_mapping, sample_available_channels, mock_ipywidgets_channel
+    ):
+        """Test that get_unmatched_channels returns empty list when all channels are valid."""
+        with patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets_channel}):
+            picker = ChannelPicker(sample_channel_mapping, sample_available_channels)
+
+            unmatched = picker.get_unmatched_channels()
+
+            assert unmatched == []
+
+    def test_get_unmatched_channels_returns_invalid_channels(
+        self, sample_available_channels, mock_ipywidgets_channel
+    ):
+        """Test that get_unmatched_channels returns channels not in available list."""
+        mapping_with_invalid = {
+            "gps_latitude": "GPS Latitude",
+            "throttle": "InvalidChannel",  # Not in available_channels
+        }
+
+        with patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets_channel}):
+            picker = ChannelPicker(mapping_with_invalid, sample_available_channels)
+
+            unmatched = picker.get_unmatched_channels()
+
+            assert "throttle" in unmatched
+            assert "gps_latitude" not in unmatched
+
+    def test_is_valid_returns_true_when_all_matched(
+        self, sample_channel_mapping, sample_available_channels, mock_ipywidgets_channel
+    ):
+        """Test that is_valid returns True when all channels are matched."""
+        with patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets_channel}):
+            picker = ChannelPicker(sample_channel_mapping, sample_available_channels)
+
+            assert picker.is_valid() is True
+
+    def test_is_valid_returns_false_when_unmatched(
+        self, sample_available_channels, mock_ipywidgets_channel
+    ):
+        """Test that is_valid returns False when channels are unmatched."""
+        mapping_with_invalid = {
+            "gps_latitude": "GPS Latitude",
+            "throttle": "InvalidChannel",
+        }
+
+        with patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets_channel}):
+            picker = ChannelPicker(mapping_with_invalid, sample_available_channels)
+
+            assert picker.is_valid() is False
+
+    def test_update_available_channels_updates_options(
+        self, sample_channel_mapping, sample_available_channels, mock_ipywidgets_channel
+    ):
+        """Test that update_available_channels updates combobox options."""
+        with patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets_channel}):
+            picker = ChannelPicker(sample_channel_mapping, sample_available_channels)
+
+            new_channels = ["NewChannel1", "NewChannel2"]
+            picker.update_available_channels(new_channels)
+
+            assert picker._available_channels == sorted(new_channels)
+            # All comboboxes should have updated options
+            for combobox in picker._comboboxes.values():
+                assert combobox.options == sorted(new_channels)
+
+    def test_update_available_channels_updates_validation(
+        self, sample_channel_mapping, sample_available_channels, mock_ipywidgets_channel
+    ):
+        """Test that update_available_channels triggers validation update."""
+        with patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets_channel}):
+            picker = ChannelPicker(sample_channel_mapping, sample_available_channels)
+
+            # Initially all valid
+            assert picker.is_valid() is True
+
+            # Update to channels that don't include the defaults
+            new_channels = ["NewChannel1", "NewChannel2"]
+            picker.update_available_channels(new_channels)
+
+            # Now all channels should be unmatched
+            assert picker.is_valid() is False
+            assert len(picker.get_unmatched_channels()) == len(sample_channel_mapping)
+
+    def test_combobox_values_sorted_alphabetically(
+        self, sample_channel_mapping, sample_available_channels, mock_ipywidgets_channel
+    ):
+        """Test that available channels are sorted alphabetically."""
+        with patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets_channel}):
+            picker = ChannelPicker(sample_channel_mapping, sample_available_channels)
+
+            assert picker._available_channels == sorted(sample_available_channels)
+
+    def test_empty_available_channels(
+        self, sample_channel_mapping, mock_ipywidgets_channel
+    ):
+        """Test handling of empty available channels list."""
+        with patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets_channel}):
+            picker = ChannelPicker(sample_channel_mapping, [])
+
+            assert picker._available_channels == []
+            assert picker.is_valid() is False
+            assert len(picker.get_unmatched_channels()) == len(sample_channel_mapping)
