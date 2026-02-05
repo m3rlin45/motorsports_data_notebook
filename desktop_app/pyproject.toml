@@ -1,0 +1,63 @@
+[project]
+name = "suspension-analyzer"
+version = "0.1.0"
+description = "Standalone desktop app for suspension velocity histogram analysis"
+authors = [
+    {name = "Christopher Dewan", email = "chris.dewan@m3rlin.net"}
+]
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "customtkinter>=5.2.0",
+    "tkinterdnd2>=0.4.2",
+    "tkwebview2>=0.1.2",
+    "plotly>=6.0.0",
+    "pandas>=2.0.0",
+    "numpy>=2.0.0",
+    "pyarrow>=15.0.0",
+    "libxrk>=0.8.0",
+    "motorsports-data-notebook",
+]
+
+[project.optional-dependencies]
+build = [
+    "pyinstaller>=6.0.0",
+]
+
+[tool.poetry]
+packages = [{include = "suspension_analyzer", from = "src"}]
+
+[tool.poetry.dependencies]
+python = ">=3.12,<3.14"
+motorsports-data-notebook = {path = "..", develop = true}
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 100
+target-version = ['py312']
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = [
+    "plotly.*",
+    "libxrk.*",
+    "numpy.*",
+    "pyarrow.*",
+    "customtkinter.*",
+    "tkinterdnd2.*",
+    "tkwebview2.*",
+]
+ignore_missing_imports = true
+
+[tool.poe.tasks]
+run = { cmd = "python -m suspension_analyzer", help = "Run the desktop app" }
+build = { shell = "pyinstaller suspension_analyzer.spec", help = "Build standalone exe" }
