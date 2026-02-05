@@ -2,6 +2,8 @@
 
 Standalone Windows desktop application for suspension velocity histogram analysis.
 
+**The built executable is fully self-contained and runs on any Windows 10/11 machine without Python installed.**
+
 ## Features
 
 - **Drag-and-drop** XRK/XRZ file loading
@@ -12,86 +14,82 @@ Standalone Windows desktop application for suspension velocity histogram analysi
 - **Channel name mapping** for different AIM telemetry setups
 - **Detailed statistics** with bump/rebound breakdown per wheel
 
-## Windows Build Instructions
+## Quick Start (Pre-built)
 
-### Prerequisites
+If you have the pre-built `SuspensionAnalyzer.exe`, just double-click to run. No installation needed.
 
-1. **Python 3.12** - Install from [python.org](https://www.python.org/downloads/) or via winget:
+## Building the Executable
+
+### Option 1: Build with Wine (Linux/WSL)
+
+Build a Windows exe from Linux without needing Windows Python installed.
+
+**Prerequisites (one-time setup):**
+
+```bash
+# Ubuntu/Debian
+sudo dpkg --add-architecture i386
+sudo apt update
+sudo apt install wine64 wine32 xvfb wget cabextract
+
+# Fedora
+sudo dnf install wine xorg-x11-server-Xvfb wget cabextract
+
+# Arch
+sudo pacman -S wine xorg-server-xvfb wget cabextract
+```
+
+**Build:**
+
+```bash
+cd desktop_app
+./build_wine.sh
+```
+
+The first run will download and install Python in Wine (~5-10 minutes). Subsequent builds are faster.
+
+Output: `desktop_app/dist/SuspensionAnalyzer.exe`
+
+### Option 2: Build on Windows
+
+If you have Windows with Python installed:
+
+1. Install Python 3.12+:
    ```cmd
    winget install Python.Python.3.12
    ```
 
-2. **Poetry** (optional, for development) - Install via pip:
-   ```cmd
-   pip install poetry
-   ```
+2. Clone/copy the repository to Windows
 
-### Building the Executable
-
-#### Option 1: Quick Build (Recommended)
-
-1. Copy the `desktop_app` folder to your Windows machine (e.g., `C:\SuspensionAnalyzer`)
-
-2. Also copy the main library source:
-   ```cmd
-   mkdir C:\SuspensionAnalyzer\motorsports_data_notebook_src
-   xcopy /E /I src\motorsports_data_notebook C:\SuspensionAnalyzer\motorsports_data_notebook_src\motorsports_data_notebook
-   ```
-
-3. Create and activate a virtual environment:
-   ```cmd
-   cd C:\SuspensionAnalyzer
-   python -m venv venv
-   venv\Scripts\activate
-   ```
-
-4. Install dependencies:
+3. Open Command Prompt in the `desktop_app` folder and run:
    ```cmd
    pip install customtkinter tkinterdnd2 matplotlib pandas numpy pyarrow libxrk pyinstaller
+
+   pyinstaller --onefile --windowed --name SuspensionAnalyzer ^
+       --add-data "../src/motorsports_data_notebook;motorsports_data_notebook" ^
+       --paths src ^
+       --collect-all pandas ^
+       --collect-all customtkinter ^
+       --collect-all tkinterdnd2 ^
+       --hidden-import matplotlib.backends.backend_tkagg ^
+       src/suspension_analyzer/main.py
    ```
 
-5. Run the build:
-   ```cmd
-   build_exe.bat
-   ```
+4. The executable will be at `dist\SuspensionAnalyzer.exe`
 
-6. The executable will be at `dist\SuspensionAnalyzer.exe`
+### Option 3: Development Mode
 
-#### Option 2: Using Poetry (Development)
+Run directly without building an exe (requires Python):
 
-```cmd
+```bash
 cd desktop_app
-poetry install
-poetry run python -m suspension_analyzer
-```
-
-### Build Script (build_exe.bat)
-
-Create this batch file for easy building:
-
-```batch
-@echo off
-echo Building Suspension Analyzer...
-
-REM Activate virtual environment
-call venv\Scripts\activate
-
-REM Install dependencies
-pip install customtkinter tkinterdnd2 matplotlib pandas numpy pyarrow libxrk pyinstaller
-
-REM Build with PyInstaller
-pyinstaller --onefile --windowed --name SuspensionAnalyzer ^
-    --add-data "motorsports_data_notebook_src;motorsports_data_notebook_src" ^
-    --collect-all pandas ^
-    --collect-all customtkinter ^
-    --hidden-import tkinterdnd2 ^
-    --hidden-import matplotlib ^
-    src/suspension_analyzer/main.py
-
-echo Build complete! Output: dist\SuspensionAnalyzer.exe
+pip install -e .
+python -m suspension_analyzer
 ```
 
 ## Usage
+
+### Basic Analysis
 
 1. **Load Session A**: Drag an XRK/XRZ file onto the left panel, or click to browse
 2. **Select laps**: Check the laps you want to include in the analysis
@@ -109,13 +107,36 @@ echo Build complete! Output: dist\SuspensionAnalyzer.exe
 1. Click **"Show Statistics"** button in the config panel
 2. A popup window shows detailed statistics:
    - Summary statistics (skew, std dev, mean per corner)
-   - Velocity range distribution (bump/rebound breakdown)
+   - Velocity range distribution (bump/rebound breakdown per wheel)
    - Balance analysis (front/rear, left/right)
+   - Interpretation guide
 
 ### Configuration
 
 - **Motion Ratios**: Set per-corner motion ratios (default: Toyota 86 ZN6)
 - **Channel Names**: Update if your AIM setup uses different shock pot channel names
+
+## Understanding the Statistics
+
+### Velocity Ranges
+
+- **Slow**: Low-speed damper movement (body roll, weight transfer)
+- **Fast**: Medium-speed movement (bumps, curbs)
+- **High-Speed**: High-speed impacts (big bumps, kerbs)
+
+*Friction range is excluded from statistics to avoid noise bias.*
+
+### Skew Interpretation
+
+- **Positive skew**: More time in rebound (extension) - damper extending
+- **Negative skew**: More time in bump (compression) - damper compressing
+- **Near zero**: Balanced damper response
+
+### Balance Analysis
+
+Compares average skew between:
+- **Front vs Rear**: Indicates chassis pitch tendency
+- **Left vs Right**: Indicates chassis roll tendency or track characteristics
 
 ## Architecture
 
@@ -123,7 +144,7 @@ echo Build complete! Output: dist\SuspensionAnalyzer.exe
 src/suspension_analyzer/
 ├── main.py              # Entry point
 ├── app.py               # Main CustomTkinter window
-├── loader.py            # Session loading without IPython dependency
+├── loader.py            # Session loading (no IPython dependency)
 ├── widgets/
 │   ├── session_panel.py # File drop + lap selector
 │   ├── config_panel.py  # Motion ratios, channel names, status
@@ -135,25 +156,31 @@ src/suspension_analyzer/
     └── comparison.py    # Comparison chart generation
 ```
 
-## Dependencies
-
-- **customtkinter** - Modern tkinter theme
-- **tkinterdnd2** - Drag-and-drop support
-- **matplotlib** - Embedded charts with HiDPI support
-- **pandas** / **numpy** / **pyarrow** - Data processing
-- **libxrk** - AIM telemetry file parsing
-- **motorsports-data-notebook** - Analysis library (included as source)
-
 ## Troubleshooting
 
-### "Module not found" errors during build
+### Wine build fails with subprocess error
 
-Add `--collect-all <module>` to the PyInstaller command for the missing module.
+PyInstaller's subprocess handling can be finicky under Wine. Try:
+- Ensure xvfb is installed (`sudo apt install xvfb`)
+- Delete the Wine prefix and retry: `rm -rf desktop_app/.wine_build`
 
-### Chart appears blurry
+### Build fails with "Module not found"
 
-The app includes HiDPI detection for Windows. If still blurry, try setting Windows display scaling to 100%.
+Add `--collect-all <module>` to the PyInstaller command.
+
+### Chart appears blurry on high-DPI display
+
+The app includes automatic HiDPI detection. If still blurry, check Windows display scaling settings.
 
 ### Statistics window opens behind main window
 
-Click the window in the taskbar or use Alt+Tab to bring it to front.
+Click the window in the taskbar or use Alt+Tab.
+
+### "Python not found" when building on Windows
+
+Ensure Python is installed and in your PATH:
+```cmd
+python --version
+```
+
+If not found, reinstall Python and check "Add to PATH" during installation.
