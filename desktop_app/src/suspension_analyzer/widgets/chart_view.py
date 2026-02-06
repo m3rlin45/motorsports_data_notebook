@@ -8,6 +8,7 @@ import customtkinter as ctk
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.figure import Figure
+from matplotlib.patches import Rectangle
 import numpy as np
 
 
@@ -54,6 +55,10 @@ class ChartView(ctk.CTkFrame):
         # Get screen DPI for HiDPI support
         self._dpi = get_screen_dpi()
 
+        # Hover tooltip support
+        self._annotation = None
+        self._bar_data: list[tuple] = []  # List of (bar_container, bin_centers, histogram, ax)
+
         self._create_widgets()
 
     def _create_widgets(self) -> None:
@@ -91,6 +96,9 @@ class ChartView(ctk.CTkFrame):
         # Pack canvas
         self._canvas.get_tk_widget().pack(side="top", fill="both", expand=True)
 
+        # Connect hover event
+        self._canvas.mpl_connect('motion_notify_event', self._on_hover)
+
         # Show placeholder
         self._show_placeholder()
 
@@ -108,6 +116,7 @@ class ChartView(ctk.CTkFrame):
     def _show_placeholder(self) -> None:
         """Show placeholder text."""
         self._figure.clear()
+        self._bar_data = []
         ax = self._figure.add_subplot(111)
         ax.set_facecolor('#1a1a2e')
         ax.text(0.5, 0.5, 'Load a session and select laps\nto view velocity histogram',
@@ -115,6 +124,66 @@ class ChartView(ctk.CTkFrame):
                 transform=ax.transAxes)
         ax.axis('off')
         self._canvas.draw()
+
+    def _on_hover(self, event) -> None:
+        """Handle mouse hover to show bar values."""
+        if event.inaxes is None or not self._bar_data:
+            if self._annotation and self._annotation.get_visible():
+                self._annotation.set_visible(False)
+                self._canvas.draw_idle()
+            return
+
+        # Find which bar we're hovering over
+        for bar_container, bin_centers, histogram, ax, label in self._bar_data:
+            if event.inaxes != ax:
+                continue
+
+            for i, bar in enumerate(bar_container):
+                if bar.contains(event)[0]:
+                    # Get bar info
+                    velocity = bin_centers[i]
+                    percentage = histogram[i]
+
+                    # Create or update annotation
+                    if self._annotation is None:
+                        self._annotation = ax.annotate(
+                            "",
+                            xy=(0, 0),
+                            xytext=(10, 10),
+                            textcoords="offset points",
+                            bbox=dict(boxstyle="round,pad=0.3", facecolor="#333333", edgecolor="white", alpha=0.9),
+                            fontsize=9,
+                            color="white",
+                            zorder=100,
+                        )
+
+                    # Update annotation
+                    text = f"{label}\nVelocity: {velocity:.0f} mm/s\nTime: {percentage:.2f}%"
+                    self._annotation.set_text(text)
+                    self._annotation.xy = (bar.get_x() + bar.get_width() / 2, bar.get_height())
+
+                    # Move annotation to correct axes
+                    if self._annotation.axes != ax:
+                        self._annotation.remove()
+                        self._annotation = ax.annotate(
+                            text,
+                            xy=(bar.get_x() + bar.get_width() / 2, bar.get_height()),
+                            xytext=(10, 10),
+                            textcoords="offset points",
+                            bbox=dict(boxstyle="round,pad=0.3", facecolor="#333333", edgecolor="white", alpha=0.9),
+                            fontsize=9,
+                            color="white",
+                            zorder=100,
+                        )
+
+                    self._annotation.set_visible(True)
+                    self._canvas.draw_idle()
+                    return
+
+        # No bar found, hide annotation
+        if self._annotation and self._annotation.get_visible():
+            self._annotation.set_visible(False)
+            self._canvas.draw_idle()
 
     def load_html(self, html: str) -> None:
         """This method is called but we ignore HTML and wait for direct result."""
@@ -131,6 +200,8 @@ class ChartView(ctk.CTkFrame):
             Chart title.
         """
         self._figure.clear()
+        self._bar_data = []
+        self._annotation = None
 
         # Create 2x2 subplots
         axes = self._figure.subplots(2, 2)
@@ -160,9 +231,12 @@ class ChartView(ctk.CTkFrame):
 
             # Plot histogram bars
             colors = ['steelblue' if c >= 0 else 'indianred' for c in corner_data.bin_centers]
-            ax.bar(corner_data.bin_centers, corner_data.histogram,
-                   width=np.diff(corner_data.bin_edges[:2])[0] * 0.9,
-                   color=colors, edgecolor='none')
+            bars = ax.bar(corner_data.bin_centers, corner_data.histogram,
+                          width=np.diff(corner_data.bin_edges[:2])[0] * 0.9,
+                          color=colors, edgecolor='none')
+
+            # Store bar data for hover
+            self._bar_data.append((bars, corner_data.bin_centers, corner_data.histogram, ax, corner_title))
 
             # Zero line
             ax.axvline(x=0, color='white', linestyle='--', linewidth=0.5, alpha=0.5)
@@ -204,6 +278,8 @@ class ChartView(ctk.CTkFrame):
             Label for second session.
         """
         self._figure.clear()
+        self._bar_data = []
+        self._annotation = None
 
         axes = self._figure.subplots(2, 2)
         self._figure.suptitle(f"Comparison: {label_a} vs {label_b}", fontsize=12, color='white')
@@ -232,10 +308,14 @@ class ChartView(ctk.CTkFrame):
             ax.axvspan(-300, -ranges.fast, alpha=0.2, color='lightcoral')
 
             # Grouped bars
-            ax.bar(corner_a.bin_centers - bar_width/2, corner_a.histogram,
-                   width=bar_width, color='steelblue', label=label_a, alpha=0.8)
-            ax.bar(corner_b.bin_centers + bar_width/2, corner_b.histogram,
-                   width=bar_width, color='darkorange', label=label_b, alpha=0.8)
+            bars_a = ax.bar(corner_a.bin_centers - bar_width/2, corner_a.histogram,
+                            width=bar_width, color='steelblue', label=label_a, alpha=0.8)
+            bars_b = ax.bar(corner_b.bin_centers + bar_width/2, corner_b.histogram,
+                            width=bar_width, color='darkorange', label=label_b, alpha=0.8)
+
+            # Store bar data for hover
+            self._bar_data.append((bars_a, corner_a.bin_centers, corner_a.histogram, ax, f"{corner_title} - {label_a}"))
+            self._bar_data.append((bars_b, corner_b.bin_centers, corner_b.histogram, ax, f"{corner_title} - {label_b}"))
 
             ax.axvline(x=0, color='white', linestyle='--', linewidth=0.5, alpha=0.5)
             ax.set_xlim(-300, 300)
