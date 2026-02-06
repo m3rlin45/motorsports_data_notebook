@@ -1,8 +1,11 @@
 # Suspension Analyzer
 
-Standalone Windows desktop application for suspension velocity histogram analysis.
+Standalone desktop application for suspension velocity histogram analysis.
 
-**The built executable is fully self-contained and runs on any Windows 10/11 machine without Python installed.**
+**The built executables are fully self-contained and run without Python installed.**
+
+- **Windows**: `SuspensionAnalyzer.exe` - runs on Windows 10/11
+- **Linux**: `SuspensionAnalyzer-Linux` - runs on most modern Linux distributions
 
 ## Features
 
@@ -50,7 +53,43 @@ The first run will download and install Python in Wine (~5-10 minutes). Subseque
 
 Output: `desktop_app/dist/SuspensionAnalyzer.exe`
 
-### Option 2: Build on Windows
+### Option 2: Build Native Linux Binary
+
+Build a Linux executable that runs on most modern Linux distributions.
+
+**Prerequisites:**
+
+```bash
+# Ubuntu/Debian
+sudo apt install python3-tk
+
+# Fedora
+sudo dnf install python3-tkinter
+
+# Arch
+sudo pacman -S tk
+```
+
+**Build:**
+
+```bash
+cd desktop_app
+poetry install
+poetry run pip install pyinstaller
+poetry run pyinstaller --clean --noconfirm suspension_analyzer.spec
+```
+
+Output: `desktop_app/dist/SuspensionAnalyzer`
+
+**Run:**
+
+```bash
+./dist/SuspensionAnalyzer
+```
+
+Note: The Linux binary requires a display server (X11 or Wayland). On WSL2, GUI apps display automatically via WSLg.
+
+### Option 3: Build on Windows
 
 If you have Windows with Python installed:
 
@@ -77,7 +116,7 @@ If you have Windows with Python installed:
 
 4. The executable will be at `dist\SuspensionAnalyzer.exe`
 
-### Option 3: Development Mode
+### Option 4: Development Mode
 
 Run directly without building an exe (requires Python):
 
@@ -193,3 +232,23 @@ python --version
 ```
 
 If not found, reinstall Python and check "Add to PATH" during installation.
+
+### Linux build fails with "tkinter installation is broken"
+
+Install the tkinter package for your distribution:
+```bash
+# Ubuntu/Debian
+sudo apt install python3-tk
+
+# Fedora
+sudo dnf install python3-tkinter
+
+# Arch
+sudo pacman -S tk
+```
+
+Then rebuild.
+
+### Linux binary fails with "No module named 'tkinter'"
+
+The binary was built without tkinter bundled. Rebuild after installing `python3-tk` (see above).
