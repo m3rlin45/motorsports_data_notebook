@@ -65,6 +65,14 @@ poetry run poe setup_emsdk           # Installs emsdk to ~/emsdk
 poetry run poe build_libxrk_pyodide  # Rebuild libxrk for Pyodide (requires setup_emsdk)
 ```
 
+## Bash Command Conventions
+
+When running shell commands:
+- **Always use absolute paths** or combine `cd` with the command in the same invocation
+- Bad: `./build_wine.sh` (assumes correct working directory)
+- Good: `cd /home/m3rlin45/code/motorsports_data_notebook/desktop_app && ./build_wine.sh`
+- Good: `/home/m3rlin45/code/motorsports_data_notebook/desktop_app/build_wine.sh`
+
 ## Code Style & Conventions
 
 - **Formatter:** Black, 100-char line length, target py312
