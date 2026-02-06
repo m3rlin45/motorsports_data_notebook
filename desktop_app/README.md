@@ -22,21 +22,21 @@ If you have the pre-built `SuspensionAnalyzer.exe`, just double-click to run. No
 
 ### Option 1: Build with Wine (Linux/WSL)
 
-Build a Windows exe from Linux without needing Windows Python installed.
+Build a Windows exe from Linux without needing Windows installed.
 
 **Prerequisites (one-time setup):**
 
 ```bash
-# Ubuntu/Debian
+# Ubuntu/Debian - enable 32-bit architecture first
 sudo dpkg --add-architecture i386
 sudo apt update
-sudo apt install wine64 wine32 xvfb wget cabextract
+sudo apt install wine64 wine32:i386 xvfb wget
 
 # Fedora
-sudo dnf install wine xorg-x11-server-Xvfb wget cabextract
+sudo dnf install wine xorg-x11-server-Xvfb wget
 
 # Arch
-sudo pacman -S wine xorg-server-xvfb wget cabextract
+sudo pacman -S wine xorg-server-xvfb wget
 ```
 
 **Build:**
@@ -157,6 +157,15 @@ src/suspension_analyzer/
 ```
 
 ## Troubleshooting
+
+### Wine build fails - "wine32 is missing"
+
+The Python Windows installer requires 32-bit Wine support:
+```bash
+sudo dpkg --add-architecture i386
+sudo apt update
+sudo apt install wine32:i386
+```
 
 ### Wine build fails with subprocess error
 

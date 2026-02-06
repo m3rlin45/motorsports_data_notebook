@@ -1,27 +1,29 @@
 #!/bin/bash
 # Build Suspension Analyzer Windows exe using Wine
-# Requires: wine, xvfb, wget
+# Requires: wine (with 32-bit support), xvfb, wget
 #
 # Install dependencies (Ubuntu/Debian):
 #   sudo dpkg --add-architecture i386
 #   sudo apt update
-#   sudo apt install wine64 wine32 xvfb wget cabextract
+#   sudo apt install wine32:i386 wine64 xvfb wget
 #
 # The resulting exe is FULLY SELF-CONTAINED and does NOT require Python to run.
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 
 # Wine configuration
-export WINEDEBUG=-all
 export WINEPREFIX="$SCRIPT_DIR/.wine_build"
 export WINEARCH=win64
+export WINEDEBUG=-all
 
 PYTHON_VERSION="3.12.4"
-PYTHON_URL="https://www.python.org/ftp/python/${PYTHON_VERSION}/python-${PYTHON_VERSION}-amd64.exe"
-WINE_PYTHON="$WINEPREFIX/drive_c/Python312/python.exe"
+PYTHON_INSTALLER_URL="https://www.python.org/ftp/python/${PYTHON_VERSION}/python-${PYTHON_VERSION}-amd64.exe"
+
+PYTHON_DIR="$WINEPREFIX/drive_c/Python312"
+WINE_PYTHON="$PYTHON_DIR/python.exe"
 
 echo "========================================="
 echo " Suspension Analyzer Build (Wine)"
@@ -31,67 +33,75 @@ echo "========================================="
 for cmd in wine xvfb-run wget; do
     if ! command -v $cmd &> /dev/null; then
         echo "Error: $cmd is required but not installed."
-        echo "Install with: sudo apt install wine64 wine32 xvfb wget"
+        echo "Install with: sudo apt install wine64 wine32:i386 xvfb wget"
         exit 1
     fi
 done
 
+# Use wine64 if available, otherwise wine
+WINE_CMD="wine"
+if command -v wine64 &> /dev/null; then
+    WINE_CMD="wine64"
+fi
+
 # Initialize Wine prefix if needed
 if [ ! -d "$WINEPREFIX" ]; then
     echo "Initializing Wine prefix..."
-    wineboot --init 2>/dev/null || true
-    # Wait for wineserver to finish
-    wineserver -w 2>/dev/null || sleep 5
+    wineboot --init
+    wineserver -w || sleep 5
 fi
 
 # Install Python if not present
 if [ ! -f "$WINE_PYTHON" ]; then
-    echo "Downloading Python ${PYTHON_VERSION}..."
-    wget -q --show-progress "$PYTHON_URL" -O "/tmp/python-installer.exe"
+    echo "Downloading Python ${PYTHON_VERSION} installer..."
+    wget -q --show-progress "$PYTHON_INSTALLER_URL" -O "/tmp/python-installer.exe"
 
-    echo "Installing Python (this may take a few minutes)..."
-    # Use xvfb-run to handle GUI installer
-    # Install to C:\Python312 for simpler path
-    xvfb-run -a wine /tmp/python-installer.exe /quiet \
+    echo "Installing Python (silent mode, includes tkinter)..."
+    xvfb-run -a $WINE_CMD "/tmp/python-installer.exe" /quiet \
+        TargetDir="C:\\Python312" \
         InstallAllUsers=0 \
-        TargetDir='C:\Python312' \
-        PrependPath=1 \
+        PrependPath=0 \
         Include_pip=1 \
+        Include_tcltk=1 \
         Include_test=0 \
-        2>/dev/null || true
+        Include_doc=0
 
-    wineserver -w 2>/dev/null || sleep 10
-    rm -f /tmp/python-installer.exe
+    # Wait for installer to finish
+    wineserver -w || sleep 10
+
+    rm -f "/tmp/python-installer.exe"
 
     if [ ! -f "$WINE_PYTHON" ]; then
-        echo "Error: Python installation failed."
-        echo "Try installing Python manually in Wine."
+        echo "Error: Python installation failed"
         exit 1
     fi
+
     echo "Python installed successfully."
 fi
 
 # Check Python works
+echo ""
 echo "Wine Python version:"
-wine "$WINE_PYTHON" --version 2>/dev/null || {
-    echo "Error: Wine Python not working"
-    exit 1
-}
+$WINE_CMD "$WINE_PYTHON" --version
+
+# Verify tkinter works
+echo "Checking tkinter..."
+$WINE_CMD "$WINE_PYTHON" -c "import tkinter; print('tkinter OK')"
 
 # Install/update pip packages
 echo ""
 echo "Installing Python packages..."
-wine "$WINE_PYTHON" -m pip install --upgrade pip -q 2>/dev/null
-wine "$WINE_PYTHON" -m pip install -q \
+$WINE_CMD "$WINE_PYTHON" -m pip install --upgrade pip
+# Pin numpy<2 to avoid Wine compatibility issues with complex number functions
+$WINE_CMD "$WINE_PYTHON" -m pip install \
     customtkinter \
     tkinterdnd2 \
     matplotlib \
     pandas \
-    numpy \
+    "numpy<2" \
     pyarrow \
     libxrk \
-    pyinstaller \
-    2>/dev/null
+    pyinstaller
 
 echo "Packages installed."
 
@@ -107,7 +117,7 @@ echo "Copying source files..."
 cp -r "$SCRIPT_DIR/src/suspension_analyzer" "$BUILD_DIR/src/"
 cp -r "$REPO_ROOT/src/motorsports_data_notebook" "$BUILD_DIR/motorsports_data_notebook_src/"
 
-# Create PyInstaller spec file for Wine
+# Create PyInstaller spec file
 cat > "$BUILD_DIR/build.spec" << 'SPECEOF'
 # -*- mode: python ; coding: utf-8 -*-
 import sys
@@ -153,12 +163,10 @@ echo ""
 echo "Running PyInstaller (this may take several minutes)..."
 cd "$BUILD_DIR"
 
-# Try running PyInstaller with xvfb to handle subprocess issues
-xvfb-run -a wine "$WINE_PYTHON" -m PyInstaller \
+xvfb-run -a $WINE_CMD "$WINE_PYTHON" -m PyInstaller \
     --clean \
     --noconfirm \
-    build.spec \
-    2>&1 | tee pyinstaller.log
+    build.spec
 
 # Check result
 if [ -f "$BUILD_DIR/dist/SuspensionAnalyzer.exe" ]; then
@@ -181,8 +189,5 @@ else
     echo "========================================="
     echo " BUILD FAILED"
     echo "========================================="
-    echo ""
-    echo "Check pyinstaller.log for details:"
-    echo "  cat $BUILD_DIR/pyinstaller.log"
     exit 1
 fi
