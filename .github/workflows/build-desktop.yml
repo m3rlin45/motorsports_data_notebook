@@ -1,0 +1,66 @@
+name: Build Desktop App
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'desktop_app/**'
+      - 'src/motorsports_data_notebook/**'
+      - '.github/workflows/build-desktop.yml'
+  pull_request:
+    branches: [master]
+    paths:
+      - 'desktop_app/**'
+      - 'src/motorsports_data_notebook/**'
+      - '.github/workflows/build-desktop.yml'
+  release:
+    types: [published]
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Install dependencies
+        working-directory: desktop_app
+        run: |
+          poetry install
+          poetry run pip install pyinstaller
+
+      - name: Build executable
+        working-directory: desktop_app
+        run: poetry run pyinstaller --clean --noconfirm suspension_analyzer.spec
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SuspensionAnalyzer-Windows
+          path: desktop_app/dist/SuspensionAnalyzer.exe
+          retention-days: 30
+
+  attach-to-release:
+    needs: build-windows
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: SuspensionAnalyzer-Windows
+          path: dist/
+
+      - name: Attach to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/SuspensionAnalyzer.exe
