@@ -92,7 +92,7 @@ $WINE_CMD "$WINE_PYTHON" -c "import tkinter; print('tkinter OK')"
 echo ""
 echo "Installing Python packages..."
 $WINE_CMD "$WINE_PYTHON" -m pip install --upgrade pip
-# Pin numpy<2 to avoid Wine compatibility issues with complex number functions
+# Pin numpy<2 - numpy 2.x uses crealf() which Wine's ucrtbase.dll doesn't implement
 $WINE_CMD "$WINE_PYTHON" -m pip install \
     customtkinter \
     tkinterdnd2 \
