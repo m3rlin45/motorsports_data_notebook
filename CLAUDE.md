@@ -73,6 +73,24 @@ When running shell commands:
 - Good: `cd /home/m3rlin45/code/motorsports_data_notebook/desktop_app && ./build_wine.sh`
 - Good: `/home/m3rlin45/code/motorsports_data_notebook/desktop_app/build_wine.sh`
 
+## Desktop App (Suspension Analyzer)
+
+The `desktop_app/` directory contains a standalone CustomTkinter GUI application.
+
+### Building and Running Windows exe
+
+Use the Wine build script to create a standalone Windows executable, then run it via PowerShell:
+
+```bash
+# Build the exe
+cd /home/m3rlin45/code/motorsports_data_notebook/desktop_app && ./build_wine.sh
+
+# Run the exe on Windows (from WSL)
+powershell.exe -Command "Start-Process '$(wslpath -w /home/m3rlin45/code/motorsports_data_notebook/desktop_app/dist/SuspensionAnalyzer.exe)'"
+```
+
+Output: `desktop_app/dist/SuspensionAnalyzer.exe`
+
 ## Code Style & Conventions
 
 - **Formatter:** Black, 100-char line length, target py312

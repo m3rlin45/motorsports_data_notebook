@@ -52,6 +52,29 @@ class StatsPanel(ctk.CTkFrame):
         )
         header.pack(anchor="w", pady=(10, 5), padx=5)
 
+    def _create_session_legend(self, parent: ctk.CTkFrame, label_a: str, label_b: str) -> None:
+        """Create a legend showing session A and B full names."""
+        legend_frame = ctk.CTkFrame(parent, fg_color=("#E8F4FC", "#1E3A4C"))
+        legend_frame.pack(fill="x", padx=5, pady=(10, 5))
+
+        label_a_widget = ctk.CTkLabel(
+            legend_frame,
+            text=f"A: {label_a}",
+            font=ctk.CTkFont(size=11),
+            text_color="#3B8ED0",
+            anchor="w",
+        )
+        label_a_widget.pack(fill="x", padx=10, pady=(8, 2))
+
+        label_b_widget = ctk.CTkLabel(
+            legend_frame,
+            text=f"B: {label_b}",
+            font=ctk.CTkFont(size=11),
+            text_color="#D97706",
+            anchor="w",
+        )
+        label_b_widget.pack(fill="x", padx=10, pady=(2, 8))
+
     def _create_table(
         self,
         parent: ctk.CTkFrame,
@@ -138,12 +161,15 @@ class StatsPanel(ctk.CTkFrame):
             ("Rear Right", result_a.rear_right, result_b.rear_right if result_b else None),
         ]
 
+        # === Session Legend (for comparisons) ===
+        if result_b is not None:
+            self._create_session_legend(self._scrollable, label_a, label_b)
+
         # === Summary Statistics Table ===
         self._create_section_header(self._scrollable, "Summary Statistics")
 
         if result_b is not None:
-            headers = ["Corner", f"{label_a} Skew", f"{label_b} Skew", "Δ Skew",
-                      f"{label_a} Std", f"{label_b} Std", "Δ Std"]
+            headers = ["Corner", "A Skew", "B Skew", "Δ Skew", "A Std", "B Std", "Δ Std"]
             rows = []
             for corner_name, corner_a, corner_b in corners:
                 delta_skew = corner_b.skew - corner_a.skew
@@ -176,7 +202,7 @@ class StatsPanel(ctk.CTkFrame):
         if result_b is not None:
             headers = ["Corner", "Direction", "Slow", "Fast", "High-Speed"]
             self._create_velocity_table_comparison(
-                self._scrollable, headers, corners, ranges, label_a, label_b
+                self._scrollable, headers, corners, ranges
             )
         else:
             headers = ["Corner", "Direction", "Slow", "Fast", "High-Speed"]
@@ -368,16 +394,14 @@ class StatsPanel(ctk.CTkFrame):
         headers: list[str],
         corners: list,
         ranges,
-        label_a: str,
-        label_b: str,
     ) -> None:
         """Create velocity distribution table for session comparison with bump/rebound rows."""
         # For comparison, show A and B values with delta
         table_frame = ctk.CTkFrame(parent, fg_color=("#E0E0E0", "#2B2B2B"))
         table_frame.pack(fill="x", padx=5, pady=5)
 
-        # Modified headers for comparison
-        comp_headers = ["Corner", "Dir", "Session", "Slow", "Fast", "High-Spd"]
+        # Modified headers for comparison - use short labels
+        comp_headers = ["Corner", "Dir", "", "Slow", "Fast", "High-Spd"]
 
         for col, header in enumerate(comp_headers):
             cell = ctk.CTkLabel(
@@ -436,14 +460,14 @@ class StatsPanel(ctk.CTkFrame):
             bump_cell.grid(row=row_idx + 2, column=1, rowspan=2, sticky="nsew", padx=1, pady=1)
 
             # Rebound A row
-            self._add_comparison_row(table_frame, row_idx, label_a, pct_a["rebound"], base_bg)
+            self._add_comparison_row(table_frame, row_idx, "A", pct_a["rebound"], base_bg)
             # Rebound B row
-            self._add_comparison_row(table_frame, row_idx + 1, label_b, pct_b["rebound"], base_bg,
+            self._add_comparison_row(table_frame, row_idx + 1, "B", pct_b["rebound"], base_bg,
                                     delta_from=pct_a["rebound"])
             # Bump A row
-            self._add_comparison_row(table_frame, row_idx + 2, label_a, pct_a["bump"], alt_bg)
+            self._add_comparison_row(table_frame, row_idx + 2, "A", pct_a["bump"], alt_bg)
             # Bump B row
-            self._add_comparison_row(table_frame, row_idx + 3, label_b, pct_b["bump"], alt_bg,
+            self._add_comparison_row(table_frame, row_idx + 3, "B", pct_b["bump"], alt_bg,
                                     delta_from=pct_a["bump"])
 
             row_idx += 4
@@ -458,12 +482,14 @@ class StatsPanel(ctk.CTkFrame):
         delta_from: dict[str, float] | None = None,
     ) -> None:
         """Add a row to the comparison velocity table."""
-        # Session label
+        # Session label (A or B)
+        text_color = "#3B8ED0" if session_label == "A" else "#D97706"
         cell = ctk.CTkLabel(
             table_frame,
-            text=session_label[:8],  # Truncate long names
-            font=ctk.CTkFont(size=10, family="Consolas"),
+            text=session_label,
+            font=ctk.CTkFont(size=10, family="Consolas", weight="bold"),
             fg_color=bg_color,
+            text_color=text_color,
             corner_radius=0,
             padx=6,
             pady=3,
