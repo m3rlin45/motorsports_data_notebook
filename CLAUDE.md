@@ -77,19 +77,33 @@ When running shell commands:
 
 The `desktop_app/` directory contains a standalone CustomTkinter GUI application.
 
-### Building and Running Windows exe
-
-Use the Wine build script to create a standalone Windows executable, then run it via PowerShell:
+### Building Windows exe (via Wine)
 
 ```bash
-# Build the exe
 cd /home/m3rlin45/code/motorsports_data_notebook/desktop_app && ./build_wine.sh
+```
 
-# Run the exe on Windows (from WSL)
+Run on Windows from WSL:
+```bash
 powershell.exe -Command "Start-Process '$(wslpath -w /home/m3rlin45/code/motorsports_data_notebook/desktop_app/dist/SuspensionAnalyzer.exe)'"
 ```
 
-Output: `desktop_app/dist/SuspensionAnalyzer.exe`
+### Building Linux Native Binary
+
+Requires `python3-tk` system package:
+```bash
+sudo apt install python3-tk  # Ubuntu/Debian
+```
+
+Build:
+```bash
+cd /home/m3rlin45/code/motorsports_data_notebook/desktop_app && poetry run pip install pyinstaller && poetry run pyinstaller --clean --noconfirm suspension_analyzer.spec
+```
+
+Run (displays via WSLg on WSL2):
+```bash
+/home/m3rlin45/code/motorsports_data_notebook/desktop_app/dist/SuspensionAnalyzer
+```
 
 ## Code Style & Conventions
 

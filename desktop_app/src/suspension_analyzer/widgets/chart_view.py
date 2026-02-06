@@ -14,16 +14,47 @@ import numpy as np
 
 def get_screen_dpi() -> int:
     """Get the screen DPI for HiDPI support."""
+    import sys
+
+    # Try Windows API first
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)  # Per-monitor DPI aware
+            hdc = ctypes.windll.user32.GetDC(0)
+            dpi = ctypes.windll.gdi32.GetDeviceCaps(hdc, 88)  # LOGPIXELSX
+            ctypes.windll.user32.ReleaseDC(0, hdc)
+            return dpi
+        except Exception:
+            pass
+
+    # Try tkinter method (works on Linux/WSLg)
     try:
-        # Windows DPI awareness
-        import ctypes
-        ctypes.windll.shcore.SetProcessDpiAwareness(2)  # Per-monitor DPI aware
-        hdc = ctypes.windll.user32.GetDC(0)
-        dpi = ctypes.windll.gdi32.GetDeviceCaps(hdc, 88)  # LOGPIXELSX
-        ctypes.windll.user32.ReleaseDC(0, hdc)
-        return dpi
+        import tkinter as tk
+        root = tk._default_root
+        if root is None:
+            root = tk.Tk()
+            root.withdraw()
+        # Get scaling factor - tkinter returns pixels per point (1 point = 1/72 inch)
+        # scaling = pixels per point, so DPI = scaling * 72
+        scaling = root.tk.call("tk", "scaling")
+        dpi = int(float(scaling) * 72)
+        if dpi > 72:  # Sanity check
+            return dpi
     except Exception:
-        return 96  # Default DPI
+        pass
+
+    # Try environment variable (common in HiDPI setups)
+    import os
+    gdk_scale = os.environ.get("GDK_SCALE", "1")
+    try:
+        scale = float(gdk_scale)
+        if scale > 1:
+            return int(96 * scale)
+    except ValueError:
+        pass
+
+    return 96  # Default DPI
 
 
 class ChartView(ctk.CTkFrame):
