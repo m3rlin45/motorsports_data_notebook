@@ -93,8 +93,22 @@ class SessionPanel(ctk.CTkFrame):
         # Scrollable frame for lap checkboxes (compact height)
         self.laps_scroll = ctk.CTkScrollableFrame(self.laps_frame, height=80)
 
-        # Select all/none buttons
+        # Selection buttons
         self.btn_frame = ctk.CTkFrame(self.laps_frame, fg_color="transparent")
+        self.select_best_btn = ctk.CTkButton(
+            self.btn_frame,
+            text="Best",
+            width=50,
+            height=24,
+            command=self._select_best,
+        )
+        self.select_top_btn = ctk.CTkButton(
+            self.btn_frame,
+            text="Top 103%",
+            width=70,
+            height=24,
+            command=self._select_top_103,
+        )
         self.select_all_btn = ctk.CTkButton(
             self.btn_frame,
             text="All",
@@ -128,6 +142,8 @@ class SessionPanel(ctk.CTkFrame):
 
         # Button frame
         self.btn_frame.pack(fill="x", padx=5, pady=2)
+        self.select_best_btn.pack(side="left", padx=2)
+        self.select_top_btn.pack(side="left", padx=2)
         self.select_all_btn.pack(side="left", padx=2)
         self.select_none_btn.pack(side="left", padx=2)
 
@@ -260,6 +276,9 @@ class SessionPanel(ctk.CTkFrame):
             )
             checkbox.pack(anchor="w", padx=5, pady=2)
 
+        # Auto-select best lap
+        self._select_best()
+
     def _on_lap_toggled(self) -> None:
         """Handle lap checkbox toggle."""
         if self._on_selection_changed:
@@ -278,6 +297,83 @@ class SessionPanel(ctk.CTkFrame):
             var.set(False)
         if self._on_selection_changed:
             self._on_selection_changed()
+
+    def _select_best(self) -> None:
+        """Select only the best (fastest) lap."""
+        if self._log is None:
+            return
+
+        laps_df = self._log.laps.to_pandas()
+        best_lap_num = self._get_best_lap_num(laps_df)
+
+        if best_lap_num is not None:
+            # Deselect all, then select only the best
+            for lap_num, var in self._lap_vars.items():
+                var.set(lap_num == best_lap_num)
+            if self._on_selection_changed:
+                self._on_selection_changed()
+
+    def _select_top_103(self) -> None:
+        """Select all laps within 103% of the best lap time."""
+        if self._log is None:
+            return
+
+        laps_df = self._log.laps.to_pandas()
+        best_lap_num = self._get_best_lap_num(laps_df)
+
+        if best_lap_num is None:
+            return
+
+        # Get best lap time
+        best_row = laps_df[laps_df["num"] == best_lap_num].iloc[0]
+        best_time = best_row.get("lap_time")
+
+        if best_time is None or not hasattr(best_time, "total_seconds"):
+            return
+
+        best_seconds = best_time.total_seconds()
+        threshold = best_seconds * 1.03
+
+        # Select all laps within threshold
+        for _, lap in laps_df.iterrows():
+            lap_num = int(lap["num"])
+            lap_time = lap.get("lap_time")
+
+            if lap_num in self._lap_vars:
+                if lap_time is not None and hasattr(lap_time, "total_seconds"):
+                    within_threshold = lap_time.total_seconds() <= threshold
+                    self._lap_vars[lap_num].set(within_threshold)
+                else:
+                    self._lap_vars[lap_num].set(False)
+
+        if self._on_selection_changed:
+            self._on_selection_changed()
+
+    def _get_best_lap_num(self, laps_df) -> int | None:
+        """Get the lap number with the fastest time.
+
+        Parameters
+        ----------
+        laps_df : pd.DataFrame
+            DataFrame with lap data.
+
+        Returns
+        -------
+        int | None
+            Lap number of the fastest lap, or None if no valid laps.
+        """
+        best_lap_num = None
+        best_time = None
+
+        for _, lap in laps_df.iterrows():
+            lap_time = lap.get("lap_time")
+            if lap_time is not None and hasattr(lap_time, "total_seconds"):
+                lap_seconds = lap_time.total_seconds()
+                if lap_seconds > 0 and (best_time is None or lap_seconds < best_time):
+                    best_time = lap_seconds
+                    best_lap_num = int(lap["num"])
+
+        return best_lap_num
 
     def get_selected_laps(self) -> list[int]:
         """Get list of selected lap numbers.
