@@ -47,20 +47,66 @@ jobs:
           path: desktop_app/dist/SuspensionAnalyzer.exe
           retention-days: 30
 
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Install dependencies
+        working-directory: desktop_app
+        run: |
+          poetry install
+          poetry run pip install pyinstaller
+
+      - name: Build executable
+        working-directory: desktop_app
+        run: poetry run pyinstaller --clean --noconfirm suspension_analyzer.spec
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SuspensionAnalyzer-Linux
+          path: desktop_app/dist/SuspensionAnalyzer
+          retention-days: 30
+
   attach-to-release:
-    needs: build-windows
+    needs: [build-windows, build-linux]
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Download artifact
+      - name: Download Windows artifact
         uses: actions/download-artifact@v4
         with:
           name: SuspensionAnalyzer-Windows
           path: dist/
 
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: SuspensionAnalyzer-Linux
+          path: dist/
+
+      - name: Rename Linux binary
+        run: mv dist/SuspensionAnalyzer dist/SuspensionAnalyzer-Linux
+
       - name: Attach to release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/SuspensionAnalyzer.exe
+          files: |
+            dist/SuspensionAnalyzer.exe
+            dist/SuspensionAnalyzer-Linux

@@ -30,6 +30,8 @@ a = Analysis(
         "customtkinter",
         # tkinterdnd2
         "tkinterdnd2",
+        # PIL/Pillow tkinter integration
+        "PIL._tkinter_finder",
     ],
     hookspath=[],
     hooksconfig={},

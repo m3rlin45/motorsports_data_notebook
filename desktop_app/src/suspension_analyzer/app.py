@@ -45,6 +45,9 @@ class SuspensionAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
 
+        # HiDPI scaling - detect and apply for Linux/WSLg
+        self._setup_hidpi_scaling()
+
         # Analysis results storage
         self._result_a: VelocityHistogramResult | None = None
         self._result_b: VelocityHistogramResult | None = None
@@ -56,6 +59,41 @@ class SuspensionAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
         # Build UI
         self._create_widgets()
         self._layout_widgets()
+
+    def _setup_hidpi_scaling(self) -> None:
+        """Configure HiDPI scaling for Linux/WSLg."""
+        import sys
+        import os
+
+        if sys.platform != "win32":
+            scale_factor = 1.0
+
+            # Check GDK_SCALE environment variable first (user override)
+            gdk_scale = os.environ.get("GDK_SCALE")
+            if gdk_scale:
+                try:
+                    scale_factor = float(gdk_scale)
+                except ValueError:
+                    pass
+
+            # If no GDK_SCALE, detect from screen resolution
+            if scale_factor == 1.0:
+                try:
+                    screen_width = self.winfo_screenwidth()
+                    # HiDPI detection: if screen width > 2500, likely 2x scaling
+                    if screen_width > 2500:
+                        scale_factor = 2.0
+                    elif screen_width > 1920:
+                        scale_factor = 1.5
+                except Exception:
+                    pass
+
+            # Apply scaling if needed
+            if scale_factor > 1.0:
+                ctk.set_widget_scaling(scale_factor)
+                ctk.set_window_scaling(scale_factor)
+                # Also set tk scaling for consistent font rendering
+                self.tk.call("tk", "scaling", scale_factor * 1.33)
 
     def _create_widgets(self) -> None:
         """Create all UI widgets."""
