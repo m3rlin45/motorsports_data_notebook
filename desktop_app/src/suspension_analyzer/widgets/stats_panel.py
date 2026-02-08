@@ -294,7 +294,8 @@ class StatsPanel(ctk.CTkFrame):
             if abs_vel <= ranges.friction:
                 continue
 
-            target = rebound if center >= 0 else bump
+            # Positive velocity = bump (compression), negative = rebound (extension)
+            target = bump if center >= 0 else rebound
 
             if abs_vel <= ranges.slow:
                 target["Slow"] += pct
@@ -350,7 +351,7 @@ class StatsPanel(ctk.CTkFrame):
             )
             corner_cell.grid(row=row_idx, column=0, rowspan=2, sticky="nsew", padx=1, pady=1)
 
-            # Rebound row (positive velocities)
+            # Rebound row (negative velocities - extension)
             for col_idx, (range_name, val) in enumerate([
                 ("Direction", "Rebound ↑"),
                 ("Slow", f"{pct['rebound']['Slow']:.1f}%"),
@@ -368,7 +369,7 @@ class StatsPanel(ctk.CTkFrame):
                 )
                 cell.grid(row=row_idx, column=col_idx + 1, sticky="nsew", padx=1, pady=1)
 
-            # Bump row (negative velocities)
+            # Bump row (positive velocities - compression)
             for col_idx, (range_name, val) in enumerate([
                 ("Direction", "Bump ↓"),
                 ("Slow", f"{pct['bump']['Slow']:.1f}%"),
