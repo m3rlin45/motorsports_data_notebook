@@ -1,0 +1,33 @@
+# Vehicle profiles for AIM telemetry channel mapping.
+#
+# To add your vehicle, submit a PR with:
+# 1. A new entry under "profiles" with your vehicle's channel names and motion ratios
+# 2. Your logger serial number under "logger_map" pointing to your profile
+#
+# Channel names must match exactly what appears in Race Studio 3 / AIM logger config.
+
+profiles:
+  toyota_86_zn6:
+    name: Toyota 86 ZN6
+    # AiM MXP logger, Race Studio 3 default channel names
+    channel_names:
+      throttle: PPS
+      brake: BrakePress
+      gps_speed: GPS Speed
+      gps_latitude: GPS Latitude
+      gps_longitude: GPS Longitude
+      lateral_g: LateralAcc
+      steering: SteerAngle
+      shock_fl: LF_Shock_Pot
+      shock_fr: RF_Shock_Pot
+      shock_rl: LR_Shock_Pot
+      shock_rr: RR_Shock_Pot
+    motion_ratios:
+      front_left: 0.997   # MacPherson strut
+      front_right: 0.997
+      rear_left: 0.768    # Multi-link
+      rear_right: 0.768
+
+# Logger ID -> profile name mappings
+# Add your logger's serial number here
+logger_map: {}

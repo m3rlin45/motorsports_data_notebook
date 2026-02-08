@@ -2,12 +2,37 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Callable
+
 import customtkinter as ctk
 
-from motorsports_data_notebook.suspension import (
-    MotionRatios,
-    SUSPENSION_CHANNEL_NAMES,
-)
+from motorsports_data_notebook.profiles import DEFAULT_CHANNEL_NAMES
+from motorsports_data_notebook.suspension import MotionRatios
+
+if TYPE_CHECKING:
+    from motorsports_data_notebook.profiles import VehicleProfile
+
+
+# Channel entries organized by group with display labels
+_SHOCK_CHANNELS = {
+    "shock_fl": "FL Shock:",
+    "shock_fr": "FR Shock:",
+    "shock_rl": "RL Shock:",
+    "shock_rr": "RR Shock:",
+}
+
+_GPS_CHANNELS = {
+    "gps_speed": "GPS Speed:",
+    "gps_latitude": "GPS Lat:",
+    "gps_longitude": "GPS Lon:",
+}
+
+_DYNAMICS_CHANNELS = {
+    "throttle": "Throttle:",
+    "brake": "Brake:",
+    "lateral_g": "Lateral G:",
+    "steering": "Steering:",
+}
 
 
 class ConfigPanel(ctk.CTkFrame):
@@ -20,7 +45,8 @@ class ConfigPanel(ctk.CTkFrame):
     def __init__(
         self,
         parent: ctk.CTkFrame,
-        on_stats_click: callable | None = None,
+        on_stats_click: Callable[[], None] | None = None,
+        on_save_profile: Callable[[], None] | None = None,
     ) -> None:
         """Initialize the config panel.
 
@@ -30,13 +56,15 @@ class ConfigPanel(ctk.CTkFrame):
             Parent widget.
         on_stats_click : callable, optional
             Callback when statistics button is clicked.
+        on_save_profile : callable, optional
+            Callback when Save Profile button is clicked.
         """
         super().__init__(parent)
 
-        # Default values
         self._default_ratios = MotionRatios.toyota_86_zn6()
-        self._default_channels = SUSPENSION_CHANNEL_NAMES.copy()
+        self._default_channels = DEFAULT_CHANNEL_NAMES.copy()
         self._on_stats_click = on_stats_click
+        self._on_save_profile = on_save_profile
 
         self._create_widgets()
         self._layout_widgets()
@@ -98,18 +126,16 @@ class ConfigPanel(ctk.CTkFrame):
             font=ctk.CTkFont(size=12, weight="bold"),
         )
 
-        # Channel name entries
+        # Channel name entries — all groups
         self.channel_entries: dict[str, ctk.CTkEntry] = {}
         self.channel_labels: dict[str, ctk.CTkLabel] = {}
 
-        channel_display_names = {
-            "shock_fl": "FL Shock:",
-            "shock_fr": "FR Shock:",
-            "shock_rl": "RL Shock:",
-            "shock_rr": "RR Shock:",
-        }
+        all_channel_display = {}
+        all_channel_display.update(_SHOCK_CHANNELS)
+        all_channel_display.update(_GPS_CHANNELS)
+        all_channel_display.update(_DYNAMICS_CHANNELS)
 
-        for key, display_name in channel_display_names.items():
+        for key, display_name in all_channel_display.items():
             self.channel_labels[key] = ctk.CTkLabel(
                 self.channels_frame,
                 text=display_name,
@@ -120,7 +146,7 @@ class ConfigPanel(ctk.CTkFrame):
                 width=120,
                 font=ctk.CTkFont(size=11),
             )
-            self.channel_entries[key].insert(0, self._default_channels[key])
+            self.channel_entries[key].insert(0, self._default_channels.get(key, ""))
 
         # Reset channels button
         self.reset_channels_btn = ctk.CTkButton(
@@ -130,6 +156,16 @@ class ConfigPanel(ctk.CTkFrame):
             height=24,
             font=ctk.CTkFont(size=10),
             command=self._reset_channels,
+        )
+
+        # Save Profile button
+        self.save_profile_btn = ctk.CTkButton(
+            self.channels_frame,
+            text="Save Profile",
+            width=100,
+            height=24,
+            font=ctk.CTkFont(size=10),
+            command=self._on_save_profile_click,
         )
 
         # Status and actions frame
@@ -175,22 +211,51 @@ class ConfigPanel(ctk.CTkFrame):
 
         self.reset_ratios_btn.grid(row=3, column=0, columnspan=4, pady=2)
 
-        # Channel names frame (compact, 2x2 layout)
+        # Channel names frame (compact, 2-column grid by group)
         self.channels_frame.pack(fill="x", padx=5, pady=2)
         self.channels_label.grid(row=0, column=0, columnspan=4, sticky="w", padx=2, pady=1)
 
-        # Channel entries (2x2 grid instead of vertical list)
-        self.channel_labels["shock_fl"].grid(row=1, column=0, padx=(2, 1), pady=1, sticky="e")
-        self.channel_entries["shock_fl"].grid(row=1, column=1, padx=1, pady=1, sticky="w")
-        self.channel_labels["shock_fr"].grid(row=1, column=2, padx=(5, 1), pady=1, sticky="e")
-        self.channel_entries["shock_fr"].grid(row=1, column=3, padx=1, pady=1, sticky="w")
+        # Shock Pots (rows 1-2)
+        row = 1
+        shock_keys = list(_SHOCK_CHANNELS.keys())
+        self.channel_labels[shock_keys[0]].grid(row=row, column=0, padx=(2, 1), pady=1, sticky="e")
+        self.channel_entries[shock_keys[0]].grid(row=row, column=1, padx=1, pady=1, sticky="w")
+        self.channel_labels[shock_keys[1]].grid(row=row, column=2, padx=(5, 1), pady=1, sticky="e")
+        self.channel_entries[shock_keys[1]].grid(row=row, column=3, padx=1, pady=1, sticky="w")
+        row += 1
+        self.channel_labels[shock_keys[2]].grid(row=row, column=0, padx=(2, 1), pady=1, sticky="e")
+        self.channel_entries[shock_keys[2]].grid(row=row, column=1, padx=1, pady=1, sticky="w")
+        self.channel_labels[shock_keys[3]].grid(row=row, column=2, padx=(5, 1), pady=1, sticky="e")
+        self.channel_entries[shock_keys[3]].grid(row=row, column=3, padx=1, pady=1, sticky="w")
 
-        self.channel_labels["shock_rl"].grid(row=2, column=0, padx=(2, 1), pady=1, sticky="e")
-        self.channel_entries["shock_rl"].grid(row=2, column=1, padx=1, pady=1, sticky="w")
-        self.channel_labels["shock_rr"].grid(row=2, column=2, padx=(5, 1), pady=1, sticky="e")
-        self.channel_entries["shock_rr"].grid(row=2, column=3, padx=1, pady=1, sticky="w")
+        # GPS (row 3-4)
+        row += 1
+        gps_keys = list(_GPS_CHANNELS.keys())
+        self.channel_labels[gps_keys[0]].grid(row=row, column=0, padx=(2, 1), pady=1, sticky="e")
+        self.channel_entries[gps_keys[0]].grid(row=row, column=1, padx=1, pady=1, sticky="w")
+        self.channel_labels[gps_keys[1]].grid(row=row, column=2, padx=(5, 1), pady=1, sticky="e")
+        self.channel_entries[gps_keys[1]].grid(row=row, column=3, padx=1, pady=1, sticky="w")
+        row += 1
+        self.channel_labels[gps_keys[2]].grid(row=row, column=0, padx=(2, 1), pady=1, sticky="e")
+        self.channel_entries[gps_keys[2]].grid(row=row, column=1, padx=1, pady=1, sticky="w")
 
-        self.reset_channels_btn.grid(row=3, column=0, columnspan=4, pady=2)
+        # Pedals & Dynamics (rows 5-6)
+        row += 1
+        dyn_keys = list(_DYNAMICS_CHANNELS.keys())
+        self.channel_labels[dyn_keys[0]].grid(row=row, column=0, padx=(2, 1), pady=1, sticky="e")
+        self.channel_entries[dyn_keys[0]].grid(row=row, column=1, padx=1, pady=1, sticky="w")
+        self.channel_labels[dyn_keys[1]].grid(row=row, column=2, padx=(5, 1), pady=1, sticky="e")
+        self.channel_entries[dyn_keys[1]].grid(row=row, column=3, padx=1, pady=1, sticky="w")
+        row += 1
+        self.channel_labels[dyn_keys[2]].grid(row=row, column=0, padx=(2, 1), pady=1, sticky="e")
+        self.channel_entries[dyn_keys[2]].grid(row=row, column=1, padx=1, pady=1, sticky="w")
+        self.channel_labels[dyn_keys[3]].grid(row=row, column=2, padx=(5, 1), pady=1, sticky="e")
+        self.channel_entries[dyn_keys[3]].grid(row=row, column=3, padx=1, pady=1, sticky="w")
+
+        # Buttons row
+        row += 1
+        self.reset_channels_btn.grid(row=row, column=0, columnspan=2, pady=2)
+        self.save_profile_btn.grid(row=row, column=2, columnspan=2, pady=2)
 
         # Status and actions at bottom
         self.status_frame.pack(fill="x", padx=5, pady=(5, 2))
@@ -202,6 +267,11 @@ class ConfigPanel(ctk.CTkFrame):
         if self._on_stats_click:
             self._on_stats_click()
 
+    def _on_save_profile_click(self) -> None:
+        """Handle Save Profile button click."""
+        if self._on_save_profile:
+            self._on_save_profile()
+
     def set_status(self, message: str) -> None:
         """Update the status label text."""
         self.status_label.configure(text=message)
@@ -209,6 +279,52 @@ class ConfigPanel(ctk.CTkFrame):
     def set_stats_button_text(self, text: str) -> None:
         """Update the statistics button text."""
         self.stats_btn.configure(text=text)
+
+    def set_from_profile(self, profile: VehicleProfile) -> None:
+        """Populate all fields from a VehicleProfile.
+
+        Parameters
+        ----------
+        profile : VehicleProfile
+            The profile to populate from.
+        """
+        # Set motion ratios
+        ratios = {
+            "FL": profile.motion_ratios.front_left,
+            "FR": profile.motion_ratios.front_right,
+            "RL": profile.motion_ratios.rear_left,
+            "RR": profile.motion_ratios.rear_right,
+        }
+        for corner, val in ratios.items():
+            self.ratio_entries[corner].delete(0, "end")
+            self.ratio_entries[corner].insert(0, f"{val:.3f}")
+
+        # Set channel names
+        for key, entry in self.channel_entries.items():
+            if key in profile.channel_names:
+                entry.delete(0, "end")
+                entry.insert(0, profile.channel_names[key])
+
+    def get_vehicle_profile(self, name: str) -> VehicleProfile:
+        """Build a VehicleProfile from current field values.
+
+        Parameters
+        ----------
+        name : str
+            Name for the profile.
+
+        Returns
+        -------
+        VehicleProfile
+            Profile with current field values.
+        """
+        from motorsports_data_notebook.profiles import VehicleProfile
+
+        return VehicleProfile(
+            name=name,
+            channel_names=self.get_channel_names(),
+            motion_ratios=self.get_motion_ratios(),
+        )
 
     def _reset_ratios(self) -> None:
         """Reset motion ratios to Toyota 86 defaults."""
@@ -225,9 +341,9 @@ class ConfigPanel(ctk.CTkFrame):
 
     def _reset_channels(self) -> None:
         """Reset channel names to defaults."""
-        for key, val in self._default_channels.items():
-            self.channel_entries[key].delete(0, "end")
-            self.channel_entries[key].insert(0, val)
+        for key, entry in self.channel_entries.items():
+            entry.delete(0, "end")
+            entry.insert(0, self._default_channels.get(key, ""))
 
     def get_motion_ratios(self) -> MotionRatios:
         """Get current motion ratio values.
@@ -245,7 +361,6 @@ class ConfigPanel(ctk.CTkFrame):
                 rear_right=float(self.ratio_entries["RR"].get()),
             )
         except ValueError:
-            # Return defaults if parsing fails
             return MotionRatios.toyota_86_zn6()
 
     def get_channel_names(self) -> dict[str, str]:
@@ -254,11 +369,13 @@ class ConfigPanel(ctk.CTkFrame):
         Returns
         -------
         dict[str, str]
-            Channel name mapping dictionary.
+            Channel name mapping dictionary with all configured channels.
         """
-        return {
-            "shock_fl": self.channel_entries["shock_fl"].get() or self._default_channels["shock_fl"],
-            "shock_fr": self.channel_entries["shock_fr"].get() or self._default_channels["shock_fr"],
-            "shock_rl": self.channel_entries["shock_rl"].get() or self._default_channels["shock_rl"],
-            "shock_rr": self.channel_entries["shock_rr"].get() or self._default_channels["shock_rr"],
-        }
+        result = {}
+        for key, entry in self.channel_entries.items():
+            value = entry.get().strip()
+            if value:
+                result[key] = value
+            elif key in self._default_channels:
+                result[key] = self._default_channels[key]
+        return result

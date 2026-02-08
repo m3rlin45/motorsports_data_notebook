@@ -9,6 +9,10 @@ from typing import TYPE_CHECKING
 import customtkinter as ctk
 from tkinterdnd2 import TkinterDnD
 
+from motorsports_data_notebook.profiles import (
+    get_profile_for_logger,
+    save_profile_for_logger,
+)
 from motorsports_data_notebook.suspension import (
     MotionRatios,
     VelocityHistogramResult,
@@ -116,11 +120,12 @@ class SuspensionAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
             on_selection_changed=self._on_selection_changed,
         )
 
-        # Config panel (right) with stats button callback
+        # Config panel (right) with stats and save profile callbacks
         self._stats_window: ctk.CTkToplevel | None = None
         self.config_panel = ConfigPanel(
             self.top_frame,
             on_stats_click=self._toggle_stats_window,
+            on_save_profile=self._on_save_profile,
         )
 
         # Chart view (middle) with maximize callback
@@ -220,6 +225,16 @@ class SuspensionAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
     def _on_session_a_loaded(self, log: LogFile, file_path: Path) -> None:
         """Handle Session A file loaded."""
         self._result_a = None
+
+        # Auto-populate config from profile if logger ID is known
+        logger_id = self.session_a_panel.logger_id
+        if logger_id:
+            profile = get_profile_for_logger(logger_id)
+            if profile:
+                self.config_panel.set_from_profile(profile)
+                self._update_status(f"Loaded: {file_path.name} (profile: {profile.name})")
+                return
+
         self._update_status(f"Loaded: {file_path.name}")
 
     def _on_session_b_loaded(self, log: LogFile, file_path: Path) -> None:
@@ -372,3 +387,15 @@ class SuspensionAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
             )
         else:
             self.stats_panel.update_stats(self._result_a, label_a=label_a)
+
+    def _on_save_profile(self) -> None:
+        """Handle Save Profile button click."""
+        logger_id = self.session_a_panel.logger_id
+        if not logger_id:
+            self._update_status("No logger ID — load a session first")
+            return
+
+        session_label = self.session_a_panel.get_session_label()
+        profile = self.config_panel.get_vehicle_profile(name=session_label)
+        save_profile_for_logger(logger_id, profile)
+        self._update_status(f"Profile saved for logger {logger_id}")

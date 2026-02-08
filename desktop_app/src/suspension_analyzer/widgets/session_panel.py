@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Callable
 import customtkinter as ctk
 from tkinterdnd2 import DND_FILES
 
+from motorsports_data_notebook.profiles import get_logger_id
 from suspension_analyzer.loader import load_session
 
 if TYPE_CHECKING:
@@ -49,6 +50,7 @@ class SessionPanel(ctk.CTkFrame):
         self._on_selection_changed = on_selection_changed
         self._log: LogFile | None = None
         self._file_path: Path | None = None
+        self._logger_id: str | None = None
         self._lap_vars: dict[int, ctk.BooleanVar] = {}
 
         self._create_widgets()
@@ -223,9 +225,20 @@ class SessionPanel(ctk.CTkFrame):
             # Load session using motorsports_data_notebook
             self._log = load_session(file_data)
             self._file_path = file_path
+            self._logger_id = get_logger_id(self._log)
 
-            # Update UI
-            self.file_label.configure(text=f"File: {file_path.name}")
+            # Build file info with metadata
+            info_parts = [f"File: {file_path.name}"]
+            if self._logger_id:
+                info_parts.append(f"Logger: {self._logger_id}")
+            metadata = getattr(self._log, "metadata", {}) or {}
+            vehicle = metadata.get("Vehicle Name") or metadata.get("vehicle_name")
+            driver = metadata.get("Driver Name") or metadata.get("driver_name")
+            if vehicle:
+                info_parts.append(f"Vehicle: {vehicle}")
+            if driver:
+                info_parts.append(f"Driver: {driver}")
+            self.file_label.configure(text=" | ".join(info_parts))
             self._populate_laps()
 
             # Notify callback
@@ -236,6 +249,7 @@ class SessionPanel(ctk.CTkFrame):
             self.file_label.configure(text=f"Error: {e}")
             self._log = None
             self._file_path = None
+            self._logger_id = None
 
     def _populate_laps(self) -> None:
         """Populate the lap checkbox list."""
@@ -401,3 +415,8 @@ class SessionPanel(ctk.CTkFrame):
     def log(self) -> LogFile | None:
         """Get the loaded LogFile."""
         return self._log
+
+    @property
+    def logger_id(self) -> str | None:
+        """Get the logger serial number from the loaded file."""
+        return self._logger_id

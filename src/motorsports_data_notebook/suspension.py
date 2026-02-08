@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
+from .profiles import _validate_channel_names
+
 if TYPE_CHECKING:
     from libxrk.base import LogFile
 
@@ -405,16 +407,6 @@ def compute_velocity_stats(
         "pct_fast_rebound": pct_fast_rebound,
         "pct_curb": pct_curb,
     }
-
-
-def _validate_channel_names(channel_names: dict, required_keys: list[str], func_name: str) -> None:
-    """Validate that required keys are present in channel_names dict."""
-    missing = [key for key in required_keys if key not in channel_names]
-    if missing:
-        raise KeyError(
-            f"{func_name}() requires channel_names to have keys: {required_keys}. "
-            f"Missing: {missing}"
-        )
 
 
 def _process_corner(
