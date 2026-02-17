@@ -94,7 +94,7 @@ run = { cmd = "jupyter lab workspace/", help = "Start Jupyter notebook" }
 run_clean = ["clean", "run"]
 
 # Emscripten SDK setup (one-time, needed for building libxrk Pyodide wheel)
-setup_emsdk = { shell = "EMSDK_VERSION=$(pyodide config get emscripten_version) && ([ -d $HOME/emsdk ] || git clone https://github.com/emscripten-core/emsdk.git $HOME/emsdk) && cd $HOME/emsdk && git config core.autocrlf false && git checkout -- . && git pull && ./emsdk install $EMSDK_VERSION && ./emsdk activate $EMSDK_VERSION && pyodide xbuildenv install", help = "Install Emscripten SDK to ~/emsdk (one-time setup for Pyodide builds)" }
+setup_emsdk = { shell = "EMSDK_VERSION=$(pyodide config get emscripten_version) && ([ -d $HOME/emsdk ] || git clone https://github.com/emscripten-core/emsdk.git $HOME/emsdk) && cd $HOME/emsdk && git config core.autocrlf false && git checkout -- . && git pull && ./emsdk install $EMSDK_VERSION && ./emsdk activate $EMSDK_VERSION && rm -rf .pyodide-xbuildenv* && pyodide xbuildenv install", help = "Install Emscripten SDK to ~/emsdk (one-time setup for Pyodide builds)" }
 
 # JupyterLite wheel building tasks
 build_wheel = { shell = "poetry build -f wheel && cp dist/motorsports_data_notebook-*.whl pypi/", help = "Build motorsports_data_notebook wheel and copy to pypi" }
