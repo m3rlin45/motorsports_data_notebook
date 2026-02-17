@@ -2039,38 +2039,38 @@ files = [
 
 [[package]]
 name = "libxrk"
-version = "0.9.0"
+version = "0.10.0"
 description = "Library for reading AIM XRK files from AIM automotive data loggers"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "libxrk-0.9.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:b9720973b668190bd988ca97ff83e48fa7c06065b636e5f85cd98b55b962a0f1"},
-    {file = "libxrk-0.9.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:fd1e7ecdd3b891b9122992f97b2497987345260fd73c5401bbc56978057a4307"},
-    {file = "libxrk-0.9.0-cp310-cp310-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:c0d4768ea846ac49aa844b5c8f543fc3df925aeba2c3b87bdd4355c849a40594"},
-    {file = "libxrk-0.9.0-cp310-cp310-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:d9832001ff6c660bf1a2aaa7b4362b84a79d5f9f9f39a11faf93fdc68d08217c"},
-    {file = "libxrk-0.9.0-cp310-cp310-win_amd64.whl", hash = "sha256:ab6033c67e7e71a99046d2fa8c8a0225311df8c303689e490b155bc04986f2b2"},
-    {file = "libxrk-0.9.0-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:8381f692e81d5da4d73c6cf93ea7f999f5730879cb1be81b2b9b72aa0c325584"},
-    {file = "libxrk-0.9.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:5cc1b1587dae9ca9d3801ff85cb0d9194e2d42a78054fe523279f77a5f5960c9"},
-    {file = "libxrk-0.9.0-cp311-cp311-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:07a7f8c1659d4cf6e8791127ffd9dccc7f228eb09a41f92c3e29ad8a7cf185fd"},
-    {file = "libxrk-0.9.0-cp311-cp311-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:74956c8c7e688d3623530091686a2c3540d8bb1ef08d3b70ac3ba3fe535bfe3c"},
-    {file = "libxrk-0.9.0-cp311-cp311-win_amd64.whl", hash = "sha256:81449a14a731a00dc4634023e0c33fd4effd34fa013542a0e0b60c2b253d1b8d"},
-    {file = "libxrk-0.9.0-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:76833c35a71a9768410fafdf72b526a7ddaf62b4160f0779af074ae188311ee5"},
-    {file = "libxrk-0.9.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:d766f1a186967c0b5cf9ad08c7ce14c105705f5c1d3d123a48b9024cabf9446b"},
-    {file = "libxrk-0.9.0-cp312-cp312-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:02411222e5f2e77d035a00099ed5691302a383dacdfef2e5b0264187a7e23130"},
-    {file = "libxrk-0.9.0-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:b7fae5ccf654c674edfc04780c6220cb7d859c2888a365f65695f057b78510c8"},
-    {file = "libxrk-0.9.0-cp312-cp312-win_amd64.whl", hash = "sha256:fa2b5b5931542e7d580128e77b225a221aabb3e3fca4df6b352c504f76e94464"},
-    {file = "libxrk-0.9.0-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:15129bb6461fcb043b4db4e3266db8cd80eb3d25936e6dc63eac8090c08c9507"},
-    {file = "libxrk-0.9.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:b190c58909d4bd595cbd327b67f41a9d7975f10050027ab076a4ee046903c597"},
-    {file = "libxrk-0.9.0-cp313-cp313-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:6fe0228fd792ab0a8f6a56af0022cb9e9f213cf08403ea413181e7e0db9792f2"},
-    {file = "libxrk-0.9.0-cp313-cp313-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:1b4110a391c3c32ccf4532418fe1c83f6ee5b68ca10cf424c28ca230df201caf"},
-    {file = "libxrk-0.9.0-cp313-cp313-win_amd64.whl", hash = "sha256:538f3ded1c5ab1cf60222af76e3b385f1035f2e5c95beb03c52428933a982ba3"},
-    {file = "libxrk-0.9.0-cp314-cp314-macosx_10_15_x86_64.whl", hash = "sha256:609b3d14491478404e9a58a152ff6cc8032140aea98f31e645014887f82ce4a6"},
-    {file = "libxrk-0.9.0-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:326a0907a9fa983b8fff44c0ca86eeecc1b613de4bcdf631d5004b22942ce59c"},
-    {file = "libxrk-0.9.0-cp314-cp314-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:5f51708f5b636d2a9a8c2c24287437a8ccd47c4fa600b7ff5944cc42fb8e7420"},
-    {file = "libxrk-0.9.0-cp314-cp314-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:a3f9289c10d1de4aede0a19c85bd6ed84f80062b99458761abbce9ae7df97870"},
-    {file = "libxrk-0.9.0-cp314-cp314-win_amd64.whl", hash = "sha256:961d59020cba7329bdb32ded2c0be7ce661518d9950c35e3af068ba5b1885d3b"},
-    {file = "libxrk-0.9.0.tar.gz", hash = "sha256:c94a02d673e683a1185a080c6412902d870a72139ae3819ebe008849b0ee3037"},
+    {file = "libxrk-0.10.0-cp310-cp310-macosx_10_13_x86_64.whl", hash = "sha256:be40cfa78206e70ed36dc0e19de35e8f2169315d6abe971c4af833a40f3df9bc"},
+    {file = "libxrk-0.10.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:645825fbcf6438735bde6e9a0eff04869e5c1015fe0c849cf989413ca7fd4650"},
+    {file = "libxrk-0.10.0-cp310-cp310-manylinux_2_28_aarch64.whl", hash = "sha256:42dfde67cdd70f9ac0ad52f3c9d913c68f412f943e82d1c57d3b5b19a868087e"},
+    {file = "libxrk-0.10.0-cp310-cp310-manylinux_2_28_x86_64.whl", hash = "sha256:3771d8fa729ec75a864b4ea16c2d31ef37106b959888dfc769d4be19a4b8bd3b"},
+    {file = "libxrk-0.10.0-cp310-cp310-win_amd64.whl", hash = "sha256:63593ece818573df185a809fba94c24a8f82a6c95103fdeb36aa8428f474635f"},
+    {file = "libxrk-0.10.0-cp311-cp311-macosx_10_13_x86_64.whl", hash = "sha256:4f2edbace85087b43bb4c4b2ee5a878c7a64cef5861b2aa792075a43ceffd01e"},
+    {file = "libxrk-0.10.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:723a78a91a873d75e2ccfb2df455fecb480e0d01646f5a619608796352af1eb8"},
+    {file = "libxrk-0.10.0-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:1511fd7fb2b6ebf13841671bc5608ab704d9a3d757ff009a8261d59e8c54ae5c"},
+    {file = "libxrk-0.10.0-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:56fcc8e816f3585b5721bca976158585c8f496cb41a38e7a234b1ee42dffa9b0"},
+    {file = "libxrk-0.10.0-cp311-cp311-win_amd64.whl", hash = "sha256:da830f31d84ec2f230b8b9767fc58ac3366e0a22d68b0005101db7a1346716d6"},
+    {file = "libxrk-0.10.0-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:7d6867d78fde764d99a2e5111a3f09cbad2a8dedee936146b5a10932e9f93ceb"},
+    {file = "libxrk-0.10.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:3d4c64bc39e177de3f56250981e6ab530a16c6e2980b2625cc2baf719673d219"},
+    {file = "libxrk-0.10.0-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:8d98cafc1e9c3180d5043f40b7f7b104584aa0d33dbf52240a62a847d273b8d1"},
+    {file = "libxrk-0.10.0-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:b2ea027297426f60db0fd6313e70217b9e4fe9813df135428f5082ecdb47fc6e"},
+    {file = "libxrk-0.10.0-cp312-cp312-win_amd64.whl", hash = "sha256:5cf59792e6a22e2d3b3e174da3e3ad1b99265bdf33b9e45fe890b2b7e473486f"},
+    {file = "libxrk-0.10.0-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:9b17f8153ecbac32dd067a6672fbbb8c44a9db6e76a9c6f76ea1cd746892140c"},
+    {file = "libxrk-0.10.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:f87dba7277a13a5f8811ebae5f1f3839532ee2d4eb74abf9dbf4f2a1168b9f0f"},
+    {file = "libxrk-0.10.0-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:d56598d323ca650a3a3e42007561ae80f9a57e77fb85ebf473139ca7be6b6ebc"},
+    {file = "libxrk-0.10.0-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:f83e706de9609a131393ce4ea47d73a41c6e85e2dbe80a1c0cacc9e94c85c489"},
+    {file = "libxrk-0.10.0-cp313-cp313-win_amd64.whl", hash = "sha256:d6ee09538ed3491acf00609a84107047b7ab2a11767b41e9a4ff31c0ce858075"},
+    {file = "libxrk-0.10.0-cp314-cp314-macosx_10_15_x86_64.whl", hash = "sha256:0042af27c8ba82a76a34b731ac1626861343e0f0607ff1e639d5210ba9c810c5"},
+    {file = "libxrk-0.10.0-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:cba1f47fc42ef3dd2821c774428daad0993aa0cafb8e3791d7dd424afc842743"},
+    {file = "libxrk-0.10.0-cp314-cp314-manylinux_2_28_aarch64.whl", hash = "sha256:70d5e91a0f7344afe450883c87eaa6130fad66d411ede433ca6fab6bdfe1d623"},
+    {file = "libxrk-0.10.0-cp314-cp314-manylinux_2_28_x86_64.whl", hash = "sha256:fdb976906fb78b98a02a3c5b64c525c2d077cecd6c513d69bc7ae0be0bb6753e"},
+    {file = "libxrk-0.10.0-cp314-cp314-win_amd64.whl", hash = "sha256:e9ecb5c8473e7ed0d9eee6ec8b12db9b2b88f240ce9a740c8b9da13cea8af01a"},
+    {file = "libxrk-0.10.0.tar.gz", hash = "sha256:3f494d83ce26663481bab52b394bf0754a09bd019b430e9f94a5bfdcb4eb7d29"},
 ]
 
 [package.dependencies]
@@ -4762,4 +4762,4 @@ jupyterlite = ["jupyterlite-core", "jupyterlite-pyodide-kernel", "nbconvert", "p
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "1bf5b5d7f13f6c14aaed85ecb3e68b68a6d564303b747a47654e5144a18b306b"
+content-hash = "c8c6dddca7127adf8d80e9cbac89fbc774fcdc724ffff0db9bed3bb2e873dfac"
