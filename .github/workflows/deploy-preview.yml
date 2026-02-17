@@ -15,53 +15,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: '2.1.1'
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-
-      - name: Cache Poetry dependencies
-        uses: actions/cache@v4
-        with:
-          path: .venv
-          key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
-          restore-keys: |
-            venv-${{ runner.os }}-
-
-      - name: Install dependencies
-        run: poetry install --extras app --extras jupyterlite
-
-      - name: Cache Emscripten SDK
-        uses: actions/cache@v4
-        with:
-          path: ~/emsdk
-          key: emsdk-${{ runner.os }}-${{ hashFiles('poetry.lock') }}
-          restore-keys: |
-            emsdk-${{ runner.os }}-
-
-      - name: Setup Emscripten SDK
-        run: poetry run poe setup_emsdk
-
-      - name: Build wheels and JupyterLite site
-        run: poetry run poe build_lite_full
-
-      - name: Upload artifact
-        if: github.event_name == 'push'
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist/
+    uses: ./.github/workflows/build-lite.yml
 
   deploy:
     needs: build
@@ -74,6 +28,17 @@ jobs:
       name: github-pages-preview
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: jupyterlite-site
+          path: dist/
+
+      - name: Upload pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

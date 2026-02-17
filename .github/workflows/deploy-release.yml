@@ -10,44 +10,16 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-
-      - name: Install Poetry
-        run: pipx install poetry==2.1.1
-
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/pypoetry
-          key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
-
-      - run: poetry install --extras app --extras jupyterlite
-
-      - uses: actions/cache@v4
-        with:
-          path: ~/emsdk
-          key: ${{ runner.os }}-emsdk-4.0.9
-
-      - run: poetry run poe setup_emsdk
-      - run: poetry run poe build_lite_full
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: site
-          path: dist/
+    uses: ./.github/workflows/build-lite.yml
 
   deploy:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - name: Download artifact
+        uses: actions/download-artifact@v4
         with:
-          name: site
+          name: jupyterlite-site
           path: dist/
 
       - name: Setup SSH
