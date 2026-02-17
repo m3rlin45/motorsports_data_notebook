@@ -21,7 +21,7 @@ jobs:
         run: pip install poetry
 
       - name: Install dependencies
-        run: poetry install --extras dev
+        run: poetry install --extras app --extras dev
 
       - name: Run linting, type checking, and tests
         run: poetry run poe check
