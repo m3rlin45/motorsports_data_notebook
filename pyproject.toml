@@ -33,9 +33,10 @@ dev = [
     "pytest-cov>=6.0.0",
 ]
 jupyterlite = [
-    "jupyterlite-core==0.6.0",
-    "jupyterlite-pyodide-kernel==0.6.0",
-    "pyodide-build==0.27.3",
+    "jupyterlite-core==0.7.1",
+    "jupyterlite-pyodide-kernel==0.7.0",
+    "pyodide-build==0.29.3",
+    "wheel<0.44",
     "nbconvert>=7.0.0"
 ]
 
@@ -112,6 +113,6 @@ build_and_serve_lite = ["build_lite_full", "serve_lite"]
 clean_build = { shell = "rm -rf build/ pypi/ dist/", help = "Clean all build artifacts" }
 
 [tool.poe.tasks._build_libxrk_pyodide]
-shell = "cd build/libxrk && . $HOME/emsdk/emsdk_env.sh && pyodide build . --skip-dependency-check"
+shell = "cd build/libxrk && . $HOME/emsdk/emsdk_env.sh && pyodide build . --exports whole_archive"
 interpreter = "bash"
 help = "Build libxrk for Pyodide"

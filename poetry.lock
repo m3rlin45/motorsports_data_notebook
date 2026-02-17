@@ -1718,53 +1718,54 @@ files = [
 
 [[package]]
 name = "jupyterlite-core"
-version = "0.6.0"
+version = "0.7.1"
 description = ""
 optional = true
-python-versions = ">=3.9"
+python-versions = ">=3.10"
 groups = ["main"]
 markers = "extra == \"jupyterlite\""
 files = [
-    {file = "jupyterlite_core-0.6.0-py3-none-any.whl", hash = "sha256:7e87b99a05345bdee21cd57a532b9acc446575ef63d69d255b7f90bda564bc4c"},
-    {file = "jupyterlite_core-0.6.0.tar.gz", hash = "sha256:2d846506fd1f273a53226fddd993ad0f91374359152ad6c7c29c6d5314e93943"},
+    {file = "jupyterlite_core-0.7.1-py3-none-any.whl", hash = "sha256:0d99339e83e186888b6f22ec7e7ced4485ca0eaf7bb53284cae0f4001c961c78"},
+    {file = "jupyterlite_core-0.7.1.tar.gz", hash = "sha256:e9c1068f875c2e75dca3771a035eb31826a41343e62bbb77c80ad2a3478b6986"},
 ]
 
 [package.dependencies]
 doit = ">=0.34,<1"
 jupyter-core = ">=4.7"
+pycparser = {version = "*", markers = "platform_python_implementation == \"PyPy\""}
 
 [package.extras]
-all = ["jsonschema (>=3)", "jupyter-server", "jupyterlab (>=4.4.3,<4.5)", "jupyterlab-server (>=2.8.1,<3)", "libarchive-c (>=4.0)", "notebook (>=7.4.3,<7.5)", "pkginfo", "tornado (>=6.1)"]
+all = ["jsonschema (>=3)", "jupyter-server", "jupyterlab (>=4.5.1,<4.6)", "jupyterlab-server (>=2.8.1,<3)", "libarchive-c (>=4.0)", "notebook (>=7.5.1,<7.6)", "pkginfo", "tornado (>=6.1)"]
 check = ["jsonschema[format-nongpl] (>=3)"]
 contents = ["jupyter-server"]
-lab = ["jupyterlab (>=4.4.3,<4.5)", "notebook (>=7.4.3,<7.5)"]
+lab = ["jupyterlab (>=4.5.1,<4.6)", "notebook (>=7.5.1,<7.6)"]
 libarchive = ["libarchive-c (>=4.0)"]
 serve = ["tornado (>=6.1)"]
-test = ["ansi2html", "diffoscope ; sys_platform == \"linux\"", "pytest-console-scripts", "pytest-cov", "pytest-html", "pytest-xdist"]
+test = ["ansi2html", "diffoscope ; sys_platform == \"linux\"", "pytest-console-scripts", "pytest-cov (<7)", "pytest-html", "pytest-xdist"]
 translation = ["jupyterlab-server (>=2.8.1,<3)"]
 
 [[package]]
 name = "jupyterlite-pyodide-kernel"
-version = "0.6.0"
+version = "0.7.0"
 description = "Python kernel for JupyterLite powered by Pyodide"
 optional = true
-python-versions = ">=3.9"
+python-versions = ">=3.10"
 groups = ["main"]
 markers = "extra == \"jupyterlite\""
 files = [
-    {file = "jupyterlite_pyodide_kernel-0.6.0-py3-none-any.whl", hash = "sha256:b030a149efb832aba517ff523e67d27aaf287d6607b1e2633fa26df4e00da26d"},
-    {file = "jupyterlite_pyodide_kernel-0.6.0.tar.gz", hash = "sha256:6cbbcb2a9a8117aaeafddffd43b22090ef5c562cd32e1972c94b05ac56ff0c0a"},
+    {file = "jupyterlite_pyodide_kernel-0.7.0-py3-none-any.whl", hash = "sha256:02174ce22a3ac8e6c2a7e9206aa13afba77da15fc75237b8721b4548fb68c487"},
+    {file = "jupyterlite_pyodide_kernel-0.7.0.tar.gz", hash = "sha256:4c2b6763518faf6d72eea91b2db31e215fbc9aa3099cc3cfa5a2866cbd1c380e"},
 ]
 
 [package.dependencies]
-jupyterlite-core = ">=0.6.0,<0.7.0"
+jupyterlite-core = ">=0.7.0,<0.8.0"
 pkginfo = "*"
 
 [package.extras]
-dev = ["build", "hatch", "jupyterlab (>=4.4.3,<4.5.0a0)"]
+dev = ["build", "hatch", "jupyterlab (>=4.5.0,<4.6.0)"]
 docs = ["ipywidgets (>=8.1.3,<9)", "jupyter-server-mathjax", "jupyterlab-language-pack-fr-fr", "jupyterlab-language-pack-zh-cn", "libarchive-c", "myst-parser", "pydata-sphinx-theme", "sphinx-copybutton"]
 lint = ["ruff (>=0.3.0)"]
-test = ["pytest", "pytest-console-scripts (>=1.4.0)", "pytest-cov", "pytest-html"]
+test = ["pytest", "pytest-console-scripts (>=1.4.0)", "pytest-cov (<7)", "pytest-html"]
 
 [[package]]
 name = "kiwisolver"
@@ -3200,7 +3201,7 @@ description = "C parser in Python"
 optional = false
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "implementation_name != \"PyPy\""
+markers = "implementation_name != \"PyPy\" or extra == \"jupyterlite\" and platform_python_implementation == \"PyPy\""
 files = [
     {file = "pycparser-2.23-py3-none-any.whl", hash = "sha256:e5c6e8d3fbad53479cab09ac03729e0a9faf2bee3db8208a550daf5af81a5934"},
     {file = "pycparser-2.23.tar.gz", hash = "sha256:78816d4f24add8f10a06d6f05b4d424ad9e96cfebf68a4ddc99c65c0720d00c2"},
@@ -3381,15 +3382,15 @@ windows-terminal = ["colorama (>=0.4.6)"]
 
 [[package]]
 name = "pyodide-build"
-version = "0.27.3"
+version = "0.29.3"
 description = "\"Tools for building Pyodide\""
 optional = true
 python-versions = ">=3.12"
 groups = ["main"]
 markers = "extra == \"jupyterlite\""
 files = [
-    {file = "pyodide_build-0.27.3-py3-none-any.whl", hash = "sha256:44ca39e5ad0696ffc5236a677e724fffd335a25e9b4ce3a26124a32a6cf62065"},
-    {file = "pyodide_build-0.27.3.tar.gz", hash = "sha256:c9d6c5b233289862433e0e4e4e834a5f2a81bdfef0ff47ce8f48db3e9dde3ff0"},
+    {file = "pyodide_build-0.29.3-py3-none-any.whl", hash = "sha256:05c4718e74c762d0df2bafeb171ea486ccb58b0d4396905dbaac68d261f33682"},
+    {file = "pyodide_build-0.29.3.tar.gz", hash = "sha256:7da6e59dbf8d7bce2b98d85417afe742d3d712df77fea415d352f646ed44207e"},
 ]
 
 [package.dependencies]
@@ -3399,7 +3400,7 @@ cmake = ">=3.24"
 packaging = "*"
 pydantic = ">=2,<3"
 pyodide-cli = ">=0.2.1,<0.3.0"
-pyodide-lock = "0.1.0a6"
+pyodide-lock = "0.1.0a7"
 requests = "*"
 resolvelib = "*"
 rich = "*"
@@ -3434,15 +3435,15 @@ test = ["pytest"]
 
 [[package]]
 name = "pyodide-lock"
-version = "0.1.0a6"
+version = "0.1.0a7"
 description = "Tooling to manage the `pyodide-lock.json` file"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
 markers = "extra == \"jupyterlite\""
 files = [
-    {file = "pyodide_lock-0.1.0a6-py3-none-any.whl", hash = "sha256:86078eef728d6f508d343dff461a426f59161b1b1a063b78fdeda12bb217c51a"},
-    {file = "pyodide_lock-0.1.0a6.tar.gz", hash = "sha256:a4584e0e31270828b97587c1831e7aaa330f3318600392733537184ba511d279"},
+    {file = "pyodide_lock-0.1.0a7-py3-none-any.whl", hash = "sha256:aecdb3e3efa35dde71813fe7ac0a5e73b62e039177c7ef5033e0ab7ed19640ee"},
+    {file = "pyodide_lock-0.1.0a7.tar.gz", hash = "sha256:e8424f6dbde22a874856b7bc28a3dae1f5ae6f52e95a901c82f3bbab6acf8d83"},
 ]
 
 [package.dependencies]
@@ -4625,15 +4626,15 @@ test = ["pytest", "websockets"]
 
 [[package]]
 name = "wheel"
-version = "0.45.1"
+version = "0.43.0"
 description = "A built-package format for Python"
 optional = true
 python-versions = ">=3.8"
 groups = ["main"]
 markers = "extra == \"jupyterlite\""
 files = [
-    {file = "wheel-0.45.1-py3-none-any.whl", hash = "sha256:708e7481cc80179af0e556bbf0cc00b8444c7321e2700b8d8580231d13017248"},
-    {file = "wheel-0.45.1.tar.gz", hash = "sha256:661e1abd9198507b1409a20c02106d9670b2576e916d58f520316666abca6729"},
+    {file = "wheel-0.43.0-py3-none-any.whl", hash = "sha256:55c570405f142630c6b9f72fe09d9b67cf1477fcf543ae5b8dcb1f5b7377da81"},
+    {file = "wheel-0.43.0.tar.gz", hash = "sha256:465ef92c69fa5c5da2d1cf8ac40559a8c940886afcef87dcf14b9470862f1d85"},
 ]
 
 [package.extras]
@@ -4674,9 +4675,9 @@ type = ["pytest-mypy"]
 
 [extras]
 dev = ["black", "mypy", "nbqa", "pandas-stubs", "pytest", "pytest-cov", "types-seaborn"]
-jupyterlite = ["jupyterlite-core", "jupyterlite-pyodide-kernel", "nbconvert", "pyodide-build"]
+jupyterlite = ["jupyterlite-core", "jupyterlite-pyodide-kernel", "nbconvert", "pyodide-build", "wheel"]
 
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "65c34d90796016986c400db680c8cef8f2ba78ac212d5916bfa3ded843be429f"
+content-hash = "d494415d0933b05d304ae5e5852b4febcc20b4d908ea628549a226b6898eb400"
