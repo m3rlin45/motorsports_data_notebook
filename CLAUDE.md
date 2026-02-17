@@ -34,9 +34,9 @@ scripts/           # Build utilities (lite wheel builder, notebook executor)
 
 ```bash
 # Install dependencies
-poetry install
-poetry install --extras dev          # dev tools (black, mypy, pytest)
-poetry install --extras jupyterlite  # JupyterLite build tools
+poetry install --extras app                        # app environment (jupyterlab, poe, etc.)
+poetry install --extras app --extras dev            # + dev tools (black, mypy, pytest)
+poetry install --extras app --extras jupyterlite    # + JupyterLite build tools
 
 # Run all checks (lint + typecheck + tests)
 poetry run poe check
@@ -86,6 +86,28 @@ cd /home/m3rlin45/code/motorsports_data_notebook/desktop_app && ./build_wine.sh
 Run on Windows from WSL:
 ```bash
 powershell.exe -Command "Start-Process '$(wslpath -w /home/m3rlin45/code/motorsports_data_notebook/desktop_app/dist/SuspensionAnalyzer.exe)'"
+```
+
+## Desktop App (Driver Consistency Analyzer)
+
+The `desktop_app_driver/` directory contains a standalone CustomTkinter GUI application for analyzing throttle acceptance and braking point consistency across corners.
+
+### Building Windows exe (via Wine)
+
+```bash
+cd /home/m3rlin45/code/motorsports_data_notebook/desktop_app_driver && ./build_wine.sh
+```
+
+Run on Windows from WSL:
+```bash
+powershell.exe -Command "Start-Process '$(wslpath -w /home/m3rlin45/code/motorsports_data_notebook/desktop_app_driver/dist/DriverConsistencyAnalyzer.exe)'"
+```
+
+### Copying exe to Windows Desktop
+
+Use PowerShell's `GetFolderPath` macro to resolve the desktop (handles OneDrive redirection):
+```bash
+DESKTOP=$(powershell.exe -Command '[Environment]::GetFolderPath("Desktop")' 2>/dev/null | tr -d '\r') && cp /path/to/App.exe "$(wslpath "$DESKTOP")/"
 ```
 
 ### Building Linux Native Binary
