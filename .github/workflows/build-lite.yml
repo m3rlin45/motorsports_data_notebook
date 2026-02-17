@@ -30,12 +30,17 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .venv
-          key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
-          restore-keys: |
-            venv-${{ runner.os }}-
+          key: venv-lite-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
 
       - name: Install dependencies
         run: poetry install --extras app --extras jupyterlite
+
+      - name: Verify pyodide-build version
+        run: |
+          EXPECTED="0.29.3"
+          ACTUAL=$(poetry run python -c "import importlib.metadata; print(importlib.metadata.version('pyodide-build'))")
+          echo "pyodide-build version: $ACTUAL (expected: $EXPECTED)"
+          [ "$ACTUAL" = "$EXPECTED" ] || (echo "ERROR: Wrong pyodide-build version!" && exit 1)
 
       - name: Cache Emscripten SDK
         uses: actions/cache@v4
