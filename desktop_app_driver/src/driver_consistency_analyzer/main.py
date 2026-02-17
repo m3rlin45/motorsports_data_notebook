@@ -1,5 +1,9 @@
 """Entry point for Driver Consistency Analyzer desktop app."""
 
+import os
+
+os.environ["LIBXRK_BACKEND"] = "rust"
+
 from driver_consistency_analyzer.app import DriverConsistencyApp
 
 

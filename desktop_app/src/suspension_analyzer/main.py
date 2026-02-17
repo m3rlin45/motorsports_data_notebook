@@ -1,5 +1,9 @@
 """Entry point for Suspension Analyzer desktop app."""
 
+import os
+
+os.environ["LIBXRK_BACKEND"] = "rust"
+
 from suspension_analyzer.app import SuspensionAnalyzerApp
 
 

@@ -26,6 +26,12 @@ jobs:
           virtualenvs-create: true
           virtualenvs-in-project: true
 
+      - name: Install Rust nightly with wasm32-unknown-emscripten
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          targets: wasm32-unknown-emscripten
+          components: rust-src
+
       - name: Cache Poetry dependencies
         uses: actions/cache@v4
         with:

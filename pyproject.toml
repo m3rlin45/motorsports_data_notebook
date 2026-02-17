@@ -1,6 +1,6 @@
 [project]
 name = "motorsports-data-notebook"
-version = "0.9.0"
+version = "0.10.0"
 description = ""
 authors = [
     {name = "Christopher Dewan",email = "chris.dewan@m3rlin.net"}
@@ -12,7 +12,7 @@ dependencies = [
     "pandas (>=2.0.0,<3.0.0)",
     "pyarrow (>=18.0.0,<23.0.0)",
     "plotly (>=6.0.0,<7.0.0)",
-    "libxrk>=0.9.0",
+    "libxrk>=0.10.0",
     "ipywidgets (>=8.0.0,<9.0.0)"
 ]
 
@@ -98,7 +98,7 @@ setup_emsdk = { shell = "EMSDK_VERSION=$(pyodide config get emscripten_version) 
 
 # JupyterLite wheel building tasks
 build_wheel = { shell = "poetry build -f wheel && cp dist/motorsports_data_notebook-*.whl pypi/", help = "Build motorsports_data_notebook wheel and copy to pypi" }
-_download_libxrk = { shell = "LIBXRK_VERSION=$(poetry show libxrk | grep 'version' | head -1 | awk '{print $NF}') && rm -rf build/libxrk && mkdir -p build/libxrk && pip download --no-deps --no-binary libxrk -d build/libxrk \"libxrk==$LIBXRK_VERSION\" && cd build/libxrk && tar -xzf *.tar.gz --strip-components=1 && rm -f *.tar.gz", help = "Download and extract libxrk sdist from PyPI (version from lockfile)" }
+_download_libxrk = { shell = "LIBXRK_VERSION=$(poetry show libxrk | grep 'version' | head -1 | awk '{print $NF}') && rm -rf build/libxrk && git clone --depth 1 --branch v$LIBXRK_VERSION https://github.com/m3rlin45/libxrk.git build/libxrk", help = "Clone libxrk repo at lockfile version (includes Rust source for Pyodide build)" }
 _copy_libxrk_wheel = { shell = "rm -f pypi/libxrk-*.whl && python scripts/build_lite_wheel.py build/libxrk/dist/*.whl", help = "Copy libxrk wheel to pypi with deps stripped" }
 build_libxrk_pyodide = { sequence = ["_download_libxrk", "_build_libxrk_pyodide", "_copy_libxrk_wheel"], help = "Build libxrk wheel for Pyodide (requires setup_emsdk)" }
 _download_pyodide_deps = { shell = "python scripts/download_pyodide_deps.py", help = "Download Pyodide built-in wheels (pyarrow etc.) for piplite" }
@@ -116,6 +116,14 @@ build_and_serve_lite = ["build_lite_full", "serve_lite"]
 clean_build = { shell = "rm -rf build/ pypi/ dist/", help = "Clean all build artifacts" }
 
 [tool.poe.tasks._build_libxrk_pyodide]
-shell = "cd build/libxrk && . $HOME/emsdk/emsdk_env.sh && pyodide build . --exports whole_archive"
+shell = """
+cd build/libxrk && \
+. $HOME/emsdk/emsdk_env.sh && \
+. $HOME/.cargo/env && \
+export RUSTUP_TOOLCHAIN=nightly && \
+export CARGO_BUILD_TARGET=wasm32-unknown-emscripten && \
+export RUSTFLAGS="-Zemscripten-wasm-eh" && \
+pyodide build --exports whole_archive
+"""
 interpreter = "bash"
-help = "Build libxrk for Pyodide"
+help = "Build libxrk for Pyodide (Cython + Rust)"
