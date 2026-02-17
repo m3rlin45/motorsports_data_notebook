@@ -1,0 +1,139 @@
+name: Build Driver Consistency Analyzer
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'desktop_app_driver/**'
+      - 'src/motorsports_data_notebook/**'
+      - '.github/workflows/build-desktop-driver.yml'
+  pull_request:
+    branches: [master]
+    paths:
+      - 'desktop_app_driver/**'
+      - 'src/motorsports_data_notebook/**'
+      - '.github/workflows/build-desktop-driver.yml'
+  release:
+    types: [published]
+
+jobs:
+  lint-and-typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Install dependencies
+        working-directory: desktop_app_driver
+        run: poetry install --extras dev
+
+      - name: Lint
+        working-directory: desktop_app_driver
+        run: poetry run poe lint
+
+      - name: Type check
+        working-directory: desktop_app_driver
+        run: poetry run poe typecheck
+
+  build-windows:
+    needs: lint-and-typecheck
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Install dependencies
+        working-directory: desktop_app_driver
+        run: |
+          poetry install
+          poetry run pip install pyinstaller
+
+      - name: Build executable
+        working-directory: desktop_app_driver
+        run: poetry run pyinstaller --clean --noconfirm driver_consistency_analyzer.spec
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DriverConsistencyAnalyzer-Windows
+          path: desktop_app_driver/dist/DriverConsistencyAnalyzer.exe
+          retention-days: 30
+
+  build-linux:
+    needs: lint-and-typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Install dependencies
+        working-directory: desktop_app_driver
+        run: |
+          poetry install
+          poetry run pip install pyinstaller
+
+      - name: Build executable
+        working-directory: desktop_app_driver
+        run: poetry run pyinstaller --clean --noconfirm driver_consistency_analyzer.spec
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DriverConsistencyAnalyzer-Linux
+          path: desktop_app_driver/dist/DriverConsistencyAnalyzer
+          retention-days: 30
+
+  attach-to-release:
+    needs: [build-windows, build-linux]
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: DriverConsistencyAnalyzer-Windows
+          path: dist/
+
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: DriverConsistencyAnalyzer-Linux
+          path: dist/
+
+      - name: Rename Linux binary
+        run: mv dist/DriverConsistencyAnalyzer dist/DriverConsistencyAnalyzer-Linux
+
+      - name: Attach to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/DriverConsistencyAnalyzer.exe
+            dist/DriverConsistencyAnalyzer-Linux
