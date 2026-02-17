@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """
-Build a wheel without dependencies for JupyterLite.
+Strip all dependencies from a wheel for JupyterLite.
 
-This creates a copy of the wheel with all Requires-Dist entries removed,
-so it can be installed in JupyterLite without dependency conflicts.
+Used for external wheels (e.g. libxrk) whose native dependencies are already
+provided by the Pyodide runtime and would fail to resolve via micropip.
 """
 import re
+import sys
 import zipfile
 from pathlib import Path
 
 
 def strip_dependencies_from_wheel(input_wheel: Path, output_dir: Path) -> Path:
-    """Remove all Requires-Dist from a wheel's METADATA."""
+    """Remove all Requires-Dist and Provides-Extra from a wheel's METADATA."""
     output_dir.mkdir(parents=True, exist_ok=True)
     output_wheel = output_dir / input_wheel.name
 
@@ -20,12 +21,9 @@ def strip_dependencies_from_wheel(input_wheel: Path, output_dir: Path) -> Path:
             for item in zin.namelist():
                 content = zin.read(item)
 
-                # Modify METADATA to remove dependencies
                 if item.endswith("METADATA"):
                     text = content.decode("utf-8")
-                    # Remove all Requires-Dist lines
                     text = re.sub(r"^Requires-Dist:.*\n?", "", text, flags=re.MULTILINE)
-                    # Remove Provides-Extra lines too
                     text = re.sub(r"^Provides-Extra:.*\n?", "", text, flags=re.MULTILINE)
                     content = text.encode("utf-8")
 
@@ -35,18 +33,17 @@ def strip_dependencies_from_wheel(input_wheel: Path, output_dir: Path) -> Path:
 
 
 def main():
-    dist_dir = Path("dist")
-    pypi_dir = Path("pypi")
-
-    # Find the wheel
-    wheels = list(dist_dir.glob("motorsports_data_notebook*.whl"))
-    if not wheels:
-        print("Error: No wheel found in dist/. Run 'poetry build -f wheel' first.")
+    if len(sys.argv) < 2:
+        print("Usage: build_lite_wheel.py <wheel_path>")
         return 1
 
-    wheel = wheels[0]
-    output = strip_dependencies_from_wheel(wheel, pypi_dir)
-    print(f"Created {output} (dependencies stripped for JupyterLite)")
+    wheel = Path(sys.argv[1])
+    if not wheel.exists():
+        print(f"Error: Wheel not found: {wheel}")
+        return 1
+
+    output = strip_dependencies_from_wheel(wheel, Path("pypi"))
+    print(f"Created {output} (dependencies stripped)")
     return 0
 
 

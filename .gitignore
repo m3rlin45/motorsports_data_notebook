@@ -64,4 +64,5 @@ _output/
 poetry.lock
 
 .jupyterlite.doit.db
+.pyodide-xbuildenv*/
 desktop_app/.wine_build/

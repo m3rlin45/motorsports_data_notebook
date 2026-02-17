@@ -8,21 +8,23 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.12,<4.0"
 dependencies = [
-    "jupyterlab (>=4.4.10,<5.0.0)",
-    "notebook (>=7.4.7,<8.0.0)",
-    "ipykernel (>=7.1.0,<8.0.0)",
-    "pandas (>=2.3.3,<3.0.0)",
-    "numpy (>=2.3.4,<3.0.0)",
-    "pyarrow (>=22.0.0,<23.0.0)",
-    "matplotlib (>=3.10.7,<4.0.0)",
-    "seaborn (>=0.13.2,<0.14.0)",
-    "plotly (>=6.4.0,<7.0.0)",
-    "poethepoet (>=0.24.0,<1.0.0)",
+    "numpy (>=2.0.0,<3.0.0)",
+    "pandas (>=2.0.0,<3.0.0)",
+    "pyarrow (>=18.0.0,<23.0.0)",
+    "plotly (>=6.0.0,<7.0.0)",
     "libxrk>=0.9.0",
     "ipywidgets (>=8.0.0,<9.0.0)"
 ]
 
 [project.optional-dependencies]
+app = [
+    "jupyterlab (>=4.4.10,<5.0.0)",
+    "notebook (>=7.4.7,<8.0.0)",
+    "ipykernel (>=7.1.0,<8.0.0)",
+    "matplotlib (>=3.10.7,<4.0.0)",
+    "seaborn (>=0.13.2,<0.14.0)",
+    "poethepoet (>=0.24.0,<1.0.0)",
+]
 dev = [
     "black>=25.11.0",
     "mypy>=1.18.0",
@@ -95,18 +97,19 @@ run_clean = ["clean", "run"]
 setup_emsdk = { shell = "EMSDK_VERSION=$(pyodide config get emscripten_version) && ([ -d $HOME/emsdk ] || git clone https://github.com/emscripten-core/emsdk.git $HOME/emsdk) && cd $HOME/emsdk && git config core.autocrlf false && git checkout -- . && ./emsdk install $EMSDK_VERSION && ./emsdk activate $EMSDK_VERSION && pyodide xbuildenv install", help = "Install Emscripten SDK to ~/emsdk (one-time setup for Pyodide builds)" }
 
 # JupyterLite wheel building tasks
-build_wheel = { shell = "poetry build -f wheel && python scripts/build_lite_wheel.py", help = "Build motorsports_data_notebook wheel (no deps for JupyterLite)" }
+build_wheel = { shell = "poetry build -f wheel && cp dist/motorsports_data_notebook-*.whl pypi/", help = "Build motorsports_data_notebook wheel and copy to pypi" }
 _download_libxrk = { shell = "rm -rf build/libxrk && mkdir -p build/libxrk && pip download --no-deps --no-binary libxrk -d build/libxrk libxrk && cd build/libxrk && tar -xzf *.tar.gz --strip-components=1 && rm -f *.tar.gz", help = "Download and extract libxrk sdist from PyPI" }
-_copy_libxrk_wheel = { shell = "mkdir -p pypi && rm -f pypi/libxrk-*.whl && cp build/libxrk/dist/*.whl pypi/", help = "Copy libxrk wheel to pypi (removes old wheels first)" }
+_copy_libxrk_wheel = { shell = "rm -f pypi/libxrk-*.whl && python scripts/build_lite_wheel.py build/libxrk/dist/*.whl", help = "Copy libxrk wheel to pypi with deps stripped" }
 build_libxrk_pyodide = { sequence = ["_download_libxrk", "_build_libxrk_pyodide", "_copy_libxrk_wheel"], help = "Build libxrk wheel for Pyodide (requires setup_emsdk)" }
+_download_pyodide_deps = { shell = "python scripts/download_pyodide_deps.py", help = "Download Pyodide built-in wheels (pyarrow etc.) for piplite" }
 
 # JupyterLite site building tasks (parallel where possible)
 _prepare_lite_contents = { shell = "rm -rf .lite_contents dist && mkdir -p .lite_contents/en .lite_contents/ja .lite_contents/data && cp workspace_template/data/*.xrz .lite_contents/data/ && VERSION=$(poetry version -s) && for nb in workspace_template/en/*.ipynb; do name=$(basename \"$nb\" .ipynb); cp \"$nb\" \".lite_contents/en/${name}_v${VERSION}.ipynb\"; done && for nb in workspace_template/ja/*.ipynb; do name=$(basename \"$nb\" .ipynb); cp \"$nb\" \".lite_contents/ja/${name}_v${VERSION}.ipynb\"; done", help = "Prepare .lite_contents directory with versioned notebooks" }
 _execute_lite_notebooks = { shell = "cd .lite_contents && python ../scripts/execute_notebooks.py", help = "Execute notebooks in .lite_contents to populate outputs" }
 _prepare_and_execute_notebooks = { sequence = ["_prepare_lite_contents", "_execute_lite_notebooks"], help = "Prepare and execute notebooks for JupyterLite" }
-_build_lite_site = { shell = "jupyter lite build --contents .lite_contents --output-dir dist && rm -rf .lite_contents", help = "Build JupyterLite site from .lite_contents" }
+_build_lite_site = { shell = "rm -rf dist .jupyterlite.doit.db && jupyter lite build --contents .lite_contents --output-dir dist && rm -rf .lite_contents", help = "Build JupyterLite site from .lite_contents" }
 serve_lite = { cmd = "jupyter lite serve --output-dir dist", help = "Serve JupyterLite site locally" }
-build_lite_full = { sequence = [["build_wheel", "build_libxrk_pyodide", "_prepare_and_execute_notebooks"], "_build_lite_site"], help = "Build JupyterLite site with all wheels" }
+build_lite_full = { sequence = [["build_wheel", "build_libxrk_pyodide", "_download_pyodide_deps", "_prepare_and_execute_notebooks"], "_build_lite_site"], help = "Build JupyterLite site with all wheels" }
 build_and_serve_lite = ["build_lite_full", "serve_lite"]
 
 # Cleanup tasks
