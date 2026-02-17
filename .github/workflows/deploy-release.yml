@@ -16,7 +16,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.13"
 
       - name: Install Poetry
         run: pipx install poetry==2.1.1
@@ -31,7 +31,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/emsdk
-          key: ${{ runner.os }}-emsdk-3.1.58
+          key: ${{ runner.os }}-emsdk-4.0.9
 
       - run: poetry run poe setup_emsdk
       - run: poetry run poe build_lite_full
