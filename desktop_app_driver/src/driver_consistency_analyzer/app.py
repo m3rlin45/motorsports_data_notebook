@@ -117,6 +117,7 @@ class DriverConsistencyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         self.config_panel = ConfigPanel(
             self.top_frame,
             on_stats_click=self._toggle_stats_window,
+            on_config_changed=self._on_selection_changed,
         )
 
         # Bottom frame (corner selector + chart)
@@ -228,12 +229,23 @@ class DriverConsistencyApp(ctk.CTk, TkinterDnD.DnDWrapper):
     def _on_session_a_loaded(self, log: LogFile, file_path: Path) -> None:
         """Handle Session A file loaded."""
         self._result_a = None
+        self._channels_a = sorted(log.channels.keys())
+        self._update_available_channels()
         self._update_status(f"Loaded: {file_path.name}")
 
     def _on_session_b_loaded(self, log: LogFile, file_path: Path) -> None:
         """Handle Session B file loaded."""
         self._result_b = None
+        self._channels_b = sorted(log.channels.keys())
+        self._update_available_channels()
         self._update_status(f"Loaded comparison: {file_path.name}")
+
+    def _update_available_channels(self) -> None:
+        """Update config panel with channels from all loaded sessions."""
+        channels_a = getattr(self, "_channels_a", [])
+        channels_b = getattr(self, "_channels_b", [])
+        merged = sorted(set(channels_a) | set(channels_b))
+        self.config_panel.update_available_channels(merged)
 
     def _update_status(self, message: str) -> None:
         """Update the status label in config panel."""

@@ -125,6 +125,9 @@ def _draw_single(
     ax2.set_xticks(positions)
     ax2.set_xticklabels(corner_names, rotation=45, ha="right", fontsize=9)
 
+    # Attach tooltip data for hover display
+    _attach_tooltips(ax1, ax2, positions, result.corner_data, corner_names)
+
 
 def _draw_comparison(
     fig: Figure,
@@ -210,6 +213,19 @@ def _draw_comparison(
         fontsize=9,
     )
 
+    # Attach tooltip data for hover display
+    _attach_tooltips_comparison(
+        ax1,
+        ax2,
+        positions_a,
+        positions_b,
+        result_a.corner_data,
+        result_b,
+        corner_names,
+        label_a,
+        label_b,
+    )
+
 
 def _get_matching_data(result_a, result_b, data_fn):
     """Get per-corner data lists from result_b matching result_a corner order."""
@@ -225,3 +241,82 @@ def _get_matching_data(result_a, result_b, data_fn):
         if not found:
             data.append([])
     return data
+
+
+def _box_stats_text(values: list[float], corner_name: str, unit: str, label: str = "") -> str:
+    """Format box plot statistics into tooltip text."""
+    arr = np.array(values)
+    q1, median, q3 = np.percentile(arr, [25, 50, 75])
+    mean = float(np.mean(arr))
+    iqr = q3 - q1
+    whisker_lo = float(arr[arr >= q1 - 1.5 * iqr].min())
+    whisker_hi = float(arr[arr <= q3 + 1.5 * iqr].max())
+
+    header = corner_name
+    if label:
+        header += f" ({label})"
+    return (
+        f"{header}\n"
+        f"  Mean:    {mean:.2f}{unit}\n"
+        f"  Median:  {median:.2f}{unit}\n"
+        f"  Q1:      {q1:.2f}{unit}\n"
+        f"  Q3:      {q3:.2f}{unit}\n"
+        f"  Whisker: {whisker_lo:.2f} – {whisker_hi:.2f}{unit}\n"
+        f"  N:       {len(values)}"
+    )
+
+
+def _attach_tooltips(ax1, ax2, positions, corner_data, corner_names) -> None:
+    """Attach tooltip metadata to axes for hover display."""
+    ta_tooltips: dict[float, str] = {}
+    bp_tooltips: dict[float, str] = {}
+
+    for i, cd in enumerate(corner_data):
+        pos = float(positions[i])
+        name = corner_names[i]
+        if cd.ta_values:
+            ta_tooltips[pos] = _box_stats_text(cd.ta_values, name, "%")
+        if cd.bp_values:
+            centered = [v - np.mean(cd.bp_values) for v in cd.bp_values]
+            bp_tooltips[pos] = _box_stats_text(centered, name, " m")
+
+    ax1._tooltip_data = ta_tooltips  # type: ignore[attr-defined]
+    ax2._tooltip_data = bp_tooltips  # type: ignore[attr-defined]
+
+
+def _attach_tooltips_comparison(
+    ax1,
+    ax2,
+    positions_a,
+    positions_b,
+    corner_data_a,
+    result_b,
+    corner_names,
+    label_a,
+    label_b,
+) -> None:
+    """Attach tooltip metadata for comparison mode."""
+    ta_tooltips: dict[float, str] = {}
+    bp_tooltips: dict[float, str] = {}
+
+    for i, cd_a in enumerate(corner_data_a):
+        pos_a = float(positions_a[i])
+        name = corner_names[i]
+        if cd_a.ta_values:
+            ta_tooltips[pos_a] = _box_stats_text(cd_a.ta_values, name, "%", label_a)
+        if cd_a.bp_values:
+            centered_a = [v - np.mean(cd_a.bp_values) for v in cd_a.bp_values]
+            bp_tooltips[pos_a] = _box_stats_text(centered_a, name, " m", label_a)
+
+        pos_b = float(positions_b[i])
+        for cd_b in result_b.corner_data:
+            if cd_b.corner.id == cd_a.corner.id:
+                if cd_b.ta_values:
+                    ta_tooltips[pos_b] = _box_stats_text(cd_b.ta_values, name, "%", label_b)
+                if cd_b.bp_values:
+                    centered_b = [v - np.mean(cd_b.bp_values) for v in cd_b.bp_values]
+                    bp_tooltips[pos_b] = _box_stats_text(centered_b, name, " m", label_b)
+                break
+
+    ax1._tooltip_data = ta_tooltips  # type: ignore[attr-defined]
+    ax2._tooltip_data = bp_tooltips  # type: ignore[attr-defined]
