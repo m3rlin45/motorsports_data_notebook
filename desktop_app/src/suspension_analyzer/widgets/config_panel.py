@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import customtkinter as ctk
 
+from motorsports_data_notebook.desktop.autocomplete_entry import AutocompleteEntry
 from motorsports_data_notebook.suspension import (
     MotionRatios,
     SUSPENSION_CHANNEL_NAMES,
@@ -21,6 +22,7 @@ class ConfigPanel(ctk.CTkFrame):
         self,
         parent: ctk.CTkFrame,
         on_stats_click: callable | None = None,
+        on_config_changed: callable | None = None,
     ) -> None:
         """Initialize the config panel.
 
@@ -30,6 +32,8 @@ class ConfigPanel(ctk.CTkFrame):
             Parent widget.
         on_stats_click : callable, optional
             Callback when statistics button is clicked.
+        on_config_changed : callable, optional
+            Callback when any configuration value changes.
         """
         super().__init__(parent)
 
@@ -37,6 +41,7 @@ class ConfigPanel(ctk.CTkFrame):
         self._default_ratios = MotionRatios.toyota_86_zn6()
         self._default_channels = SUSPENSION_CHANNEL_NAMES.copy()
         self._on_stats_click = on_stats_click
+        self._on_config_changed = on_config_changed
 
         self._create_widgets()
         self._layout_widgets()
@@ -79,6 +84,7 @@ class ConfigPanel(ctk.CTkFrame):
                 font=ctk.CTkFont(size=11),
             )
             self.ratio_entries[corner].insert(0, f"{default_val:.3f}")
+            self.ratio_entries[corner].bind("<KeyRelease>", self._on_entry_changed)
 
         # Reset ratios button
         self.reset_ratios_btn = ctk.CTkButton(
@@ -99,7 +105,7 @@ class ConfigPanel(ctk.CTkFrame):
         )
 
         # Channel name entries
-        self.channel_entries: dict[str, ctk.CTkEntry] = {}
+        self.channel_entries: dict[str, AutocompleteEntry] = {}
         self.channel_labels: dict[str, ctk.CTkLabel] = {}
 
         channel_display_names = {
@@ -115,10 +121,11 @@ class ConfigPanel(ctk.CTkFrame):
                 text=display_name,
                 font=ctk.CTkFont(size=11),
             )
-            self.channel_entries[key] = ctk.CTkEntry(
+            self.channel_entries[key] = AutocompleteEntry(
                 self.channels_frame,
                 width=120,
                 font=ctk.CTkFont(size=11),
+                on_change=self._on_entry_changed,
             )
             self.channel_entries[key].insert(0, self._default_channels[key])
 
@@ -197,6 +204,11 @@ class ConfigPanel(ctk.CTkFrame):
         self.status_label.pack(side="left", fill="x", expand=True, padx=2)
         self.stats_btn.pack(side="right", padx=2)
 
+    def _on_entry_changed(self, event=None) -> None:
+        """Handle any config entry value change."""
+        if self._on_config_changed:
+            self._on_config_changed()
+
     def _on_stats_btn_click(self) -> None:
         """Handle statistics button click."""
         if self._on_stats_click:
@@ -222,12 +234,14 @@ class ConfigPanel(ctk.CTkFrame):
         for corner, val in values.items():
             self.ratio_entries[corner].delete(0, "end")
             self.ratio_entries[corner].insert(0, f"{val:.3f}")
+        self._on_entry_changed()
 
     def _reset_channels(self) -> None:
         """Reset channel names to defaults."""
         for key, val in self._default_channels.items():
             self.channel_entries[key].delete(0, "end")
             self.channel_entries[key].insert(0, val)
+        self._on_entry_changed()
 
     def get_motion_ratios(self) -> MotionRatios:
         """Get current motion ratio values.
@@ -247,6 +261,17 @@ class ConfigPanel(ctk.CTkFrame):
         except ValueError:
             # Return defaults if parsing fails
             return MotionRatios.toyota_86_zn6()
+
+    def update_available_channels(self, channel_names: list[str]) -> None:
+        """Update autocomplete suggestions for all channel entries.
+
+        Parameters
+        ----------
+        channel_names : list[str]
+            Available channel names from loaded session(s).
+        """
+        for entry in self.channel_entries.values():
+            entry.set_suggestions(channel_names)
 
     def get_channel_names(self) -> dict[str, str]:
         """Get current channel name mappings.

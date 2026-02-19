@@ -126,43 +126,47 @@ def draw_detail(
     if n_laps <= 10:
         ax1.legend(fontsize=7, loc="upper right", ncol=2)
 
-    # Boundary annotations on top subplot
+    # Boundary annotations on top subplot, placed just above the axes
     if corner_data.braking_start is not None:
         ax1.text(
             corner_data.braking_start,
             ax1.get_ylim()[1],
             " Brake",
-            fontsize=7,
+            fontsize=9,
             color="cyan",
-            va="top",
+            va="bottom",
             alpha=0.8,
+            clip_on=False,
         )
     ax1.text(
         corner.start_dist,
         ax1.get_ylim()[1],
         " Entry",
-        fontsize=7,
+        fontsize=9,
         color="yellow",
-        va="top",
+        va="bottom",
         alpha=0.8,
+        clip_on=False,
     )
     ax1.text(
         corner.apex_dist,
         ax1.get_ylim()[1],
         " Apex",
-        fontsize=7,
+        fontsize=9,
         color="red",
-        va="top",
+        va="bottom",
         alpha=0.8,
+        clip_on=False,
     )
     ax1.text(
         corner.end_dist,
         ax1.get_ylim()[1],
         " Exit",
-        fontsize=7,
+        fontsize=9,
         color="yellow",
-        va="top",
+        va="bottom",
         alpha=0.8,
+        clip_on=False,
     )
 
     fig.tight_layout()

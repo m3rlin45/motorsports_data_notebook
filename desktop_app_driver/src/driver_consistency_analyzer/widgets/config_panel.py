@@ -6,6 +6,8 @@ from typing import Callable
 
 import customtkinter as ctk
 
+from motorsports_data_notebook.desktop.autocomplete_entry import AutocompleteEntry
+
 # Default channel name mappings
 DEFAULT_CHANNEL_NAMES = {
     "throttle": "PPS",
@@ -33,6 +35,7 @@ class ConfigPanel(ctk.CTkFrame):
         self,
         parent: ctk.CTkFrame,
         on_stats_click: Callable[[], None] | None = None,
+        on_config_changed: Callable[[], None] | None = None,
     ) -> None:
         """Initialize the config panel.
 
@@ -42,10 +45,13 @@ class ConfigPanel(ctk.CTkFrame):
             Parent widget.
         on_stats_click : callable, optional
             Callback when statistics button is clicked.
+        on_config_changed : callable, optional
+            Callback when any configuration value changes.
         """
         super().__init__(parent)
 
         self._on_stats_click = on_stats_click
+        self._on_config_changed = on_config_changed
         self._create_widgets()
         self._layout_widgets()
 
@@ -67,7 +73,7 @@ class ConfigPanel(ctk.CTkFrame):
         )
 
         # Channel name entries
-        self.channel_entries: dict[str, ctk.CTkEntry] = {}
+        self.channel_entries: dict[str, AutocompleteEntry] = {}
         self.channel_labels: dict[str, ctk.CTkLabel] = {}
 
         channel_display = {
@@ -85,10 +91,11 @@ class ConfigPanel(ctk.CTkFrame):
                 text=display_name,
                 font=ctk.CTkFont(size=11),
             )
-            self.channel_entries[key] = ctk.CTkEntry(
+            self.channel_entries[key] = AutocompleteEntry(
                 self.channels_frame,
                 width=110,
                 font=ctk.CTkFont(size=11),
+                on_change=self._on_entry_changed,
             )
             self.channel_entries[key].insert(0, DEFAULT_CHANNEL_NAMES[key])
 
@@ -132,6 +139,7 @@ class ConfigPanel(ctk.CTkFrame):
                 font=ctk.CTkFont(size=11),
             )
             self.threshold_entries[key].insert(0, default_val)
+            self.threshold_entries[key].bind("<KeyRelease>", self._on_entry_changed)
 
         # Status and actions frame
         self.status_frame = ctk.CTkFrame(self, fg_color="transparent")
@@ -193,6 +201,11 @@ class ConfigPanel(ctk.CTkFrame):
         self.status_label.pack(side="left", fill="x", expand=True, padx=2)
         self.stats_btn.pack(side="right", padx=2)
 
+    def _on_entry_changed(self, event=None) -> None:
+        """Handle any config entry value change."""
+        if self._on_config_changed:
+            self._on_config_changed()
+
     def _on_stats_btn_click(self) -> None:
         """Handle statistics button click."""
         if self._on_stats_click:
@@ -211,6 +224,18 @@ class ConfigPanel(ctk.CTkFrame):
         for key, val in DEFAULT_CHANNEL_NAMES.items():
             self.channel_entries[key].delete(0, "end")
             self.channel_entries[key].insert(0, val)
+        self._on_entry_changed()
+
+    def update_available_channels(self, channel_names: list[str]) -> None:
+        """Update autocomplete suggestions for all channel entries.
+
+        Parameters
+        ----------
+        channel_names : list[str]
+            Available channel names from loaded session(s).
+        """
+        for entry in self.channel_entries.values():
+            entry.set_suggestions(channel_names)
 
     def get_channel_names(self) -> dict[str, str]:
         """Get current channel name mappings.

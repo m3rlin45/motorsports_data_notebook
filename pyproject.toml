@@ -72,6 +72,7 @@ module = [
     "numpy.*",
     "ipywidgets.*",
     "pyarrow.*",
+    "customtkinter.*",
 ]
 ignore_missing_imports = true
 
