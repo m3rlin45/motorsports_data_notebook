@@ -9,15 +9,17 @@ from typing import TYPE_CHECKING
 import customtkinter as ctk
 from tkinterdnd2 import TkinterDnD
 
+from motorsports_data_notebook.desktop.dpi import setup_hidpi_scaling
 from motorsports_data_notebook.suspension import (
     MotionRatios,
     VelocityHistogramResult,
 )
 
+from motorsports_data_notebook.desktop.session_panel import SessionPanel
+
 from suspension_analyzer.analysis.multi_lap import analyze_suspension_velocity_multi_lap
 from suspension_analyzer.widgets.chart_view import ChartView
 from suspension_analyzer.widgets.config_panel import ConfigPanel
-from suspension_analyzer.widgets.session_panel import SessionPanel
 from suspension_analyzer.widgets.stats_panel import StatsPanel
 
 if TYPE_CHECKING:
@@ -46,7 +48,7 @@ class SuspensionAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
         ctk.set_default_color_theme("blue")
 
         # HiDPI scaling - detect and apply for Linux/WSLg
-        self._setup_hidpi_scaling()
+        setup_hidpi_scaling(self)
 
         # Analysis results storage
         self._result_a: VelocityHistogramResult | None = None
@@ -59,41 +61,6 @@ class SuspensionAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
         # Build UI
         self._create_widgets()
         self._layout_widgets()
-
-    def _setup_hidpi_scaling(self) -> None:
-        """Configure HiDPI scaling for Linux/WSLg."""
-        import sys
-        import os
-
-        if sys.platform != "win32":
-            scale_factor = 1.0
-
-            # Check GDK_SCALE environment variable first (user override)
-            gdk_scale = os.environ.get("GDK_SCALE")
-            if gdk_scale:
-                try:
-                    scale_factor = float(gdk_scale)
-                except ValueError:
-                    pass
-
-            # If no GDK_SCALE, detect from screen resolution
-            if scale_factor == 1.0:
-                try:
-                    screen_width = self.winfo_screenwidth()
-                    # HiDPI detection: if screen width > 2500, likely 2x scaling
-                    if screen_width > 2500:
-                        scale_factor = 2.0
-                    elif screen_width > 1920:
-                        scale_factor = 1.5
-                except Exception:
-                    pass
-
-            # Apply scaling if needed
-            if scale_factor > 1.0:
-                ctk.set_widget_scaling(scale_factor)
-                ctk.set_window_scaling(scale_factor)
-                # Also set tk scaling for consistent font rendering
-                self.tk.call("tk", "scaling", scale_factor * 1.33)
 
     def _create_widgets(self) -> None:
         """Create all UI widgets."""
@@ -173,7 +140,7 @@ class SuspensionAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
         self._stats_window.minsize(500, 400)
 
         # Create stats panel in the popup
-        self.stats_panel = StatsPanel(self._stats_window, on_maximize_toggle=None)
+        self.stats_panel = StatsPanel(self._stats_window)
         self.stats_panel.pack(fill="both", expand=True, padx=10, pady=10)
 
         # Update stats if we have results

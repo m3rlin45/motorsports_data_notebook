@@ -2,146 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Callable
-
 import customtkinter as ctk
 
+from motorsports_data_notebook.desktop.stats_panel import BaseStatsPanel
 from motorsports_data_notebook.suspension import VelocityHistogramResult
 
 
-class StatsPanel(ctk.CTkFrame):
+class StatsPanel(BaseStatsPanel):
     """Panel for displaying suspension velocity statistics with styled tables."""
-
-    def __init__(
-        self,
-        parent: ctk.CTk | ctk.CTkFrame,
-        on_maximize_toggle: Callable[[bool], None] | None = None,
-    ) -> None:
-        """Initialize the stats panel."""
-        super().__init__(parent)
-        self._scrollable: ctk.CTkScrollableFrame | None = None
-        self._create_widgets()
-
-    def _create_widgets(self) -> None:
-        """Create all widgets."""
-        # Scrollable container for all content
-        self._scrollable = ctk.CTkScrollableFrame(self)
-        self._scrollable.pack(fill="both", expand=True, padx=5, pady=5)
-
-        # Placeholder
-        self._placeholder = ctk.CTkLabel(
-            self._scrollable,
-            text="Load a session and select laps to view statistics",
-            font=ctk.CTkFont(size=12),
-            text_color="gray",
-        )
-        self._placeholder.pack(pady=20)
-
-    def _clear_content(self) -> None:
-        """Clear all content from scrollable frame."""
-        for widget in self._scrollable.winfo_children():
-            widget.destroy()
-
-    def _create_section_header(self, parent: ctk.CTkFrame, text: str) -> None:
-        """Create a styled section header."""
-        header = ctk.CTkLabel(
-            parent,
-            text=text,
-            font=ctk.CTkFont(size=14, weight="bold"),
-            text_color="#3B8ED0",
-        )
-        header.pack(anchor="w", pady=(10, 5), padx=5)
-
-    def _create_session_legend(self, parent: ctk.CTkFrame, label_a: str, label_b: str) -> None:
-        """Create a legend showing session A and B full names."""
-        legend_frame = ctk.CTkFrame(parent, fg_color=("#E8F4FC", "#1E3A4C"))
-        legend_frame.pack(fill="x", padx=5, pady=(10, 5))
-
-        label_a_widget = ctk.CTkLabel(
-            legend_frame,
-            text=f"A: {label_a}",
-            font=ctk.CTkFont(size=11),
-            text_color="#3B8ED0",
-            anchor="w",
-        )
-        label_a_widget.pack(fill="x", padx=10, pady=(8, 2))
-
-        label_b_widget = ctk.CTkLabel(
-            legend_frame,
-            text=f"B: {label_b}",
-            font=ctk.CTkFont(size=11),
-            text_color="#D97706",
-            anchor="w",
-        )
-        label_b_widget.pack(fill="x", padx=10, pady=(2, 8))
-
-    def _create_table(
-        self,
-        parent: ctk.CTkFrame,
-        headers: list[str],
-        rows: list[list[str]],
-        highlight_cols: list[int] | None = None,
-    ) -> None:
-        """Create a styled table with headers and rows.
-
-        Parameters
-        ----------
-        parent : ctk.CTkFrame
-            Parent widget.
-        headers : list[str]
-            Column headers.
-        rows : list[list[str]]
-            Table rows (list of lists).
-        highlight_cols : list[int], optional
-            Column indices to highlight (e.g., delta columns).
-        """
-        table_frame = ctk.CTkFrame(parent, fg_color=("#E0E0E0", "#2B2B2B"))
-        table_frame.pack(fill="x", padx=5, pady=5)
-
-        highlight_cols = highlight_cols or []
-
-        # Header row
-        for col, header in enumerate(headers):
-            cell = ctk.CTkLabel(
-                table_frame,
-                text=header,
-                font=ctk.CTkFont(size=11, weight="bold"),
-                fg_color=("#C0C0C0", "#404040"),
-                corner_radius=0,
-                padx=10,
-                pady=5,
-            )
-            cell.grid(row=0, column=col, sticky="nsew", padx=1, pady=1)
-            table_frame.grid_columnconfigure(col, weight=1)
-
-        # Data rows
-        for row_idx, row_data in enumerate(rows):
-            bg_color = ("#F5F5F5", "#333333") if row_idx % 2 == 0 else ("#E8E8E8", "#3A3A3A")
-
-            for col_idx, cell_value in enumerate(row_data):
-                # Determine text color for delta columns
-                text_color = None
-                if col_idx in highlight_cols and cell_value not in ("", "-"):
-                    try:
-                        val = float(cell_value.replace("%", "").replace("+", ""))
-                        if val > 0:
-                            text_color = "#22AA22"  # Green for positive
-                        elif val < 0:
-                            text_color = "#DD4444"  # Red for negative
-                    except ValueError:
-                        pass
-
-                cell = ctk.CTkLabel(
-                    table_frame,
-                    text=cell_value,
-                    font=ctk.CTkFont(size=11, family="Consolas"),
-                    fg_color=bg_color,
-                    text_color=text_color,
-                    corner_radius=0,
-                    padx=10,
-                    pady=4,
-                )
-                cell.grid(row=row_idx + 1, column=col_idx, sticky="nsew", padx=1, pady=1)
 
     def update_stats(
         self,
@@ -174,26 +42,30 @@ class StatsPanel(ctk.CTkFrame):
             for corner_name, corner_a, corner_b in corners:
                 delta_skew = corner_b.skew - corner_a.skew
                 delta_std = corner_b.std - corner_a.std
-                rows.append([
-                    corner_name,
-                    f"{corner_a.skew:+.3f}",
-                    f"{corner_b.skew:+.3f}",
-                    f"{delta_skew:+.3f}",
-                    f"{corner_a.std:.1f}",
-                    f"{corner_b.std:.1f}",
-                    f"{delta_std:+.1f}",
-                ])
+                rows.append(
+                    [
+                        corner_name,
+                        f"{corner_a.skew:+.3f}",
+                        f"{corner_b.skew:+.3f}",
+                        f"{delta_skew:+.3f}",
+                        f"{corner_a.std:.1f}",
+                        f"{corner_b.std:.1f}",
+                        f"{delta_std:+.1f}",
+                    ]
+                )
             self._create_table(self._scrollable, headers, rows, highlight_cols=[3, 6])
         else:
             headers = ["Corner", "Skew", "Std Dev (mm/s)", "Mean (mm/s)"]
             rows = []
             for corner_name, corner_a, _ in corners:
-                rows.append([
-                    corner_name,
-                    f"{corner_a.skew:+.3f}",
-                    f"{corner_a.std:.1f}",
-                    f"{corner_a.mean:.1f}",
-                ])
+                rows.append(
+                    [
+                        corner_name,
+                        f"{corner_a.skew:+.3f}",
+                        f"{corner_a.std:.1f}",
+                        f"{corner_a.mean:.1f}",
+                    ]
+                )
             self._create_table(self._scrollable, headers, rows)
 
         # === Velocity Range Distribution Table ===
@@ -201,9 +73,7 @@ class StatsPanel(ctk.CTkFrame):
 
         if result_b is not None:
             headers = ["Corner", "Direction", "Slow", "Fast", "High-Speed"]
-            self._create_velocity_table_comparison(
-                self._scrollable, headers, corners, ranges
-            )
+            self._create_velocity_table_comparison(self._scrollable, headers, corners, ranges)
         else:
             headers = ["Corner", "Direction", "Slow", "Fast", "High-Speed"]
             self._create_velocity_table_single(self._scrollable, headers, corners, ranges)
@@ -352,12 +222,14 @@ class StatsPanel(ctk.CTkFrame):
             corner_cell.grid(row=row_idx, column=0, rowspan=2, sticky="nsew", padx=1, pady=1)
 
             # Rebound row (negative velocities - extension)
-            for col_idx, (range_name, val) in enumerate([
-                ("Direction", "Rebound ↑"),
-                ("Slow", f"{pct['rebound']['Slow']:.1f}%"),
-                ("Fast", f"{pct['rebound']['Fast']:.1f}%"),
-                ("High-Speed", f"{pct['rebound']['High-Speed']:.1f}%"),
-            ]):
+            for col_idx, (range_name, val) in enumerate(
+                [
+                    ("Direction", "Rebound ↑"),
+                    ("Slow", f"{pct['rebound']['Slow']:.1f}%"),
+                    ("Fast", f"{pct['rebound']['Fast']:.1f}%"),
+                    ("High-Speed", f"{pct['rebound']['High-Speed']:.1f}%"),
+                ]
+            ):
                 cell = ctk.CTkLabel(
                     table_frame,
                     text=val,
@@ -370,12 +242,14 @@ class StatsPanel(ctk.CTkFrame):
                 cell.grid(row=row_idx, column=col_idx + 1, sticky="nsew", padx=1, pady=1)
 
             # Bump row (positive velocities - compression)
-            for col_idx, (range_name, val) in enumerate([
-                ("Direction", "Bump ↓"),
-                ("Slow", f"{pct['bump']['Slow']:.1f}%"),
-                ("Fast", f"{pct['bump']['Fast']:.1f}%"),
-                ("High-Speed", f"{pct['bump']['High-Speed']:.1f}%"),
-            ]):
+            for col_idx, (range_name, val) in enumerate(
+                [
+                    ("Direction", "Bump ↓"),
+                    ("Slow", f"{pct['bump']['Slow']:.1f}%"),
+                    ("Fast", f"{pct['bump']['Fast']:.1f}%"),
+                    ("High-Speed", f"{pct['bump']['High-Speed']:.1f}%"),
+                ]
+            ):
                 cell = ctk.CTkLabel(
                     table_frame,
                     text=val,
@@ -463,13 +337,20 @@ class StatsPanel(ctk.CTkFrame):
             # Rebound A row
             self._add_comparison_row(table_frame, row_idx, "A", pct_a["rebound"], base_bg)
             # Rebound B row
-            self._add_comparison_row(table_frame, row_idx + 1, "B", pct_b["rebound"], base_bg,
-                                    delta_from=pct_a["rebound"])
+            self._add_comparison_row(
+                table_frame,
+                row_idx + 1,
+                "B",
+                pct_b["rebound"],
+                base_bg,
+                delta_from=pct_a["rebound"],
+            )
             # Bump A row
             self._add_comparison_row(table_frame, row_idx + 2, "A", pct_a["bump"], alt_bg)
             # Bump B row
-            self._add_comparison_row(table_frame, row_idx + 3, "B", pct_b["bump"], alt_bg,
-                                    delta_from=pct_a["bump"])
+            self._add_comparison_row(
+                table_frame, row_idx + 3, "B", pct_b["bump"], alt_bg, delta_from=pct_a["bump"]
+            )
 
             row_idx += 4
 
@@ -529,14 +410,3 @@ class StatsPanel(ctk.CTkFrame):
             return f"{name1} biased to rebound"
         else:
             return f"{name2} biased to rebound"
-
-    def clear(self) -> None:
-        """Clear and show placeholder."""
-        self._clear_content()
-        self._placeholder = ctk.CTkLabel(
-            self._scrollable,
-            text="Load a session and select laps to view statistics",
-            font=ctk.CTkFont(size=12),
-            text_color="gray",
-        )
-        self._placeholder.pack(pady=20)

@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Callable, Literal
 
 import customtkinter as ctk
 from tkinterdnd2 import DND_FILES
 
-from suspension_analyzer.loader import load_session
+from motorsports_data_notebook.desktop.loader import load_session
 
 if TYPE_CHECKING:
     from libxrk.base import LogFile
@@ -27,6 +27,7 @@ class SessionPanel(ctk.CTkFrame):
         title: str = "Session",
         on_file_loaded: Callable[[LogFile, Path], None] | None = None,
         on_selection_changed: Callable[[], None] | None = None,
+        auto_select: Literal["best", "top_103"] = "best",
     ) -> None:
         """Initialize the session panel.
 
@@ -41,12 +42,17 @@ class SessionPanel(ctk.CTkFrame):
             Receives (log: LogFile, file_path: Path).
         on_selection_changed : Callable, optional
             Callback when lap selection changes.
+        auto_select : {"best", "top_103"}
+            Which laps to auto-select when a file is loaded.
+            "best" selects only the fastest lap; "top_103" selects all
+            laps within 103% of the best.
         """
         super().__init__(parent)
 
         self._title = title
         self._on_file_loaded = on_file_loaded
         self._on_selection_changed = on_selection_changed
+        self._auto_select = auto_select
         self._log: LogFile | None = None
         self._file_path: Path | None = None
         self._lap_vars: dict[int, ctk.BooleanVar] = {}
@@ -276,8 +282,11 @@ class SessionPanel(ctk.CTkFrame):
             )
             checkbox.pack(anchor="w", padx=5, pady=2)
 
-        # Auto-select best lap
-        self._select_best()
+        # Auto-select based on configured mode
+        if self._auto_select == "top_103":
+            self._select_top_103()
+        else:
+            self._select_best()
 
     def _on_lap_toggled(self) -> None:
         """Handle lap checkbox toggle."""

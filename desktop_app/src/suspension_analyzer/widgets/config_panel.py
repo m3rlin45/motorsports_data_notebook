@@ -2,27 +2,32 @@
 
 from __future__ import annotations
 
+from typing import Callable
+
 import customtkinter as ctk
 
-from motorsports_data_notebook.desktop.autocomplete_entry import AutocompleteEntry
+from motorsports_data_notebook.desktop.config_panel import BaseConfigPanel
 from motorsports_data_notebook.suspension import (
     MotionRatios,
     SUSPENSION_CHANNEL_NAMES,
 )
 
+_CHANNEL_DISPLAY_NAMES = {
+    "shock_fl": "FL Shock:",
+    "shock_fr": "FR Shock:",
+    "shock_rl": "RL Shock:",
+    "shock_rr": "RR Shock:",
+}
 
-class ConfigPanel(ctk.CTkFrame):
-    """Panel for configuring analysis parameters.
 
-    Provides inputs for motion ratios and channel name mappings,
-    plus status display and statistics button.
-    """
+class ConfigPanel(BaseConfigPanel):
+    """Panel for configuring motion ratios and channel name mappings."""
 
     def __init__(
         self,
         parent: ctk.CTkFrame,
-        on_stats_click: callable | None = None,
-        on_config_changed: callable | None = None,
+        on_stats_click: Callable[[], None] | None = None,
+        on_config_changed: Callable[[], None] | None = None,
     ) -> None:
         """Initialize the config panel.
 
@@ -35,27 +40,19 @@ class ConfigPanel(ctk.CTkFrame):
         on_config_changed : callable, optional
             Callback when any configuration value changes.
         """
-        super().__init__(parent)
-
-        # Default values
+        super().__init__(
+            parent,
+            channel_defaults=SUSPENSION_CHANNEL_NAMES.copy(),
+            channel_display_names=_CHANNEL_DISPLAY_NAMES,
+            on_stats_click=on_stats_click,
+            on_config_changed=on_config_changed,
+        )
         self._default_ratios = MotionRatios.toyota_86_zn6()
-        self._default_channels = SUSPENSION_CHANNEL_NAMES.copy()
-        self._on_stats_click = on_stats_click
-        self._on_config_changed = on_config_changed
-
-        self._create_widgets()
+        self._create_ratio_widgets()
         self._layout_widgets()
 
-    def _create_widgets(self) -> None:
-        """Create all widgets."""
-        # Title
-        self.title_label = ctk.CTkLabel(
-            self,
-            text="CONFIGURATION",
-            font=ctk.CTkFont(size=14, weight="bold"),
-        )
-
-        # Motion ratios frame
+    def _create_ratio_widgets(self) -> None:
+        """Create motion ratio input widgets."""
         self.ratios_frame = ctk.CTkFrame(self)
         self.ratios_label = ctk.CTkLabel(
             self.ratios_frame,
@@ -63,7 +60,6 @@ class ConfigPanel(ctk.CTkFrame):
             font=ctk.CTkFont(size=12, weight="bold"),
         )
 
-        # Motion ratio entries (2x2 grid)
         self.ratio_entries: dict[str, ctk.CTkEntry] = {}
         self.ratio_labels: dict[str, ctk.CTkLabel] = {}
 
@@ -86,7 +82,6 @@ class ConfigPanel(ctk.CTkFrame):
             self.ratio_entries[corner].insert(0, f"{default_val:.3f}")
             self.ratio_entries[corner].bind("<KeyRelease>", self._on_entry_changed)
 
-        # Reset ratios button
         self.reset_ratios_btn = ctk.CTkButton(
             self.ratios_frame,
             text="Reset to Toyota 86",
@@ -96,80 +91,14 @@ class ConfigPanel(ctk.CTkFrame):
             command=self._reset_ratios,
         )
 
-        # Channel names frame
-        self.channels_frame = ctk.CTkFrame(self)
-        self.channels_label = ctk.CTkLabel(
-            self.channels_frame,
-            text="Channel Names:",
-            font=ctk.CTkFont(size=12, weight="bold"),
-        )
-
-        # Channel name entries
-        self.channel_entries: dict[str, AutocompleteEntry] = {}
-        self.channel_labels: dict[str, ctk.CTkLabel] = {}
-
-        channel_display_names = {
-            "shock_fl": "FL Shock:",
-            "shock_fr": "FR Shock:",
-            "shock_rl": "RL Shock:",
-            "shock_rr": "RR Shock:",
-        }
-
-        for key, display_name in channel_display_names.items():
-            self.channel_labels[key] = ctk.CTkLabel(
-                self.channels_frame,
-                text=display_name,
-                font=ctk.CTkFont(size=11),
-            )
-            self.channel_entries[key] = AutocompleteEntry(
-                self.channels_frame,
-                width=120,
-                font=ctk.CTkFont(size=11),
-                on_change=self._on_entry_changed,
-            )
-            self.channel_entries[key].insert(0, self._default_channels[key])
-
-        # Reset channels button
-        self.reset_channels_btn = ctk.CTkButton(
-            self.channels_frame,
-            text="Reset to Default",
-            width=120,
-            height=24,
-            font=ctk.CTkFont(size=10),
-            command=self._reset_channels,
-        )
-
-        # Status and actions frame
-        self.status_frame = ctk.CTkFrame(self, fg_color="transparent")
-
-        # Status label
-        self.status_label = ctk.CTkLabel(
-            self.status_frame,
-            text="",
-            font=ctk.CTkFont(size=11),
-            anchor="w",
-        )
-
-        # Statistics button
-        self.stats_btn = ctk.CTkButton(
-            self.status_frame,
-            text="Show Statistics",
-            width=110,
-            height=26,
-            font=ctk.CTkFont(size=11),
-            command=self._on_stats_btn_click,
-        )
-
     def _layout_widgets(self) -> None:
-        """Arrange widgets in the panel."""
-        # Title
+        """Arrange all widgets in the panel."""
         self.title_label.pack(anchor="w", padx=5, pady=(2, 5))
 
-        # Motion ratios frame (compact)
+        # Motion ratios frame
         self.ratios_frame.pack(fill="x", padx=5, pady=2)
         self.ratios_label.grid(row=0, column=0, columnspan=4, sticky="w", padx=2, pady=1)
 
-        # Motion ratio grid (2x2, compact)
         self.ratio_labels["FL"].grid(row=1, column=0, padx=(2, 1), pady=1, sticky="e")
         self.ratio_entries["FL"].grid(row=1, column=1, padx=1, pady=1)
         self.ratio_labels["FR"].grid(row=1, column=2, padx=(5, 1), pady=1, sticky="e")
@@ -182,45 +111,9 @@ class ConfigPanel(ctk.CTkFrame):
 
         self.reset_ratios_btn.grid(row=3, column=0, columnspan=4, pady=2)
 
-        # Channel names frame (compact, 2x2 layout)
-        self.channels_frame.pack(fill="x", padx=5, pady=2)
-        self.channels_label.grid(row=0, column=0, columnspan=4, sticky="w", padx=2, pady=1)
-
-        # Channel entries (2x2 grid instead of vertical list)
-        self.channel_labels["shock_fl"].grid(row=1, column=0, padx=(2, 1), pady=1, sticky="e")
-        self.channel_entries["shock_fl"].grid(row=1, column=1, padx=1, pady=1, sticky="w")
-        self.channel_labels["shock_fr"].grid(row=1, column=2, padx=(5, 1), pady=1, sticky="e")
-        self.channel_entries["shock_fr"].grid(row=1, column=3, padx=1, pady=1, sticky="w")
-
-        self.channel_labels["shock_rl"].grid(row=2, column=0, padx=(2, 1), pady=1, sticky="e")
-        self.channel_entries["shock_rl"].grid(row=2, column=1, padx=1, pady=1, sticky="w")
-        self.channel_labels["shock_rr"].grid(row=2, column=2, padx=(5, 1), pady=1, sticky="e")
-        self.channel_entries["shock_rr"].grid(row=2, column=3, padx=1, pady=1, sticky="w")
-
-        self.reset_channels_btn.grid(row=3, column=0, columnspan=4, pady=2)
-
-        # Status and actions at bottom
-        self.status_frame.pack(fill="x", padx=5, pady=(5, 2))
-        self.status_label.pack(side="left", fill="x", expand=True, padx=2)
-        self.stats_btn.pack(side="right", padx=2)
-
-    def _on_entry_changed(self, event=None) -> None:
-        """Handle any config entry value change."""
-        if self._on_config_changed:
-            self._on_config_changed()
-
-    def _on_stats_btn_click(self) -> None:
-        """Handle statistics button click."""
-        if self._on_stats_click:
-            self._on_stats_click()
-
-    def set_status(self, message: str) -> None:
-        """Update the status label text."""
-        self.status_label.configure(text=message)
-
-    def set_stats_button_text(self, text: str) -> None:
-        """Update the statistics button text."""
-        self.stats_btn.configure(text=text)
+        # Channels + status
+        self._pack_channels()
+        self._pack_status()
 
     def _reset_ratios(self) -> None:
         """Reset motion ratios to Toyota 86 defaults."""
@@ -234,13 +127,6 @@ class ConfigPanel(ctk.CTkFrame):
         for corner, val in values.items():
             self.ratio_entries[corner].delete(0, "end")
             self.ratio_entries[corner].insert(0, f"{val:.3f}")
-        self._on_entry_changed()
-
-    def _reset_channels(self) -> None:
-        """Reset channel names to defaults."""
-        for key, val in self._default_channels.items():
-            self.channel_entries[key].delete(0, "end")
-            self.channel_entries[key].insert(0, val)
         self._on_entry_changed()
 
     def get_motion_ratios(self) -> MotionRatios:
@@ -261,29 +147,3 @@ class ConfigPanel(ctk.CTkFrame):
         except ValueError:
             # Return defaults if parsing fails
             return MotionRatios.toyota_86_zn6()
-
-    def update_available_channels(self, channel_names: list[str]) -> None:
-        """Update autocomplete suggestions for all channel entries.
-
-        Parameters
-        ----------
-        channel_names : list[str]
-            Available channel names from loaded session(s).
-        """
-        for entry in self.channel_entries.values():
-            entry.set_suggestions(channel_names)
-
-    def get_channel_names(self) -> dict[str, str]:
-        """Get current channel name mappings.
-
-        Returns
-        -------
-        dict[str, str]
-            Channel name mapping dictionary.
-        """
-        return {
-            "shock_fl": self.channel_entries["shock_fl"].get() or self._default_channels["shock_fl"],
-            "shock_fr": self.channel_entries["shock_fr"].get() or self._default_channels["shock_fr"],
-            "shock_rl": self.channel_entries["shock_rl"].get() or self._default_channels["shock_rl"],
-            "shock_rr": self.channel_entries["shock_rr"].get() or self._default_channels["shock_rr"],
-        }
