@@ -103,6 +103,22 @@ $WINE_CMD "$WINE_PYTHON" -m pip install \
     libxrk \
     pyinstaller
 
+# Remove unused pyarrow components to reduce bundle size (~33 MB)
+# The apps only use core Arrow tables + compute (arrow.dll, arrow_compute.dll, arrow_python.dll)
+echo "Stripping unused pyarrow components..."
+PYARROW_DIR="$PYTHON_DIR/Lib/site-packages/pyarrow"
+rm -f "$PYARROW_DIR"/arrow_flight.dll "$PYARROW_DIR"/arrow_flight.lib
+rm -f "$PYARROW_DIR"/parquet.dll "$PYARROW_DIR"/parquet.lib
+rm -f "$PYARROW_DIR"/arrow_substrait.dll "$PYARROW_DIR"/arrow_substrait.lib
+rm -f "$PYARROW_DIR"/arrow_dataset.dll "$PYARROW_DIR"/arrow_dataset.lib
+rm -f "$PYARROW_DIR"/arrow_acero.dll "$PYARROW_DIR"/arrow_acero.lib
+rm -f "$PYARROW_DIR"/_flight.*.pyd "$PYARROW_DIR"/_parquet.*.pyd
+rm -f "$PYARROW_DIR"/_dataset.*.pyd "$PYARROW_DIR"/_dataset_parquet.*.pyd
+rm -f "$PYARROW_DIR"/_acero.*.pyd "$PYARROW_DIR"/_substrait.*.pyd
+rm -f "$PYARROW_DIR"/_orc.*.pyd "$PYARROW_DIR"/_csv.*.pyd "$PYARROW_DIR"/_fs.*.pyd
+rm -f "$PYARROW_DIR"/_parquet_encryption.*.pyd
+rm -rf "$PYARROW_DIR"/include "$PYARROW_DIR"/src "$PYARROW_DIR"/tests
+
 echo "Packages installed."
 
 # Create build directory in Wine
@@ -136,7 +152,17 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['IPython', 'jupyter', 'notebook', 'qtpy', 'PyQt5', 'PyQt6'],
+    excludes=[
+        'IPython', 'jupyter', 'notebook', 'qtpy', 'PyQt5', 'PyQt6',
+        # Build tools (not needed at runtime)
+        'Cython', 'setuptools', 'pip', 'pkg_resources',
+        '_pyinstaller_hooks_contrib',
+        # Unused pyarrow submodules
+        'pyarrow.flight', 'pyarrow.parquet', 'pyarrow._dataset',
+        'pyarrow._acero', 'pyarrow._substrait', 'pyarrow._orc',
+        'pyarrow._csv', 'pyarrow._fs', 'pyarrow._parquet_encryption',
+        'pyarrow.dataset', 'pyarrow.acero', 'pyarrow.substrait',
+    ],
     noarchive=False,
 )
 
