@@ -9,6 +9,9 @@ from typing import TYPE_CHECKING
 import customtkinter as ctk
 from tkinterdnd2 import TkinterDnD
 
+from motorsports_data_notebook.desktop.dpi import setup_hidpi_scaling
+from motorsports_data_notebook.desktop.session_panel import SessionPanel
+
 from driver_consistency_analyzer.analysis.driver_consistency import (
     DriverConsistencyResult,
     analyze_driver_consistency,
@@ -19,7 +22,6 @@ from driver_consistency_analyzer.visualization.track_map import draw_track_map
 from driver_consistency_analyzer.widgets.chart_view import ChartView
 from driver_consistency_analyzer.widgets.config_panel import ConfigPanel
 from driver_consistency_analyzer.widgets.corner_selector import CornerSelector
-from driver_consistency_analyzer.widgets.session_panel import SessionPanel
 from driver_consistency_analyzer.widgets.stats_panel import StatsPanel
 
 if TYPE_CHECKING:
@@ -47,7 +49,7 @@ class DriverConsistencyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         ctk.set_default_color_theme("blue")
 
         # HiDPI scaling
-        self._setup_hidpi_scaling()
+        setup_hidpi_scaling(self)
 
         # Analysis results storage
         self._result_a: DriverConsistencyResult | None = None
@@ -61,36 +63,6 @@ class DriverConsistencyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         self._create_widgets()
         self._layout_widgets()
 
-    def _setup_hidpi_scaling(self) -> None:
-        """Configure HiDPI scaling for Linux/WSLg."""
-        import os
-        import sys
-
-        if sys.platform != "win32":
-            scale_factor = 1.0
-
-            gdk_scale = os.environ.get("GDK_SCALE")
-            if gdk_scale:
-                try:
-                    scale_factor = float(gdk_scale)
-                except ValueError:
-                    pass
-
-            if scale_factor == 1.0:
-                try:
-                    screen_width = self.winfo_screenwidth()
-                    if screen_width > 2500:
-                        scale_factor = 2.0
-                    elif screen_width > 1920:
-                        scale_factor = 1.5
-                except Exception:
-                    pass
-
-            if scale_factor > 1.0:
-                ctk.set_widget_scaling(scale_factor)
-                ctk.set_window_scaling(scale_factor)
-                self.tk.call("tk", "scaling", scale_factor * 1.33)
-
     def _create_widgets(self) -> None:
         """Create all UI widgets."""
         # Top frame for session panels and config
@@ -102,6 +74,7 @@ class DriverConsistencyApp(ctk.CTk, TkinterDnD.DnDWrapper):
             title="SESSION A (Primary)",
             on_file_loaded=self._on_session_a_loaded,
             on_selection_changed=self._on_selection_changed,
+            auto_select="top_103",
         )
 
         # Session B panel (middle)
@@ -110,6 +83,7 @@ class DriverConsistencyApp(ctk.CTk, TkinterDnD.DnDWrapper):
             title="SESSION B (Compare)",
             on_file_loaded=self._on_session_b_loaded,
             on_selection_changed=self._on_selection_changed,
+            auto_select="top_103",
         )
 
         # Config panel (right)

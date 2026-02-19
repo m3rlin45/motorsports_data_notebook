@@ -73,6 +73,8 @@ module = [
     "ipywidgets.*",
     "pyarrow.*",
     "customtkinter.*",
+    "tkinterdnd2",
+    "tkinterdnd2.*",
 ]
 ignore_missing_imports = true
 

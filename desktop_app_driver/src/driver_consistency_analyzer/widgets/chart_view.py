@@ -10,54 +10,10 @@ from matplotlib.axes import Axes
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.figure import Figure
 
+from motorsports_data_notebook.desktop.dpi import get_screen_dpi
+
 if TYPE_CHECKING:
     from driver_consistency_analyzer.analysis.driver_consistency import DriverConsistencyResult
-
-
-def get_screen_dpi() -> int:
-    """Get the screen DPI for HiDPI support."""
-    import sys
-
-    # Try Windows API first
-    if sys.platform == "win32":
-        try:
-            import ctypes
-
-            ctypes.windll.shcore.SetProcessDpiAwareness(2)
-            hdc = ctypes.windll.user32.GetDC(0)
-            dpi = ctypes.windll.gdi32.GetDeviceCaps(hdc, 88)
-            ctypes.windll.user32.ReleaseDC(0, hdc)
-            return dpi
-        except Exception:
-            pass
-
-    # Try tkinter method
-    try:
-        import tkinter as tk
-
-        root = tk._default_root  # type: ignore[attr-defined]
-        if root is None:
-            root = tk.Tk()
-            root.withdraw()
-        scaling = root.tk.call("tk", "scaling")
-        dpi = int(float(scaling) * 72)
-        if dpi > 72:
-            return dpi
-    except Exception:
-        pass
-
-    # Try environment variable
-    import os
-
-    gdk_scale = os.environ.get("GDK_SCALE", "1")
-    try:
-        scale = float(gdk_scale)
-        if scale > 1:
-            return int(96 * scale)
-    except ValueError:
-        pass
-
-    return 96
 
 
 class ChartView(ctk.CTkFrame):

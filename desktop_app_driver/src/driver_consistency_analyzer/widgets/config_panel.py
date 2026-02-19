@@ -6,7 +6,7 @@ from typing import Callable
 
 import customtkinter as ctk
 
-from motorsports_data_notebook.desktop.autocomplete_entry import AutocompleteEntry
+from motorsports_data_notebook.desktop.config_panel import BaseConfigPanel
 
 # Default channel name mappings
 DEFAULT_CHANNEL_NAMES = {
@@ -23,13 +23,18 @@ DEFAULT_CORNER_THRESHOLD = 0.006
 DEFAULT_THROTTLE_THRESHOLD = 98.0
 DEFAULT_SUSTAIN_TIME_MS = 500.0
 
+_CHANNEL_DISPLAY_NAMES = {
+    "throttle": "Throttle:",
+    "brake": "Brake:",
+    "lateral_g": "Lat G:",
+    "gps_lat": "GPS Lat:",
+    "gps_lon": "GPS Lon:",
+    "gps_speed": "GPS Spd:",
+}
 
-class ConfigPanel(ctk.CTkFrame):
-    """Panel for configuring channel names and analysis thresholds.
 
-    Provides editable fields for channel name mappings and analysis
-    parameters, plus status display and statistics button.
-    """
+class ConfigPanel(BaseConfigPanel):
+    """Panel for configuring channel names and analysis thresholds."""
 
     def __init__(
         self,
@@ -48,68 +53,18 @@ class ConfigPanel(ctk.CTkFrame):
         on_config_changed : callable, optional
             Callback when any configuration value changes.
         """
-        super().__init__(parent)
-
-        self._on_stats_click = on_stats_click
-        self._on_config_changed = on_config_changed
-        self._create_widgets()
+        super().__init__(
+            parent,
+            channel_defaults=DEFAULT_CHANNEL_NAMES.copy(),
+            channel_display_names=_CHANNEL_DISPLAY_NAMES,
+            on_stats_click=on_stats_click,
+            on_config_changed=on_config_changed,
+        )
+        self._create_threshold_widgets()
         self._layout_widgets()
 
-    def _create_widgets(self) -> None:
-        """Create all widgets."""
-        # Title
-        self.title_label = ctk.CTkLabel(
-            self,
-            text="CONFIGURATION",
-            font=ctk.CTkFont(size=14, weight="bold"),
-        )
-
-        # Channel names frame
-        self.channels_frame = ctk.CTkFrame(self)
-        self.channels_label = ctk.CTkLabel(
-            self.channels_frame,
-            text="Channel Names:",
-            font=ctk.CTkFont(size=12, weight="bold"),
-        )
-
-        # Channel name entries
-        self.channel_entries: dict[str, AutocompleteEntry] = {}
-        self.channel_labels: dict[str, ctk.CTkLabel] = {}
-
-        channel_display = {
-            "throttle": "Throttle:",
-            "brake": "Brake:",
-            "lateral_g": "Lat G:",
-            "gps_lat": "GPS Lat:",
-            "gps_lon": "GPS Lon:",
-            "gps_speed": "GPS Spd:",
-        }
-
-        for key, display_name in channel_display.items():
-            self.channel_labels[key] = ctk.CTkLabel(
-                self.channels_frame,
-                text=display_name,
-                font=ctk.CTkFont(size=11),
-            )
-            self.channel_entries[key] = AutocompleteEntry(
-                self.channels_frame,
-                width=110,
-                font=ctk.CTkFont(size=11),
-                on_change=self._on_entry_changed,
-            )
-            self.channel_entries[key].insert(0, DEFAULT_CHANNEL_NAMES[key])
-
-        # Reset channels button
-        self.reset_channels_btn = ctk.CTkButton(
-            self.channels_frame,
-            text="Reset to Default",
-            width=120,
-            height=24,
-            font=ctk.CTkFont(size=10),
-            command=self._reset_channels,
-        )
-
-        # Thresholds frame
+    def _create_threshold_widgets(self) -> None:
+        """Create threshold input widgets."""
         self.thresholds_frame = ctk.CTkFrame(self)
         self.thresholds_label = ctk.CTkLabel(
             self.thresholds_frame,
@@ -117,7 +72,6 @@ class ConfigPanel(ctk.CTkFrame):
             font=ctk.CTkFont(size=12, weight="bold"),
         )
 
-        # Threshold entries
         self.threshold_entries: dict[str, ctk.CTkEntry] = {}
         self.threshold_labels: dict[str, ctk.CTkLabel] = {}
 
@@ -141,52 +95,14 @@ class ConfigPanel(ctk.CTkFrame):
             self.threshold_entries[key].insert(0, default_val)
             self.threshold_entries[key].bind("<KeyRelease>", self._on_entry_changed)
 
-        # Status and actions frame
-        self.status_frame = ctk.CTkFrame(self, fg_color="transparent")
-
-        # Status label
-        self.status_label = ctk.CTkLabel(
-            self.status_frame,
-            text="",
-            font=ctk.CTkFont(size=11),
-            anchor="w",
-        )
-
-        # Statistics button
-        self.stats_btn = ctk.CTkButton(
-            self.status_frame,
-            text="Show Statistics",
-            width=110,
-            height=26,
-            font=ctk.CTkFont(size=11),
-            command=self._on_stats_btn_click,
-        )
-
     def _layout_widgets(self) -> None:
-        """Arrange widgets in the panel."""
-        # Title
+        """Arrange all widgets in the panel."""
         self.title_label.pack(anchor="w", padx=5, pady=(2, 5))
 
-        # Channel names frame (2-column grid layout)
-        self.channels_frame.pack(fill="x", padx=5, pady=2)
-        self.channels_label.grid(row=0, column=0, columnspan=4, sticky="w", padx=2, pady=1)
+        # Channels
+        self._pack_channels()
 
-        # Channel entries in 2-column grid
-        keys = list(self.channel_entries.keys())
-        for i, key in enumerate(keys):
-            row = (i // 2) + 1
-            col_offset = (i % 2) * 2
-            self.channel_labels[key].grid(
-                row=row, column=col_offset, padx=(2, 1), pady=1, sticky="e"
-            )
-            self.channel_entries[key].grid(
-                row=row, column=col_offset + 1, padx=1, pady=1, sticky="w"
-            )
-
-        reset_row = (len(keys) // 2) + 2
-        self.reset_channels_btn.grid(row=reset_row, column=0, columnspan=4, pady=2)
-
-        # Thresholds frame
+        # Thresholds
         self.thresholds_frame.pack(fill="x", padx=5, pady=2)
         self.thresholds_label.grid(row=0, column=0, columnspan=4, sticky="w", padx=2, pady=1)
 
@@ -196,59 +112,8 @@ class ConfigPanel(ctk.CTkFrame):
             self.threshold_labels[key].grid(row=row, column=0, padx=(2, 1), pady=1, sticky="e")
             self.threshold_entries[key].grid(row=row, column=1, padx=1, pady=1, sticky="w")
 
-        # Status and actions at bottom
-        self.status_frame.pack(fill="x", padx=5, pady=(5, 2))
-        self.status_label.pack(side="left", fill="x", expand=True, padx=2)
-        self.stats_btn.pack(side="right", padx=2)
-
-    def _on_entry_changed(self, event=None) -> None:
-        """Handle any config entry value change."""
-        if self._on_config_changed:
-            self._on_config_changed()
-
-    def _on_stats_btn_click(self) -> None:
-        """Handle statistics button click."""
-        if self._on_stats_click:
-            self._on_stats_click()
-
-    def set_status(self, message: str) -> None:
-        """Update the status label text."""
-        self.status_label.configure(text=message)
-
-    def set_stats_button_text(self, text: str) -> None:
-        """Update the statistics button text."""
-        self.stats_btn.configure(text=text)
-
-    def _reset_channels(self) -> None:
-        """Reset channel names to defaults."""
-        for key, val in DEFAULT_CHANNEL_NAMES.items():
-            self.channel_entries[key].delete(0, "end")
-            self.channel_entries[key].insert(0, val)
-        self._on_entry_changed()
-
-    def update_available_channels(self, channel_names: list[str]) -> None:
-        """Update autocomplete suggestions for all channel entries.
-
-        Parameters
-        ----------
-        channel_names : list[str]
-            Available channel names from loaded session(s).
-        """
-        for entry in self.channel_entries.values():
-            entry.set_suggestions(channel_names)
-
-    def get_channel_names(self) -> dict[str, str]:
-        """Get current channel name mappings.
-
-        Returns
-        -------
-        dict[str, str]
-            Channel name mapping dictionary.
-        """
-        return {
-            key: self.channel_entries[key].get() or DEFAULT_CHANNEL_NAMES[key]
-            for key in DEFAULT_CHANNEL_NAMES
-        }
+        # Status
+        self._pack_status()
 
     def get_corner_threshold(self) -> float:
         """Get the corner detection threshold."""
