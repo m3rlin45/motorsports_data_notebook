@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 import customtkinter as ctk
 
 from motorsports_data_notebook.desktop.config_panel import BaseConfigPanel
-from motorsports_data_notebook.suspension import (
-    MotionRatios,
-    SUSPENSION_CHANNEL_NAMES,
-)
+from motorsports_data_notebook.profiles import DEFAULT_CHANNEL_NAMES
+from motorsports_data_notebook.suspension import MotionRatios
 
+if TYPE_CHECKING:
+    from motorsports_data_notebook.profiles import VehicleProfile
+
+# Display labels for channels used by the suspension analysis
 _CHANNEL_DISPLAY_NAMES = {
     "shock_fl": "FL Shock:",
     "shock_fr": "FR Shock:",
@@ -28,6 +30,7 @@ class ConfigPanel(BaseConfigPanel):
         parent: ctk.CTkFrame,
         on_stats_click: Callable[[], None] | None = None,
         on_config_changed: Callable[[], None] | None = None,
+        on_save_profile: Callable[[], None] | None = None,
     ) -> None:
         """Initialize the config panel.
 
@@ -39,16 +42,20 @@ class ConfigPanel(BaseConfigPanel):
             Callback when statistics button is clicked.
         on_config_changed : callable, optional
             Callback when any configuration value changes.
+        on_save_profile : callable, optional
+            Callback when Save Profile button is clicked.
         """
+        self._on_save_profile = on_save_profile
         super().__init__(
             parent,
-            channel_defaults=SUSPENSION_CHANNEL_NAMES.copy(),
+            channel_defaults={k: DEFAULT_CHANNEL_NAMES[k] for k in _CHANNEL_DISPLAY_NAMES},
             channel_display_names=_CHANNEL_DISPLAY_NAMES,
             on_stats_click=on_stats_click,
             on_config_changed=on_config_changed,
         )
         self._default_ratios = MotionRatios.toyota_86_zn6()
         self._create_ratio_widgets()
+        self._create_save_profile_btn()
         self._layout_widgets()
 
     def _create_ratio_widgets(self) -> None:
@@ -91,6 +98,17 @@ class ConfigPanel(BaseConfigPanel):
             command=self._reset_ratios,
         )
 
+    def _create_save_profile_btn(self) -> None:
+        """Create the Save Profile button (placed in channels frame)."""
+        self.save_profile_btn = ctk.CTkButton(
+            self.channels_frame,
+            text="Save Profile",
+            width=100,
+            height=24,
+            font=ctk.CTkFont(size=10),
+            command=self._on_save_profile_click,
+        )
+
     def _layout_widgets(self) -> None:
         """Arrange all widgets in the panel."""
         self.title_label.pack(anchor="w", padx=5, pady=(2, 5))
@@ -111,9 +129,66 @@ class ConfigPanel(BaseConfigPanel):
 
         self.reset_ratios_btn.grid(row=3, column=0, columnspan=4, pady=2)
 
-        # Channels + status
+        # Channels + status (from base class)
         self._pack_channels()
+
+        # Add save profile button next to reset channels button
+        num_channel_rows = (len(self.channel_entries) + 1) // 2
+        self.reset_channels_btn.grid_configure(columnspan=2)
+        self.save_profile_btn.grid(row=num_channel_rows + 1, column=2, columnspan=2, pady=2)
+
         self._pack_status()
+
+    def _on_save_profile_click(self) -> None:
+        """Handle Save Profile button click."""
+        if self._on_save_profile:
+            self._on_save_profile()
+
+    def set_from_profile(self, profile: VehicleProfile) -> None:
+        """Populate all fields from a VehicleProfile.
+
+        Parameters
+        ----------
+        profile : VehicleProfile
+            The profile to populate from.
+        """
+        # Set motion ratios
+        ratios = {
+            "FL": profile.motion_ratios.front_left,
+            "FR": profile.motion_ratios.front_right,
+            "RL": profile.motion_ratios.rear_left,
+            "RR": profile.motion_ratios.rear_right,
+        }
+        for corner, val in ratios.items():
+            self.ratio_entries[corner].delete(0, "end")
+            self.ratio_entries[corner].insert(0, f"{val:.3f}")
+
+        # Set channel names
+        for key, entry in self.channel_entries.items():
+            if key in profile.channel_names:
+                entry.delete(0, "end")
+                entry.insert(0, profile.channel_names[key])
+
+    def get_vehicle_profile(self, name: str) -> VehicleProfile:
+        """Build a VehicleProfile from current field values.
+
+        Parameters
+        ----------
+        name : str
+            Name for the profile.
+
+        Returns
+        -------
+        VehicleProfile
+            Profile with current field values.
+        """
+        from motorsports_data_notebook.profiles import VehicleProfile
+
+        return VehicleProfile(
+            name=name,
+            channel_names=self.get_channel_names(),
+            motion_ratios=self.get_motion_ratios(),
+        )
 
     def _reset_ratios(self) -> None:
         """Reset motion ratios to Toyota 86 defaults."""
@@ -145,5 +220,4 @@ class ConfigPanel(BaseConfigPanel):
                 rear_right=float(self.ratio_entries["RR"].get()),
             )
         except ValueError:
-            # Return defaults if parsing fails
             return MotionRatios.toyota_86_zn6()

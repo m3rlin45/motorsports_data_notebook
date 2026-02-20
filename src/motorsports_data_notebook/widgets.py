@@ -462,10 +462,33 @@ class SessionPicker:
             self._laps = self._log.laps.to_pandas()
             self._update_lap_dropdown()
             self._update_channel_picker()
+
+            # Auto-populate channel names from profile if logger ID is known
+            self._apply_profile_channels()
+
             self._loading_label.value = ""
         except Exception as e:
             self._loading_label.value = f"<span style='color: red;'>Error loading file: {e}</span>"
             self._lap_dropdown.disabled = True
+
+    def _apply_profile_channels(self) -> None:
+        """Auto-populate channel names from a vehicle profile."""
+        if self._channel_picker is None or self._log is None:
+            return
+
+        from .profiles import get_logger_id, get_profile_for_logger
+
+        logger_id = get_logger_id(self._log)
+        if not logger_id:
+            return
+
+        profile = get_profile_for_logger(logger_id)
+        if profile:
+            self._channel_picker.set_channel_values(profile.channel_names)
+            self._file_status.value += (
+                f"<br><span style='color: green;'><b>✓</b> Profile: {profile.name} "
+                f"(logger {logger_id})</span>"
+            )
 
     def _update_channel_picker(self) -> None:
         """Update the channel picker with available channels from loaded log."""
@@ -775,6 +798,21 @@ class ChannelPicker:
             if combobox.value not in self._available_channels:
                 unmatched.append(logical_name)
         return unmatched
+
+    def set_channel_values(self, channel_names: dict[str, str]) -> None:
+        """Set channel values from a mapping (e.g. from a vehicle profile).
+
+        Only updates channels that exist in the picker; ignores unknown keys.
+
+        Parameters
+        ----------
+        channel_names : dict[str, str]
+            Mapping of logical channel names to channel values.
+        """
+        for logical_name, value in channel_names.items():
+            if logical_name in self._comboboxes:
+                self._comboboxes[logical_name].value = value
+        self._update_validation()
 
     def update_available_channels(self, available_channels: list[str]) -> None:
         """Update the list of available channels.
