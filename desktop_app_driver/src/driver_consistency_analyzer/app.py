@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import customtkinter as ctk
+import numpy as np
 from tkinterdnd2 import TkinterDnD
 
 from motorsports_data_notebook.desktop.dpi import setup_hidpi_scaling
@@ -58,6 +59,7 @@ class DriverConsistencyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         # Debounce timer for auto-analysis
         self._analysis_timer: str | None = None
         self._analyzing = False
+        self._last_throttle_channel: str | None = None
 
         # Build UI
         self._create_widgets()
@@ -203,8 +205,11 @@ class DriverConsistencyApp(ctk.CTk, TkinterDnD.DnDWrapper):
     def _on_session_a_loaded(self, log: LogFile, file_path: Path) -> None:
         """Handle Session A file loaded."""
         self._result_a = None
+        self._result_b = None
         self._channels_a = sorted(log.channels.keys())
         self._update_available_channels()
+        self._auto_set_throttle_threshold()
+        self._last_throttle_channel = self.config_panel.get_channel_names()["throttle"]
         self._update_status(f"Loaded: {file_path.name}")
 
     def _on_session_b_loaded(self, log: LogFile, file_path: Path) -> None:
@@ -225,8 +230,66 @@ class DriverConsistencyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         """Update the status label in config panel."""
         self.config_panel.set_status(message)
 
+    def _auto_set_throttle_threshold(self) -> bool:
+        """Set throttle threshold to 95% of peak throttle channel value.
+
+        Returns True if the threshold was successfully computed and set.
+        """
+        log = self.session_a_panel.log
+        if log is None:
+            return False
+
+        throttle_name = self.config_panel.get_channel_names()["throttle"]
+        if throttle_name not in log.channels:
+            return False
+
+        try:
+            data = log.channels[throttle_name].column(throttle_name).to_numpy()
+            # Use 95th percentile to ignore sensor spikes/overshoot.
+            # The top 5% of session data is excluded, which handles noisy
+            # sensors that overshoot above the true full-throttle value.
+            peak = float(np.nanpercentile(data, 95))
+            if peak <= 0:
+                return False
+            threshold = round(peak * 0.95, 1)
+            self.config_panel.set_throttle_threshold(threshold)
+            return True
+        except Exception:
+            return False
+
+    def _diagnose_empty_ta(self) -> str:
+        """Suggest why TA values are empty."""
+        log = self.session_a_panel.log
+        if log is None:
+            return "try lower threshold"
+
+        lateral_g_name = self.config_panel.get_channel_names()["lateral_g"]
+        if lateral_g_name not in log.channels:
+            return f"Lat G channel '{lateral_g_name}' not found"
+
+        try:
+            data = log.channels[lateral_g_name].column(lateral_g_name).to_numpy()
+            peak = float(np.nanmax(np.abs(data)))
+            if peak < 0.1:
+                return f"Lat G values near zero — check channel name"
+        except Exception:
+            pass
+
+        threshold = self.config_panel.get_throttle_threshold()
+        return f"try lower threshold (currently {threshold})"
+
     def _on_selection_changed(self) -> None:
         """Handle lap selection change - trigger auto-analysis with debounce."""
+        current_throttle = self.config_panel.get_channel_names()["throttle"]
+        if (
+            self._last_throttle_channel is not None
+            and current_throttle != self._last_throttle_channel
+        ):
+            # Only update tracking when the channel actually exists in the log
+            # (avoids tracking intermediate partial text while user types)
+            if self._auto_set_throttle_threshold():
+                self._last_throttle_channel = current_throttle
+
         if self._analysis_timer:
             self.after_cancel(self._analysis_timer)
         self._analysis_timer = self.after(300, self._run_analysis)
@@ -244,6 +307,8 @@ class DriverConsistencyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         self._analysis_timer = None
 
         if self._analyzing:
+            # Re-schedule so config changes made during analysis aren't lost
+            self._analysis_timer = self.after(300, self._run_analysis)
             return
 
         session_a = self.session_a_panel.log
@@ -318,6 +383,8 @@ class DriverConsistencyApp(ctk.CTk, TkinterDnD.DnDWrapper):
                     throttle_threshold=throttle_threshold,
                     sustain_time_ms=sustain_time_ms,
                 )
+            else:
+                self._result_b = None
 
             self.after(0, self._display_results)
 
@@ -347,7 +414,13 @@ class DriverConsistencyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         self._display_stats()
 
         n_corners = len(self._result_a.corners)
-        self._update_status(f"Analysis complete - {n_corners} corners detected")
+        total_ta = sum(len(cd.ta_values) for cd in self._result_a.corner_data)
+        threshold = self.config_panel.get_throttle_threshold()
+        if total_ta > 0:
+            self._update_status(f"Done - {n_corners} corners, {total_ta} TA pts (thr: {threshold})")
+        else:
+            hint = self._diagnose_empty_ta()
+            self._update_status(f"Done - {n_corners} corners, 0 TA - {hint}")
 
     def _update_chart(self) -> None:
         """Update the chart based on current view mode and selection."""

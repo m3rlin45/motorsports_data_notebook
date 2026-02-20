@@ -129,6 +129,12 @@ class ConfigPanel(BaseConfigPanel):
         except ValueError:
             return DEFAULT_THROTTLE_THRESHOLD
 
+    def set_throttle_threshold(self, value: float) -> None:
+        """Programmatically update the throttle threshold entry field."""
+        entry = self.threshold_entries["throttle_threshold"]
+        entry.delete(0, "end")
+        entry.insert(0, f"{value:.1f}")
+
     def get_sustain_time_ms(self) -> float:
         """Get the sustain time in milliseconds."""
         try:
