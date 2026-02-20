@@ -13,6 +13,8 @@ import numpy as np
 import pandas as pd
 
 
+from ._util import validate_channel_names as _validate_channel_names
+
 if TYPE_CHECKING:
     from libxrk.base import LogFile
 
@@ -544,31 +546,6 @@ def create_track_segments(
     segments = sorted(segments, key=lambda s: s.start_dist)
 
     return segments
-
-
-def _validate_channel_names(channel_names: dict, required_keys: list[str], func_name: str) -> None:
-    """Validate that required keys are present in channel_names dict.
-
-    Parameters
-    ----------
-    channel_names : dict
-        Channel name mapping from canonical names to actual channel names.
-    required_keys : list[str]
-        List of required keys that must be present.
-    func_name : str
-        Name of the calling function (for error messages).
-
-    Raises
-    ------
-    KeyError
-        If any required key is missing from channel_names.
-    """
-    missing = [key for key in required_keys if key not in channel_names]
-    if missing:
-        raise KeyError(
-            f"{func_name}() requires channel_names to have keys: {required_keys}. "
-            f"Missing: {missing}"
-        )
 
 
 def detect_zones_averaged(
