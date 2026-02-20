@@ -1,0 +1,102 @@
+# Vehicle profiles for AIM telemetry channel mapping.
+#
+# To add your vehicle, submit a PR with:
+# 1. A new entry under "profiles" with your vehicle's channel names and motion ratios
+# 2. Your logger serial number under "logger_map" pointing to your profile
+#
+# Channel names must match exactly what appears in Race Studio 3 / AIM logger config.
+
+profiles:
+  toyota_86_zn6:
+    name: Toyota 86 ZN6
+    # AiM Solo2 DL / MXP 1.3 + Toyota GT86 CAN expansion
+    channel_names:
+      throttle: PPS
+      brake: BrakePress
+      gps_speed: GPS Speed
+      gps_latitude: GPS Latitude
+      gps_longitude: GPS Longitude
+      lateral_g: LateralAcc
+      steering: SteerAngle
+      shock_fl: LF_Shock_Pot
+      shock_fr: RF_Shock_Pot
+      shock_rl: LR_Shock_Pot
+      shock_rr: RR_Shock_Pot
+      tpms_press_fl: TPMS_Press_LF
+      tpms_press_fr: TPMS_Press_RF
+      tpms_press_rl: TPMS_Press_LR
+      tpms_press_rr: TPMS_Press_RR
+      tpms_temp_fl: TPMS_Temp_LF
+      tpms_temp_fr: TPMS_Temp_RF
+      tpms_temp_rl: TPMS_Temp_LR
+      tpms_temp_rr: TPMS_Temp_RR
+    motion_ratios:
+      front_left: 0.997   # MacPherson strut
+      front_right: 0.997
+      rear_left: 0.768    # Multi-link
+      rear_right: 0.768
+
+  honda_ek9:
+    name: Honda Civic EK9
+    # AiM Solo logger — GPS-only, no CAN bus, no shock pots
+    channel_names:
+      gps_speed: GPS Speed
+      gps_latitude: GPS Latitude
+      gps_longitude: GPS Longitude
+      lateral_g: LateralAcc
+    motion_ratios:
+      front_left: 1.0
+      front_right: 1.0
+      rear_left: 1.0
+      rear_right: 1.0
+
+  super_fj:
+    name: Super FJ
+    # AiM MXm logger
+    channel_names:
+      throttle: ACCEL
+      brake: BRK
+      gps_speed: GPS Speed
+      gps_latitude: GPS Latitude
+      gps_longitude: GPS Longitude
+      lateral_g: LateralAcc
+      steering: steering
+    motion_ratios:
+      front_left: 1.0
+      front_right: 1.0
+      rear_left: 1.0
+      rear_right: 1.0
+
+  kk_s2:
+    name: KK-SII
+    # AiM SW4 logger + Trailbrake TPMS
+    # Note: separate front/rear brake channels; brake maps to front brake
+    channel_names:
+      throttle: Throttle
+      brake: F_BRK
+      gps_speed: GPS Speed
+      gps_latitude: GPS Latitude
+      gps_longitude: GPS Longitude
+      lateral_g: GPSPO_LateralAcc
+      steering: Steering
+      tpms_press_fl: TPMS_Press_LF
+      tpms_press_fr: TPMS_Press_RF
+      tpms_press_rl: TPMS_Press_LR
+      tpms_press_rr: TPMS_Press_RR
+      tpms_temp_fl: TPMS_Temp_LF
+      tpms_temp_fr: TPMS_Temp_RF
+      tpms_temp_rl: TPMS_Temp_LR
+      tpms_temp_rr: TPMS_Temp_RR
+    motion_ratios:
+      front_left: 1.0
+      front_right: 1.0
+      rear_left: 1.0
+      rear_right: 1.0
+
+# Logger ID -> profile name mappings
+logger_map:
+  6519522: toyota_86_zn6    # Inferno 86 — Solo2 DL (no shock pots or TPMS)
+  6701209: toyota_86_zn6    # Inferno 86 — MXP 1.3 (with shock pots + TPMS from Aug 2025)
+  15074: honda_ek9           # EK9 — Solo logger
+  6603435: super_fj              # Super FJ — MXm logger
+  8401203: kk_s2             # KK-SII — SW4 logger

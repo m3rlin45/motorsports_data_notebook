@@ -13,7 +13,8 @@ dependencies = [
     "pyarrow (>=18.0.0,<23.0.0)",
     "plotly (>=6.0.0,<7.0.0)",
     "libxrk>=0.10.1",
-    "ipywidgets (>=8.0.0,<9.0.0)"
+    "ipywidgets (>=8.0.0,<9.0.0)",
+    "pyyaml (>=6.0,<7.0)"
 ]
 
 [project.optional-dependencies]
@@ -23,7 +24,7 @@ app = [
     "ipykernel (>=7.1.0,<8.0.0)",
     "matplotlib (>=3.10.7,<4.0.0)",
     "seaborn (>=0.13.2,<0.14.0)",
-    "poethepoet (>=0.24.0,<1.0.0)",
+    "poethepoet (>=0.24.0,<1.0.0)"
 ]
 dev = [
     "black>=25.11.0",
@@ -75,6 +76,7 @@ module = [
     "customtkinter.*",
     "tkinterdnd2",
     "tkinterdnd2.*",
+    "yaml.*",
 ]
 ignore_missing_imports = true
 

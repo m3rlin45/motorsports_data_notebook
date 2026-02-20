@@ -44,6 +44,19 @@ if command -v wine64 &> /dev/null; then
     WINE_CMD="wine64"
 fi
 
+# Wine Python needs valid console handles (stdin/stdout/stderr).
+# In non-interactive shells (CI, piped output, etc.), Wine can't obtain
+# Windows console handles, causing "init_sys_streams: Invalid handle".
+# Use `script` to allocate a pseudo-TTY so Wine gets valid handles.
+wine_python() {
+    local cmd="$WINE_CMD \"$WINE_PYTHON\""
+    local arg
+    for arg in "$@"; do
+        cmd+=" $(printf '%q' "$arg")"
+    done
+    script -qc "$cmd" /dev/null
+}
+
 # Initialize Wine prefix if needed
 if [ ! -d "$WINEPREFIX" ]; then
     echo "Initializing Wine prefix..."
@@ -82,18 +95,18 @@ fi
 # Check Python works
 echo ""
 echo "Wine Python version:"
-$WINE_CMD "$WINE_PYTHON" --version
+wine_python --version
 
 # Verify tkinter works
 echo "Checking tkinter..."
-$WINE_CMD "$WINE_PYTHON" -c "import tkinter; print('tkinter OK')"
+wine_python -c "import tkinter; print('tkinter OK')"
 
 # Install/update pip packages
 echo ""
 echo "Installing Python packages..."
-$WINE_CMD "$WINE_PYTHON" -m pip install --upgrade pip
+wine_python -m pip install --upgrade pip
 # Pin numpy<2 - numpy 2.x uses crealf() which Wine's ucrtbase.dll doesn't implement
-$WINE_CMD "$WINE_PYTHON" -m pip install \
+wine_python -m pip install \
     customtkinter \
     tkinterdnd2 \
     matplotlib \
@@ -101,6 +114,7 @@ $WINE_CMD "$WINE_PYTHON" -m pip install \
     "numpy<2" \
     pyarrow \
     libxrk \
+    pyyaml \
     pyinstaller
 
 # Remove unused pyarrow components to reduce bundle size (~33 MB)
@@ -189,10 +203,7 @@ echo ""
 echo "Running PyInstaller (this may take several minutes)..."
 cd "$BUILD_DIR"
 
-xvfb-run -a $WINE_CMD "$WINE_PYTHON" -m PyInstaller \
-    --clean \
-    --noconfirm \
-    build.spec
+xvfb-run -a script -qc "$WINE_CMD \"$WINE_PYTHON\" -m PyInstaller --clean --noconfirm build.spec" /dev/null
 
 # Check result
 if [ -f "$BUILD_DIR/dist/DriverConsistencyAnalyzer.exe" ]; then
