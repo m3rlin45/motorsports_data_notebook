@@ -73,9 +73,33 @@ When running shell commands:
 - Good: `cd /home/m3rlin45/code/motorsports_data_notebook/desktop_app && ./build_wine.sh`
 - Good: `/home/m3rlin45/code/motorsports_data_notebook/desktop_app/build_wine.sh`
 
-## Desktop App (Suspension Analyzer)
+## Desktop App (Inferno Analyzer)
 
-The `desktop_app/` directory contains a standalone CustomTkinter GUI application.
+The `desktop_app/` directory contains a standalone CustomTkinter GUI application that combines suspension velocity histogram analysis and driver consistency analysis (throttle acceptance & braking points) into a single tabbed interface.
+
+```
+desktop_app/
+  src/inferno_analyzer/
+    app.py                      # InfernoAnalyzerApp (shared sessions + CTkTabview)
+    tabs/
+      base_tab.py               # BaseAnalysisTab (debounce, threading, stats window)
+      suspension_tab.py          # SuspensionTab
+      driver_tab.py              # DriverTab
+    suspension/                  # Suspension velocity histogram analysis
+      analysis/multi_lap.py
+      widgets/{chart_view,config_panel,stats_panel}.py
+      visualization/comparison.py
+    driver/                      # Driver consistency analysis
+      analysis/driver_consistency.py
+      widgets/{chart_view,config_panel,corner_selector,stats_panel}.py
+      visualization/{corner_detail,corner_summary,track_map}.py
+```
+
+### Running locally
+
+```bash
+cd /home/m3rlin45/code/motorsports_data_notebook/desktop_app && poetry install && python -m inferno_analyzer
+```
 
 ### Building Windows exe (via Wine)
 
@@ -85,22 +109,7 @@ cd /home/m3rlin45/code/motorsports_data_notebook/desktop_app && ./build_wine.sh
 
 Run on Windows from WSL:
 ```bash
-powershell.exe -Command "Start-Process '$(wslpath -w /home/m3rlin45/code/motorsports_data_notebook/desktop_app/dist/SuspensionAnalyzer.exe)'"
-```
-
-## Desktop App (Driver Consistency Analyzer)
-
-The `desktop_app_driver/` directory contains a standalone CustomTkinter GUI application for analyzing throttle acceptance and braking point consistency across corners.
-
-### Building Windows exe (via Wine)
-
-```bash
-cd /home/m3rlin45/code/motorsports_data_notebook/desktop_app_driver && ./build_wine.sh
-```
-
-Run on Windows from WSL:
-```bash
-powershell.exe -Command "Start-Process '$(wslpath -w /home/m3rlin45/code/motorsports_data_notebook/desktop_app_driver/dist/DriverConsistencyAnalyzer.exe)'"
+powershell.exe -Command "Start-Process '$(wslpath -w /home/m3rlin45/code/motorsports_data_notebook/desktop_app/dist/InfernoAnalyzer.exe)'"
 ```
 
 ### Copying exe to Windows Desktop
@@ -119,12 +128,12 @@ sudo apt install python3-tk  # Ubuntu/Debian
 
 Build:
 ```bash
-cd /home/m3rlin45/code/motorsports_data_notebook/desktop_app && poetry run pip install pyinstaller && poetry run pyinstaller --clean --noconfirm suspension_analyzer.spec
+cd /home/m3rlin45/code/motorsports_data_notebook/desktop_app && poetry run pip install pyinstaller && poetry run pyinstaller --clean --noconfirm inferno_analyzer.spec
 ```
 
 Run (displays via WSLg on WSL2):
 ```bash
-/home/m3rlin45/code/motorsports_data_notebook/desktop_app/dist/SuspensionAnalyzer
+/home/m3rlin45/code/motorsports_data_notebook/desktop_app/dist/InfernoAnalyzer
 ```
 
 ## Code Style & Conventions

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build Suspension Analyzer Windows exe using Wine
+# Build Inferno Analyzer Windows exe using Wine
 # Requires: wine (with 32-bit support), xvfb, wget
 #
 # Install dependencies (Ubuntu/Debian):
@@ -26,7 +26,7 @@ PYTHON_DIR="$WINEPREFIX/drive_c/Python312"
 WINE_PYTHON="$PYTHON_DIR/python.exe"
 
 echo "========================================="
-echo " Suspension Analyzer Build (Wine)"
+echo " Inferno Analyzer Build (Wine)"
 echo "========================================="
 
 # Check dependencies
@@ -105,16 +105,18 @@ wine_python -c "import tkinter; print('tkinter OK')"
 echo ""
 echo "Installing Python packages..."
 wine_python -m pip install --upgrade pip
-# Pin numpy<2 - numpy 2.x uses crealf() which Wine's ucrtbase.dll doesn't implement
+# Pin versions to match main project (pyproject.toml).
+# Exception: numpy<2 because numpy 2.x uses crealf() which Wine's ucrtbase.dll
+# doesn't implement.
 wine_python -m pip install \
     customtkinter \
     tkinterdnd2 \
-    matplotlib \
-    pandas \
-    "numpy<2" \
-    pyarrow \
-    libxrk \
-    pyyaml \
+    "matplotlib>=3.10.7,<4" \
+    "pandas>=2,<3" \
+    "numpy>=1.26,<2" \
+    "pyarrow>=18,<23" \
+    "libxrk>=0.10.1" \
+    "pyyaml>=6,<7" \
     pyinstaller
 
 # Remove unused pyarrow components to reduce bundle size (~33 MB)
@@ -144,7 +146,7 @@ mkdir -p "$BUILD_DIR/motorsports_data_notebook_src"
 # Copy source files
 echo ""
 echo "Copying source files..."
-cp -r "$SCRIPT_DIR/src/suspension_analyzer" "$BUILD_DIR/src/"
+cp -r "$SCRIPT_DIR/src/inferno_analyzer" "$BUILD_DIR/src/"
 cp -r "$REPO_ROOT/src/motorsports_data_notebook" "$BUILD_DIR/motorsports_data_notebook_src/"
 
 # Create PyInstaller spec file
@@ -154,7 +156,7 @@ import sys
 sys.setrecursionlimit(5000)
 
 a = Analysis(
-    ['src/suspension_analyzer/main.py'],
+    ['src/inferno_analyzer/main.py'],
     pathex=['src', 'motorsports_data_notebook_src'],
     binaries=[],
     datas=[
@@ -171,7 +173,7 @@ a = Analysis(
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
-        'IPython', 'jupyter', 'notebook', 'qtpy', 'PyQt5', 'PyQt6',
+        'IPython', 'jupyter', 'notebook', 'qtpy', 'PyQt5', 'PyQt6', 'plotly',
         # Build tools (not needed at runtime)
         'Cython', 'setuptools', 'pip', 'pkg_resources',
         '_pyinstaller_hooks_contrib',
@@ -192,7 +194,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='SuspensionAnalyzer',
+    name='InfernoAnalyzer',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -210,16 +212,16 @@ cd "$BUILD_DIR"
 xvfb-run -a script -qc "$WINE_CMD \"$WINE_PYTHON\" -m PyInstaller --clean --noconfirm build.spec" /dev/null
 
 # Check result
-if [ -f "$BUILD_DIR/dist/SuspensionAnalyzer.exe" ]; then
+if [ -f "$BUILD_DIR/dist/InfernoAnalyzer.exe" ]; then
     mkdir -p "$SCRIPT_DIR/dist"
-    cp "$BUILD_DIR/dist/SuspensionAnalyzer.exe" "$SCRIPT_DIR/dist/"
+    cp "$BUILD_DIR/dist/InfernoAnalyzer.exe" "$SCRIPT_DIR/dist/"
 
-    EXE_SIZE=$(du -h "$SCRIPT_DIR/dist/SuspensionAnalyzer.exe" | cut -f1)
+    EXE_SIZE=$(du -h "$SCRIPT_DIR/dist/InfernoAnalyzer.exe" | cut -f1)
 
     echo ""
     echo "========================================="
     echo " BUILD SUCCESSFUL!"
-    echo " Output: desktop_app/dist/SuspensionAnalyzer.exe"
+    echo " Output: desktop_app/dist/InfernoAnalyzer.exe"
     echo " Size: $EXE_SIZE"
     echo "========================================="
     echo ""

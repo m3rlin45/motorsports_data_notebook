@@ -38,13 +38,13 @@ jobs:
 
       - name: Build executable
         working-directory: desktop_app
-        run: poetry run pyinstaller --clean --noconfirm suspension_analyzer.spec
+        run: poetry run pyinstaller --clean --noconfirm inferno_analyzer.spec
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SuspensionAnalyzer-Windows
-          path: desktop_app/dist/SuspensionAnalyzer.exe
+          name: InfernoAnalyzer-Windows
+          path: desktop_app/dist/InfernoAnalyzer.exe
           retention-days: 30
 
   build-linux:
@@ -73,13 +73,13 @@ jobs:
 
       - name: Build executable
         working-directory: desktop_app
-        run: poetry run pyinstaller --clean --noconfirm suspension_analyzer.spec
+        run: poetry run pyinstaller --clean --noconfirm inferno_analyzer.spec
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SuspensionAnalyzer-Linux
-          path: desktop_app/dist/SuspensionAnalyzer
+          name: InfernoAnalyzer-Linux
+          path: desktop_app/dist/InfernoAnalyzer
           retention-days: 30
 
   attach-to-release:
@@ -92,21 +92,21 @@ jobs:
       - name: Download Windows artifact
         uses: actions/download-artifact@v4
         with:
-          name: SuspensionAnalyzer-Windows
+          name: InfernoAnalyzer-Windows
           path: dist/
 
       - name: Download Linux artifact
         uses: actions/download-artifact@v4
         with:
-          name: SuspensionAnalyzer-Linux
+          name: InfernoAnalyzer-Linux
           path: dist/
 
       - name: Rename Linux binary
-        run: mv dist/SuspensionAnalyzer dist/SuspensionAnalyzer-Linux
+        run: mv dist/InfernoAnalyzer dist/InfernoAnalyzer-Linux
 
       - name: Attach to release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/SuspensionAnalyzer.exe
-            dist/SuspensionAnalyzer-Linux
+            dist/InfernoAnalyzer.exe
+            dist/InfernoAnalyzer-Linux
