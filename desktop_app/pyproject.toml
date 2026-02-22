@@ -1,21 +1,20 @@
 [project]
-name = "suspension-analyzer"
+name = "inferno-analyzer"
 version = "0.1.0"
-description = "Standalone desktop app for suspension velocity histogram analysis"
+description = "Standalone desktop app for motorsports telemetry analysis (suspension + driver consistency)"
 authors = [
     {name = "Christopher Dewan", email = "chris.dewan@m3rlin.net"}
 ]
-readme = "README.md"
 requires-python = ">=3.12,<3.14"
 dependencies = [
     "customtkinter>=5.2.0",
     "tkinterdnd2>=0.4.2",
-    "tkwebview2>=0.1.2",
-    "plotly>=6.0.0",
-    "pandas>=2.0.0",
-    "numpy>=2.0.0",
-    "pyarrow>=15.0.0",
-    "libxrk>=0.8.0",
+    "matplotlib>=3.10.7,<4.0.0",
+    "pandas>=2.0.0,<3.0.0",
+    "numpy>=2.0.0,<3.0.0",
+    "pyarrow>=18.0.0,<23.0.0",
+    "libxrk>=0.10.1",
+    "pyyaml>=6.0,<7.0",
     "motorsports-data-notebook",
 ]
 
@@ -23,9 +22,14 @@ dependencies = [
 build = [
     "pyinstaller>=6.0.0",
 ]
+dev = [
+    "black>=24.0.0",
+    "mypy>=1.8.0",
+    "poethepoet>=0.24.0",
+]
 
 [tool.poetry]
-packages = [{include = "suspension_analyzer", from = "src"}]
+packages = [{include = "inferno_analyzer", from = "src"}]
 
 [tool.poetry.dependencies]
 python = ">=3.12,<3.14"
@@ -45,6 +49,7 @@ warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
 check_untyped_defs = true
+disable_error_code = ["import-untyped"]
 
 [[tool.mypy.overrides]]
 module = [
@@ -52,12 +57,18 @@ module = [
     "libxrk.*",
     "numpy.*",
     "pyarrow.*",
+    "pandas",
+    "pandas.*",
     "customtkinter.*",
     "tkinterdnd2.*",
-    "tkwebview2.*",
+    "matplotlib.*",
 ]
 ignore_missing_imports = true
 
 [tool.poe.tasks]
-run = { cmd = "python -m suspension_analyzer", help = "Run the desktop app" }
-build = { shell = "pyinstaller suspension_analyzer.spec", help = "Build standalone exe" }
+run = { cmd = "python -m inferno_analyzer", help = "Run the desktop app" }
+build = { shell = "pyinstaller inferno_analyzer.spec", help = "Build standalone exe" }
+lint = { cmd = "black --check src/", help = "Check code formatting" }
+format = { cmd = "black src/", help = "Format code" }
+typecheck = { cmd = "mypy src/", help = "Run type checking" }
+check = { shell = "poe lint && poe typecheck", help = "Run all checks" }
