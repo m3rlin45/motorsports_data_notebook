@@ -40,6 +40,7 @@ class StatsPanel(BaseStatsPanel):
             headers = ["Corner", "A Skew", "B Skew", "Δ Skew", "A Std", "B Std", "Δ Std"]
             rows = []
             for corner_name, corner_a, corner_b in corners:
+                assert corner_b is not None
                 delta_skew = corner_b.skew - corner_a.skew
                 delta_std = corner_b.std - corner_a.std
                 rows.append(
@@ -365,7 +366,7 @@ class StatsPanel(BaseStatsPanel):
     ) -> None:
         """Add a row to the comparison velocity table."""
         # Session label (A or B)
-        text_color = "#3B8ED0" if session_label == "A" else "#D97706"
+        text_color: str | None = "#3B8ED0" if session_label == "A" else "#D97706"
         cell = ctk.CTkLabel(
             table_frame,
             text=session_label,

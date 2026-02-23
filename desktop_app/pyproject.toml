@@ -22,22 +22,22 @@ dependencies = [
 build = [
     "pyinstaller>=6.0.0",
 ]
+
+[dependency-groups]
 dev = [
     "black>=24.0.0",
     "mypy>=1.8.0",
-    "poethepoet>=0.24.0",
 ]
 
-[tool.poetry]
-packages = [{include = "inferno_analyzer", from = "src"}]
-
-[tool.poetry.dependencies]
-python = ">=3.12,<3.14"
-motorsports-data-notebook = {path = "..", develop = true}
-
 [build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["setuptools>=75.0.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.uv.sources]
+motorsports-data-notebook = { workspace = true }
 
 [tool.black]
 line-length = 100
@@ -64,11 +64,3 @@ module = [
     "matplotlib.*",
 ]
 ignore_missing_imports = true
-
-[tool.poe.tasks]
-run = { cmd = "python -m inferno_analyzer", help = "Run the desktop app" }
-build = { shell = "pyinstaller inferno_analyzer.spec", help = "Build standalone exe" }
-lint = { cmd = "black --check src/", help = "Check code formatting" }
-format = { cmd = "black src/", help = "Format code" }
-typecheck = { cmd = "mypy src/", help = "Run type checking" }
-check = { shell = "poe lint && poe typecheck", help = "Run all checks" }

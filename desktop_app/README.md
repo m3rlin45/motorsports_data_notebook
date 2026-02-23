@@ -85,9 +85,8 @@ sudo pacman -S tk
 
 ```bash
 cd desktop_app
-poetry install
-poetry run pip install pyinstaller
-poetry run pyinstaller --clean --noconfirm inferno_analyzer.spec
+uv sync --extra build
+uv run pyinstaller --clean --noconfirm inferno_analyzer.spec
 ```
 
 Output: `desktop_app/dist/InfernoAnalyzer`

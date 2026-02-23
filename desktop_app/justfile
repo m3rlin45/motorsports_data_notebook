@@ -1,0 +1,16 @@
+run:
+    uv run python -m inferno_analyzer
+
+build:
+    uv run pyinstaller inferno_analyzer.spec
+
+lint:
+    uv run black --check src/
+
+format:
+    uv run black src/
+
+typecheck:
+    uv run mypy src/
+
+check: lint typecheck

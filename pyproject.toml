@@ -8,24 +8,33 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.12,<4.0"
 dependencies = [
-    "numpy (>=2.0.0,<3.0.0)",
-    "pandas (>=2.0.0,<3.0.0)",
-    "pyarrow (>=18.0.0,<23.0.0)",
-    "plotly (>=6.0.0,<7.0.0)",
+    "numpy>=2.0.0,<3.0.0",
+    "pandas>=2.0.0,<3.0.0",
+    "pyarrow>=18.0.0,<23.0.0",
+    "plotly>=6.0.0,<7.0.0",
     "libxrk>=0.10.1",
-    "ipywidgets (>=8.0.0,<9.0.0)",
-    "pyyaml (>=6.0,<7.0)"
+    "ipywidgets>=8.0.0,<9.0.0",
+    "pyyaml>=6.0,<7.0",
 ]
 
 [project.optional-dependencies]
 app = [
-    "jupyterlab (>=4.4.10,<5.0.0)",
-    "notebook (>=7.4.7,<8.0.0)",
-    "ipykernel (>=7.1.0,<8.0.0)",
-    "matplotlib (>=3.10.7,<4.0.0)",
-    "seaborn (>=0.13.2,<0.14.0)",
-    "poethepoet (>=0.24.0,<1.0.0)"
+    "jupyterlab>=4.4.10,<5.0.0",
+    "notebook>=7.4.7,<8.0.0",
+    "ipykernel>=7.1.0,<8.0.0",
+    "matplotlib>=3.10.7,<4.0.0",
+    "seaborn>=0.13.2,<0.14.0",
 ]
+jupyterlite = [
+    "jupyterlite-core==0.7.1",
+    "jupyterlite-pyodide-kernel==0.7.0",
+    "pyodide-build==0.29.3",
+    "pyodide-lock==0.1.0a7",
+    "wheel<0.44",
+    "nbconvert>=7.0.0",
+]
+
+[dependency-groups]
 dev = [
     "black>=25.11.0",
     "mypy>=1.18.0",
@@ -35,20 +44,22 @@ dev = [
     "pytest>=8.0.0",
     "pytest-cov>=6.0.0",
 ]
-jupyterlite = [
-    "jupyterlite-core==0.7.1",
-    "jupyterlite-pyodide-kernel==0.7.0",
-    "pyodide-build==0.29.3",
-    "wheel<0.44",
-    "nbconvert>=7.0.0"
-]
-
-[tool.poetry]
-packages = [{include = "motorsports_data_notebook", from = "src"}]
 
 [build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["setuptools>=75.0.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+motorsports_data_notebook = ["py.typed", "data/*.yaml"]
+
+[tool.uv]
+prerelease = "if-necessary-or-explicit"
+
+[tool.uv.workspace]
+members = ["desktop_app"]
 
 [tool.black]
 line-length = 100
@@ -79,56 +90,3 @@ module = [
     "yaml.*",
 ]
 ignore_missing_imports = true
-
-[tool.poe.tasks]
-# Linting and type checking tasks
-format = { cmd = "black src/", help = "Format source code with black" }
-lint = { cmd = "black --check src/", help = "Check source code formatting with black" }
-typecheck = { cmd = "mypy src/", help = "Type check source code with mypy" }
-format-notebooks = { shell = "nbqa black workspace_template/en/ workspace_template/ja/", help = "Format notebooks with black" }
-lint-notebooks = { shell = "nbqa black --check workspace_template/en/ workspace_template/ja/", help = "Check notebook formatting with black" }
-typecheck-notebooks = { shell = "nbqa mypy workspace_template/en/ workspace_template/ja/", help = "Type check notebooks with mypy" }
-check = { sequence = ["lint", "typecheck", "lint-notebooks", "typecheck-notebooks", "test"], help = "Run all linting, type checking, and tests" }
-
-# Testing tasks
-test = { cmd = "pytest tests/ --cov=motorsports_data_notebook --cov-report=term-missing --cov-report=html:coverage_html", help = "Run tests with coverage" }
-
-# Workspace tasks
-clean = { shell = "rm -rf workspace/* && mkdir -p workspace/en workspace/ja workspace/data && cp workspace_template/en/*.ipynb workspace/en/ && cp workspace_template/ja/*.ipynb workspace/ja/ && cp workspace_template/data/*.xrz workspace/data/", help = "Clean workspace and copy fresh notebooks" }
-run = { cmd = "jupyter lab workspace/", help = "Start Jupyter notebook" }
-run_clean = ["clean", "run"]
-
-# Emscripten SDK setup (one-time, needed for building libxrk Pyodide wheel)
-setup_emsdk = { shell = "EMSDK_VERSION=$(pyodide config get emscripten_version) && ([ -d $HOME/emsdk ] || git clone https://github.com/emscripten-core/emsdk.git $HOME/emsdk) && cd $HOME/emsdk && git config core.autocrlf false && git checkout -- . && git pull && ./emsdk install $EMSDK_VERSION && ./emsdk activate $EMSDK_VERSION && rm -rf .pyodide-xbuildenv* && pyodide xbuildenv install", help = "Install Emscripten SDK to ~/emsdk (one-time setup for Pyodide builds)" }
-
-# JupyterLite wheel building tasks
-build_wheel = { shell = "poetry build -f wheel && cp dist/motorsports_data_notebook-*.whl pypi/", help = "Build motorsports_data_notebook wheel and copy to pypi" }
-_download_libxrk = { shell = "LIBXRK_VERSION=$(poetry show libxrk | grep 'version' | head -1 | awk '{print $NF}') && rm -rf build/libxrk && git clone --depth 1 --branch v$LIBXRK_VERSION https://github.com/m3rlin45/libxrk.git build/libxrk", help = "Clone libxrk repo at lockfile version (includes Rust source for Pyodide build)" }
-_copy_libxrk_wheel = { shell = "rm -f pypi/libxrk-*.whl && python scripts/build_lite_wheel.py build/libxrk/dist/*.whl", help = "Copy libxrk wheel to pypi with deps stripped" }
-build_libxrk_pyodide = { sequence = ["_download_libxrk", "_build_libxrk_pyodide", "_copy_libxrk_wheel"], help = "Build libxrk wheel for Pyodide (requires setup_emsdk)" }
-_download_pyodide_deps = { shell = "python scripts/download_pyodide_deps.py", help = "Download Pyodide built-in wheels (pyarrow etc.) for piplite" }
-
-# JupyterLite site building tasks (parallel where possible)
-_prepare_lite_contents = { shell = "rm -rf .lite_contents dist && mkdir -p .lite_contents/en .lite_contents/ja .lite_contents/data && cp workspace_template/data/*.xrz .lite_contents/data/ && VERSION=$(poetry version -s) && for nb in workspace_template/en/*.ipynb; do name=$(basename \"$nb\" .ipynb); cp \"$nb\" \".lite_contents/en/${name}_v${VERSION}.ipynb\"; done && for nb in workspace_template/ja/*.ipynb; do name=$(basename \"$nb\" .ipynb); cp \"$nb\" \".lite_contents/ja/${name}_v${VERSION}.ipynb\"; done", help = "Prepare .lite_contents directory with versioned notebooks" }
-_execute_lite_notebooks = { shell = "cd .lite_contents && python ../scripts/execute_notebooks.py", help = "Execute notebooks in .lite_contents to populate outputs" }
-_prepare_and_execute_notebooks = { sequence = ["_prepare_lite_contents", "_execute_lite_notebooks"], help = "Prepare and execute notebooks for JupyterLite" }
-_build_lite_site = { shell = "rm -rf dist .jupyterlite.doit.db && jupyter lite build --contents .lite_contents --output-dir dist && rm -rf .lite_contents", help = "Build JupyterLite site from .lite_contents" }
-serve_lite = { cmd = "jupyter lite serve --output-dir dist", help = "Serve JupyterLite site locally" }
-build_lite_full = { sequence = [["build_wheel", "build_libxrk_pyodide", "_download_pyodide_deps", "_prepare_and_execute_notebooks"], "_build_lite_site"], help = "Build JupyterLite site with all wheels" }
-build_and_serve_lite = ["build_lite_full", "serve_lite"]
-
-# Cleanup tasks
-clean_build = { shell = "rm -rf build/ pypi/ dist/", help = "Clean all build artifacts" }
-
-[tool.poe.tasks._build_libxrk_pyodide]
-shell = """
-cd build/libxrk && \
-. $HOME/emsdk/emsdk_env.sh && \
-. $HOME/.cargo/env && \
-export RUSTUP_TOOLCHAIN=nightly && \
-export CARGO_BUILD_TARGET=wasm32-unknown-emscripten && \
-export RUSTFLAGS="-Zemscripten-wasm-eh" && \
-pyodide build --exports whole_archive
-"""
-interpreter = "bash"
-help = "Build libxrk for Pyodide (Cython + Rust)"

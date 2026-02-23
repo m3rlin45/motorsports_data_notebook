@@ -8,12 +8,12 @@ Live site: https://analysis-preview.inferno.racing/
 
 ## Tech Stack
 
-- **Python 3.12+** with **Poetry 2.x** for dependency management
+- **Python 3.12+** with **uv** for dependency management
+- **just** as task runner
 - **PyArrow** for efficient columnar data filtering (prefer over pandas where possible)
 - **Plotly** for interactive visualizations (primary charting library)
 - **libxrk** for parsing AIM telemetry files (XRK/XRZ)
 - **JupyterLite + Pyodide** for browser-based deployment
-- **poethepoet (poe)** as task runner
 
 ## Repository Structure
 
@@ -34,35 +34,34 @@ scripts/           # Build utilities (lite wheel builder, notebook executor)
 
 ```bash
 # Install dependencies
-poetry install --extras app                        # app environment (jupyterlab, poe, etc.)
-poetry install --extras app --extras dev            # + dev tools (black, mypy, pytest)
-poetry install --extras app --extras jupyterlite    # + JupyterLite build tools
+uv sync --extra app                        # app environment (jupyterlab, etc.)
+uv sync --extra app --group dev            # + dev tools (black, mypy, pytest)
+uv sync --extra app --extra jupyterlite    # + JupyterLite build tools
 
 # Run all checks (lint + typecheck + tests)
-poetry run poe check
+just check
 
 # Individual checks
-poetry run poe lint                  # black --check src/
-poetry run poe typecheck             # mypy src/
-poetry run poe test                  # pytest with coverage
-poetry run poe lint-notebooks        # black --check on notebooks
-poetry run poe typecheck-notebooks   # mypy on notebooks
+just lint                  # black --check src/
+just typecheck             # mypy src/
+just test                  # pytest with coverage
+just lint-notebooks        # black --check on notebooks
+just typecheck-notebooks   # mypy on notebooks
 
 # Format code
-poetry run poe format               # black src/
-poetry run poe format-notebooks      # black on notebooks
+just format               # black src/
+just format-notebooks      # black on notebooks
 
 # Run locally
-poetry run poe run_clean             # Reset workspace + start JupyterLab
+just run-clean             # Reset workspace + start JupyterLab
 
 # Build JupyterLite site
-poetry run poe build_lite            # Build site (uses pre-built wheels in pypi/)
-poetry run poe build_lite_full       # Rebuild project wheel + build site
-poetry run poe build_and_serve_lite  # build_lite_full + serve locally
+just build-lite-full       # Rebuild project wheel + build site
+just build-and-serve-lite  # build-lite-full + serve locally
 
 # Emscripten SDK setup (one-time, needed for rebuilding libxrk Pyodide wheel)
-poetry run poe setup_emsdk           # Installs emsdk to ~/emsdk
-poetry run poe build_libxrk_pyodide  # Rebuild libxrk for Pyodide (requires setup_emsdk)
+just setup-emsdk           # Installs emsdk to ~/emsdk
+just build-libxrk-pyodide  # Rebuild libxrk for Pyodide (requires setup-emsdk)
 ```
 
 ## Bash Command Conventions
@@ -98,7 +97,7 @@ desktop_app/
 ### Running locally
 
 ```bash
-cd /home/m3rlin45/code/motorsports_data_notebook/desktop_app && poetry install && python -m inferno_analyzer
+cd /home/m3rlin45/code/motorsports_data_notebook/desktop_app && uv sync && python -m inferno_analyzer
 ```
 
 ### Building Windows exe (via Wine)
@@ -128,7 +127,7 @@ sudo apt install python3-tk  # Ubuntu/Debian
 
 Build:
 ```bash
-cd /home/m3rlin45/code/motorsports_data_notebook/desktop_app && poetry run pip install pyinstaller && poetry run pyinstaller --clean --noconfirm inferno_analyzer.spec
+cd /home/m3rlin45/code/motorsports_data_notebook/desktop_app && uv sync --extra build && uv run pyinstaller --clean --noconfirm inferno_analyzer.spec
 ```
 
 Run (displays via WSLg on WSL2):
