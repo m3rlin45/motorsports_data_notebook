@@ -2,26 +2,26 @@
 
 ## Package Manager
 
-This project uses **Poetry** for dependency management. Always use `poetry run` to execute Python commands:
+This project uses **uv** for dependency management and **just** as task runner:
 
 ```bash
 # Correct
-poetry run python script.py
-poetry run poe <task>
-poetry run pytest
+uv run python script.py
+just <task>
+uv run pytest
 
 # Incorrect - do not use
-python script.py
+poetry run python script.py
 pip install <package>
 ```
 
-## Common Tasks (via poethepoet)
+## Common Tasks (via just)
 
-Use `poetry run poe <task>` for all project tasks:
+Use `just <task>` for all project tasks:
 
-- `poe check` - Run all linting and type checking
-- `poe build_lite_full` - Build wheels and JupyterLite site (executes notebooks during build)
-- `poe clean` - Reset workspace with fresh notebooks
+- `just check` - Run all linting, type checking, and tests
+- `just build-lite-full` - Build wheels and JupyterLite site (executes notebooks during build)
+- `just clean` - Reset workspace with fresh notebooks
 
 ## Project Structure
 
@@ -34,9 +34,9 @@ Use `poetry run poe <task>` for all project tasks:
 ## Dependencies
 
 - Add runtime deps to `[project.dependencies]` in pyproject.toml
-- Add dev deps to `[project.optional-dependencies.dev]`
+- Add dev deps to `[dependency-groups.dev]`
 - Add JupyterLite/CI deps to `[project.optional-dependencies.jupyterlite]`
-- After modifying deps, run `poetry lock && poetry install`
+- After modifying deps, run `uv lock && uv sync`
 
 ## Notebooks
 
@@ -60,17 +60,16 @@ When checking GitHub Actions CI failures:
    ```
 
 3. **Common issues**:
-   - Poetry uses `--extras <name>` for `[project.optional-dependencies]` (PEP 621 style)
-   - Poetry uses `--with <name>` for `[tool.poetry.group.<name>.dependencies]` (Poetry groups)
-   - CI installs via `poetry install --extras dev` to use locked versions from `poetry.lock`
-   - If CI uses `pip install .[dev]`, it ignores `poetry.lock` and gets latest allowed versions
+   - uv uses `--extra <name>` for `[project.optional-dependencies]` (PEP 621 style)
+   - uv uses `--group <name>` for `[dependency-groups]` (PEP 735 style)
+   - CI installs via `uv sync --extra app` to use locked versions from `uv.lock`
 
 ## Long-Running Commands
 
 **Be patient with build commands!** The following commands take significant time:
 
-- `poe build_lite_full` - **3-5 minutes**: Compiles C++ (libxrk), builds wheels, executes all notebooks
-- `poe build_and_serve_lite` - Same as above plus starts a server
+- `just build-lite-full` - **3-5 minutes**: Compiles C++ (libxrk), builds wheels, executes all notebooks
+- `just build-and-serve-lite` - Same as above plus starts a server
 - Notebook execution during builds - Each notebook may take 30-60 seconds
 
 **Do NOT**:

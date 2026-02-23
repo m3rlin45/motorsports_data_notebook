@@ -105,7 +105,7 @@ def analyze_suspension_velocity_multi_lap(
     shock_rr_name = channel_names["shock_rr"]
 
     # Collect velocity data from all laps
-    all_velocities = {
+    all_velocities: dict[str, list[np.ndarray]] = {
         "FL": [],
         "FR": [],
         "RL": [],

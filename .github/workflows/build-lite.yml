@@ -14,17 +14,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
 
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: '2.1.1'
-          virtualenvs-create: true
-          virtualenvs-in-project: true
+      - name: Install just
+        uses: extractions/setup-just@v2
 
       - name: Install Rust nightly with wasm32-unknown-emscripten
         uses: dtolnay/rust-toolchain@nightly
@@ -32,19 +26,19 @@ jobs:
           targets: wasm32-unknown-emscripten
           components: rust-src
 
-      - name: Cache Poetry dependencies
+      - name: Cache uv dependencies
         uses: actions/cache@v4
         with:
           path: .venv
-          key: venv-lite-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+          key: venv-lite-${{ runner.os }}-${{ hashFiles('**/uv.lock') }}
 
       - name: Install dependencies
-        run: poetry install --extras app --extras jupyterlite
+        run: uv sync --extra app --extra jupyterlite
 
       - name: Verify pyodide-build version
         run: |
           EXPECTED="0.29.3"
-          ACTUAL=$(poetry run python -c "import importlib.metadata; print(importlib.metadata.version('pyodide-build'))")
+          ACTUAL=$(uv run python -c "import importlib.metadata; print(importlib.metadata.version('pyodide-build'))")
           echo "pyodide-build version: $ACTUAL (expected: $EXPECTED)"
           [ "$ACTUAL" = "$EXPECTED" ] || (echo "ERROR: Wrong pyodide-build version!" && exit 1)
 
@@ -52,15 +46,15 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/emsdk
-          key: emsdk-${{ runner.os }}-${{ hashFiles('poetry.lock') }}
+          key: emsdk-${{ runner.os }}-${{ hashFiles('uv.lock') }}
           restore-keys: |
             emsdk-${{ runner.os }}-
 
       - name: Setup Emscripten SDK
-        run: poetry run poe setup_emsdk
+        run: just setup-emsdk
 
       - name: Build wheels and JupyterLite site
-        run: poetry run poe build_lite_full
+        run: just build-lite-full
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

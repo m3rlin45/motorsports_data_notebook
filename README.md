@@ -52,19 +52,20 @@ For contributors or advanced users who want to run locally or modify the code.
 ### Prerequisites
 
 - Python 3.12+
-- [Poetry 2.x](https://python-poetry.org/docs/#installation)
+- [uv](https://docs.astral.sh/uv/getting-started/installation/)
+- [just](https://github.com/casey/just#installation)
 
 ### Setup
 
 ```bash
 # Install dependencies
-poetry install
+uv sync --extra app
 
 # Install dev dependencies (linting, type checking)
-poetry install --extras dev
+uv sync --extra app --group dev
 
 # Start JupyterLab with the workspace
-poetry run poe run_clean
+just run-clean
 ```
 
 ### Code Quality
@@ -73,17 +74,17 @@ This project uses [Black](https://black.readthedocs.io/) for formatting and [myp
 
 ```bash
 # Run all checks (linting + type checking for source and notebooks)
-poetry run poe check
+just check
 
 # Format code
-poetry run poe format            # Format source files
-poetry run poe format-notebooks  # Format notebooks
+just format            # Format source files
+just format-notebooks  # Format notebooks
 
 # Individual checks
-poetry run poe lint              # Check source formatting
-poetry run poe typecheck         # Type check source files
-poetry run poe lint-notebooks    # Check notebook formatting
-poetry run poe typecheck-notebooks  # Type check notebooks
+just lint              # Check source formatting
+just typecheck         # Type check source files
+just lint-notebooks    # Check notebook formatting
+just typecheck-notebooks  # Type check notebooks
 ```
 
 These checks run automatically on all PRs and pushes to `master` via GitHub Actions.
@@ -92,10 +93,10 @@ These checks run automatically on all PRs and pushes to `master` via GitHub Acti
 
 ```bash
 # Install JupyterLite dependencies
-poetry install --extras jupyterlite
+uv sync --extra app --extra jupyterlite
 
 # Build and serve locally
-poetry run poe build_and_serve_lite
+just build-and-serve-lite
 ```
 
 ### Building Pyodide Wheels
@@ -104,11 +105,11 @@ To rebuild `libxrk` for Pyodide (after updating the C++ bindings):
 
 ```bash
 # Install Emscripten SDK (one time)
-poetry install --extras jupyterlite
-poetry run poe setup_emsdk
+uv sync --extra app --extra jupyterlite
+just setup-emsdk
 
 # Build all wheels and site
-poetry run poe build_lite_full
+just build-lite-full
 ```
 
 ---

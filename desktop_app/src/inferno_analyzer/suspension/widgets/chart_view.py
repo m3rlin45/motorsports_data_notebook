@@ -8,7 +8,7 @@ import customtkinter as ctk
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.figure import Figure
-from matplotlib.patches import Rectangle
+from matplotlib.text import Annotation
 import numpy as np
 
 from motorsports_data_notebook.desktop.dpi import get_screen_dpi
@@ -34,9 +34,7 @@ class ChartView(ctk.CTkFrame):
         """
         super().__init__(parent)
 
-        self._figure: Figure | None = None
-        self._canvas: FigureCanvasTkAgg | None = None
-        self._toolbar = None
+        self._toolbar: NavigationToolbar2Tk | None = None
         self._on_maximize_toggle = on_maximize_toggle
         self._is_maximized = False
 
@@ -44,7 +42,7 @@ class ChartView(ctk.CTkFrame):
         self._dpi = get_screen_dpi()
 
         # Hover tooltip support
-        self._annotation = None
+        self._annotation: Annotation | None = None
         self._bar_data: list[tuple] = []  # List of (bar_container, bin_centers, histogram, ax)
 
         self._create_widgets()
@@ -157,7 +155,8 @@ class ChartView(ctk.CTkFrame):
                             zorder=100,
                         )
 
-                    # Update annotation
+                    # Update annotation (always set after the block above)
+                    assert self._annotation is not None
                     text = f"{label}\nVelocity: {velocity:.0f} mm/s\nTime: {percentage:.2f}%"
                     self._annotation.set_text(text)
                     self._annotation.xy = (bar.get_x() + bar.get_width() / 2, bar.get_height())
