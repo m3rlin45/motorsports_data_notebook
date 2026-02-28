@@ -142,7 +142,7 @@ Run (displays via WSLg on WSL2):
 - **Docstrings:** NumPy-style with Parameters/Returns/Raises/Examples sections
 - **Type hints:** Use `from __future__ import annotations`, PEP 604 unions (`X | None`), `TYPE_CHECKING` blocks for import-only types
 - **Data handling:** Prefer PyArrow tables and `pyarrow.compute` (pc) operations for filtering/transforms over pandas. Convert to pandas/numpy only for analysis steps that require it.
-- **Channel names:** Passed as dictionaries (`channel_names["throttle"]` -> `"PPS"`) to support different AIM telemetry formats. Use `_validate_channel_names()` for validation.
+- **Channel names:** Passed as dictionaries (`channel_names["throttle"]` -> `"PPS"`) to support different AIM telemetry formats. Use `_validate_channel_names()` for validation. When adding new channel keys to `DEFAULT_CHANNEL_NAMES` in `profiles.py`, also add the corresponding entries to each vehicle profile in `src/motorsports_data_notebook/data/builtin_profiles.yaml` (channel names vary per vehicle/logger).
 - **Visualization:** All notebook visualizations use Plotly. Use `show_fig()` for environment-aware display (handles JupyterLite vs standard Jupyter).
 - **Tests:** pytest with `pytest-cov`. Use mock `MockLogFile` dataclass objects for isolation. Float comparisons with `pytest.approx`. Test classes named `TestClassName`.
 

@@ -78,6 +78,7 @@ profiles:
       gps_latitude: GPS Latitude
       gps_longitude: GPS Longitude
       lateral_g: GPS_LateralAcc
+      inline_g: GPS_InlineAcc
       steering: Steering
       tpms_press_fl: TPMS_Press_LF
       tpms_press_fr: TPMS_Press_RF

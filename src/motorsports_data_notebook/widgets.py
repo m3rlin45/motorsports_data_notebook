@@ -355,6 +355,9 @@ class SessionPicker:
         is displayed allowing users to configure channel names with typeahead
         autocomplete and validation. Keys are logical names (e.g., "throttle"),
         values are default channel names (e.g., "PPS").
+    show_lap_picker : bool, default=True
+        Whether to show the lap selection dropdown. Set to False when lap
+        selection is handled externally (e.g., via get_top_laps).
 
     Examples
     --------
@@ -373,7 +376,12 @@ class SessionPicker:
     >>> CHANNEL_NAMES = session.get_channel_names()
     """
 
-    def __init__(self, default_file: str, channel_mapping: dict[str, str] | None = None) -> None:
+    def __init__(
+        self,
+        default_file: str,
+        channel_mapping: dict[str, str] | None = None,
+        show_lap_picker: bool = True,
+    ) -> None:
         import ipywidgets as widgets
 
         self._default_file = default_file
@@ -381,6 +389,7 @@ class SessionPicker:
         self._log: "LogFile | None" = None
         self._laps: pd.DataFrame | None = None
         self._channel_mapping = channel_mapping
+        self._show_lap_picker = show_lap_picker
 
         # File upload section
         self._instruction = widgets.HTML(
@@ -438,11 +447,15 @@ class SessionPicker:
             self._upload_widget,
             self._file_status,
             self._loading_label,
-            widgets.HTML(value="<hr style='margin: 10px 0;'>"),
-            self._lap_label,
-            self._lap_dropdown,
-            self._lap_status,
         ]
+
+        if self._show_lap_picker:
+            layout_items += [
+                widgets.HTML(value="<hr style='margin: 10px 0;'>"),
+                self._lap_label,
+                self._lap_dropdown,
+                self._lap_status,
+            ]
 
         if self._channel_section is not None:
             layout_items.append(self._channel_section)

@@ -32,6 +32,7 @@ DEFAULT_CHANNEL_NAMES: dict[str, str] = {
     "gps_latitude": "GPS Latitude",
     "gps_longitude": "GPS Longitude",
     "lateral_g": "LateralAcc",
+    "inline_g": "InlineAcc",
     "steering": "SteerAngle",
     "shock_fl": "LF_Shock_Pot",
     "shock_fr": "RF_Shock_Pot",
