@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 
     from .corners import Corner
     from .suspension import VelocityHistogramResult
+    from .tire_grip import TireGripResult
     from .zones import TrackSegment
 
 
@@ -33,6 +34,7 @@ __all__ = [
     "plot_gps_channels",
     "plot_lap_gps",
     "plot_suspension_velocity_histogram",
+    "plot_tire_grip_scatter",
     "plot_tire_thermography",
     "plot_track_segments",
     "show_fig",
@@ -1317,5 +1319,114 @@ def plot_suspension_velocity_histogram(
 
     # Set consistent y-axis range
     fig.update_yaxes(range=[0, max_y * 1.1])
+
+    return fig
+
+
+def plot_tire_grip_scatter(
+    result: "TireGripResult",
+    title: str = "Tire Grip Analysis",
+    width: int = 1000,
+    height: int = 800,
+) -> go.Figure:
+    """Create 2x2 scatter plot of total G vs tire pressure/temperature.
+
+    Each subplot shows one corner (FL, FR, RL, RR) with a bucketed percentile
+    line plot of total acceleration vs the selected tire metric.
+
+    Parameters
+    ----------
+    result : TireGripResult
+        Analysis results from analyze_tire_grip().
+    title : str, default="Tire Grip Analysis"
+        Plot title.
+    width : int, default=1000
+        Figure width in pixels.
+    height : int, default=800
+        Figure height in pixels.
+
+    Returns
+    -------
+    go.Figure
+        Plotly figure with 4 scatter subplots.
+
+    Examples
+    --------
+    >>> result = analyze_tire_grip(lap_log, channel_names, metric_mode="pressure")
+    >>> fig = plot_tire_grip_scatter(result, title="Tire Grip - Lap 3")
+    >>> show_fig(fig)
+    """
+    metric_label = "Pressure" if result.metric_mode == "pressure" else "Temperature"
+    unit = result.metric_unit
+
+    fig = make_subplots(
+        rows=2,
+        cols=2,
+        shared_yaxes=True,
+        vertical_spacing=0.1,
+        horizontal_spacing=0.08,
+        subplot_titles=("Front Left (FL)", "Front Right (FR)", "Rear Left (RL)", "Rear Right (RR)"),
+    )
+
+    corners = [
+        (result.front_left, 1, 1),
+        (result.front_right, 1, 2),
+        (result.rear_left, 2, 1),
+        (result.rear_right, 2, 2),
+    ]
+
+    for corner_data, row, col in corners:
+        fig.add_trace(
+            go.Scatter(
+                x=corner_data.bucket_centers,
+                y=corner_data.bucket_values,
+                mode="lines+markers",
+                marker=dict(size=6, color="steelblue"),
+                line=dict(width=2, color="steelblue"),
+                name=corner_data.corner_name,
+                showlegend=False,
+                customdata=corner_data.bucket_counts,
+                hovertemplate=(
+                    f"{metric_label}: %{{x:.1f}} {unit}<br>"
+                    f"P{corner_data.percentile:g} G: %{{y:.2f}}<br>"
+                    "n = %{customdata}<extra></extra>"
+                ),
+            ),
+            row=row,
+            col=col,
+        )
+
+        # Sample count annotation
+        subplot_idx = (row - 1) * 2 + col
+        xref = "x domain" if subplot_idx == 1 else f"x{subplot_idx} domain"
+        yref = "y domain" if subplot_idx == 1 else f"y{subplot_idx} domain"
+        total_n = int(corner_data.bucket_counts.sum()) if len(corner_data.bucket_counts) > 0 else 0
+        fig.add_annotation(
+            x=0.95,
+            y=0.95,
+            xref=xref,
+            yref=yref,
+            text=f"n = {total_n}",
+            showarrow=False,
+            font=dict(size=10),
+            align="right",
+            bgcolor="rgba(255,255,255,0.7)",
+            row=row,
+            col=col,
+        )
+
+    fig.update_layout(
+        title=title,
+        width=width,
+        height=height,
+    )
+
+    # X-axis labels (bottom row only)
+    fig.update_xaxes(title_text=f"{metric_label} ({unit})", row=2, col=1)
+    fig.update_xaxes(title_text=f"{metric_label} ({unit})", row=2, col=2)
+
+    # Y-axis labels (left column only)
+    fig.update_yaxes(title_text="Total G", row=1, col=1)
+    fig.update_yaxes(title_text="Total G", row=2, col=1)
 
     return fig
