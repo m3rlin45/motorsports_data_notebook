@@ -23,6 +23,8 @@ from inferno_analyzer.driver.widgets.config_panel import ConfigPanel as DriverCo
 from inferno_analyzer.suspension.widgets.config_panel import ConfigPanel as SuspensionConfigPanel
 from inferno_analyzer.tabs.driver_tab import DriverTab
 from inferno_analyzer.tabs.suspension_tab import SuspensionTab
+from inferno_analyzer.tabs.tire_grip_tab import TireGripTab
+from inferno_analyzer.tire_grip.widgets.config_panel import ConfigPanel as TireGripConfigPanel
 
 if TYPE_CHECKING:
     from inferno_analyzer.tabs.base_tab import BaseAnalysisTab
@@ -30,11 +32,11 @@ if TYPE_CHECKING:
 
 
 class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
-    """Main application window combining suspension and driver analysis.
+    """Main application window combining suspension, driver, and tire grip analysis.
 
     Layout:
     - Top row: Session A | Session B | Config Panel (swaps per tab)
-    - Tab bar: [Suspension] [Driver Consistency]
+    - Tab bar: [Suspension] [Driver Consistency] [Tire Grip]
     - Analysis area: fills remaining space (tab-specific content)
     """
 
@@ -102,6 +104,13 @@ class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
             on_save_profile=self._on_save_profile,
         )
 
+        self.tire_grip_config_panel = TireGripConfigPanel(
+            self._config_container,
+            on_stats_click=self._on_stats_click,
+            on_config_changed=self._on_selection_changed,
+            on_save_profile=self._on_save_profile,
+        )
+
         # Tab view for analysis area
         self.tabview = ctk.CTkTabview(
             self,
@@ -109,10 +118,12 @@ class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
         )
         self.tabview.add("Suspension")
         self.tabview.add("Driver Consistency")
+        self.tabview.add("Tire Grip")
 
         # Create tab instances
         self.suspension_tab = SuspensionTab(self, self.tabview.tab("Suspension"))
         self.driver_tab = DriverTab(self, self.tabview.tab("Driver Consistency"))
+        self.tire_grip_tab = TireGripTab(self, self.tabview.tab("Tire Grip"))
 
     def _layout_widgets(self) -> None:
         """Arrange widgets in the window."""
@@ -140,17 +151,23 @@ class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
 
     def _swap_config_panel(self) -> None:
         """Show/hide config panels based on active tab."""
-        if self._active_tab_name == "Suspension":
-            self.driver_config_panel.pack_forget()
-            self.suspension_config_panel.pack(fill="both", expand=True)
-        else:
-            self.suspension_config_panel.pack_forget()
-            self.driver_config_panel.pack(fill="both", expand=True)
+        panels = {
+            "Suspension": self.suspension_config_panel,
+            "Driver Consistency": self.driver_config_panel,
+            "Tire Grip": self.tire_grip_config_panel,
+        }
+        for panel in panels.values():
+            panel.pack_forget()
+        active = panels.get(self._active_tab_name)
+        if active:
+            active.pack(fill="both", expand=True)
 
     def get_config_panel_for_tab(self, tab: BaseAnalysisTab):
         """Return the config panel associated with a tab."""
         if isinstance(tab, SuspensionTab):
             return self.suspension_config_panel
+        if isinstance(tab, TireGripTab):
+            return self.tire_grip_config_panel
         return self.driver_config_panel
 
     # ------------------------------------------------------------------
@@ -177,6 +194,8 @@ class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
             return self.suspension_tab
         elif self._active_tab_name == "Driver Consistency":
             return self.driver_tab
+        elif self._active_tab_name == "Tire Grip":
+            return self.tire_grip_tab
         return None
 
     # ------------------------------------------------------------------
@@ -197,11 +216,13 @@ class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
             if profile:
                 self.suspension_config_panel.set_from_profile(profile)
                 self.driver_config_panel.set_from_profile(profile)
+                self.tire_grip_config_panel.set_from_profile(profile)
 
         # Notify all tabs (driver tab auto-sets throttle threshold after
         # profile has already set channel names)
         self.suspension_tab.on_session_loaded()
         self.driver_tab.on_session_a_loaded()
+        self.tire_grip_tab.on_session_loaded()
 
         # Update status on active config panel
         active_tab = self._get_active_tab()
@@ -221,9 +242,10 @@ class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
         self._channels_b = channels
         self._update_available_channels()
 
-        # Show A/B session controls on both config panels
+        # Show A/B session controls on all config panels
         self.suspension_config_panel.show_session_b_controls()
         self.driver_config_panel.show_session_b_controls()
+        self.tire_grip_config_panel.show_session_b_controls()
 
         # Check if Session B has a different vehicle profile
         logger_id_b = self.session_b_panel.logger_id
@@ -237,10 +259,13 @@ class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
                 self.suspension_config_panel.set_from_profile_b(profile_b)
                 self.driver_config_panel.set_sync(False)
                 self.driver_config_panel.set_from_profile_b(profile_b)
+                self.tire_grip_config_panel.set_sync(False)
+                self.tire_grip_config_panel.set_from_profile_b(profile_b)
 
-        # Mark both tabs stale; driver tab also auto-sets B's throttle threshold
+        # Mark all tabs stale; driver tab also auto-sets B's throttle threshold
         self.suspension_tab.on_session_loaded()
         self.driver_tab.on_session_b_loaded()
+        self.tire_grip_tab.on_session_loaded()
 
         active_tab = self._get_active_tab()
         if active_tab is not None:
@@ -250,13 +275,15 @@ class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
             active_tab._update_status(status)
 
     def _update_available_channels(self) -> None:
-        """Update both config panels with per-session channel suggestions."""
+        """Update all config panels with per-session channel suggestions."""
         channels_a = getattr(self, "_channels_a", [])
         channels_b = getattr(self, "_channels_b", [])
         self.suspension_config_panel.update_available_channels_a(channels_a)
         self.suspension_config_panel.update_available_channels_b(channels_b)
         self.driver_config_panel.update_available_channels_a(channels_a)
         self.driver_config_panel.update_available_channels_b(channels_b)
+        self.tire_grip_config_panel.update_available_channels_a(channels_a)
+        self.tire_grip_config_panel.update_available_channels_b(channels_b)
 
     def _on_selection_changed(self) -> None:
         """Handle lap selection or config change — route to active tab."""
@@ -299,11 +326,16 @@ class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
         if saving_b:
             profile = self.suspension_config_panel.get_vehicle_profile_b(name=session_label)
             driver_profile = self.driver_config_panel.get_vehicle_profile_b(name=session_label)
+            tire_grip_profile = self.tire_grip_config_panel.get_vehicle_profile_b(
+                name=session_label
+            )
         else:
             profile = self.suspension_config_panel.get_vehicle_profile(name=session_label)
             driver_profile = self.driver_config_panel.get_vehicle_profile(name=session_label)
+            tire_grip_profile = self.tire_grip_config_panel.get_vehicle_profile(name=session_label)
 
         profile.channel_names.update(driver_profile.channel_names)
+        profile.channel_names.update(tire_grip_profile.channel_names)
         save_profile_for_logger(logger_id, profile)
 
         if active_tab is not None:
