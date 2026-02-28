@@ -1,6 +1,6 @@
 [project]
 name = "motorsports-data-notebook"
-version = "0.10.1"
+version = "0.11.0"
 description = ""
 authors = [
     {name = "Christopher Dewan",email = "chris.dewan@m3rlin.net"}
@@ -12,7 +12,7 @@ dependencies = [
     "pandas>=2.0.0,<3.0.0",
     "pyarrow>=18.0.0,<23.0.0",
     "plotly>=6.0.0,<7.0.0",
-    "libxrk>=0.10.1",
+    "libxrk>=0.11.0",
     "ipywidgets>=8.0.0,<9.0.0",
     "pyyaml>=6.0,<7.0",
 ]
