@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import customtkinter as ctk
@@ -13,7 +14,20 @@ from inferno_analyzer.tabs.base_tab import BaseAnalysisTab
 
 if TYPE_CHECKING:
     from inferno_analyzer.app import InfernoAnalyzerApp
-    from motorsports_data_notebook.suspension import VelocityHistogramResult
+    from libxrk.base import LogFile
+    from motorsports_data_notebook.suspension import MotionRatios, VelocityHistogramResult
+
+
+@dataclass
+class SuspensionParams:
+    session_a: LogFile
+    laps_a: list[int]
+    session_b: LogFile | None
+    laps_b: list[int]
+    channel_names_a: dict[str, str]
+    channel_names_b: dict[str, str]
+    motion_ratios_a: MotionRatios
+    motion_ratios_b: MotionRatios
 
 
 class SuspensionTab(BaseAnalysisTab):
@@ -35,7 +49,7 @@ class SuspensionTab(BaseAnalysisTab):
     def _layout_tab_widgets(self) -> None:
         self.chart_view.pack(fill="both", expand=True)
 
-    def _get_analysis_params(self) -> dict | None:
+    def _get_analysis_params(self) -> SuspensionParams | None:
         session_a = self.app.session_a_panel.log
         if session_a is None:
             return None
@@ -54,32 +68,31 @@ class SuspensionTab(BaseAnalysisTab):
                 return None
 
         config_panel = self.app.suspension_config_panel
-        motion_ratios = config_panel.get_motion_ratios()
-        channel_names = config_panel.get_channel_names()
-
-        return {
-            "session_a": session_a,
-            "laps_a": laps_a,
-            "session_b": session_b,
-            "laps_b": laps_b,
-            "motion_ratios": motion_ratios,
-            "channel_names": channel_names,
-        }
-
-    def _analysis_worker(self, params: dict) -> None:
-        self._result_a = analyze_suspension_velocity_multi_lap(
-            params["session_a"],
-            params["laps_a"],
-            channel_names=params["channel_names"],
-            motion_ratios=params["motion_ratios"],
+        return SuspensionParams(
+            session_a=session_a,
+            laps_a=laps_a,
+            session_b=session_b,
+            laps_b=laps_b,
+            channel_names_a=config_panel.get_channel_names_a(),
+            channel_names_b=config_panel.get_channel_names_b(),
+            motion_ratios_a=config_panel.get_motion_ratios_a(),
+            motion_ratios_b=config_panel.get_motion_ratios_b(),
         )
 
-        if params["laps_b"] and params["session_b"] is not None:
+    def _analysis_worker(self, params: SuspensionParams) -> None:
+        self._result_a = analyze_suspension_velocity_multi_lap(
+            params.session_a,
+            params.laps_a,
+            channel_names=params.channel_names_a,
+            motion_ratios=params.motion_ratios_a,
+        )
+
+        if params.laps_b and params.session_b is not None:
             self._result_b = analyze_suspension_velocity_multi_lap(
-                params["session_b"],
-                params["laps_b"],
-                channel_names=params["channel_names"],
-                motion_ratios=params["motion_ratios"],
+                params.session_b,
+                params.laps_b,
+                channel_names=params.channel_names_b,
+                motion_ratios=params.motion_ratios_b,
             )
         else:
             self._result_b = None

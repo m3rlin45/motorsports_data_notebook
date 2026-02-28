@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import customtkinter as ctk
@@ -21,6 +22,23 @@ from inferno_analyzer.tabs.base_tab import BaseAnalysisTab
 
 if TYPE_CHECKING:
     from inferno_analyzer.app import InfernoAnalyzerApp
+    from libxrk.base import LogFile
+
+
+@dataclass
+class DriverParams:
+    session_a: LogFile
+    laps_a: list[int]
+    session_b: LogFile | None
+    laps_b: list[int]
+    channel_names_a: dict[str, str]
+    channel_names_b: dict[str, str]
+    corner_threshold_a: float
+    corner_threshold_b: float
+    throttle_threshold_a: float
+    throttle_threshold_b: float
+    sustain_time_ms_a: float
+    sustain_time_ms_b: float
 
 
 class DriverTab(BaseAnalysisTab):
@@ -53,7 +71,7 @@ class DriverTab(BaseAnalysisTab):
         self.corner_selector.pack(side="left", fill="y", padx=(0, 5))
         self.chart_view.pack(side="left", fill="both", expand=True)
 
-    def _get_analysis_params(self) -> dict | None:
+    def _get_analysis_params(self) -> DriverParams | None:
         session_a = self.app.session_a_panel.log
         if session_a is None:
             return None
@@ -72,40 +90,39 @@ class DriverTab(BaseAnalysisTab):
                 return None
 
         config_panel = self.app.driver_config_panel
-        channel_names = config_panel.get_channel_names()
-        corner_threshold = config_panel.get_corner_threshold()
-        throttle_threshold = config_panel.get_throttle_threshold()
-        sustain_time_ms = config_panel.get_sustain_time_ms()
-
-        return {
-            "session_a": session_a,
-            "laps_a": laps_a,
-            "session_b": session_b,
-            "laps_b": laps_b,
-            "channel_names": channel_names,
-            "corner_threshold": corner_threshold,
-            "throttle_threshold": throttle_threshold,
-            "sustain_time_ms": sustain_time_ms,
-        }
-
-    def _analysis_worker(self, params: dict) -> None:
-        self._result_a = analyze_driver_consistency(
-            params["session_a"],
-            params["laps_a"],
-            params["channel_names"],
-            corner_threshold=params["corner_threshold"],
-            throttle_threshold=params["throttle_threshold"],
-            sustain_time_ms=params["sustain_time_ms"],
+        return DriverParams(
+            session_a=session_a,
+            laps_a=laps_a,
+            session_b=session_b,
+            laps_b=laps_b,
+            channel_names_a=config_panel.get_channel_names_a(),
+            channel_names_b=config_panel.get_channel_names_b(),
+            corner_threshold_a=config_panel.get_corner_threshold_a(),
+            corner_threshold_b=config_panel.get_corner_threshold_b(),
+            throttle_threshold_a=config_panel.get_throttle_threshold_a(),
+            throttle_threshold_b=config_panel.get_throttle_threshold_b(),
+            sustain_time_ms_a=config_panel.get_sustain_time_ms_a(),
+            sustain_time_ms_b=config_panel.get_sustain_time_ms_b(),
         )
 
-        if params["laps_b"] and params["session_b"] is not None:
+    def _analysis_worker(self, params: DriverParams) -> None:
+        self._result_a = analyze_driver_consistency(
+            params.session_a,
+            params.laps_a,
+            params.channel_names_a,
+            corner_threshold=params.corner_threshold_a,
+            throttle_threshold=params.throttle_threshold_a,
+            sustain_time_ms=params.sustain_time_ms_a,
+        )
+
+        if params.laps_b and params.session_b is not None:
             self._result_b = analyze_driver_consistency(
-                params["session_b"],
-                params["laps_b"],
-                params["channel_names"],
-                corner_threshold=params["corner_threshold"],
-                throttle_threshold=params["throttle_threshold"],
-                sustain_time_ms=params["sustain_time_ms"],
+                params.session_b,
+                params.laps_b,
+                params.channel_names_b,
+                corner_threshold=params.corner_threshold_b,
+                throttle_threshold=params.throttle_threshold_b,
+                sustain_time_ms=params.sustain_time_ms_b,
             )
         else:
             self._result_b = None
@@ -158,11 +175,18 @@ class DriverTab(BaseAnalysisTab):
         self._result_b = None
         self._stale = True
         self._auto_set_throttle_threshold()
-        self._last_throttle_channel = self.app.driver_config_panel.get_channel_names()["throttle"]
+        self._last_throttle_channel = self.app.driver_config_panel.get_channel_names_a()["throttle"]
+
+    def on_session_b_loaded(self) -> None:
+        """Called when Session B file is loaded — auto-set B's throttle threshold."""
+        self._result_a = None
+        self._result_b = None
+        self._stale = True
+        self._auto_set_throttle_threshold_b()
 
     def on_selection_changed(self) -> None:
         """Override to handle throttle channel change → auto-threshold."""
-        current_throttle = self.app.driver_config_panel.get_channel_names()["throttle"]
+        current_throttle = self.app.driver_config_panel.get_channel_names_a()["throttle"]
         if (
             self._last_throttle_channel is not None
             and current_throttle != self._last_throttle_channel
@@ -177,12 +201,12 @@ class DriverTab(BaseAnalysisTab):
     # ------------------------------------------------------------------
 
     def _auto_set_throttle_threshold(self) -> bool:
-        """Set throttle threshold to 95% of peak throttle channel value."""
+        """Set Session A throttle threshold to 95% of peak throttle channel value."""
         log = self.app.session_a_panel.log
         if log is None:
             return False
 
-        throttle_name = self.app.driver_config_panel.get_channel_names()["throttle"]
+        throttle_name = self.app.driver_config_panel.get_channel_names_a()["throttle"]
         if throttle_name not in log.channels:
             return False
 
@@ -197,13 +221,34 @@ class DriverTab(BaseAnalysisTab):
         except Exception:
             return False
 
+    def _auto_set_throttle_threshold_b(self) -> bool:
+        """Set Session B throttle threshold to 95% of peak throttle channel value."""
+        log = self.app.session_b_panel.log
+        if log is None:
+            return False
+
+        throttle_name = self.app.driver_config_panel.get_channel_names_b()["throttle"]
+        if throttle_name not in log.channels:
+            return False
+
+        try:
+            data = log.channels[throttle_name].column(throttle_name).to_numpy()
+            peak = float(np.nanpercentile(data, 95))
+            if peak <= 0:
+                return False
+            threshold = round(peak * 0.95, 1)
+            self.app.driver_config_panel.set_throttle_threshold_b(threshold)
+            return True
+        except Exception:
+            return False
+
     def _diagnose_empty_ta(self) -> str:
         """Suggest why TA values are empty."""
         log = self.app.session_a_panel.log
         if log is None:
             return "try lower threshold"
 
-        lateral_g_name = self.app.driver_config_panel.get_channel_names()["lateral_g"]
+        lateral_g_name = self.app.driver_config_panel.get_channel_names_a()["lateral_g"]
         if lateral_g_name not in log.channels:
             return f"Lat G channel '{lateral_g_name}' not found"
 

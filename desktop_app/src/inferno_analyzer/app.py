@@ -221,21 +221,42 @@ class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
         self._channels_b = channels
         self._update_available_channels()
 
-        # Mark both tabs stale
+        # Show A/B session controls on both config panels
+        self.suspension_config_panel.show_session_b_controls()
+        self.driver_config_panel.show_session_b_controls()
+
+        # Check if Session B has a different vehicle profile
+        logger_id_b = self.session_b_panel.logger_id
+        logger_id_a = self.session_a_panel.logger_id
+        profile_b = None
+        if logger_id_b:
+            profile_b = get_profile_for_logger(logger_id_b)
+            if profile_b and logger_id_b != logger_id_a:
+                # Different vehicle — unsync and populate B from its profile
+                self.suspension_config_panel.set_sync(False)
+                self.suspension_config_panel.set_from_profile_b(profile_b)
+                self.driver_config_panel.set_sync(False)
+                self.driver_config_panel.set_from_profile_b(profile_b)
+
+        # Mark both tabs stale; driver tab also auto-sets B's throttle threshold
         self.suspension_tab.on_session_loaded()
-        self.driver_tab.on_session_loaded()
+        self.driver_tab.on_session_b_loaded()
 
         active_tab = self._get_active_tab()
         if active_tab is not None:
-            active_tab._update_status(f"Loaded comparison: {file_path.name}")
+            status = f"Loaded comparison: {file_path.name}"
+            if profile_b and logger_id_b != logger_id_a:
+                status += f" (profile: {profile_b.name})"
+            active_tab._update_status(status)
 
     def _update_available_channels(self) -> None:
-        """Update both config panels with channels from all loaded sessions."""
+        """Update both config panels with per-session channel suggestions."""
         channels_a = getattr(self, "_channels_a", [])
         channels_b = getattr(self, "_channels_b", [])
-        merged = sorted(set(channels_a) | set(channels_b))
-        self.suspension_config_panel.update_available_channels(merged)
-        self.driver_config_panel.update_available_channels(merged)
+        self.suspension_config_panel.update_available_channels_a(channels_a)
+        self.suspension_config_panel.update_available_channels_b(channels_b)
+        self.driver_config_panel.update_available_channels_a(channels_a)
+        self.driver_config_panel.update_available_channels_b(channels_b)
 
     def _on_selection_changed(self) -> None:
         """Handle lap selection or config change — route to active tab."""
@@ -250,25 +271,41 @@ class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
             active_tab.toggle_stats_window()
 
     def _on_save_profile(self) -> None:
-        """Save a merged vehicle profile from both config panels."""
-        logger_id = self.session_a_panel.logger_id
+        """Save a merged vehicle profile from both config panels.
+
+        Saves for whichever session (A or B) is active in the current
+        config panel's segmented button.
+        """
+        active_tab = self._get_active_tab()
+        active_config = self.get_config_panel_for_tab(active_tab) if active_tab else None
+
+        # Determine which session to save for
+        saving_b = active_config is not None and active_config.active_session == "B"
+
+        if saving_b:
+            logger_id = self.session_b_panel.logger_id
+            session_panel = self.session_b_panel
+        else:
+            logger_id = self.session_a_panel.logger_id
+            session_panel = self.session_a_panel
+
         if not logger_id:
-            active_tab = self._get_active_tab()
             if active_tab is not None:
                 active_tab._update_status("No logger ID — load a session first")
             return
 
-        # Build profile from suspension config panel (has motion ratios + shock channels)
-        session_label = self.session_a_panel.get_session_label()
-        profile = self.suspension_config_panel.get_vehicle_profile(name=session_label)
+        session_label = session_panel.get_session_label()
 
-        # Merge in driver config panel channels (throttle, brake, GPS, etc.)
-        driver_profile = self.driver_config_panel.get_vehicle_profile(name=session_label)
+        if saving_b:
+            profile = self.suspension_config_panel.get_vehicle_profile_b(name=session_label)
+            driver_profile = self.driver_config_panel.get_vehicle_profile_b(name=session_label)
+        else:
+            profile = self.suspension_config_panel.get_vehicle_profile(name=session_label)
+            driver_profile = self.driver_config_panel.get_vehicle_profile(name=session_label)
+
         profile.channel_names.update(driver_profile.channel_names)
-
         save_profile_for_logger(logger_id, profile)
 
-        active_tab = self._get_active_tab()
         if active_tab is not None:
             active_tab._update_status(f"Profile saved for logger {logger_id}")
 
