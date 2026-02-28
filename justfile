@@ -37,6 +37,10 @@ run-clean: clean run
 setup-emsdk:
     #!/usr/bin/env bash
     set -euo pipefail
+    # pyodide-build needs pip on PATH for xbuildenv install
+    uv pip install pip
+    rm -rf .pyodide-xbuildenv*
+    uv run pyodide xbuildenv install
     EMSDK_VERSION=$(uv run pyodide config get emscripten_version)
     [ -d "$HOME/emsdk" ] || git clone https://github.com/emscripten-core/emsdk.git "$HOME/emsdk"
     pushd "$HOME/emsdk"
@@ -46,8 +50,6 @@ setup-emsdk:
     ./emsdk install "$EMSDK_VERSION"
     ./emsdk activate "$EMSDK_VERSION"
     popd
-    rm -rf .pyodide-xbuildenv*
-    uv run pyodide xbuildenv install
 
 # Wheel building
 build-wheel:
@@ -68,6 +70,8 @@ _build-libxrk-pyodide:
     #!/usr/bin/env bash
     set -euo pipefail
     cd build/libxrk
+    # Clear stale xbuildenv so pyodide build uses the project-root one
+    rm -rf .pyodide-xbuildenv*
     . "$HOME/emsdk/emsdk_env.sh"
     . "$HOME/.cargo/env"
     # Install wasm-opt wrapper to strip flags unsupported by emsdk's older binaryen
@@ -78,6 +82,8 @@ _build-libxrk-pyodide:
     export RUSTUP_TOOLCHAIN=nightly
     export CARGO_BUILD_TARGET=wasm32-unknown-emscripten
     export RUSTFLAGS="-Zemscripten-wasm-eh"
+    # pyodide-build internally calls bare `pip`; ensure it exists in the venv
+    uv pip install --project ../.. pip
     uv run --project ../.. pyodide build --exports whole_archive
 
 _copy-libxrk-wheel:
@@ -92,10 +98,12 @@ _download-pyodide-deps:
     uv run python scripts/download_pyodide_deps.py
 
 # JupyterLite site building
+_clean-lite-artifacts:
+    rm -rf .lite_contents dist
+
 _prepare-lite-contents:
     #!/usr/bin/env bash
     set -euo pipefail
-    rm -rf .lite_contents dist
     mkdir -p .lite_contents/en .lite_contents/ja .lite_contents/data
     cp workspace_template/data/*.xrz .lite_contents/data/
     VERSION=$(uv run python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
@@ -121,17 +129,12 @@ _build-lite-site:
 serve-lite:
     uv run jupyter lite serve --output-dir dist
 
-build-lite-full:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    # Run independent build steps in parallel
-    just build-wheel &
-    just build-libxrk-pyodide &
-    just _download-pyodide-deps &
-    just _prepare-lite-contents && just _execute-lite-notebooks &
-    wait
-    # Build the site from all artifacts
-    just _build-lite-site
+_prepare-and-execute-lite: _prepare-lite-contents _execute-lite-notebooks
+
+[parallel]
+_build-lite-parallel: build-wheel build-libxrk-pyodide _download-pyodide-deps _prepare-and-execute-lite
+
+build-lite-full: _clean-lite-artifacts _build-lite-parallel _build-lite-site
 
 build-and-serve-lite: build-lite-full serve-lite
 
