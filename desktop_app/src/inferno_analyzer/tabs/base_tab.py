@@ -57,15 +57,16 @@ class BaseAnalysisTab(ABC):
         """Arrange tab-specific widgets."""
 
     @abstractmethod
-    def _get_analysis_params(self) -> dict | None:
+    def _get_analysis_params(self) -> Any:
         """Read config from the tab's config panel.
 
         Returns None if analysis cannot proceed (e.g., no session loaded,
-        no laps selected).
+        no laps selected). Subclasses return a TypedDict specific to their
+        analysis type.
         """
 
     @abstractmethod
-    def _analysis_worker(self, params: dict) -> None:
+    def _analysis_worker(self, params: Any) -> None:
         """Run the analysis in a background thread.
 
         Must store results in self._result_a / self._result_b and call
