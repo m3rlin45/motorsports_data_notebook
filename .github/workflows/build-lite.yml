@@ -38,6 +38,8 @@ jobs:
 
       - name: Build wheels and JupyterLite site
         run: just build-lite-full
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
