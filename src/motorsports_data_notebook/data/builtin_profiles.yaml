@@ -30,6 +30,38 @@ profiles:
       tpms_temp_fr: TPMS_Temp_RF
       tpms_temp_rl: TPMS_Temp_LR
       tpms_temp_rr: TPMS_Temp_RR
+      tire_temp_fl_1: FL_Ch1
+      tire_temp_fl_2: FL_Ch2
+      tire_temp_fl_3: FL_Ch3
+      tire_temp_fl_4: FL_Ch4
+      tire_temp_fl_5: FL_Ch5
+      tire_temp_fl_6: FL_Ch6
+      tire_temp_fl_7: FL_Ch7
+      tire_temp_fl_8: FL_Ch8
+      tire_temp_fr_1: FR_Ch1
+      tire_temp_fr_2: FR_Ch2
+      tire_temp_fr_3: FR_Ch3
+      tire_temp_fr_4: FR_Ch4
+      tire_temp_fr_5: FR_Ch5
+      tire_temp_fr_6: FR_Ch6
+      tire_temp_fr_7: FR_Ch7
+      tire_temp_fr_8: FR_Ch8
+      tire_temp_rl_1: RL_Ch1
+      tire_temp_rl_2: RL_Ch2
+      tire_temp_rl_3: RL_Ch3
+      tire_temp_rl_4: RL_Ch4
+      tire_temp_rl_5: RL_Ch5
+      tire_temp_rl_6: RL_Ch6
+      tire_temp_rl_7: RL_Ch7
+      tire_temp_rl_8: RL_Ch8
+      tire_temp_rr_1: RR_Ch1
+      tire_temp_rr_2: RR_Ch2
+      tire_temp_rr_3: RR_Ch3
+      tire_temp_rr_4: RR_Ch4
+      tire_temp_rr_5: RR_Ch5
+      tire_temp_rr_6: RR_Ch6
+      tire_temp_rr_7: RR_Ch7
+      tire_temp_rr_8: RR_Ch8
     motion_ratios:
       front_left: 0.997   # MacPherson strut
       front_right: 0.997
@@ -94,6 +126,49 @@ profiles:
       rear_left: 1.0
       rear_right: 1.0
 
+  iracing:
+    name: iRacing
+    # iRacing telemetry — all cars use the same channel names
+    # Throttle/Brake are 0-1 (not 0-100%), Speed is m/s, shock channels are velocity (m/s)
+    channel_names:
+      throttle: Throttle
+      brake: Brake
+      gps_speed: Speed
+      gps_latitude: Lat
+      gps_longitude: Lon
+      lateral_g: LatAccel
+      inline_g: LongAccel
+      steering: SteeringWheelAngle
+      shock_fl: LFshockVel
+      shock_fr: RFshockVel
+      shock_rl: LRshockVel
+      shock_rr: RRshockVel
+      tpms_press_fl: LFpressure
+      tpms_press_fr: RFpressure
+      tpms_press_rl: LRpressure
+      tpms_press_rr: RRpressure
+      tpms_temp_fl: LFtempM
+      tpms_temp_fr: RFtempM
+      tpms_temp_rl: LRtempM
+      tpms_temp_rr: RRtempM
+      tire_temp_fl_1: LFtempL
+      tire_temp_fl_2: LFtempM
+      tire_temp_fl_3: LFtempR
+      tire_temp_fr_1: RFtempL
+      tire_temp_fr_2: RFtempM
+      tire_temp_fr_3: RFtempR
+      tire_temp_rl_1: LRtempL
+      tire_temp_rl_2: LRtempM
+      tire_temp_rl_3: LRtempR
+      tire_temp_rr_1: RRtempL
+      tire_temp_rr_2: RRtempM
+      tire_temp_rr_3: RRtempR
+    motion_ratios:
+      front_left: 1.0
+      front_right: 1.0
+      rear_left: 1.0
+      rear_right: 1.0
+
 # Logger ID -> profile name mappings
 logger_map:
   6519522: toyota_86_zn6    # Inferno 86 — Solo2 DL (no shock pots or TPMS)
@@ -101,3 +176,4 @@ logger_map:
   15074: honda_ek9           # EK9 — Solo logger
   6603435: super_fj              # Super FJ — MXm logger
   8401203: kk_s2             # KK-SII — SW4 logger
+  iracing: iracing            # iRacing — all cars use the same channel names

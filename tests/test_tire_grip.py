@@ -7,47 +7,18 @@ import pandas as pd
 import plotly.graph_objects as go
 import pyarrow as pa
 import pytest
-from dataclasses import dataclass
-from typing import Dict
 
+from helpers import MockLogFile, make_table_with_unit
 from motorsports_data_notebook.tire_grip import (
     CornerTireGripData,
     TireGripResult,
     _compute_corner,
+    _get_channel_unit,
     analyze_tire_grip,
     analyze_tire_grip_multi_lap,
     format_tire_grip_stats_table,
 )
 from motorsports_data_notebook.visualization import plot_tire_grip_scatter
-
-
-@dataclass
-class MockLogFile:
-    """Mock LogFile for testing."""
-
-    channels: Dict[str, pa.Table]
-    laps: pa.Table = None
-    metadata: Dict[str, str] = None
-    file_name: str = "test.xrk"
-
-    def __post_init__(self):
-        if self.laps is None:
-            self.laps = pa.table({"num": [], "start_time": [], "end_time": []})
-        if self.metadata is None:
-            self.metadata = {}
-
-    def filter_by_lap(self, lap_num: int):
-        """Mock filter_by_lap returning self for method chaining."""
-        return self
-
-    def select_channels(self, channel_names: list):
-        """Mock select_channels returning self for method chaining."""
-        return self
-
-    def resample_to_channel(self, reference_channel: str):
-        """Mock resample_to_channel returning self for method chaining."""
-        return self
-
 
 # Default channel name mapping matching profiles.py DEFAULT_CHANNEL_NAMES
 _DEFAULT_CHANNEL_NAMES = {
@@ -76,36 +47,12 @@ def _make_pressure_log(
     n = len(lateral)
     timecodes = np.arange(0, n * 10, 10, dtype=np.int64)
     channels = {
-        "LateralAcc": pa.table(
-            {"timecodes": pa.array(timecodes, type=pa.int64()), "LateralAcc": pa.array(lateral)}
-        ),
-        "InlineAcc": pa.table(
-            {"timecodes": pa.array(timecodes, type=pa.int64()), "InlineAcc": pa.array(inline)}
-        ),
-        "TPMS_Press_LF": pa.table(
-            {
-                "timecodes": pa.array(timecodes, type=pa.int64()),
-                "TPMS_Press_LF": pa.array(press_fl),
-            }
-        ),
-        "TPMS_Press_RF": pa.table(
-            {
-                "timecodes": pa.array(timecodes, type=pa.int64()),
-                "TPMS_Press_RF": pa.array(press_fr),
-            }
-        ),
-        "TPMS_Press_LR": pa.table(
-            {
-                "timecodes": pa.array(timecodes, type=pa.int64()),
-                "TPMS_Press_LR": pa.array(press_rl),
-            }
-        ),
-        "TPMS_Press_RR": pa.table(
-            {
-                "timecodes": pa.array(timecodes, type=pa.int64()),
-                "TPMS_Press_RR": pa.array(press_rr),
-            }
-        ),
+        "LateralAcc": make_table_with_unit(timecodes, "LateralAcc", lateral, "g"),
+        "InlineAcc": make_table_with_unit(timecodes, "InlineAcc", inline, "g"),
+        "TPMS_Press_LF": make_table_with_unit(timecodes, "TPMS_Press_LF", press_fl, "bar"),
+        "TPMS_Press_RF": make_table_with_unit(timecodes, "TPMS_Press_RF", press_fr, "bar"),
+        "TPMS_Press_LR": make_table_with_unit(timecodes, "TPMS_Press_LR", press_rl, "bar"),
+        "TPMS_Press_RR": make_table_with_unit(timecodes, "TPMS_Press_RR", press_rr, "bar"),
     }
     return MockLogFile(channels=channels)
 
@@ -122,36 +69,12 @@ def _make_temperature_log(
     n = len(lateral)
     timecodes = np.arange(0, n * 10, 10, dtype=np.int64)
     channels = {
-        "LateralAcc": pa.table(
-            {"timecodes": pa.array(timecodes, type=pa.int64()), "LateralAcc": pa.array(lateral)}
-        ),
-        "InlineAcc": pa.table(
-            {"timecodes": pa.array(timecodes, type=pa.int64()), "InlineAcc": pa.array(inline)}
-        ),
-        "TPMS_Temp_LF": pa.table(
-            {
-                "timecodes": pa.array(timecodes, type=pa.int64()),
-                "TPMS_Temp_LF": pa.array(temp_fl),
-            }
-        ),
-        "TPMS_Temp_RF": pa.table(
-            {
-                "timecodes": pa.array(timecodes, type=pa.int64()),
-                "TPMS_Temp_RF": pa.array(temp_fr),
-            }
-        ),
-        "TPMS_Temp_LR": pa.table(
-            {
-                "timecodes": pa.array(timecodes, type=pa.int64()),
-                "TPMS_Temp_LR": pa.array(temp_rl),
-            }
-        ),
-        "TPMS_Temp_RR": pa.table(
-            {
-                "timecodes": pa.array(timecodes, type=pa.int64()),
-                "TPMS_Temp_RR": pa.array(temp_rr),
-            }
-        ),
+        "LateralAcc": make_table_with_unit(timecodes, "LateralAcc", lateral, "g"),
+        "InlineAcc": make_table_with_unit(timecodes, "InlineAcc", inline, "g"),
+        "TPMS_Temp_LF": make_table_with_unit(timecodes, "TPMS_Temp_LF", temp_fl, "C"),
+        "TPMS_Temp_RF": make_table_with_unit(timecodes, "TPMS_Temp_RF", temp_fr, "C"),
+        "TPMS_Temp_LR": make_table_with_unit(timecodes, "TPMS_Temp_LR", temp_rl, "C"),
+        "TPMS_Temp_RR": make_table_with_unit(timecodes, "TPMS_Temp_RR", temp_rr, "C"),
     }
     return MockLogFile(channels=channels)
 
@@ -176,7 +99,8 @@ class TestAnalyzeTireGrip:
         assert isinstance(result.rear_left, CornerTireGripData)
         assert isinstance(result.rear_right, CornerTireGripData)
         assert result.metric_mode == "pressure"
-        assert result.metric_unit == "psi"
+        assert result.metric_unit == "bar"
+        assert result.accel_unit == "g"
 
     def test_temperature_mode(self):
         """Temperature mode should use temp channels and set correct metric_mode and unit."""
@@ -191,7 +115,8 @@ class TestAnalyzeTireGrip:
 
         assert isinstance(result, TireGripResult)
         assert result.metric_mode == "temperature"
-        assert result.metric_unit == "\u00b0F"
+        assert result.metric_unit == "C"
+        assert result.accel_unit == "g"
         assert result.front_left.corner_name == "FL"
         assert result.rear_right.corner_name == "RR"
 
@@ -289,7 +214,7 @@ class TestPlotTireGripScatter:
         n = 50
         total_g = np.random.uniform(0.5, 2.0, n)
         tire_metric = np.random.uniform(30.0, 35.0, n)
-        metric_unit = "psi" if metric_mode == "pressure" else "\u00b0F"
+        metric_unit = "bar" if metric_mode == "pressure" else "C"
         bucket_centers = np.array([31.0, 32.0, 33.0, 34.0])
         bucket_values = np.array([1.5, 1.8, 1.6, 1.7])
         bucket_counts = np.array([10, 15, 12, 13], dtype=np.int64)
@@ -300,7 +225,6 @@ class TestPlotTireGripScatter:
                 corner_name=name,
                 total_g=total_g.copy(),
                 tire_metric=tire_metric.copy(),
-
                 mean_g=float(np.mean(total_g)),
                 mean_metric=float(np.mean(tire_metric)),
                 std_g=float(np.std(total_g)),
@@ -318,6 +242,7 @@ class TestPlotTireGripScatter:
             rear_right=corners["RR"],
             metric_mode=metric_mode,
             metric_unit=metric_unit,
+            accel_unit="g",
         )
 
     def test_returns_figure(self):
@@ -362,9 +287,9 @@ class TestPlotTireGripScatter:
                 else:
                     x_axis_titles.append(str(title))
 
-        assert any("Pressure" in t for t in x_axis_titles), (
-            f"Expected 'Pressure' in x-axis labels, got: {x_axis_titles}"
-        )
+        assert any(
+            "Pressure" in t for t in x_axis_titles
+        ), f"Expected 'Pressure' in x-axis labels, got: {x_axis_titles}"
 
     def test_axis_labels_temperature_mode(self):
         """X-axis label should contain 'Temperature' in temperature mode."""
@@ -381,9 +306,9 @@ class TestPlotTireGripScatter:
                 else:
                     x_axis_titles.append(str(title))
 
-        assert any("Temperature" in t for t in x_axis_titles), (
-            f"Expected 'Temperature' in x-axis labels, got: {x_axis_titles}"
-        )
+        assert any(
+            "Temperature" in t for t in x_axis_titles
+        ), f"Expected 'Temperature' in x-axis labels, got: {x_axis_titles}"
 
 
 class TestFormatTireGripStatsTable:
@@ -391,7 +316,7 @@ class TestFormatTireGripStatsTable:
 
     def _make_result(self, metric_mode: str = "pressure") -> TireGripResult:
         """Create a minimal TireGripResult for table formatting tests."""
-        metric_unit = "psi" if metric_mode == "pressure" else "\u00b0F"
+        metric_unit = "bar" if metric_mode == "pressure" else "C"
 
         corners = {}
         for name in ("FL", "FR", "RL", "RR"):
@@ -399,7 +324,6 @@ class TestFormatTireGripStatsTable:
                 corner_name=name,
                 total_g=np.array([1.0, 1.5, 2.0]),
                 tire_metric=np.array([32.0, 32.5, 33.0]),
-
                 mean_g=1.5,
                 mean_metric=32.5,
                 std_g=0.5,
@@ -417,6 +341,7 @@ class TestFormatTireGripStatsTable:
             rear_right=corners["RR"],
             metric_mode=metric_mode,
             metric_unit=metric_unit,
+            accel_unit="g",
         )
 
     def test_returns_dataframe(self):
@@ -428,8 +353,8 @@ class TestFormatTireGripStatsTable:
         assert isinstance(df, pd.DataFrame)
         assert len(df) == 4
         assert "Corner" in df.columns
-        assert "Mean G" in df.columns
-        assert "Std G" in df.columns
+        assert "Mean Accel (g)" in df.columns
+        assert "Std Accel (g)" in df.columns
 
     def test_pressure_columns(self):
         """Pressure mode should have 'Pressure' in metric column names."""
@@ -470,8 +395,8 @@ class TestFormatTireGripStatsTable:
 
         # All corners have the same values in our test fixture
         for _, row in df.iterrows():
-            assert row["Mean G"] == pytest.approx(1.5)
-            assert row["Std G"] == pytest.approx(0.5)
+            assert row["Mean Accel (g)"] == pytest.approx(1.5)
+            assert row["Std Accel (g)"] == pytest.approx(0.5)
 
 
 class TestBucketComputation:
@@ -485,8 +410,12 @@ class TestBucketComputation:
         total_g = tire_metric + 1.0
 
         result = _compute_corner(
-            total_g, tire_metric, "FL",
-            num_buckets=10, percentile=100.0, min_count=1,
+            total_g,
+            tire_metric,
+            "FL",
+            num_buckets=10,
+            percentile=100.0,
+            min_count=1,
         )
 
         # Each bucket should have ~10 points, bucket centers at 0.45, 1.35, ...
@@ -507,8 +436,12 @@ class TestBucketComputation:
         total_g = np.array([0.5, 0.6, 0.7, 0.8, 0.9, 2.0])
 
         result = _compute_corner(
-            total_g, tire_metric, "FL",
-            num_buckets=5, percentile=99.9, min_count=3,
+            total_g,
+            tire_metric,
+            "FL",
+            num_buckets=5,
+            percentile=99.9,
+            min_count=3,
         )
 
         # Only the bucket containing the 5 clustered points should survive
@@ -522,8 +455,12 @@ class TestBucketComputation:
         total_g = np.arange(1, n + 1, dtype=float)
 
         result = _compute_corner(
-            total_g, tire_metric, "FL",
-            num_buckets=1, percentile=50.0, min_count=1,
+            total_g,
+            tire_metric,
+            "FL",
+            num_buckets=1,
+            percentile=50.0,
+            min_count=1,
         )
 
         assert len(result.bucket_values) == 1
@@ -569,7 +506,8 @@ class TestAnalyzeTireGripMultiLap:
         assert len(result.front_left.total_g) == n * 3
         assert len(result.front_left.tire_metric) == n * 3
         assert result.metric_mode == "pressure"
-        assert result.metric_unit == "psi"
+        assert result.metric_unit == "bar"
+        assert result.accel_unit == "g"
 
     def test_multi_lap_empty_raises(self):
         """Empty lap_numbers should raise ValueError."""
@@ -583,9 +521,7 @@ class TestAnalyzeTireGripMultiLap:
         log = MockLogFile(channels={})
 
         with pytest.raises(ValueError, match="metric_mode must be"):
-            analyze_tire_grip_multi_lap(
-                log, [1], _DEFAULT_CHANNEL_NAMES, metric_mode="invalid"
-            )
+            analyze_tire_grip_multi_lap(log, [1], _DEFAULT_CHANNEL_NAMES, metric_mode="invalid")
 
     def test_multi_lap_has_buckets(self):
         """Multi-lap analysis should populate bucket fields."""
@@ -619,5 +555,36 @@ class TestAnalyzeTireGripMultiLap:
         )
 
         assert result.metric_mode == "temperature"
-        assert result.metric_unit == "\u00b0F"
+        assert result.metric_unit == "C"
+        assert result.accel_unit == "g"
         assert len(result.front_left.total_g) == n * 2
+
+
+class TestGetChannelUnit:
+    """Tests for _get_channel_unit helper."""
+
+    def test_reads_unit_from_metadata(self):
+        """Should read the 'units' key from field metadata."""
+        schema = pa.schema([pa.field("ch", pa.float64(), metadata={"units": "kPa"})])
+        table = pa.table({"ch": [1.0, 2.0]}, schema=schema)
+
+        assert _get_channel_unit(table, "ch") == "kPa"
+
+    def test_returns_empty_when_no_metadata(self):
+        """Should return empty string when field has no metadata."""
+        table = pa.table({"ch": [1.0, 2.0]})
+
+        assert _get_channel_unit(table, "ch") == ""
+
+    def test_returns_empty_for_missing_field(self):
+        """Should return empty string when field name doesn't exist."""
+        table = pa.table({"ch": [1.0, 2.0]})
+
+        assert _get_channel_unit(table, "nonexistent") == ""
+
+    def test_returns_empty_when_units_key_missing(self):
+        """Should return empty string when metadata exists but has no 'units' key."""
+        schema = pa.schema([pa.field("ch", pa.float64(), metadata={"desc": "test"})])
+        table = pa.table({"ch": [1.0, 2.0]}, schema=schema)
+
+        assert _get_channel_unit(table, "ch") == ""

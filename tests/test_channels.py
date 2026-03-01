@@ -4,8 +4,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-from dataclasses import dataclass, field
-from typing import Dict
 from unittest.mock import MagicMock
 
 from motorsports_data_notebook.channels import (
@@ -13,30 +11,6 @@ from motorsports_data_notebook.channels import (
     get_best_lap_channels,
     get_top_laps,
 )
-
-
-@dataclass
-class MockLogFile:
-    """Mock LogFile for testing."""
-
-    channels: Dict[str, pa.Table]
-    laps: pa.Table = None
-    metadata: Dict[str, str] = None
-    file_name: str = "test.xrk"
-
-    def __post_init__(self):
-        if self.laps is None:
-            self.laps = pa.table({"num": [], "start_time": [], "end_time": []})
-        if self.metadata is None:
-            self.metadata = {}
-
-    def filter_by_lap(self, lap_num: int):
-        """Mock filter_by_lap returning self for method chaining."""
-        return self
-
-    def select_channels(self, channel_names: list):
-        """Mock select_channels returning self for method chaining."""
-        return self
 
 
 class TestGetBestLap:

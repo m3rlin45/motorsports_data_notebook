@@ -7,14 +7,15 @@ from typing import TYPE_CHECKING, Any
 
 import customtkinter as ctk
 
-from inferno_analyzer.suspension.analysis.multi_lap import analyze_suspension_velocity_multi_lap
+from motorsports_data_notebook.suspension import analyze_suspension_velocity_multi_lap
 from inferno_analyzer.suspension.widgets.chart_view import ChartView
 from inferno_analyzer.suspension.widgets.stats_panel import StatsPanel
 from inferno_analyzer.tabs.base_tab import BaseAnalysisTab
 
 if TYPE_CHECKING:
+    from motorsports_data_notebook._types import LogFile
+
     from inferno_analyzer.app import InfernoAnalyzerApp
-    from libxrk.base import LogFile
     from motorsports_data_notebook.suspension import MotionRatios, VelocityHistogramResult
 
 

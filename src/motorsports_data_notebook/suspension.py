@@ -12,10 +12,11 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
+from ._util import get_channel_unit as _get_channel_unit
 from ._util import validate_channel_names as _validate_channel_names
 
 if TYPE_CHECKING:
-    from libxrk.base import LogFile
+    from ._types import LogFile
 
 
 @dataclass
@@ -283,7 +284,6 @@ def compute_velocity_histogram(
     # Bins are arranged so that zero is at the center of a bin
     # e.g., with bin_size=10: edges at -5, 5, 15, ... so centers are at 0, 10, 20, ...
     half_bin = bin_size / 2
-    n_bins_half = int(max_velocity / bin_size)
     # Create edges: -max - half_bin, ..., -half_bin, half_bin, ..., max + half_bin
     positive_edges = np.arange(half_bin, max_velocity + bin_size, bin_size)
     negative_edges = -positive_edges[::-1]
@@ -409,6 +409,44 @@ def compute_velocity_stats(
     }
 
 
+def _channels_are_velocity(log: "LogFile", channel_name: str) -> bool:
+    """Check if shock channel contains velocity data (vs displacement).
+
+    iRacing provides shock velocity directly (m/s), while AIM loggers
+    provide displacement (mm) requiring velocity derivation.
+    """
+    table = log.channels.get(channel_name)
+    if table is None:
+        return False
+    return "/s" in _get_channel_unit(table, channel_name)  # m/s, mm/s, etc.
+
+
+def _build_corner_data(
+    velocity_mms: np.ndarray,
+    corner_name: str,
+    bin_size: float,
+    max_velocity: float,
+    ranges: VelocityRanges,
+) -> CornerVelocityData:
+    """Build CornerVelocityData from velocity array in mm/s."""
+    histogram, bin_edges, bin_centers = compute_velocity_histogram(
+        velocity_mms, bin_size, max_velocity
+    )
+    zero_bin_idx = int(np.argmin(np.abs(bin_centers)))
+    pct_zero_bin = float(histogram[zero_bin_idx]) if len(histogram) > 0 else 0.0
+    stats = compute_velocity_stats(velocity_mms, ranges)
+
+    return CornerVelocityData(
+        corner_name=corner_name,
+        velocity=velocity_mms,
+        bin_edges=bin_edges,
+        bin_centers=bin_centers,
+        histogram=histogram,
+        pct_zero_bin=pct_zero_bin,
+        **stats,
+    )
+
+
 def _process_corner(
     displacement: np.ndarray,
     timecodes: np.ndarray,
@@ -419,43 +457,21 @@ def _process_corner(
     max_velocity: float,
     ranges: VelocityRanges,
 ) -> CornerVelocityData:
-    """Process a single corner's suspension data."""
-    # Compute shock velocity
+    """Process a single corner's suspension data (displacement -> velocity)."""
     shock_velocity = compute_shock_velocity(displacement, timecodes, smoothing_window)
-
-    # Convert to wheel velocity
     wheel_velocity = compute_wheel_velocity(shock_velocity, motion_ratio)
+    return _build_corner_data(wheel_velocity, corner_name, bin_size, max_velocity, ranges)
 
-    # Compute histogram
-    histogram, bin_edges, bin_centers = compute_velocity_histogram(
-        wheel_velocity, bin_size, max_velocity
-    )
 
-    # Find zero bin percentage (the bin centered at 0)
-    zero_bin_idx = int(np.argmin(np.abs(bin_centers)))
-    pct_zero_bin = float(histogram[zero_bin_idx]) if len(histogram) > 0 else 0.0
-
-    # Compute statistics
-    stats = compute_velocity_stats(wheel_velocity, ranges)
-
-    return CornerVelocityData(
-        corner_name=corner_name,
-        velocity=wheel_velocity,
-        bin_edges=bin_edges,
-        bin_centers=bin_centers,
-        histogram=histogram,
-        skew=stats["skew"],
-        kurtosis=stats["kurtosis"],
-        mean=stats["mean"],
-        std=stats["std"],
-        pct_friction=stats["pct_friction"],
-        pct_slow_bump=stats["pct_slow_bump"],
-        pct_slow_rebound=stats["pct_slow_rebound"],
-        pct_fast_bump=stats["pct_fast_bump"],
-        pct_fast_rebound=stats["pct_fast_rebound"],
-        pct_curb=stats["pct_curb"],
-        pct_zero_bin=pct_zero_bin,
-    )
+def _process_corner_velocity(
+    velocity_ms: np.ndarray,
+    corner_name: str,
+    bin_size: float,
+    max_velocity: float,
+    ranges: VelocityRanges,
+) -> CornerVelocityData:
+    """Process a single corner when velocity is already in m/s (iRacing)."""
+    return _build_corner_data(velocity_ms * 1000.0, corner_name, bin_size, max_velocity, ranges)
 
 
 def analyze_suspension_velocity(
@@ -540,60 +556,203 @@ def analyze_suspension_velocity(
         .channels
     )
 
-    # Extract timecodes and displacement arrays
-    timecodes = aligned[shock_fl_name].column("timecodes").to_numpy()
-    fl_disp = aligned[shock_fl_name].column(shock_fl_name).to_numpy()
-    fr_disp = aligned[shock_fr_name].column(shock_fr_name).to_numpy()
-    rl_disp = aligned[shock_rl_name].column(shock_rl_name).to_numpy()
-    rr_disp = aligned[shock_rr_name].column(shock_rr_name).to_numpy()
+    # Check if channels contain velocity data (iRacing) or displacement (AIM)
+    is_velocity = _channels_are_velocity(log, shock_fl_name)
 
-    # Process each corner
-    fl_data = _process_corner(
-        fl_disp,
-        timecodes,
-        motion_ratios.front_left,
-        "FL",
-        smoothing_window,
-        bin_size,
-        max_velocity,
-        velocity_ranges,
-    )
-    fr_data = _process_corner(
-        fr_disp,
-        timecodes,
-        motion_ratios.front_right,
-        "FR",
-        smoothing_window,
-        bin_size,
-        max_velocity,
-        velocity_ranges,
-    )
-    rl_data = _process_corner(
-        rl_disp,
-        timecodes,
-        motion_ratios.rear_left,
-        "RL",
-        smoothing_window,
-        bin_size,
-        max_velocity,
-        velocity_ranges,
-    )
-    rr_data = _process_corner(
-        rr_disp,
-        timecodes,
-        motion_ratios.rear_right,
-        "RR",
-        smoothing_window,
-        bin_size,
-        max_velocity,
-        velocity_ranges,
-    )
+    if is_velocity:
+        # Velocity channels (iRacing): convert m/s to mm/s, skip derivation
+        fl_vel = aligned[shock_fl_name].column(shock_fl_name).to_numpy()
+        fr_vel = aligned[shock_fr_name].column(shock_fr_name).to_numpy()
+        rl_vel = aligned[shock_rl_name].column(shock_rl_name).to_numpy()
+        rr_vel = aligned[shock_rr_name].column(shock_rr_name).to_numpy()
+
+        fl_data = _process_corner_velocity(fl_vel, "FL", bin_size, max_velocity, velocity_ranges)
+        fr_data = _process_corner_velocity(fr_vel, "FR", bin_size, max_velocity, velocity_ranges)
+        rl_data = _process_corner_velocity(rl_vel, "RL", bin_size, max_velocity, velocity_ranges)
+        rr_data = _process_corner_velocity(rr_vel, "RR", bin_size, max_velocity, velocity_ranges)
+    else:
+        # Displacement channels (AIM): derive velocity and apply motion ratios
+        timecodes = aligned[shock_fl_name].column("timecodes").to_numpy()
+        fl_disp = aligned[shock_fl_name].column(shock_fl_name).to_numpy()
+        fr_disp = aligned[shock_fr_name].column(shock_fr_name).to_numpy()
+        rl_disp = aligned[shock_rl_name].column(shock_rl_name).to_numpy()
+        rr_disp = aligned[shock_rr_name].column(shock_rr_name).to_numpy()
+
+        fl_data = _process_corner(
+            fl_disp,
+            timecodes,
+            motion_ratios.front_left,
+            "FL",
+            smoothing_window,
+            bin_size,
+            max_velocity,
+            velocity_ranges,
+        )
+        fr_data = _process_corner(
+            fr_disp,
+            timecodes,
+            motion_ratios.front_right,
+            "FR",
+            smoothing_window,
+            bin_size,
+            max_velocity,
+            velocity_ranges,
+        )
+        rl_data = _process_corner(
+            rl_disp,
+            timecodes,
+            motion_ratios.rear_left,
+            "RL",
+            smoothing_window,
+            bin_size,
+            max_velocity,
+            velocity_ranges,
+        )
+        rr_data = _process_corner(
+            rr_disp,
+            timecodes,
+            motion_ratios.rear_right,
+            "RR",
+            smoothing_window,
+            bin_size,
+            max_velocity,
+            velocity_ranges,
+        )
 
     return VelocityHistogramResult(
         front_left=fl_data,
         front_right=fr_data,
         rear_left=rl_data,
         rear_right=rr_data,
+        velocity_ranges=velocity_ranges,
+    )
+
+
+def analyze_suspension_velocity_multi_lap(
+    log: "LogFile",
+    lap_numbers: list[int],
+    channel_names: dict | None = None,
+    motion_ratios: MotionRatios | None = None,
+    velocity_ranges: VelocityRanges | None = None,
+    smoothing_window: int = 5,
+    bin_size: float = 10.0,
+    max_velocity: float = 300.0,
+) -> VelocityHistogramResult:
+    """Analyze suspension velocity across multiple laps.
+
+    Concatenates velocity data from all selected laps before computing
+    the histogram, ensuring correct weighting (longer laps contribute
+    more data points).
+
+    Automatically detects whether channels contain velocity data (iRacing)
+    or displacement data (AIM) and processes accordingly.
+
+    Parameters
+    ----------
+    log : LogFile
+        The LogFile containing all laps (unfiltered).
+    lap_numbers : list[int]
+        Lap numbers to include in the analysis.
+    channel_names : dict, optional
+        Channel name mapping. Required keys:
+        - "shock_fl": Front left shock pot channel
+        - "shock_fr": Front right shock pot channel
+        - "shock_rl": Rear left shock pot channel
+        - "shock_rr": Rear right shock pot channel
+        If None, uses SUSPENSION_CHANNEL_NAMES defaults.
+    motion_ratios : MotionRatios, optional
+        Motion ratios for each corner. If None, uses Toyota 86 ZN6 defaults.
+    velocity_ranges : VelocityRanges, optional
+        Velocity thresholds for categorization. If None, uses defaults.
+    smoothing_window : int, default=5
+        Rolling average window size for velocity smoothing.
+    bin_size : float, default=10.0
+        Histogram bin size in mm/s.
+    max_velocity : float, default=300.0
+        Maximum velocity for histogram range.
+
+    Returns
+    -------
+    VelocityHistogramResult
+        Complete analysis results for all four corners, aggregated
+        across all selected laps.
+
+    Raises
+    ------
+    KeyError
+        If required channel names are missing.
+    ValueError
+        If lap_numbers is empty.
+    """
+    if not lap_numbers:
+        raise ValueError("lap_numbers cannot be empty")
+
+    if channel_names is None:
+        channel_names = SUSPENSION_CHANNEL_NAMES.copy()
+    if motion_ratios is None:
+        motion_ratios = MotionRatios.toyota_86_zn6()
+    if velocity_ranges is None:
+        velocity_ranges = VelocityRanges()
+
+    required_keys = ["shock_fl", "shock_fr", "shock_rl", "shock_rr"]
+    _validate_channel_names(channel_names, required_keys, "analyze_suspension_velocity_multi_lap")
+
+    shock_fl_name = channel_names["shock_fl"]
+    shock_fr_name = channel_names["shock_fr"]
+    shock_rl_name = channel_names["shock_rl"]
+    shock_rr_name = channel_names["shock_rr"]
+    shock_names = [shock_fl_name, shock_fr_name, shock_rl_name, shock_rr_name]
+    corner_labels = ["FL", "FR", "RL", "RR"]
+    mr_values = [
+        motion_ratios.front_left,
+        motion_ratios.front_right,
+        motion_ratios.rear_left,
+        motion_ratios.rear_right,
+    ]
+
+    is_velocity = _channels_are_velocity(log, shock_fl_name)
+
+    # Collect velocity data (in mm/s) from all laps
+    all_velocities: dict[str, list[np.ndarray]] = {c: [] for c in corner_labels}
+
+    for lap_num in lap_numbers:
+        try:
+            lap_log = log.filter_by_lap(lap_num)
+            aligned = (
+                lap_log.select_channels(shock_names).resample_to_channel(shock_fl_name).channels
+            )
+
+            if is_velocity:
+                # iRacing: channels are velocity in m/s, convert to mm/s
+                for name, label in zip(shock_names, corner_labels):
+                    vel_ms = aligned[name].column(name).to_numpy()
+                    all_velocities[label].append(vel_ms * 1000.0)
+            else:
+                # AIM: channels are displacement in mm, derive velocity
+                timecodes = aligned[shock_fl_name].column("timecodes").to_numpy()
+                for name, label, mr in zip(shock_names, corner_labels, mr_values):
+                    disp = aligned[name].column(name).to_numpy()
+                    shock_vel = compute_shock_velocity(disp, timecodes, smoothing_window)
+                    wheel_vel = compute_wheel_velocity(shock_vel, mr)
+                    all_velocities[label].append(wheel_vel)
+
+        except Exception:
+            continue
+
+    # Concatenate and compute histograms
+    results = {}
+    for label in corner_labels:
+        vel_list = all_velocities[label]
+        combined = np.concatenate(vel_list) if vel_list else np.array([])
+        results[label] = _build_corner_data(
+            combined, label, bin_size, max_velocity, velocity_ranges
+        )
+
+    return VelocityHistogramResult(
+        front_left=results["FL"],
+        front_right=results["FR"],
+        rear_left=results["RL"],
+        rear_right=results["RR"],
         velocity_ranges=velocity_ranges,
     )
 

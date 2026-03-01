@@ -12,7 +12,7 @@ from motorsports_data_notebook.desktop.loader import load_session
 from motorsports_data_notebook.profiles import get_logger_id
 
 if TYPE_CHECKING:
-    from libxrk.base import LogFile
+    from motorsports_data_notebook._types import LogFile
 
 
 class SessionPanel(ctk.CTkFrame):
@@ -76,7 +76,7 @@ class SessionPanel(ctk.CTkFrame):
         self.drop_frame = ctk.CTkFrame(self, height=50, fg_color=("gray85", "gray25"))
         self.drop_label = ctk.CTkLabel(
             self.drop_frame,
-            text="Drop XRK/XRZ file here or click to browse",
+            text="Drop XRK/XRZ/IBT file here or click to browse",
             font=ctk.CTkFont(size=11),
             text_color=("gray50", "gray60"),
         )
@@ -202,19 +202,19 @@ class SessionPanel(ctk.CTkFrame):
             for path_str in data.split():
                 files.append(Path(path_str))
 
-        # Filter for XRK/XRZ files
-        return [f for f in files if f.suffix.lower() in (".xrk", ".xrz")]
+        # Filter for supported telemetry files
+        return [f for f in files if f.suffix.lower() in (".xrk", ".xrz", ".ibt")]
 
     def _on_click_browse(self, event) -> None:
         """Open file browser dialog."""
         from tkinter import filedialog
 
         file_path = filedialog.askopenfilename(
-            title="Select XRK/XRZ file",
+            title="Select telemetry file",
             filetypes=[
+                ("Telemetry Files", "*.xrk *.xrz *.ibt"),
                 ("AIM Telemetry", "*.xrk *.xrz"),
-                ("XRK Files", "*.xrk"),
-                ("XRZ Files", "*.xrz"),
+                ("iRacing Telemetry", "*.ibt"),
                 ("All Files", "*.*"),
             ],
         )

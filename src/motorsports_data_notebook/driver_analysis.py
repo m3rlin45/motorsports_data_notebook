@@ -9,6 +9,7 @@ from typing import cast
 import pandas as pd
 
 from .corners import Corner
+from ._util import infer_channel_scale as _infer_channel_scale
 from ._util import validate_channel_names as _validate_channel_names
 
 
@@ -16,7 +17,7 @@ def find_throttle_acceptance(
     lap_data: pd.DataFrame,
     corner: Corner,
     channel_names: dict,
-    throttle_threshold: float = 98.0,
+    throttle_threshold: float | None = None,
     sustain_time_ms: float = 500.0,
     smoothing_window: int = 25,
 ) -> dict | None:
@@ -37,8 +38,9 @@ def find_throttle_acceptance(
         Channel name mapping. Required keys:
         - "throttle": Throttle position column name in lap_data (e.g., "PPS")
         - "lateral_g": Lateral acceleration column name in lap_data (e.g., "LateralAcc")
-    throttle_threshold : float, default=98.0
-        Throttle percentage to consider as "full throttle".
+    throttle_threshold : float or None, default=None
+        Throttle value to consider as "full throttle".
+        If None, auto-detected from data scale (98% of scale).
     sustain_time_ms : float, default=500.0
         Time in milliseconds that throttle must be sustained to count as "maintained".
     smoothing_window : int, default=10
@@ -64,6 +66,9 @@ def find_throttle_acceptance(
 
     throttle_col = channel_names["throttle"]
     lateral_g_col = channel_names["lateral_g"]
+
+    if throttle_threshold is None:
+        throttle_threshold = 0.98 * _infer_channel_scale(lap_data[throttle_col].values)
 
     # Apply smoothing to lateral G (rolling average on absolute value)
     lap_data = lap_data.copy()

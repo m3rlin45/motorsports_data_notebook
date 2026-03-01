@@ -10,7 +10,6 @@ import pytest
 from motorsports_data_notebook.corners import Corner
 from motorsports_data_notebook.driver_analysis import find_throttle_acceptance
 
-
 # Test channel names mapping (matches the test data column names)
 TEST_CHANNEL_NAMES = {
     "throttle": "PPS",
@@ -214,6 +213,46 @@ class TestFindThrottleAcceptance:
         assert result_low is not None
         assert result_high is not None
         assert result_high["throttle_acceptance_pct"] > result_low["throttle_acceptance_pct"]
+
+    def test_auto_detect_zero_to_one_scale(self):
+        """Test that throttle acceptance works with 0-1 scale data (iRacing)."""
+        corner = self.create_corner(start_dist=100.0, end_dist=300.0, apex_dist=200.0)
+
+        n_points = 200
+        lap_data = pd.DataFrame(
+            {
+                "distance_m": np.linspace(50, 350, n_points),
+                "timecodes": np.linspace(0, 10000, n_points),
+                "PPS": np.zeros(n_points),  # 0-1 scale throttle
+                "LateralAcc": np.zeros(n_points),
+            }
+        )
+
+        # Add lateral G profile
+        for i, row in lap_data.iterrows():
+            d = row["distance_m"]
+            if 100 <= d <= 300:
+                if d <= 200:
+                    lap_data.loc[i, "LateralAcc"] = 1.5
+                else:
+                    progress = (d - 200) / 100
+                    lap_data.loc[i, "LateralAcc"] = 1.5 * (1 - progress * 0.7)
+
+        # Full throttle at 250m in 0-1 scale
+        throttle_start_idx = lap_data[lap_data["distance_m"] >= 250].index[0]
+        lap_data.loc[throttle_start_idx:, "PPS"] = 1.0  # 0-1 scale
+
+        # Auto-detect (no explicit throttle_threshold)
+        result = find_throttle_acceptance(
+            lap_data,
+            corner,
+            TEST_CHANNEL_NAMES,
+            sustain_time_ms=500,
+            smoothing_window=5,
+        )
+
+        assert result is not None
+        assert result["throttle_acceptance_pct"] > 0
 
     def test_smoothing_reduces_noise(self):
         """Test that smoothing window affects the result."""

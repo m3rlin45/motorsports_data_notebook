@@ -4,9 +4,8 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-from dataclasses import dataclass
-from typing import Dict
 
+from helpers import MockLogFile
 from motorsports_data_notebook.suspension import (
     MotionRatios,
     VelocityRanges,
@@ -18,34 +17,13 @@ from motorsports_data_notebook.suspension import (
     compute_velocity_histogram,
     compute_velocity_stats,
     analyze_suspension_velocity,
+    analyze_suspension_velocity_multi_lap,
     format_suspension_stats_table,
     format_symmetry_table,
     format_comparison_table,
+    _channels_are_velocity,
+    _process_corner_velocity,
 )
-
-
-@dataclass
-class MockLogFile:
-    """Mock LogFile for testing."""
-
-    channels: Dict[str, pa.Table]
-    laps: pa.Table = None
-    metadata: Dict[str, str] = None
-    file_name: str = "test.xrk"
-
-    def __post_init__(self):
-        if self.laps is None:
-            self.laps = pa.table({"num": [], "start_time": [], "end_time": []})
-        if self.metadata is None:
-            self.metadata = {}
-
-    def select_channels(self, channel_names: list):
-        """Mock select_channels returning self for method chaining."""
-        return self
-
-    def resample_to_channel(self, reference_channel: str):
-        """Mock resample_to_channel returning self for method chaining."""
-        return self
 
 
 class TestMotionRatios:
@@ -277,10 +255,12 @@ class TestComputeVelocityStats:
         # Distribution with tail toward positive (high bump velocities)
         np.random.seed(42)
         # Use an exponential-like distribution shifted to be asymmetric
-        velocity = np.concatenate([
-            np.random.exponential(50, 500),  # Right-tailed positive
-            np.random.normal(-10, 5, 500),  # Concentrated negative
-        ])
+        velocity = np.concatenate(
+            [
+                np.random.exponential(50, 500),  # Right-tailed positive
+                np.random.normal(-10, 5, 500),  # Concentrated negative
+            ]
+        )
 
         stats = compute_velocity_stats(velocity, VelocityRanges())
 
@@ -290,10 +270,12 @@ class TestComputeVelocityStats:
         """Left-tailed distribution should have negative skew."""
         # Distribution with tail toward negative (high rebound velocities)
         np.random.seed(42)
-        velocity = np.concatenate([
-            -np.random.exponential(50, 500),  # Left-tailed negative
-            np.random.normal(10, 5, 500),  # Concentrated positive
-        ])
+        velocity = np.concatenate(
+            [
+                -np.random.exponential(50, 500),  # Left-tailed negative
+                np.random.normal(10, 5, 500),  # Concentrated positive
+            ]
+        )
 
         stats = compute_velocity_stats(velocity, VelocityRanges())
 
@@ -427,10 +409,12 @@ class TestAnalyzeSuspensionVelocity:
             "shock_rr": "Custom_RR",
         }
         channels = {
-            name: pa.table({
-                "timecodes": pa.array(timecodes, type=pa.int64()),
-                name: pa.array(displacement),
-            })
+            name: pa.table(
+                {
+                    "timecodes": pa.array(timecodes, type=pa.int64()),
+                    name: pa.array(displacement),
+                }
+            )
             for name in custom_names.values()
         }
         log = MockLogFile(channels=channels)
@@ -625,3 +609,303 @@ class TestFormatComparisonTable:
             if col != "Comparison":
                 for val in df[col]:
                     assert val == pytest.approx(0.0)
+
+
+class TestChannelsAreVelocity:
+    """Tests for _channels_are_velocity function."""
+
+    def test_velocity_channel_with_ms_units(self):
+        """Channel with m/s units should be detected as velocity."""
+        field = pa.field("LFshockVel", pa.float64(), metadata={b"units": b"m/s"})
+        table = pa.table(
+            {"timecodes": [0, 100], "LFshockVel": [0.1, 0.2]},
+            schema=pa.schema([pa.field("timecodes", pa.int64()), field]),
+        )
+        log = MockLogFile(channels={"LFshockVel": table})
+
+        assert _channels_are_velocity(log, "LFshockVel") is True
+
+    def test_velocity_channel_with_mms_units(self):
+        """Channel with mm/s units should be detected as velocity."""
+        field = pa.field("LFshockVel", pa.float64(), metadata={b"units": b"mm/s"})
+        table = pa.table(
+            {"timecodes": [0, 100], "LFshockVel": [10.0, 20.0]},
+            schema=pa.schema([pa.field("timecodes", pa.int64()), field]),
+        )
+        log = MockLogFile(channels={"LFshockVel": table})
+
+        assert _channels_are_velocity(log, "LFshockVel") is True
+
+    def test_displacement_channel_with_mm_units(self):
+        """Channel with mm units (no /s) should not be detected as velocity."""
+        field = pa.field("LF_Shock_Pot", pa.float64(), metadata={b"units": b"mm"})
+        table = pa.table(
+            {"timecodes": [0, 100], "LF_Shock_Pot": [10.0, 12.0]},
+            schema=pa.schema([pa.field("timecodes", pa.int64()), field]),
+        )
+        log = MockLogFile(channels={"LF_Shock_Pot": table})
+
+        assert _channels_are_velocity(log, "LF_Shock_Pot") is False
+
+    def test_channel_without_metadata(self):
+        """Channel with no metadata should not be detected as velocity."""
+        table = pa.table(
+            {"timecodes": pa.array([0, 100], type=pa.int64()), "LF_Shock_Pot": [10.0, 12.0]},
+        )
+        log = MockLogFile(channels={"LF_Shock_Pot": table})
+
+        assert _channels_are_velocity(log, "LF_Shock_Pot") is False
+
+    def test_missing_channel(self):
+        """Missing channel should return False."""
+        log = MockLogFile(channels={})
+
+        assert _channels_are_velocity(log, "nonexistent") is False
+
+
+class TestProcessCornerVelocity:
+    """Tests for _process_corner_velocity function."""
+
+    def test_converts_ms_to_mms(self):
+        """Velocity should be converted from m/s to mm/s."""
+        # 0.1 m/s = 100 mm/s
+        velocity_ms = np.array([0.1, -0.1, 0.05, -0.05])
+
+        result = _process_corner_velocity(
+            velocity_ms, "FL", bin_size=10.0, max_velocity=300.0, ranges=VelocityRanges()
+        )
+
+        # Result velocity should be in mm/s
+        np.testing.assert_array_almost_equal(result.velocity, [100.0, -100.0, 50.0, -50.0])
+
+    def test_corner_name_preserved(self):
+        """Corner name should be set correctly."""
+        velocity_ms = np.array([0.01, -0.01])
+
+        result = _process_corner_velocity(
+            velocity_ms, "RR", bin_size=10.0, max_velocity=300.0, ranges=VelocityRanges()
+        )
+
+        assert result.corner_name == "RR"
+
+    def test_histogram_sums_to_100(self):
+        """Histogram should sum to 100%."""
+        np.random.seed(42)
+        velocity_ms = np.random.normal(0, 0.05, 1000)
+
+        result = _process_corner_velocity(
+            velocity_ms, "FL", bin_size=10.0, max_velocity=300.0, ranges=VelocityRanges()
+        )
+
+        assert result.histogram.sum() == pytest.approx(100.0, rel=0.001)
+
+    def test_stats_computed_in_mms(self):
+        """Statistics should be computed on mm/s values."""
+        # 0.1 m/s = 100 mm/s — all values exactly 100 mm/s
+        velocity_ms = np.array([0.1, 0.1, 0.1])
+
+        result = _process_corner_velocity(
+            velocity_ms, "FL", bin_size=10.0, max_velocity=300.0, ranges=VelocityRanges()
+        )
+
+        assert result.mean == pytest.approx(100.0)
+        assert result.std == pytest.approx(0.0)
+
+
+class TestAnalyzeSuspensionVelocityIRacing:
+    """Tests for analyze_suspension_velocity with iRacing velocity channels."""
+
+    def _create_velocity_mock_log(self, velocity_ms_data):
+        """Create a mock log with velocity channels (m/s units metadata)."""
+        channel_names = {
+            "shock_fl": "LFshockVel",
+            "shock_fr": "RFshockVel",
+            "shock_rl": "LRshockVel",
+            "shock_rr": "RRshockVel",
+        }
+        timecodes = np.arange(0, len(velocity_ms_data) * 10, 10, dtype=np.int64)
+        channels = {}
+        for name in channel_names.values():
+            field = pa.field(name, pa.float64(), metadata={b"units": b"m/s"})
+            channels[name] = pa.table(
+                {"timecodes": pa.array(timecodes, type=pa.int64()), name: velocity_ms_data},
+                schema=pa.schema([pa.field("timecodes", pa.int64()), field]),
+            )
+        return MockLogFile(channels=channels), channel_names
+
+    def test_velocity_path_returns_result(self):
+        """Velocity channels should produce a valid result."""
+        velocity_data = np.random.normal(0, 0.05, 100)
+        log, channel_names = self._create_velocity_mock_log(velocity_data)
+
+        result = analyze_suspension_velocity(log, channel_names=channel_names)
+
+        assert isinstance(result, VelocityHistogramResult)
+        assert result.front_left.corner_name == "FL"
+        assert result.rear_right.corner_name == "RR"
+
+    def test_velocity_path_skips_motion_ratio(self):
+        """Velocity path should ignore motion ratios (all values same regardless of ratio)."""
+        velocity_data = np.array([0.1] * 50)  # constant 0.1 m/s = 100 mm/s
+        log, channel_names = self._create_velocity_mock_log(velocity_data)
+
+        # Use very different motion ratios — should not affect velocity path
+        ratios_a = MotionRatios(front_left=0.5, front_right=0.5, rear_left=0.5, rear_right=0.5)
+        ratios_b = MotionRatios(front_left=2.0, front_right=2.0, rear_left=2.0, rear_right=2.0)
+
+        result_a = analyze_suspension_velocity(
+            log, channel_names=channel_names, motion_ratios=ratios_a
+        )
+        result_b = analyze_suspension_velocity(
+            log, channel_names=channel_names, motion_ratios=ratios_b
+        )
+
+        # Both should give exactly the same velocity (100 mm/s)
+        np.testing.assert_array_equal(result_a.front_left.velocity, result_b.front_left.velocity)
+        assert result_a.front_left.mean == pytest.approx(100.0)
+
+    def test_velocity_conversion_ms_to_mms(self):
+        """Velocity values should be converted from m/s to mm/s."""
+        velocity_data = np.array([0.05] * 50)  # 0.05 m/s = 50 mm/s
+        log, channel_names = self._create_velocity_mock_log(velocity_data)
+
+        result = analyze_suspension_velocity(log, channel_names=channel_names)
+
+        assert result.front_left.mean == pytest.approx(50.0)
+
+    def test_displacement_path_uses_motion_ratio(self):
+        """Displacement path should use motion ratios (AIM behavior, for contrast)."""
+        timecodes = np.arange(0, 500, 10, dtype=np.int64)
+        displacement = np.arange(len(timecodes), dtype=float)
+
+        channels = {}
+        for name in SUSPENSION_CHANNEL_NAMES.values():
+            channels[name] = pa.table(
+                {
+                    "timecodes": pa.array(timecodes, type=pa.int64()),
+                    name: pa.array(displacement),
+                }
+            )
+        log = MockLogFile(channels=channels)
+
+        # Different motion ratios should produce different velocities
+        ratios_a = MotionRatios(front_left=0.5, front_right=0.5, rear_left=0.5, rear_right=0.5)
+        ratios_b = MotionRatios(front_left=1.0, front_right=1.0, rear_left=1.0, rear_right=1.0)
+
+        result_a = analyze_suspension_velocity(log, motion_ratios=ratios_a)
+        result_b = analyze_suspension_velocity(log, motion_ratios=ratios_b)
+
+        # With ratio 0.5, wheel velocity = shock_vel / 0.5 = 2x
+        # With ratio 1.0, wheel velocity = shock_vel / 1.0 = 1x
+        assert result_a.front_left.mean != pytest.approx(result_b.front_left.mean, rel=0.01)
+
+
+class TestAnalyzeSuspensionVelocityMultiLap:
+    """Tests for analyze_suspension_velocity_multi_lap function."""
+
+    def _create_mock_log(self, timecodes, displacement):
+        """Create a mock log file with shock pot channels."""
+        channels = {}
+        for shock_name in SUSPENSION_CHANNEL_NAMES.values():
+            channels[shock_name] = pa.table(
+                {
+                    "timecodes": pa.array(timecodes, type=pa.int64()),
+                    shock_name: pa.array(displacement),
+                }
+            )
+        return MockLogFile(channels=channels)
+
+    def _create_velocity_mock_log(self, velocity_ms_data):
+        """Create a mock log with velocity channels (m/s units metadata)."""
+        channel_names = {
+            "shock_fl": "LFshockVel",
+            "shock_fr": "RFshockVel",
+            "shock_rl": "LRshockVel",
+            "shock_rr": "RRshockVel",
+        }
+        timecodes = np.arange(0, len(velocity_ms_data) * 10, 10, dtype=np.int64)
+        channels = {}
+        for name in channel_names.values():
+            field = pa.field(name, pa.float64(), metadata={b"units": b"m/s"})
+            channels[name] = pa.table(
+                {"timecodes": pa.array(timecodes, type=pa.int64()), name: velocity_ms_data},
+                schema=pa.schema([pa.field("timecodes", pa.int64()), field]),
+            )
+        return MockLogFile(channels=channels), channel_names
+
+    def test_empty_lap_numbers_raises(self):
+        """Should raise ValueError when lap_numbers is empty."""
+        timecodes = np.arange(0, 100, 10, dtype=np.int64)
+        displacement = np.ones(len(timecodes))
+        log = self._create_mock_log(timecodes, displacement)
+
+        with pytest.raises(ValueError, match="lap_numbers cannot be empty"):
+            analyze_suspension_velocity_multi_lap(log, [])
+
+    def test_returns_velocity_histogram_result(self):
+        """Should return VelocityHistogramResult with all four corners."""
+        timecodes = np.arange(0, 1000, 10, dtype=np.int64)
+        displacement = np.cumsum(np.random.randn(len(timecodes))) + 50
+        log = self._create_mock_log(timecodes, displacement)
+
+        result = analyze_suspension_velocity_multi_lap(log, [1, 2])
+
+        assert isinstance(result, VelocityHistogramResult)
+        assert result.front_left.corner_name == "FL"
+        assert result.front_right.corner_name == "FR"
+        assert result.rear_left.corner_name == "RL"
+        assert result.rear_right.corner_name == "RR"
+
+    def test_uses_default_channel_names(self):
+        """Should use SUSPENSION_CHANNEL_NAMES when channel_names is None."""
+        timecodes = np.arange(0, 500, 10, dtype=np.int64)
+        displacement = np.cumsum(np.random.randn(len(timecodes)))
+        log = self._create_mock_log(timecodes, displacement)
+
+        result = analyze_suspension_velocity_multi_lap(log, [1])
+        assert result is not None
+
+    def test_missing_channel_key_raises_key_error(self):
+        """Should raise KeyError if required channel key is missing from channel_names."""
+        timecodes = np.arange(0, 100, 10, dtype=np.int64)
+        displacement = np.ones(len(timecodes))
+        log = self._create_mock_log(timecodes, displacement)
+
+        with pytest.raises(KeyError):
+            analyze_suspension_velocity_multi_lap(log, [1], channel_names={"shock_fl": "X"})
+
+    def test_velocity_path_with_iracing_channels(self):
+        """Should handle iRacing velocity channels (m/s -> mm/s conversion)."""
+        velocity_data = np.array([0.05] * 50)  # 0.05 m/s = 50 mm/s
+        log, channel_names = self._create_velocity_mock_log(velocity_data)
+
+        result = analyze_suspension_velocity_multi_lap(log, [1], channel_names=channel_names)
+
+        assert result.front_left.mean == pytest.approx(50.0)
+
+    def test_histogram_sums_to_100(self):
+        """Histogram percentages should sum to approximately 100%."""
+        np.random.seed(42)
+        timecodes = np.arange(0, 10000, 10, dtype=np.int64)
+        displacement = np.cumsum(np.random.randn(len(timecodes))) + 50
+        log = self._create_mock_log(timecodes, displacement)
+
+        result = analyze_suspension_velocity_multi_lap(log, [1, 2, 3])
+
+        assert result.front_left.histogram.sum() == pytest.approx(100.0, rel=0.01)
+
+    def test_custom_velocity_ranges(self):
+        """Should use custom velocity ranges when provided."""
+        timecodes = np.arange(0, 1000, 10, dtype=np.int64)
+        displacement = np.cumsum(np.random.randn(len(timecodes))) + 50
+        log = self._create_mock_log(timecodes, displacement)
+
+        custom_ranges = VelocityRanges(
+            friction=5.0,
+            slow=50.0,
+            fast=100.0,
+        )
+
+        result = analyze_suspension_velocity_multi_lap(log, [1], velocity_ranges=custom_ranges)
+
+        assert result.velocity_ranges == custom_ranges
