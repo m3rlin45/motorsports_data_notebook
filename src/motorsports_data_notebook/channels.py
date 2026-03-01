@@ -11,9 +11,13 @@ from typing import TYPE_CHECKING
 import pandas as pd
 
 if TYPE_CHECKING:
-    import pyarrow as pa
+    from typing import Union
 
-    from libxrk.base import LogFile
+    import pyarrow as pa
+    from libxrk.base import LogFile as AimLogFile
+    from libibt.base import LogFile as IbtLogFile
+
+    LogFile = Union[AimLogFile, IbtLogFile]
 
 
 def get_best_lap(laps_df: pd.DataFrame) -> pd.Series:

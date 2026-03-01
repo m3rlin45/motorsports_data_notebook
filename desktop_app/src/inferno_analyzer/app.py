@@ -27,8 +27,14 @@ from inferno_analyzer.tabs.tire_grip_tab import TireGripTab
 from inferno_analyzer.tire_grip.widgets.config_panel import ConfigPanel as TireGripConfigPanel
 
 if TYPE_CHECKING:
+    from typing import Union
+
+    from libxrk.base import LogFile as AimLogFile
+    from libibt.base import LogFile as IbtLogFile
+
+    LogFile = Union[AimLogFile, IbtLogFile]
+
     from inferno_analyzer.tabs.base_tab import BaseAnalysisTab
-    from libxrk.base import LogFile
 
 
 class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):

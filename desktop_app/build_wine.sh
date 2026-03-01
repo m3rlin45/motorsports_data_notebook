@@ -116,6 +116,7 @@ wine_python -m pip install \
     "numpy>=1.26,<2" \
     "pyarrow>=18,<23" \
     "libxrk>=0.11.0" \
+    "libibt>=0.0.1" \
     "pyyaml>=6,<7" \
     pyinstaller
 
@@ -168,6 +169,7 @@ a = Analysis(
         'customtkinter',
         'tkinterdnd2',
         'yaml',
+        'libibt',
     ],
     hookspath=[],
     hooksconfig={},

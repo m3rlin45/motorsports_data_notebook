@@ -16,10 +16,18 @@ import plotly.io as pio
 import pyarrow as pa
 from plotly.subplots import make_subplots
 
+from libxrk import ChannelMetadata
+
+from ._util import infer_channel_scale as _infer_channel_scale
 from .channels import get_best_lap
 
 if TYPE_CHECKING:
-    from libxrk.base import LogFile
+    from typing import Union
+
+    from libxrk.base import LogFile as AimLogFile
+    from libibt.base import LogFile as IbtLogFile
+
+    LogFile = Union[AimLogFile, IbtLogFile]
 
     from .corners import Corner
     from .suspension import VelocityHistogramResult
@@ -309,83 +317,118 @@ def visualize_throttle_acceptance(
     """
     fig = go.Figure()
 
-    # Throttle trace (scaled to fit on same axis as G)
+    throttle_arr = np.asarray(throttle)
+    lateral_g_arr = np.asarray(lateral_g)
+
+    # Lateral G trace (yaxis1 — left side)
     fig.add_trace(
         go.Scatter(
             x=distance,
-            y=np.asarray(throttle) / 100 * 2,  # Scale 0-100% to 0-2 for visibility
-            mode="lines",
-            name="Throttle (scaled)",
-            line=dict(color="green", width=2),
-            hovertemplate="Distance: %{x:.0f}m<br>Throttle: %{customdata:.0f}%<extra></extra>",
-            customdata=throttle,
-        )
-    )
-
-    # Brake trace (scaled to fit on same axis as G)
-    if brake is not None:
-        brake_arr = np.asarray(brake)
-        brake_max = brake_arr.max()
-        if brake_max > 0:
-            fig.add_trace(
-                go.Scatter(
-                    x=distance,
-                    y=brake_arr / brake_max * 2,  # Scale to 0-2 for visibility
-                    mode="lines",
-                    name="Brake (scaled)",
-                    line=dict(color="red", width=2),
-                    hovertemplate="Distance: %{x:.0f}m<br>Brake: %{customdata:.0f}<extra></extra>",
-                    customdata=brake,
-                )
-            )
-
-    # Steering trace (scaled to fit on same axis as G)
-    if steering is not None:
-        steering_arr = np.asarray(steering)
-        steer_max = np.abs(steering_arr).max()
-        if steer_max > 0:
-            fig.add_trace(
-                go.Scatter(
-                    x=distance,
-                    y=steering_arr / steer_max,  # Scale to -1 to 1
-                    mode="lines",
-                    name="Steering (scaled)",
-                    line=dict(color="purple", width=2),
-                    hovertemplate="Distance: %{x:.0f}m<br>Steering: %{customdata:.1f}°<extra></extra>",
-                    customdata=steering,
-                )
-            )
-
-    # Lateral G trace
-    fig.add_trace(
-        go.Scatter(
-            x=distance,
-            y=lateral_g,
+            y=lateral_g_arr,
             mode="lines",
             name="Lateral G",
+            yaxis="y",
             line=dict(color="blue", width=2),
             hovertemplate="Distance: %{x:.0f}m<br>Lateral G: %{y:.2f}G<extra></extra>",
         )
     )
 
-    # Peak lateral G reference line
-    fig.add_hline(
-        y=throttle_acceptance_result["peak_lateral_g"],
-        line_dash="dash",
-        line_color="blue",
+    # Throttle trace (yaxis2 — right side)
+    fig.add_trace(
+        go.Scatter(
+            x=distance,
+            y=throttle_arr,
+            mode="lines",
+            name="Throttle",
+            yaxis="y2",
+            line=dict(color="green", width=2),
+            hovertemplate="Distance: %{x:.0f}m<br>Throttle: %{y:.1f}<extra></extra>",
+        )
+    )
+
+    # Brake trace (yaxis3 — right side, offset)
+    axis_count = 2
+    if brake is not None:
+        brake_arr = np.asarray(brake)
+        if brake_arr.max() > 0:
+            axis_count += 1
+            fig.add_trace(
+                go.Scatter(
+                    x=distance,
+                    y=brake_arr,
+                    mode="lines",
+                    name="Brake",
+                    yaxis=f"y{axis_count}",
+                    line=dict(color="red", width=2),
+                    hovertemplate="Distance: %{x:.0f}m<br>Brake: %{y:.1f}<extra></extra>",
+                )
+            )
+
+    # Steering trace (next available axis — right side, offset)
+    if steering is not None:
+        steering_arr = np.asarray(steering)
+        if np.abs(steering_arr).max() > 0:
+            axis_count += 1
+            fig.add_trace(
+                go.Scatter(
+                    x=distance,
+                    y=steering_arr,
+                    mode="lines",
+                    name="Steering",
+                    yaxis=f"y{axis_count}",
+                    line=dict(color="purple", width=2),
+                    hovertemplate="Distance: %{x:.0f}m<br>Steering: %{y:.1f}°<extra></extra>",
+                )
+            )
+
+    # Peak lateral G reference line (as a shape on yaxis1)
+    peak_g = throttle_acceptance_result["peak_lateral_g"]
+    g_at_throttle = throttle_acceptance_result["lateral_g_at_throttle"]
+    fig.add_shape(
+        type="line",
+        xref="paper",
+        yref="y",
+        x0=0,
+        x1=1,
+        y0=peak_g,
+        y1=peak_g,
+        line=dict(dash="dash", color="blue", width=1),
         opacity=0.7,
-        annotation_text=f"Peak Lateral G: {throttle_acceptance_result['peak_lateral_g']:.2f}G",
-        annotation_position="top right",
+    )
+    fig.add_annotation(
+        xref="paper",
+        yref="y",
+        x=1,
+        y=peak_g,
+        text=f"Peak G: {peak_g:.2f}",
+        showarrow=False,
+        xanchor="right",
+        yanchor="bottom",
+        font=dict(color="blue", size=10),
     )
 
     # Lateral G at throttle acceptance reference line
-    fig.add_hline(
-        y=throttle_acceptance_result["lateral_g_at_throttle"],
-        line_dash="dash",
-        line_color="red",
+    fig.add_shape(
+        type="line",
+        xref="paper",
+        yref="y",
+        x0=0,
+        x1=1,
+        y0=g_at_throttle,
+        y1=g_at_throttle,
+        line=dict(dash="dash", color="red", width=1),
         opacity=0.7,
-        annotation_text=f"Lateral G at Full Throttle: {throttle_acceptance_result['lateral_g_at_throttle']:.2f}G ({throttle_acceptance_result['throttle_acceptance_pct']:.0f}%)",
-        annotation_position="bottom right",
+    )
+    fig.add_annotation(
+        xref="paper",
+        yref="y",
+        x=1,
+        y=g_at_throttle,
+        text=f"G at Full Throttle: {g_at_throttle:.2f} ({throttle_acceptance_result['throttle_acceptance_pct']:.0f}%)",
+        showarrow=False,
+        xanchor="right",
+        yanchor="top",
+        font=dict(color="red", size=10),
     )
 
     # Full throttle point vertical line
@@ -418,14 +461,59 @@ def visualize_throttle_acceptance(
         annotation_text="Apex",
     )
 
-    fig.update_layout(
+    # Build layout with overlaid y-axes
+    # Shrink x-domain to make room for right-side axes, positions must be in [0, 1]
+    right_positions: list[float | None]
+    if axis_count == 2:
+        x_domain = [0, 1.0]
+        right_positions = [None]  # yaxis2 anchors to "x" directly
+    elif axis_count == 3:
+        x_domain = [0, 0.88]
+        right_positions = [0.88, 0.94]
+    else:
+        x_domain = [0, 0.82]
+        right_positions = [0.82, 0.88, 0.94]
+
+    layout_args: dict[str, Any] = dict(
         title=title if title is not None else f"Throttle Acceptance - {corner.name}",
-        xaxis_title="Distance (m)",
-        yaxis_title="Lateral G / Inputs (scaled)",
+        xaxis=dict(title="Distance (m)", domain=x_domain),
+        yaxis=dict(
+            title=dict(text="Lateral G", font=dict(color="blue")),
+            tickfont=dict(color="blue"),
+        ),
+        yaxis2=dict(
+            title=dict(text="Throttle", font=dict(color="green")),
+            tickfont=dict(color="green"),
+            anchor="free" if axis_count > 2 else "x",
+            overlaying="y",
+            side="right",
+            position=right_positions[0],
+        ),
         width=width,
         height=height,
         legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01),
     )
+
+    if axis_count >= 3:
+        layout_args["yaxis3"] = dict(
+            title=dict(text="Brake", font=dict(color="red")),
+            tickfont=dict(color="red"),
+            anchor="free",
+            overlaying="y",
+            side="right",
+            position=right_positions[1],
+        )
+    if axis_count >= 4:
+        layout_args["yaxis4"] = dict(
+            title=dict(text="Steering", font=dict(color="purple")),
+            tickfont=dict(color="purple"),
+            anchor="free",
+            overlaying="y",
+            side="right",
+            position=right_positions[2],
+        )
+
+    fig.update_layout(**layout_args)
 
     return fig
 
@@ -663,8 +751,44 @@ def plot_lap_gps(lat, lon, color_channels, width=800, height=800, title=None):
     return fig
 
 
+def _discover_tire_temp_channels(
+    channel_names: dict[str, str],
+    available_channels: set[str] | None = None,
+) -> dict[str, list[str]]:
+    """Discover tire temperature channel names per corner from channel_names dict.
+
+    Parameters
+    ----------
+    channel_names : dict[str, str]
+        Channel name mapping containing ``tire_temp_{corner}_{n}`` keys.
+    available_channels : set[str] or None
+        If provided, only include channels that exist in this set.
+        Stops adding channels for a corner at the first missing one.
+
+    Returns
+    -------
+    dict[str, list[str]]
+        Mapping from corner abbreviation (``"fl"``, ``"fr"``, ``"rl"``, ``"rr"``)
+        to list of actual channel names in sensor order.
+    """
+    result: dict[str, list[str]] = {}
+    for corner in ("fl", "fr", "rl", "rr"):
+        channels_list: list[str] = []
+        n = 1
+        while f"tire_temp_{corner}_{n}" in channel_names:
+            ch_name = channel_names[f"tire_temp_{corner}_{n}"]
+            if available_channels is not None and ch_name not in available_channels:
+                break
+            channels_list.append(ch_name)
+            n += 1
+        if channels_list:
+            result[corner] = channels_list
+    return result
+
+
 def plot_tire_thermography(
     channels: dict[str, pa.Table],
+    channel_names: dict[str, str] | None = None,
     title: str = "Tire Temperatures",
     width: int = 900,
     height: int = 900,
@@ -683,18 +807,12 @@ def plot_tire_thermography(
     ----------
     channels : dict[str, pa.Table]
         Channel tables for a single lap, pre-resampled to a common timebase.
-        Must contain:
-        - distance_m: Distance along lap (meters)
-        - FL_Ch1 through FL_Ch8: Front left tire temps (Ch1=outside, Ch8=inside)
-        - FR_Ch1 through FR_Ch8: Front right tire temps (Ch1=inside, Ch8=outside)
-        - RL_Ch1 through RL_Ch8: Rear left tire temps (Ch1=outside, Ch8=inside)
-        - RR_Ch1 through RR_Ch8: Rear right tire temps (Ch1=inside, Ch8=outside)
-        - speed_kmh: Speed in km/h
-        - LateralAcc: Lateral acceleration (G)
-        - InlineAcc: Longitudinal acceleration (G)
-        - BrakePress: Brake pressure (%)
-        - PPS: Throttle position (%)
-        - SteerAngle: Steering angle (degrees)
+    channel_names : dict[str, str], optional
+        Mapping from canonical keys to actual channel names. Must contain
+        ``tire_temp_{corner}_{n}`` keys for tire temps, plus ``lateral_g``,
+        ``inline_g``, ``brake``, ``throttle``, and ``steering``.
+        If None, falls back to legacy hardcoded AIM channel names for
+        backwards compatibility.
     title : str, default="Tire Temperatures"
         Plot title.
     width : int, default=900
@@ -715,56 +833,95 @@ def plot_tire_thermography(
     Examples
     --------
     >>> lap_log = log.filter_by_lap(best_lap_num)
-    >>> channels = lap_log.select_channels(TIRE_CHANNELS).resample_to_channel("distance_m").channels
-    >>> fig = plot_tire_thermography(channels, title="Best Lap Tire Temps")
+    >>> channels = lap_log.select_channels(tire_channels + other_channels)
+    ...     .resample_to_channel("distance_m").channels
+    >>> fig = plot_tire_thermography(channels, CHANNEL_NAMES, title="Lap Tire Temps")
     >>> show_fig(fig)
     """
-    # Validate required channels
-    tire_positions = ["FL", "FR", "RL", "RR"]
+    # Build legacy channel_names if not provided (backwards compatibility)
+    if channel_names is None:
+        channel_names = {
+            "lateral_g": "LateralAcc",
+            "inline_g": "InlineAcc",
+            "brake": "BrakePress",
+            "throttle": "PPS",
+            "steering": "SteerAngle",
+        }
+        for corner_key, corner_prefix in [("fl", "FL"), ("fr", "FR"), ("rl", "RL"), ("rr", "RR")]:
+            for i in range(1, 9):
+                channel_names[f"tire_temp_{corner_key}_{i}"] = f"{corner_prefix}_Ch{i}"
+
+    # Discover tire temp channels per corner (only those present in data)
+    tire_channels = _discover_tire_temp_channels(channel_names, set(channels.keys()))
+    if not tire_channels:
+        raise ValueError(
+            "No tire temperature channels found. "
+            "channel_names must contain keys like tire_temp_fl_1, tire_temp_fr_1, etc."
+        )
+
+    # Resolve non-tire channel names
+    lateral_g_ch = channel_names.get("lateral_g", "LateralAcc")
+    inline_g_ch = channel_names.get("inline_g", "InlineAcc")
+    brake_ch = channel_names.get("brake", "BrakePress")
+    throttle_ch = channel_names.get("throttle", "PPS")
+    steering_ch = channel_names.get("steering", "SteerAngle")
+
+    # Validate required channels exist
     required_channels = [
         "distance_m",
         "speed_kmh",
-        "LateralAcc",
-        "InlineAcc",
-        "BrakePress",
-        "PPS",
-        "SteerAngle",
+        lateral_g_ch,
+        inline_g_ch,
+        brake_ch,
+        throttle_ch,
+        steering_ch,
     ]
-    for pos in tire_positions:
-        required_channels.extend([f"{pos}_Ch{i}" for i in range(1, 9)])
+    for corner_channels in tire_channels.values():
+        required_channels.extend(corner_channels)
 
     missing = [ch for ch in required_channels if ch not in channels]
     if missing:
         raise ValueError(
             f"Missing channels: {missing[:5]}{'...' if len(missing) > 5 else ''}. "
-            f"Expected channels like FL_Ch1 through FL_Ch8 for each tire position."
+            f"Ensure all tire temperature and input channels are present."
         )
 
     # Extract distance array (reference)
     distance_m = channels["distance_m"].column("distance_m").to_numpy()
 
-    # Extract tire temperature data as 2D arrays (8, n_samples)
-    fl_temps = np.vstack(
-        [channels[f"FL_Ch{i}"].column(f"FL_Ch{i}").to_numpy() for i in range(1, 9)]
-    )
-    fr_temps = np.vstack(
-        [channels[f"FR_Ch{i}"].column(f"FR_Ch{i}").to_numpy() for i in range(1, 9)]
-    )
-    rl_temps = np.vstack(
-        [channels[f"RL_Ch{i}"].column(f"RL_Ch{i}").to_numpy() for i in range(1, 9)]
-    )
-    rr_temps = np.vstack(
-        [channels[f"RR_Ch{i}"].column(f"RR_Ch{i}").to_numpy() for i in range(1, 9)]
-    )
+    # Extract tire temperature data as 2D arrays per corner
+    corner_order = ["fl", "fr", "rl", "rr"]
+    corner_labels = {"fl": "Front Left", "fr": "Front Right", "rl": "Rear Left", "rr": "Rear Right"}
+    corner_temps: dict[str, np.ndarray] = {}
+    corner_sensor_counts: dict[str, int] = {}
+
+    for corner in corner_order:
+        ch_names = tire_channels.get(corner, [])
+        if ch_names:
+            corner_temps[corner] = np.vstack(
+                [channels[ch].column(ch).to_numpy() for ch in ch_names]
+            )
+            corner_sensor_counts[corner] = len(ch_names)
 
     # Calculate Sum of G
-    lateral_acc = channels["LateralAcc"].column("LateralAcc").to_numpy()
-    inline_acc = channels["InlineAcc"].column("InlineAcc").to_numpy()
+    lateral_acc = channels[lateral_g_ch].column(lateral_g_ch).to_numpy()
+    inline_acc = channels[inline_g_ch].column(inline_g_ch).to_numpy()
     sum_of_g = np.sqrt(lateral_acc**2 + inline_acc**2)
 
     # Get color scale range across all tires
-    vmin = float(min(fl_temps.min(), fr_temps.min(), rl_temps.min(), rr_temps.min()))
-    vmax = float(max(fl_temps.max(), fr_temps.max(), rl_temps.max(), rr_temps.max()))
+    all_temps = [t for t in corner_temps.values()]
+    vmin = float(min(t.min() for t in all_temps))
+    vmax = float(max(t.max() for t in all_temps))
+
+    # Read accel unit from PyArrow field metadata if available
+    accel_unit = "G"
+    accel_table = channels[inline_g_ch]
+    try:
+        accel_meta = ChannelMetadata.from_field(accel_table.schema.field(inline_g_ch))
+        if accel_meta.units:
+            accel_unit = accel_meta.units
+    except (KeyError, AttributeError):
+        pass
 
     # Create subplots
     fig = make_subplots(
@@ -773,10 +930,10 @@ def plot_tire_thermography(
         shared_xaxes=True,
         vertical_spacing=0.04,
         subplot_titles=(
-            "Front Left (Outside at top)",
-            "Front Right (Outside at bottom)",
-            "Rear Left (Outside at top)",
-            "Rear Right (Outside at bottom)",
+            corner_labels.get("fl", "Front Left"),
+            corner_labels.get("fr", "Front Right"),
+            corner_labels.get("rl", "Rear Left"),
+            corner_labels.get("rr", "Rear Right"),
             "Speed & Sum of G",
             "Driver Inputs",
         ),
@@ -784,77 +941,36 @@ def plot_tire_thermography(
         specs=[[{}], [{}], [{}], [{}], [{"secondary_y": True}], [{"secondary_y": True}]],
     )
 
-    y_labels = ["1", "2", "3", "4", "5", "6", "7", "8"]
-
     # Extract arrays for speed/brake/throttle/steering
     speed_kmh = channels["speed_kmh"].column("speed_kmh").to_numpy()
-    brake_press = channels["BrakePress"].column("BrakePress").to_numpy()
-    throttle_pps = channels["PPS"].column("PPS").to_numpy()
-    steer_angle = channels["SteerAngle"].column("SteerAngle").to_numpy()
+    brake_press = channels[brake_ch].column(brake_ch).to_numpy()
+    throttle_pps = channels[throttle_ch].column(throttle_ch).to_numpy()
+    steer_angle = channels[steering_ch].column(steering_ch).to_numpy()
 
-    # Front Left heatmap
-    fig.add_trace(
-        go.Heatmap(
-            z=fl_temps,
-            x=distance_m,
-            y=y_labels,
-            colorscale="Inferno",
-            zmin=vmin,
-            zmax=vmax,
-            showscale=False,
-        ),
-        row=1,
-        col=1,
-    )
-    fig.update_yaxes(autorange="reversed", row=1, col=1)
+    # Add heatmaps for each corner
+    for row_idx, corner in enumerate(corner_order, start=1):
+        if corner not in corner_temps:
+            continue
+        temps = corner_temps[corner]
+        n_sensors = corner_sensor_counts[corner]
+        y_labels = [str(i) for i in range(1, n_sensors + 1)]
 
-    # Front Right heatmap
-    fig.add_trace(
-        go.Heatmap(
-            z=fr_temps,
-            x=distance_m,
-            y=y_labels,
-            colorscale="Inferno",
-            zmin=vmin,
-            zmax=vmax,
-            showscale=False,
-        ),
-        row=2,
-        col=1,
-    )
-    fig.update_yaxes(autorange="reversed", row=2, col=1)
-
-    # Rear Left heatmap
-    fig.add_trace(
-        go.Heatmap(
-            z=rl_temps,
-            x=distance_m,
-            y=y_labels,
-            colorscale="Inferno",
-            zmin=vmin,
-            zmax=vmax,
-            showscale=False,
-        ),
-        row=3,
-        col=1,
-    )
-    fig.update_yaxes(autorange="reversed", row=3, col=1)
-
-    # Rear Right heatmap
-    fig.add_trace(
-        go.Heatmap(
-            z=rr_temps,
-            x=distance_m,
-            y=y_labels,
-            colorscale="Inferno",
-            zmin=vmin,
-            zmax=vmax,
-            colorbar=dict(title="Temp (°C)"),
-        ),
-        row=4,
-        col=1,
-    )
-    fig.update_yaxes(autorange="reversed", row=4, col=1)
+        show_colorbar = row_idx == 4  # Only show on last heatmap
+        fig.add_trace(
+            go.Heatmap(
+                z=temps,
+                x=distance_m,
+                y=y_labels,
+                colorscale="Inferno",
+                zmin=vmin,
+                zmax=vmax,
+                showscale=show_colorbar,
+                **({"colorbar": dict(title="Temp (°C)")} if show_colorbar else {}),
+            ),
+            row=row_idx,
+            col=1,
+        )
+        fig.update_yaxes(autorange="reversed", row=row_idx, col=1)
 
     # Speed trace
     fig.add_trace(
@@ -940,7 +1056,7 @@ def plot_tire_thermography(
 
     # Set y-axis titles for speed/G subplot
     fig.update_yaxes(title_text="km/h", row=5, col=1, secondary_y=False)
-    fig.update_yaxes(title_text="G", row=5, col=1, secondary_y=True)
+    fig.update_yaxes(title_text=accel_unit, row=5, col=1, secondary_y=True)
 
     # Set y-axis titles for driver inputs subplot
     fig.update_yaxes(title_text="%", row=6, col=1, secondary_y=False)
@@ -1357,7 +1473,9 @@ def plot_tire_grip_scatter(
     >>> show_fig(fig)
     """
     metric_label = "Pressure" if result.metric_mode == "pressure" else "Temperature"
-    unit = result.metric_unit
+    metric_unit = result.metric_unit
+    accel_unit = result.accel_unit
+    accel_label = f"Total Accel ({accel_unit})" if accel_unit else "Total Accel"
 
     fig = make_subplots(
         rows=2,
@@ -1387,8 +1505,8 @@ def plot_tire_grip_scatter(
                 showlegend=False,
                 customdata=corner_data.bucket_counts,
                 hovertemplate=(
-                    f"{metric_label}: %{{x:.1f}} {unit}<br>"
-                    f"P{corner_data.percentile:g} G: %{{y:.2f}}<br>"
+                    f"{metric_label}: %{{x:.1f}} {metric_unit}<br>"
+                    f"P{corner_data.percentile:g} Accel: %{{y:.2f}} {accel_unit}<br>"
                     "n = %{customdata}<extra></extra>"
                 ),
             ),
@@ -1422,11 +1540,12 @@ def plot_tire_grip_scatter(
     )
 
     # X-axis labels (bottom row only)
-    fig.update_xaxes(title_text=f"{metric_label} ({unit})", row=2, col=1)
-    fig.update_xaxes(title_text=f"{metric_label} ({unit})", row=2, col=2)
+    x_label = f"{metric_label} ({metric_unit})" if metric_unit else metric_label
+    fig.update_xaxes(title_text=x_label, row=2, col=1)
+    fig.update_xaxes(title_text=x_label, row=2, col=2)
 
     # Y-axis labels (left column only)
-    fig.update_yaxes(title_text="Total G", row=1, col=1)
-    fig.update_yaxes(title_text="Total G", row=2, col=1)
+    fig.update_yaxes(title_text=accel_label, row=1, col=1)
+    fig.update_yaxes(title_text=accel_label, row=2, col=1)
 
     return fig

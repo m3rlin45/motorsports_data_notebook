@@ -18,6 +18,7 @@ from motorsports_data_notebook.profiles import (
     _profile_to_dict,
     get_logger_id,
     get_profile_for_logger,
+    is_iracing_session,
     load_builtin_profiles,
     load_user_profiles,
     save_profile_for_logger,
@@ -304,7 +305,9 @@ class TestGetProfileForLogger:
         save_user_profiles({"LOGGER1": user_profile})
 
         # Also make builtin return a different profile for same logger
-        builtin_profile = VehicleProfile(name="Builtin Car", channel_names={"throttle": "BuiltinTPS"})
+        builtin_profile = VehicleProfile(
+            name="Builtin Car", channel_names={"throttle": "BuiltinTPS"}
+        )
         monkeypatch.setattr(
             "motorsports_data_notebook.profiles.load_builtin_profiles",
             lambda: {"LOGGER1": builtin_profile},
@@ -416,21 +419,99 @@ class TestBuiltinProfiles:
         # Each profile should have a name and channel_names dict
         for profile_id, profile_data in data["profiles"].items():
             assert "name" in profile_data, f"Profile '{profile_id}' missing 'name'"
-            assert "channel_names" in profile_data, (
-                f"Profile '{profile_id}' missing 'channel_names'"
-            )
+            assert (
+                "channel_names" in profile_data
+            ), f"Profile '{profile_id}' missing 'channel_names'"
             assert isinstance(profile_data["channel_names"], dict)
             # All channel values must be non-empty strings
             for key, value in profile_data["channel_names"].items():
-                assert key in ALL_CANONICAL_KEYS, (
-                    f"Profile '{profile_id}' has unknown key '{key}'"
-                )
-                assert isinstance(value, str) and value, (
-                    f"Profile '{profile_id}' channel '{key}' must be a non-empty string"
-                )
+                assert key in ALL_CANONICAL_KEYS, f"Profile '{profile_id}' has unknown key '{key}'"
+                assert (
+                    isinstance(value, str) and value
+                ), f"Profile '{profile_id}' channel '{key}' must be a non-empty string"
 
         # Every logger_map entry should reference an existing profile
         for logger_id, profile_id in data["logger_map"].items():
-            assert profile_id in data["profiles"], (
-                f"Logger '{logger_id}' references unknown profile '{profile_id}'"
-            )
+            assert (
+                profile_id in data["profiles"]
+            ), f"Logger '{logger_id}' references unknown profile '{profile_id}'"
+
+
+class TestGetLoggerIdIRacing:
+    """Tests for get_logger_id with iRacing metadata."""
+
+    def test_returns_iracing_for_ibt_metadata(self):
+        """iRacing metadata (session_info_yaml) should return 'iracing'."""
+        log = MockLogFile(metadata={"session_info_yaml": "some_yaml_content"})
+        assert get_logger_id(log) == "iracing"
+
+    def test_aim_logger_id_takes_precedence(self):
+        """If both Logger ID and session_info_yaml exist, Logger ID wins."""
+        log = MockLogFile(metadata={"Logger ID": "12345", "session_info_yaml": "yaml"})
+        assert get_logger_id(log) == "12345"
+
+
+class TestIsIracingSession:
+    """Tests for is_iracing_session function."""
+
+    def test_true_for_iracing(self):
+        """Should return True for iRacing metadata."""
+        log = MockLogFile(metadata={"session_info_yaml": "some_yaml"})
+        assert is_iracing_session(log) is True
+
+    def test_false_for_aim(self):
+        """Should return False for AIM metadata."""
+        log = MockLogFile(metadata={"Logger ID": "6701209"})
+        assert is_iracing_session(log) is False
+
+    def test_false_for_empty_metadata(self):
+        """Should return False for empty metadata."""
+        log = MockLogFile(metadata={})
+        assert is_iracing_session(log) is False
+
+    def test_false_for_no_metadata(self):
+        """Should return False when metadata is not a dict."""
+        log = MockLogFile()
+        log.metadata = None
+        assert is_iracing_session(log) is False
+
+
+class TestBuiltinIracingProfile:
+    """Tests for the builtin iRacing profile."""
+
+    def test_iracing_profile_exists(self):
+        """The builtin profiles should include an 'iracing' entry."""
+        profile = get_profile_for_logger("iracing")
+        assert profile is not None
+
+    def test_iracing_profile_name(self):
+        """The iRacing profile should have the correct name."""
+        profile = get_profile_for_logger("iracing")
+        assert profile.name == "iRacing"
+
+    def test_iracing_profile_has_correct_channels(self):
+        """The iRacing profile should have correct channel mappings."""
+        profile = get_profile_for_logger("iracing")
+        assert profile.channel_names["throttle"] == "Throttle"
+        assert profile.channel_names["brake"] == "Brake"
+        assert profile.channel_names["gps_speed"] == "Speed"
+        assert profile.channel_names["gps_latitude"] == "Lat"
+        assert profile.channel_names["gps_longitude"] == "Lon"
+        assert profile.channel_names["lateral_g"] == "LatAccel"
+        assert profile.channel_names["steering"] == "SteeringWheelAngle"
+
+    def test_iracing_profile_has_shock_velocity_channels(self):
+        """The iRacing profile should map shock channels to velocity names."""
+        profile = get_profile_for_logger("iracing")
+        assert profile.channel_names["shock_fl"] == "LFshockVel"
+        assert profile.channel_names["shock_fr"] == "RFshockVel"
+        assert profile.channel_names["shock_rl"] == "LRshockVel"
+        assert profile.channel_names["shock_rr"] == "RRshockVel"
+
+    def test_iracing_profile_motion_ratios_are_unity(self):
+        """The iRacing profile should have 1.0 motion ratios."""
+        profile = get_profile_for_logger("iracing")
+        assert profile.motion_ratios.front_left == pytest.approx(1.0)
+        assert profile.motion_ratios.front_right == pytest.approx(1.0)
+        assert profile.motion_ratios.rear_left == pytest.approx(1.0)
+        assert profile.motion_ratios.rear_right == pytest.approx(1.0)

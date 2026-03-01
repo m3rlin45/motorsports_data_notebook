@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
-from motorsports_data_notebook.channels import get_best_lap, get_best_lap_channels, get_top_laps
+from motorsports_data_notebook.channels import get_best_lap_channels, get_top_laps
 from motorsports_data_notebook.corners import Corner, identify_corners
 from motorsports_data_notebook.driver_analysis import find_throttle_acceptance
 from motorsports_data_notebook.zones import (
@@ -23,7 +23,12 @@ from motorsports_data_notebook.zones import (
 )
 
 if TYPE_CHECKING:
-    from libxrk.base import LogFile
+    from typing import Union
+
+    from libxrk.base import LogFile as AimLogFile
+    from libibt.base import LogFile as IbtLogFile
+
+    LogFile = Union[AimLogFile, IbtLogFile]
 
 
 @dataclass
@@ -178,8 +183,9 @@ def analyze_driver_consistency(
     # Use get_top_laps to get laps for zone averaging
     top_laps = selected_laps_df
 
-    # Get best lap GPS data
-    best_lap = get_best_lap(laps_df)
+    # Use fastest selected lap for GPS reference (avoids out-laps / incomplete laps)
+    selected_laps_df["_duration"] = selected_laps_df["end_time"] - selected_laps_df["start_time"]
+    best_lap = selected_laps_df.loc[selected_laps_df["_duration"].idxmin()]
     best_lap_num = int(best_lap["num"])
     best_lap_log = log.filter_by_lap(best_lap_num)
     best_channels = (
@@ -191,6 +197,15 @@ def analyze_driver_consistency(
     lon_table = best_channels[channel_names["gps_lon"]]
     lat = lat_table.column(channel_names["gps_lat"]).to_numpy()
     lon = lon_table.column(channel_names["gps_lon"]).to_numpy()
+    dist_table = best_channels["distance_m"]
+    ref_dist = dist_table.column("distance_m").to_numpy()
+
+    # Filter out invalid GPS samples (e.g. iRacing reports (0,0) before car is on track)
+    valid_gps = (lat != 0.0) | (lon != 0.0)
+    if not np.all(valid_gps):
+        lat = lat[valid_gps]
+        lon = lon[valid_gps]
+        ref_dist = ref_dist[valid_gps]
 
     # Step 2: Detect corners
     corners = identify_corners(lat, lon, threshold=corner_threshold)
@@ -198,8 +213,7 @@ def analyze_driver_consistency(
         raise ValueError("No corners detected. Try adjusting the corner detection threshold.")
 
     # Get track length from best lap distance
-    dist_table = best_channels["distance_m"]
-    track_length = float(dist_table.column("distance_m").to_numpy()[-1])
+    track_length = float(ref_dist[-1])
 
     # Step 3: Detect zones
     zone_channel_names = {
@@ -331,9 +345,6 @@ def analyze_driver_consistency(
             cd.ta_std = float(np.std(cd.ta_values))
 
         corner_data_list.append(cd)
-
-    # Get reference lap distance array for track map
-    ref_dist = dist_table.column("distance_m").to_numpy()
 
     return DriverConsistencyResult(
         corners=corners,
