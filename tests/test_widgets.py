@@ -18,6 +18,14 @@ from motorsports_data_notebook.widgets import (
 # Path to patch aim_xrk - it's imported inside the function
 AIM_XRK_PATCH_PATH = "libxrk.aim_xrk"
 IBT_PATCH_PATH = "libibt.ibt"
+PROFILE_PATCH_PATH = "motorsports_data_notebook.profiles.get_profile_for_logger"
+
+
+def _mock_iracing_profile():
+    """Create a mock iRacing profile with Speed channel."""
+    profile = MagicMock()
+    profile.channel_names = {"gps_speed": "Speed"}
+    return profile
 
 
 # ============================================================================
@@ -769,6 +777,7 @@ def mock_ibt_log_file():
             "num": [1, 2, 3],
             "start_time": [0, 60000, 120000],
             "end_time": [60000, 120000, 180000],
+            "lap_type": ["full", "full", "full"],
         }
     )
 
@@ -794,14 +803,20 @@ class TestLoadIbtSession:
         # IBT magic bytes header
         ibt_bytes = b"\x02\x00\x00\x00" + b"\x00" * 100
 
-        with patch(IBT_PATCH_PATH, return_value=mock_ibt_log_file) as mock_ibt:
+        with (
+            patch(IBT_PATCH_PATH, return_value=mock_ibt_log_file) as mock_ibt,
+            patch(PROFILE_PATCH_PATH, return_value=_mock_iracing_profile()),
+        ):
             load_session(ibt_bytes)
 
         mock_ibt.assert_called_once_with(ibt_bytes)
 
     def test_dispatches_to_libibt_for_ibt_path(self, mock_ibt_log_file):
         """load_session should call libibt.ibt for .ibt file paths."""
-        with patch(IBT_PATCH_PATH, return_value=mock_ibt_log_file) as mock_ibt:
+        with (
+            patch(IBT_PATCH_PATH, return_value=mock_ibt_log_file) as mock_ibt,
+            patch(PROFILE_PATCH_PATH, return_value=_mock_iracing_profile()),
+        ):
             load_session("path/to/file.ibt")
 
         mock_ibt.assert_called_once_with("path/to/file.ibt")
@@ -817,7 +832,10 @@ class TestLoadIbtSession:
         """IBT load_session should add speed_kmh channel from Speed * 3.6."""
         ibt_bytes = b"\x02\x00\x00\x00" + b"\x00" * 100
 
-        with patch(IBT_PATCH_PATH, return_value=mock_ibt_log_file):
+        with (
+            patch(IBT_PATCH_PATH, return_value=mock_ibt_log_file),
+            patch(PROFILE_PATCH_PATH, return_value=_mock_iracing_profile()),
+        ):
             result = load_session(ibt_bytes)
 
         assert "speed_kmh" in result.channels
@@ -829,7 +847,10 @@ class TestLoadIbtSession:
         """IBT load_session should compute distance_m from Speed integration."""
         ibt_bytes = b"\x02\x00\x00\x00" + b"\x00" * 100
 
-        with patch(IBT_PATCH_PATH, return_value=mock_ibt_log_file):
+        with (
+            patch(IBT_PATCH_PATH, return_value=mock_ibt_log_file),
+            patch(PROFILE_PATCH_PATH, return_value=_mock_iracing_profile()),
+        ):
             result = load_session(ibt_bytes)
 
         assert "distance_m" in result.channels
@@ -842,7 +863,10 @@ class TestLoadIbtSession:
         """IBT load_session should add lap_time column to laps table."""
         ibt_bytes = b"\x02\x00\x00\x00" + b"\x00" * 100
 
-        with patch(IBT_PATCH_PATH, return_value=mock_ibt_log_file):
+        with (
+            patch(IBT_PATCH_PATH, return_value=mock_ibt_log_file),
+            patch(PROFILE_PATCH_PATH, return_value=_mock_iracing_profile()),
+        ):
             result = load_session(ibt_bytes)
 
         laps_df = result.laps.to_pandas()
@@ -853,12 +877,17 @@ class TestLoadIbtSession:
         """IBT load_session should work without Speed channel."""
         mock_log = MagicMock()
         mock_log.channels = {}
-        mock_log.laps = pa.table({"num": [1], "start_time": [0], "end_time": [60000]})
+        mock_log.laps = pa.table(
+            {"num": [1], "start_time": [0], "end_time": [60000], "lap_type": ["full"]}
+        )
         mock_log.metadata = {"session_info_yaml": "yaml"}
 
         ibt_bytes = b"\x02\x00\x00\x00" + b"\x00" * 100
 
-        with patch(IBT_PATCH_PATH, return_value=mock_log):
+        with (
+            patch(IBT_PATCH_PATH, return_value=mock_log),
+            patch(PROFILE_PATCH_PATH, return_value=_mock_iracing_profile()),
+        ):
             result = load_session(ibt_bytes)
 
         assert "speed_kmh" not in result.channels
