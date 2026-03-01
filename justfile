@@ -57,6 +57,7 @@ build-wheel:
     set -euo pipefail
     uv build --wheel
     mkdir -p pypi
+    rm -f pypi/motorsports_data_notebook-*.whl
     cp dist/motorsports_data_notebook-*.whl pypi/
 
 # Download a library source for Pyodide cross-compilation
@@ -97,19 +98,23 @@ _copy-pyodide-lib-wheel name:
 build-libxrk-pyodide: (_download-pyodide-lib "libxrk" "m3rlin45/libxrk") (_build-pyodide-lib "libxrk") (_copy-pyodide-lib-wheel "libxrk")
 build-libibt-pyodide: (_download-pyodide-lib "libibt" "m3rlin45/libibt") (_build-pyodide-lib "libibt") (_copy-pyodide-lib-wheel "libibt")
 
-# Download both libraries in parallel
+# Download a pre-built Pyodide wheel from a GitHub release
+_download-pyodide-lib-release name repo:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    VERSION=$(uv run python -c "import importlib.metadata; print(importlib.metadata.version('{{name}}'))")
+    echo "Downloading {{name}} v$VERSION from {{repo}}..."
+    rm -rf build/{{name}}/dist
+    mkdir -p build/{{name}}/dist
+    gh release download "v$VERSION" -R {{repo}} -p "*pyodide*wasm32.whl" -D build/{{name}}/dist --clobber
+    rm -f pypi/{{name}}-*.whl
+    # If multiple Pyodide wheels exist (e.g. cp312 + cp313), pick the latest
+    WHEEL=$(ls -v build/{{name}}/dist/*.whl | tail -1)
+    uv run python scripts/build_lite_wheel.py "$WHEEL"
+
+# Download pre-built Pyodide wheels for all libraries
 [parallel]
-_download-pyodide-libs: (_download-pyodide-lib "libxrk" "m3rlin45/libxrk") (_download-pyodide-lib "libibt" "m3rlin45/libibt")
-
-# Build both in parallel
-[parallel]
-_build-pyodide-libs: (_build-pyodide-lib "libxrk") (_build-pyodide-lib "libibt")
-
-# Copy both wheels
-_copy-pyodide-lib-wheels: (_copy-pyodide-lib-wheel "libxrk") (_copy-pyodide-lib-wheel "libibt")
-
-# Build all Pyodide library wheels (downloads in parallel, builds sequentially for shared deps)
-build-pyodide-libs: _download-pyodide-libs _build-pyodide-libs _copy-pyodide-lib-wheels
+build-pyodide-libs: (_download-pyodide-lib-release "libxrk" "m3rlin45/libxrk") (_download-pyodide-lib-release "libibt" "m3rlin45/libibt")
 
 _download-pyodide-deps:
     uv run python scripts/download_pyodide_deps.py
