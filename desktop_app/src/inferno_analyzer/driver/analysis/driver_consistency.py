@@ -90,6 +90,11 @@ class CornerConsistencyData:
     speed_values: list[float] = field(default_factory=list)
     speed_mean: float = 0.0
     speed_std: float = 0.0
+    exit_speed_values: list[float] = field(default_factory=list)
+    exit_speed_mean: float = 0.0
+    exit_speed_std: float = 0.0
+    accel_zone_length: float = 0.0
+    opportunity_score: float = 0.0
     lap_traces: list[LapTraceData] = field(default_factory=list)
     braking_start: float | None = None
 
@@ -263,6 +268,24 @@ def analyze_driver_consistency(
                 cd.speed_values = speed_vals
                 cd.speed_mean = float(np.mean(speed_vals))
                 cd.speed_std = float(np.std(speed_vals))
+
+        # Extract exit speed stats
+        if len(corner_seg) > 0 and "exit_speed" in corner_seg.columns:
+            exit_vals = corner_seg["exit_speed"].dropna().tolist()
+            if exit_vals:
+                cd.exit_speed_values = exit_vals
+                cd.exit_speed_mean = float(np.mean(exit_vals))
+                cd.exit_speed_std = float(np.std(exit_vals))
+
+        # Compute accel zone length and opportunity score
+        accel_seg = next(
+            (s for s in segments if s.corner_id == corner.id and s.segment_type == "acceleration"),
+            None,
+        )
+        if accel_seg is not None:
+            cd.accel_zone_length = accel_seg.length
+            if cd.exit_speed_std > 0:
+                cd.opportunity_score = cd.exit_speed_std * cd.accel_zone_length
 
         # Find braking zone start for this corner to extend trace view
         braking_seg = next(
