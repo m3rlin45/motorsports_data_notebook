@@ -12,10 +12,13 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
+import pyarrow as pa
+
+from ._util import get_channel_unit as _get_channel_unit
 from ._util import validate_channel_names as _validate_channel_names
 
 if TYPE_CHECKING:
-    from libxrk.base import LogFile
+    from ._types import LogFile
 
 
 @dataclass
@@ -78,7 +81,11 @@ class TireGripResult:
     metric_mode : str
         "pressure" or "temperature".
     metric_unit : str
-        Unit string for the tire metric (e.g., "psi" or "°F").
+        Unit string for the tire metric, read from channel metadata
+        (e.g., "bar", "kPa", "C").
+    accel_unit : str
+        Unit string for acceleration, read from channel metadata
+        (e.g., "g", "m/s^2").
     """
 
     front_left: CornerTireGripData
@@ -87,6 +94,7 @@ class TireGripResult:
     rear_right: CornerTireGripData
     metric_mode: str
     metric_unit: str
+    accel_unit: str
 
 
 # Channel keys for each mode
@@ -200,12 +208,7 @@ def analyze_tire_grip(
         raise ValueError(f"metric_mode must be 'pressure' or 'temperature', got '{metric_mode}'")
 
     # Determine which tire metric channels to use
-    if metric_mode == "pressure":
-        metric_keys = _PRESSURE_KEYS
-        metric_unit = "psi"
-    else:
-        metric_keys = _TEMPERATURE_KEYS
-        metric_unit = "°F"
+    metric_keys = _PRESSURE_KEYS if metric_mode == "pressure" else _TEMPERATURE_KEYS
 
     required_keys = _ACCEL_KEYS + metric_keys
     _validate_channel_names(channel_names, required_keys, "analyze_tire_grip")
@@ -219,6 +222,10 @@ def analyze_tire_grip(
 
     # Select and resample channels
     aligned = lap_log.select_channels(all_channels).resample_to_channel(lat_g_ch).channels
+
+    # Read units from channel metadata
+    metric_unit = _get_channel_unit(aligned[metric_channels[0]], metric_channels[0])
+    accel_unit = _get_channel_unit(aligned[lat_g_ch], lat_g_ch)
 
     # Extract acceleration arrays
     lateral_g = aligned[lat_g_ch].column(lat_g_ch).to_numpy()
@@ -251,6 +258,7 @@ def analyze_tire_grip(
         rear_right=corners["RR"],
         metric_mode=metric_mode,
         metric_unit=metric_unit,
+        accel_unit=accel_unit,
     )
 
 
@@ -306,12 +314,7 @@ def analyze_tire_grip_multi_lap(
         raise ValueError(f"metric_mode must be 'pressure' or 'temperature', got '{metric_mode}'")
 
     # Determine which tire metric channels to use
-    if metric_mode == "pressure":
-        metric_keys = _PRESSURE_KEYS
-        metric_unit = "psi"
-    else:
-        metric_keys = _TEMPERATURE_KEYS
-        metric_unit = "°F"
+    metric_keys = _PRESSURE_KEYS if metric_mode == "pressure" else _TEMPERATURE_KEYS
 
     required_keys = _ACCEL_KEYS + metric_keys
     _validate_channel_names(channel_names, required_keys, "analyze_tire_grip_multi_lap")
@@ -338,11 +341,19 @@ def analyze_tire_grip_multi_lap(
         "RL": [],
         "RR": [],
     }
+    metric_unit = ""
+    accel_unit = ""
 
     for lap_num in lap_numbers:
         try:
             lap_log = log.filter_by_lap(lap_num)
             aligned = lap_log.select_channels(all_channels).resample_to_channel(lat_g_ch).channels
+
+            # Read units from the first successful lap
+            if not metric_unit:
+                metric_unit = _get_channel_unit(aligned[metric_channels[0]], metric_channels[0])
+            if not accel_unit:
+                accel_unit = _get_channel_unit(aligned[lat_g_ch], lat_g_ch)
 
             lateral_g = aligned[lat_g_ch].column(lat_g_ch).to_numpy()
             inline_g = aligned[inline_g_ch].column(inline_g_ch).to_numpy()
@@ -381,6 +392,7 @@ def analyze_tire_grip_multi_lap(
         rear_right=corners["RR"],
         metric_mode=metric_mode,
         metric_unit=metric_unit,
+        accel_unit=accel_unit,
     )
 
 
@@ -405,17 +417,27 @@ def format_tire_grip_stats_table(result: TireGripResult) -> pd.DataFrame:
     }
 
     metric_label = "Pressure" if result.metric_mode == "pressure" else "Temperature"
-    unit = result.metric_unit
+    metric_col = f"Mean {metric_label}"
+    metric_std_col = f"Std {metric_label}"
+    if result.metric_unit:
+        metric_col += f" ({result.metric_unit})"
+        metric_std_col += f" ({result.metric_unit})"
+
+    accel_col = "Mean Accel"
+    accel_std_col = "Std Accel"
+    if result.accel_unit:
+        accel_col += f" ({result.accel_unit})"
+        accel_std_col += f" ({result.accel_unit})"
 
     data = []
     for corner_name, corner_data in corners.items():
         data.append(
             {
                 "Corner": corner_name,
-                "Mean G": corner_data.mean_g,
-                "Std G": corner_data.std_g,
-                f"Mean {metric_label} ({unit})": corner_data.mean_metric,
-                f"Std {metric_label} ({unit})": corner_data.std_metric,
+                accel_col: corner_data.mean_g,
+                accel_std_col: corner_data.std_g,
+                metric_col: corner_data.mean_metric,
+                metric_std_col: corner_data.std_metric,
             }
         )
 

@@ -39,6 +39,8 @@ a = Analysis(
         "PIL._tkinter_finder",
         # YAML for vehicle profiles
         "yaml",
+        # iRacing IBT parser
+        "libibt",
     ],
     hookspath=[],
     hooksconfig={},

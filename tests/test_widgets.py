@@ -7,11 +7,17 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 
-from motorsports_data_notebook.widgets import load_session, LapPicker, SessionPicker, ChannelPicker
-
+from motorsports_data_notebook.widgets import (
+    load_session,
+    LapPicker,
+    SessionPicker,
+    ChannelPicker,
+    TireChannelPicker,
+)
 
 # Path to patch aim_xrk - it's imported inside the function
 AIM_XRK_PATCH_PATH = "libxrk.aim_xrk"
+IBT_PATCH_PATH = "libibt.ibt"
 
 
 # ============================================================================
@@ -269,47 +275,30 @@ def mock_ipywidgets():
 class TestLapPicker:
     """Tests for LapPicker widget."""
 
-    def test_preselects_fastest_middle_lap(self, sample_laps_df, mock_ipywidgets):
-        """Test that the fastest lap (excluding first/last) is pre-selected."""
+    def test_preselects_fastest_lap(self, sample_laps_df, mock_ipywidgets):
+        """Test that the fastest lap is pre-selected."""
         with patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets}):
             picker = LapPicker(sample_laps_df)
 
-            # Lap 3 (index 2) has the fastest time (58s) among middle laps
-            # The Dropdown should be initialized with value=2
+            # Lap 3 (index 2) has the fastest time (58s)
             call_kwargs = mock_ipywidgets.Dropdown.call_args[1]
             assert call_kwargs["value"] == 2
 
-    def test_excludes_first_last_from_fastest_selection(
-        self, sample_laps_df, mock_ipywidgets
-    ):
-        """Test that first and last laps are excluded from fastest selection."""
-        # Modify so first lap is fastest overall
+    def test_selects_fastest_lap_even_if_first(self, sample_laps_df, mock_ipywidgets):
+        """Test that first lap is selected if it's the fastest (laps are pre-cleaned)."""
         modified_df = sample_laps_df.copy()
         modified_df.loc[0, "lap_time"] = pd.Timedelta(seconds=50)
 
         with patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets}):
             picker = LapPicker(modified_df)
 
-            # Even though lap 1 (index 0) is fastest, it should select lap 3 (index 2)
-            # which is fastest among middle laps
+            # Lap 1 (index 0) is fastest — should be selected since
+            # incomplete laps are already removed by clean_laps_table
             call_kwargs = mock_ipywidgets.Dropdown.call_args[1]
-            assert call_kwargs["value"] == 2
-
-    def test_marks_pit_laps_in_labels(self, sample_laps_df, mock_ipywidgets):
-        """Test that first lap is marked as out lap and last as in lap."""
-        with patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets}):
-            picker = LapPicker(sample_laps_df)
-
-            call_kwargs = mock_ipywidgets.Dropdown.call_args[1]
-            options = call_kwargs["options"]
-
-            # First option should have "out lap"
-            assert "out lap" in options[0][0]
-            # Last option should have "in lap"
-            assert "in lap" in options[-1][0]
+            assert call_kwargs["value"] == 0
 
     def test_marks_fastest_lap_in_labels(self, sample_laps_df, mock_ipywidgets):
-        """Test that fastest middle lap is marked in label."""
+        """Test that fastest lap is marked in label."""
         with patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets}):
             picker = LapPicker(sample_laps_df)
 
@@ -318,7 +307,8 @@ class TestLapPicker:
 
             # Lap 3 (index 2) should have "fastest" in label
             assert "fastest" in options[2][0]
-            # Other middle laps should not have "fastest"
+            # Other laps should not have "fastest"
+            assert "fastest" not in options[0][0]
             assert "fastest" not in options[1][0]
             assert "fastest" not in options[3][0]
 
@@ -339,18 +329,18 @@ class TestLapPicker:
                 LapPicker(empty_df)
 
     def test_handles_few_laps(self, few_laps_df, mock_ipywidgets):
-        """Test handling when there are only 2 laps (no middle laps)."""
+        """Test handling when there are only 2 laps."""
         with patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets}):
             picker = LapPicker(few_laps_df)
 
-            # Should fall back to first lap
+            # Should select the fastest lap (lap 2 at 62s, index 1)
             call_kwargs = mock_ipywidgets.Dropdown.call_args[1]
-            assert call_kwargs["value"] == 0
+            assert call_kwargs["value"] == 1
 
-            # No lap should be marked as "fastest" since there are no middle laps
+            # Fastest lap should be marked
             options = call_kwargs["options"]
-            for label, _ in options:
-                assert "fastest" not in label
+            assert "fastest" in options[1][0]
+            assert "fastest" not in options[0][0]
 
     def test_get_selected_lap_returns_correct_row(self, sample_laps_df, mock_ipywidgets):
         """Test that get_selected_lap returns the correct lap row."""
@@ -473,9 +463,7 @@ class TestSessionPicker:
             assert "num" in laps.columns
             assert "lap_time" in laps.columns
 
-    def test_get_selected_lap_returns_series(
-        self, mock_log_file, mock_ipywidgets_session
-    ):
+    def test_get_selected_lap_returns_series(self, mock_log_file, mock_ipywidgets_session):
         """Test that get_selected_lap returns a Series."""
         with (
             patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets_session}),
@@ -534,9 +522,7 @@ class TestSessionPicker:
             assert picker._channel_picker is None
             assert picker._channel_section is None
 
-    def test_get_channel_names_returns_mapping(
-        self, mock_log_file, mock_ipywidgets_session
-    ):
+    def test_get_channel_names_returns_mapping(self, mock_log_file, mock_ipywidgets_session):
         """Test that get_channel_names returns the channel mapping."""
         channel_mapping = {"throttle": "PPS", "brake": "BrakePress"}
 
@@ -549,9 +535,7 @@ class TestSessionPicker:
 
             assert result == channel_mapping
 
-    def test_get_channel_names_raises_without_mapping(
-        self, mock_log_file, mock_ipywidgets_session
-    ):
+    def test_get_channel_names_raises_without_mapping(self, mock_log_file, mock_ipywidgets_session):
         """Test that get_channel_names raises error when no mapping provided."""
         with (
             patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets_session}),
@@ -562,9 +546,7 @@ class TestSessionPicker:
             with pytest.raises(RuntimeError, match="No channel_mapping provided"):
                 picker.get_channel_names()
 
-    def test_channel_picker_updates_on_file_load(
-        self, mock_log_file, mock_ipywidgets_session
-    ):
+    def test_channel_picker_updates_on_file_load(self, mock_log_file, mock_ipywidgets_session):
         """Test that channel picker is updated with available channels on file load."""
         channel_mapping = {"throttle": "PPS"}
 
@@ -756,9 +738,7 @@ class TestChannelPicker:
 
             assert picker._available_channels == sorted(sample_available_channels)
 
-    def test_empty_available_channels(
-        self, sample_channel_mapping, mock_ipywidgets_channel
-    ):
+    def test_empty_available_channels(self, sample_channel_mapping, mock_ipywidgets_channel):
         """Test handling of empty available channels list."""
         with patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets_channel}):
             picker = ChannelPicker(sample_channel_mapping, [])
@@ -766,3 +746,337 @@ class TestChannelPicker:
             assert picker._available_channels == []
             assert picker.is_valid() is False
             assert len(picker.get_unmatched_channels()) == len(sample_channel_mapping)
+
+
+# ============================================================================
+# Fixtures for IBT loading
+# ============================================================================
+
+
+@pytest.fixture
+def mock_ibt_log_file():
+    """Create a mock iRacing IBT LogFile object."""
+    n_samples = 300
+    timecodes = np.linspace(0, 180000, n_samples).astype(np.int64)
+    speed_values = np.random.uniform(20, 50, n_samples)  # m/s
+    lapdist_values = np.linspace(0, 4000, n_samples)  # meters
+
+    speed_table = pa.table({"timecodes": timecodes, "Speed": speed_values})
+    lapdist_table = pa.table({"timecodes": timecodes, "LapDist": lapdist_values})
+
+    laps_table = pa.table(
+        {
+            "num": [1, 2, 3],
+            "start_time": [0, 60000, 120000],
+            "end_time": [60000, 120000, 180000],
+        }
+    )
+
+    mock_log = MagicMock()
+    mock_log.channels = {"Speed": speed_table, "LapDist": lapdist_table}
+    mock_log.laps = laps_table
+    mock_log.metadata = {"session_info_yaml": "some_yaml_content"}
+    mock_log.file_name = "test.ibt"
+
+    return mock_log
+
+
+# ============================================================================
+# Tests for IBT load_session
+# ============================================================================
+
+
+class TestLoadIbtSession:
+    """Tests for load_session with iRacing IBT files."""
+
+    def test_dispatches_to_libibt_for_ibt_bytes(self, mock_ibt_log_file):
+        """load_session should call libibt.ibt for IBT magic bytes."""
+        # IBT magic bytes header
+        ibt_bytes = b"\x02\x00\x00\x00" + b"\x00" * 100
+
+        with patch(IBT_PATCH_PATH, return_value=mock_ibt_log_file) as mock_ibt:
+            load_session(ibt_bytes)
+
+        mock_ibt.assert_called_once_with(ibt_bytes)
+
+    def test_dispatches_to_libibt_for_ibt_path(self, mock_ibt_log_file):
+        """load_session should call libibt.ibt for .ibt file paths."""
+        with patch(IBT_PATCH_PATH, return_value=mock_ibt_log_file) as mock_ibt:
+            load_session("path/to/file.ibt")
+
+        mock_ibt.assert_called_once_with("path/to/file.ibt")
+
+    def test_dispatches_to_libxrk_for_aim_bytes(self, mock_log_file):
+        """load_session should call libxrk.aim_xrk for non-IBT bytes."""
+        aim_bytes = b"\xff\x00\x00\x00" + b"\x00" * 100
+
+        with patch(AIM_XRK_PATCH_PATH, return_value=mock_log_file):
+            load_session(aim_bytes)
+
+    def test_adds_speed_kmh_channel(self, mock_ibt_log_file):
+        """IBT load_session should add speed_kmh channel from Speed * 3.6."""
+        ibt_bytes = b"\x02\x00\x00\x00" + b"\x00" * 100
+
+        with patch(IBT_PATCH_PATH, return_value=mock_ibt_log_file):
+            result = load_session(ibt_bytes)
+
+        assert "speed_kmh" in result.channels
+        speed_kmh = result.channels["speed_kmh"].column("speed_kmh").to_numpy()
+        speed_ms = mock_ibt_log_file.channels["Speed"].column("Speed").to_numpy()
+        np.testing.assert_array_almost_equal(speed_kmh, speed_ms * 3.6, decimal=5)
+
+    def test_adds_distance_m_from_speed(self, mock_ibt_log_file):
+        """IBT load_session should compute distance_m from Speed integration."""
+        ibt_bytes = b"\x02\x00\x00\x00" + b"\x00" * 100
+
+        with patch(IBT_PATCH_PATH, return_value=mock_ibt_log_file):
+            result = load_session(ibt_bytes)
+
+        assert "distance_m" in result.channels
+        distance_m = result.channels["distance_m"].column("distance_m").to_numpy()
+        # Should start at 0 and have positive values (speed-integrated distance)
+        assert distance_m[0] == 0.0
+        assert np.max(distance_m) > 0.0
+
+    def test_adds_lap_time_column(self, mock_ibt_log_file):
+        """IBT load_session should add lap_time column to laps table."""
+        ibt_bytes = b"\x02\x00\x00\x00" + b"\x00" * 100
+
+        with patch(IBT_PATCH_PATH, return_value=mock_ibt_log_file):
+            result = load_session(ibt_bytes)
+
+        laps_df = result.laps.to_pandas()
+        assert "lap_time" in laps_df.columns
+        assert pd.api.types.is_timedelta64_dtype(laps_df["lap_time"])
+
+    def test_handles_missing_speed_channel(self):
+        """IBT load_session should work without Speed channel."""
+        mock_log = MagicMock()
+        mock_log.channels = {}
+        mock_log.laps = pa.table({"num": [1], "start_time": [0], "end_time": [60000]})
+        mock_log.metadata = {"session_info_yaml": "yaml"}
+
+        ibt_bytes = b"\x02\x00\x00\x00" + b"\x00" * 100
+
+        with patch(IBT_PATCH_PATH, return_value=mock_log):
+            result = load_session(ibt_bytes)
+
+        assert "speed_kmh" not in result.channels
+        assert "distance_m" not in result.channels
+
+
+# ============================================================================
+# Tests for SessionPicker.get_file_type
+# ============================================================================
+
+
+class TestSessionPickerGetFileType:
+    """Tests for SessionPicker.get_file_type method."""
+
+    def test_returns_aim_for_aim_files(self, mock_log_file, mock_ipywidgets_session):
+        """get_file_type should return 'aim' for AIM files."""
+        with (
+            patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets_session}),
+            patch(AIM_XRK_PATCH_PATH, return_value=mock_log_file),
+        ):
+            picker = SessionPicker("test.xrz")
+            assert picker.get_file_type() == "aim"
+
+    def test_returns_ibt_for_ibt_files(self, mock_ibt_log_file, mock_ipywidgets_session):
+        """get_file_type should return 'ibt' for iRacing files."""
+        ibt_bytes = b"\x02\x00\x00\x00" + b"\x00" * 100
+
+        with (
+            patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets_session}),
+            patch(IBT_PATCH_PATH, return_value=mock_ibt_log_file),
+        ):
+            # Load with IBT bytes by simulating upload
+            picker = SessionPicker.__new__(SessionPicker)
+            picker._log = mock_ibt_log_file
+            picker._laps = None
+            picker._channel_picker = None
+
+            assert picker.get_file_type() == "ibt"
+
+    def test_raises_when_no_session(self, mock_ipywidgets_session):
+        """get_file_type should raise RuntimeError when no session loaded."""
+        with (
+            patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets_session}),
+            patch(AIM_XRK_PATCH_PATH, side_effect=Exception("File not found")),
+        ):
+            picker = SessionPicker("nonexistent.xrz")
+
+            with pytest.raises(RuntimeError, match="No session loaded"):
+                picker.get_file_type()
+
+
+# ============================================================================
+# Fixtures for TireChannelPicker
+# ============================================================================
+
+
+@pytest.fixture
+def tire_available_channels():
+    """Available channels for tire picker tests."""
+    channels = []
+    for pos in ["FL", "FR", "RL", "RR"]:
+        for ch in range(1, 9):
+            channels.append(f"{pos}_Ch{ch}")
+    return channels
+
+
+@pytest.fixture
+def tire_mapping_8():
+    """Default 8-sensor tire mapping."""
+    return {
+        "FL": [f"FL_Ch{i}" for i in range(1, 9)],
+        "FR": [f"FR_Ch{i}" for i in range(1, 9)],
+        "RL": [f"RL_Ch{i}" for i in range(1, 9)],
+        "RR": [f"RR_Ch{i}" for i in range(1, 9)],
+    }
+
+
+@pytest.fixture
+def tire_mapping_3():
+    """Default 3-zone tire mapping (iRacing)."""
+    return {
+        "FL": ["LFtempL", "LFtempM", "LFtempR"],
+        "FR": ["RFtempL", "RFtempM", "RFtempR"],
+        "RL": ["LRtempL", "LRtempM", "LRtempR"],
+        "RR": ["RRtempL", "RRtempM", "RRtempR"],
+    }
+
+
+@pytest.fixture
+def mock_ipywidgets_tire():
+    """Create mock ipywidgets module for TireChannelPicker tests."""
+    mock_widgets = MagicMock()
+
+    def create_combobox(**kwargs):
+        mock_combo = MagicMock()
+        mock_combo.value = kwargs.get("value", "")
+        mock_combo.options = kwargs.get("options", [])
+        mock_combo.observe = MagicMock()
+        return mock_combo
+
+    class MockBox:
+        """Mock HBox/VBox that supports .children attribute."""
+
+        def __init__(self, children=None, **kwargs):
+            self.children = tuple(children) if children else ()
+
+    mock_widgets.Combobox.side_effect = create_combobox
+    mock_widgets.HTML.return_value = MagicMock()
+    mock_widgets.HBox.side_effect = MockBox
+    mock_widgets.VBox.side_effect = MockBox
+    mock_widgets.Layout.return_value = MagicMock()
+    return mock_widgets
+
+
+# ============================================================================
+# Tests for TireChannelPicker
+# ============================================================================
+
+
+class TestTireChannelPicker:
+    """Tests for TireChannelPicker widget."""
+
+    def test_creates_with_8_sensors(
+        self, tire_mapping_8, tire_available_channels, mock_ipywidgets_tire
+    ):
+        """Test creation with 8-sensor default mapping."""
+        with patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets_tire}):
+            picker = TireChannelPicker(tire_mapping_8, tire_available_channels)
+
+            # Should have 8 combos per corner
+            for corner in ["FL", "FR", "RL", "RR"]:
+                assert len(picker._corner_combos[corner]) == 8
+
+    def test_creates_with_3_sensors(self, tire_mapping_3, mock_ipywidgets_tire):
+        """Test creation with 3-zone default mapping."""
+        iracing_channels = [
+            f"{pos}temp{z}" for pos in ["LF", "RF", "LR", "RR"] for z in ["L", "M", "R"]
+        ]
+        with patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets_tire}):
+            picker = TireChannelPicker(tire_mapping_3, iracing_channels)
+
+            for corner in ["FL", "FR", "RL", "RR"]:
+                assert len(picker._corner_combos[corner]) == 3
+
+    def test_get_channel_names_returns_tire_temp_keys(
+        self, tire_mapping_8, tire_available_channels, mock_ipywidgets_tire
+    ):
+        """Test that get_channel_names returns correct tire_temp_* keys."""
+        with patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets_tire}):
+            picker = TireChannelPicker(tire_mapping_8, tire_available_channels)
+
+            names = picker.get_channel_names()
+
+            assert names["tire_temp_fl_1"] == "FL_Ch1"
+            assert names["tire_temp_fl_8"] == "FL_Ch8"
+            assert names["tire_temp_fr_1"] == "FR_Ch1"
+            assert names["tire_temp_rr_8"] == "RR_Ch8"
+            assert len(names) == 32  # 4 corners x 8 sensors
+
+    def test_get_channel_names_3_zone(self, tire_mapping_3, mock_ipywidgets_tire):
+        """Test get_channel_names with 3-zone mapping."""
+        with patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets_tire}):
+            picker = TireChannelPicker(tire_mapping_3, [])
+
+            names = picker.get_channel_names()
+
+            assert names["tire_temp_fl_1"] == "LFtempL"
+            assert names["tire_temp_fl_2"] == "LFtempM"
+            assert names["tire_temp_fl_3"] == "LFtempR"
+            assert len(names) == 12  # 4 corners x 3 zones
+
+    def test_set_channel_values_adjusts_sensor_count(
+        self, tire_mapping_8, tire_available_channels, mock_ipywidgets_tire
+    ):
+        """Test that set_channel_values adjusts sensor count from profile."""
+        with patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets_tire}):
+            picker = TireChannelPicker(tire_mapping_8, tire_available_channels)
+
+            # Start with 8 sensors
+            assert len(picker._corner_combos["FL"]) == 8
+
+            # Apply iRacing 3-zone profile
+            profile_names = {
+                "tire_temp_fl_1": "LFtempL",
+                "tire_temp_fl_2": "LFtempM",
+                "tire_temp_fl_3": "LFtempR",
+                "tire_temp_fr_1": "RFtempL",
+                "tire_temp_fr_2": "RFtempM",
+                "tire_temp_fr_3": "RFtempR",
+                "tire_temp_rl_1": "LRtempL",
+                "tire_temp_rl_2": "LRtempM",
+                "tire_temp_rl_3": "LRtempR",
+                "tire_temp_rr_1": "RRtempL",
+                "tire_temp_rr_2": "RRtempM",
+                "tire_temp_rr_3": "RRtempR",
+            }
+            picker.set_channel_values(profile_names)
+
+            # Should now have 3 sensors per corner
+            for corner in ["FL", "FR", "RL", "RR"]:
+                assert len(picker._corner_combos[corner]) == 3
+
+            # Values should match
+            names = picker.get_channel_names()
+            assert names["tire_temp_fl_1"] == "LFtempL"
+            assert len(names) == 12
+
+    def test_update_available_channels(
+        self, tire_mapping_8, tire_available_channels, mock_ipywidgets_tire
+    ):
+        """Test that update_available_channels updates all combos."""
+        with patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets_tire}):
+            picker = TireChannelPicker(tire_mapping_8, tire_available_channels)
+
+            new_channels = ["NewCh1", "NewCh2"]
+            picker.update_available_channels(new_channels)
+
+            assert picker._available_channels == sorted(new_channels)
+            for corner in ["FL", "FR", "RL", "RR"]:
+                for combo in picker._corner_combos[corner]:
+                    assert combo.options == sorted(new_channels)

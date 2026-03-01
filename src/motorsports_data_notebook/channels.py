@@ -13,7 +13,7 @@ import pandas as pd
 if TYPE_CHECKING:
     import pyarrow as pa
 
-    from libxrk.base import LogFile
+    from ._types import LogFile
 
 
 def get_best_lap(laps_df: pd.DataFrame) -> pd.Series:

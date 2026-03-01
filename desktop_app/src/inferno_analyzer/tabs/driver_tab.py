@@ -21,8 +21,9 @@ from inferno_analyzer.driver.widgets.stats_panel import StatsPanel
 from inferno_analyzer.tabs.base_tab import BaseAnalysisTab
 
 if TYPE_CHECKING:
+    from motorsports_data_notebook._types import LogFile
+
     from inferno_analyzer.app import InfernoAnalyzerApp
-    from libxrk.base import LogFile
 
 
 @dataclass

@@ -27,8 +27,9 @@ from inferno_analyzer.tabs.tire_grip_tab import TireGripTab
 from inferno_analyzer.tire_grip.widgets.config_panel import ConfigPanel as TireGripConfigPanel
 
 if TYPE_CHECKING:
+    from motorsports_data_notebook._types import LogFile
+
     from inferno_analyzer.tabs.base_tab import BaseAnalysisTab
-    from libxrk.base import LogFile
 
 
 class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):

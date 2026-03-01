@@ -268,6 +268,15 @@ def identify_corners(
     ...     print(f"{c.name} ({c.direction}): {c.start_dist:.0f}m - {c.end_dist:.0f}m")
     """
     # Step 1: Convert GPS to local XY coordinates
+    lat = np.array(lat, dtype=np.float64)
+    lon = np.array(lon, dtype=np.float64)
+
+    # Filter out invalid GPS samples (e.g. iRacing reports (0,0) before car is on track)
+    valid = (lat != 0.0) | (lon != 0.0)
+    if not np.all(valid):
+        lat = lat[valid]
+        lon = lon[valid]
+
     x, y = gps_to_local_xy(lat, lon)
 
     # Step 2: Compute distance along track

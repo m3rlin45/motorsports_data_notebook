@@ -8,6 +8,7 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 
+from helpers import MockLogFile, make_channel_table
 from motorsports_data_notebook.corners import Corner
 from motorsports_data_notebook.zones import (
     TrackSegment,
@@ -20,41 +21,6 @@ from motorsports_data_notebook.zones import (
     identify_zones_single_lap,
     merge_accel_zones_by_time,
 )
-
-
-# ============================================================================
-# Mock LogFile for testing
-# ============================================================================
-
-
-class MockLogFile:
-    """Mock LogFile for testing zone functions that take LogFile."""
-
-    def __init__(self, channels: dict[str, pa.Table]):
-        self.channels = channels
-
-    def filter_by_lap(self, lap_num: int):
-        """Mock filter_by_lap returning self for method chaining."""
-        return self
-
-    def select_channels(self, channel_names: list):
-        """Mock select_channels returning self for method chaining."""
-        return self
-
-    def resample_to_channel(self, reference_channel: str):
-        """Mock resample_to_channel returning self for method chaining."""
-        return self
-
-
-def make_channel_table(timecodes: np.ndarray, name: str, values: np.ndarray) -> pa.Table:
-    """Create a PyArrow table with timecodes and a named column."""
-    return pa.table(
-        {
-            "timecodes": pa.array(timecodes, type=pa.int64()),
-            name: pa.array(values),
-        }
-    )
-
 
 # Test channel names mapping (matches the mock data channel names)
 TEST_CHANNEL_NAMES = {
@@ -164,6 +130,31 @@ class TestIdentifyZonesSingleLap:
         for zone in accel_zones:
             # No accel zone should overlap with braking zone
             assert not (zone[0] < 250 and zone[1] > 200)
+
+    def test_auto_detect_zero_to_one_scale(self):
+        """Test that zones are found with 0-1 scale data (iRacing)."""
+        distance = np.linspace(0, 1000, 500)
+        brake_press = np.zeros(500)
+        throttle = np.zeros(500)
+        speed = np.ones(500) * 30
+
+        # Braking zone at 200-300m with 0-1 scale values
+        brake_mask = (distance >= 200) & (distance <= 300)
+        brake_press[brake_mask] = 0.5  # 50% brake in 0-1 scale
+
+        # Acceleration zone at 400-600m with 0-1 scale values
+        accel_mask = (distance >= 400) & (distance <= 600)
+        throttle[accel_mask] = 0.8  # 80% throttle in 0-1 scale
+
+        # Auto-detect (no explicit thresholds)
+        braking_zones, accel_zones = identify_zones_single_lap(
+            distance, brake_press, throttle, speed
+        )
+
+        assert len(braking_zones) >= 1
+        assert braking_zones[0][0] == pytest.approx(200, abs=5)
+        assert len(accel_zones) >= 1
+        assert accel_zones[0][0] == pytest.approx(400, abs=5)
 
     def test_gear_change_gap_merging(self):
         """Test that short gaps in throttle (gear changes) are merged."""

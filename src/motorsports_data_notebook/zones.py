@@ -13,11 +13,11 @@ import numpy as np
 import pandas as pd
 
 
+from ._util import infer_channel_scale as _infer_channel_scale
 from ._util import validate_channel_names as _validate_channel_names
 
 if TYPE_CHECKING:
-    from libxrk.base import LogFile
-
+    from ._types import LogFile
     from .corners import Corner
 
 
@@ -161,8 +161,8 @@ def identify_zones_single_lap(
     brake_press: np.ndarray,
     throttle: np.ndarray,
     speed: np.ndarray,
-    brake_threshold: float = 5,
-    throttle_threshold: float = 20,
+    brake_threshold: float | None = None,
+    throttle_threshold: float | None = None,
     gear_change_time: float = 1.5,
 ) -> tuple[list[tuple[float, float]], list[tuple[float, float]]]:
     """
@@ -173,15 +173,17 @@ def identify_zones_single_lap(
     distance : array-like
         Distance along track in meters.
     brake_press : array-like
-        Brake pressure % (0-100).
+        Brake pressure values.
     throttle : array-like
-        Throttle position % (0-100).
+        Throttle position values.
     speed : array-like
         Speed in m/s.
-    brake_threshold : float, default=5
-        Minimum brake pressure % to consider as braking.
-    throttle_threshold : float, default=20
-        Minimum throttle % to consider as accelerating.
+    brake_threshold : float or None, default=None
+        Minimum brake pressure to consider as braking.
+        If None, auto-detected from data scale (5% of scale).
+    throttle_threshold : float or None, default=None
+        Minimum throttle to consider as accelerating.
+        If None, auto-detected from data scale (20% of scale).
     gear_change_time : float, default=1.5
         Maximum time (seconds) to bridge across gear changes in accel zones.
 
@@ -203,6 +205,11 @@ def identify_zones_single_lap(
     brake_press = np.array(brake_press)
     throttle = np.array(throttle)
     speed = np.array(speed)
+
+    if brake_threshold is None:
+        brake_threshold = 0.05 * _infer_channel_scale(brake_press)
+    if throttle_threshold is None:
+        throttle_threshold = 0.20 * _infer_channel_scale(throttle)
 
     braking_zones = []
     accel_zones = []
@@ -555,8 +562,8 @@ def detect_zones_averaged(
     resolution: float = 1.0,
     threshold: float = 0.5,
     max_gap_time: float = 1.5,
-    brake_threshold: float = 5,
-    throttle_threshold: float = 20,
+    brake_threshold: float | None = None,
+    throttle_threshold: float | None = None,
 ) -> tuple[list[tuple[float, float]], list[tuple[float, float]]]:
     """Detect and average braking/acceleration zones across top laps.
 
@@ -583,10 +590,12 @@ def detect_zones_averaged(
         Fraction of laps that must agree for a zone to be included.
     max_gap_time : float, default=1.5
         Maximum time (seconds) to bridge across gear changes in accel zones.
-    brake_threshold : float, default=5
-        Minimum brake pressure % to consider as braking.
-    throttle_threshold : float, default=20
-        Minimum throttle % to consider as accelerating.
+    brake_threshold : float or None, default=None
+        Minimum brake pressure to consider as braking.
+        If None, auto-detected from data scale.
+    throttle_threshold : float or None, default=None
+        Minimum throttle to consider as accelerating.
+        If None, auto-detected from data scale.
 
     Returns
     -------
@@ -748,8 +757,8 @@ def compute_segment_stats(
     laps: pd.DataFrame,
     segments: list[TrackSegment],
     channel_names: dict,
-    brake_threshold: float = 5,
-    throttle_threshold: float = 20,
+    brake_threshold: float | None = None,
+    throttle_threshold: float | None = None,
 ) -> pd.DataFrame:
     """Compute per-lap statistics for each track segment.
 
@@ -770,10 +779,12 @@ def compute_segment_stats(
         Channel name mapping. Required keys:
         - "throttle": Throttle position channel name (e.g., "PPS")
         - "brake": Brake pressure channel name (e.g., "BrakePress")
-    brake_threshold : float, default=5
-        Minimum brake pressure % to consider as braking.
-    throttle_threshold : float, default=20
-        Minimum throttle % to consider as accelerating.
+    brake_threshold : float or None, default=None
+        Minimum brake pressure to consider as braking.
+        If None, auto-detected from data scale.
+    throttle_threshold : float or None, default=None
+        Minimum throttle to consider as accelerating.
+        If None, auto-detected from data scale.
 
     Returns
     -------
@@ -806,6 +817,7 @@ def compute_segment_stats(
     stats_channels = ["distance_m", "speed_kmh", brake_ch, throttle_ch]
 
     all_lap_stats = []
+    thresholds_resolved = False
 
     for _, lap in laps.iterrows():
         lap_num = int(lap["num"])
@@ -831,6 +843,16 @@ def compute_segment_stats(
         if len(lap_data) < 10:
             continue
 
+        # Auto-detect thresholds from first valid lap's data
+        if not thresholds_resolved:
+            if brake_threshold is None:
+                brake_threshold = 0.05 * _infer_channel_scale(lap_data[brake_ch].values)
+            if throttle_threshold is None:
+                throttle_threshold = 0.20 * _infer_channel_scale(lap_data[throttle_ch].values)
+            thresholds_resolved = True
+
+        assert brake_threshold is not None
+        assert throttle_threshold is not None
         for seg in segments:
             stat: dict = {
                 "segment_id": seg.id,

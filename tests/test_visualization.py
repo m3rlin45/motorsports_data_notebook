@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 import pyarrow as pa
 import pytest
 
+from helpers import MockLogFile
 from motorsports_data_notebook.channels import (
     get_best_lap,
     get_best_lap_channels,
@@ -20,7 +21,6 @@ from motorsports_data_notebook.visualization import (
 )
 from motorsports_data_notebook.corners import Corner
 from motorsports_data_notebook.zones import TrackSegment
-
 
 # ============================================================================
 # Fixtures for synthetic data
@@ -108,6 +108,78 @@ def sample_lap_channels():
             )
 
     return channels
+
+
+@pytest.fixture
+def aim_channel_names():
+    """Channel names dict for AIM 8-sensor tire setup."""
+    names = {
+        "lateral_g": "LateralAcc",
+        "inline_g": "InlineAcc",
+        "brake": "BrakePress",
+        "throttle": "PPS",
+        "steering": "SteerAngle",
+    }
+    for corner_key, corner_prefix in [("fl", "FL"), ("fr", "FR"), ("rl", "RL"), ("rr", "RR")]:
+        for i in range(1, 9):
+            names[f"tire_temp_{corner_key}_{i}"] = f"{corner_prefix}_Ch{i}"
+    return names
+
+
+@pytest.fixture
+def iracing_lap_channels():
+    """Create sample channel tables for iRacing 3-zone tire temps."""
+    n_samples = 300
+    timecodes = np.linspace(60000, 120000, n_samples, dtype=np.int64)
+
+    channels: dict[str, pa.Table] = {}
+
+    def make_table(name: str, values: np.ndarray) -> pa.Table:
+        return pa.table(
+            {
+                "timecodes": pa.array(timecodes, type=pa.int64()),
+                name: pa.array(values),
+            }
+        )
+
+    channels["distance_m"] = make_table("distance_m", np.linspace(0, 4500, n_samples))
+    channels["speed_kmh"] = make_table(
+        "speed_kmh", 100 + 50 * np.sin(np.linspace(0, 4 * np.pi, n_samples))
+    )
+    channels["LatAccel"] = make_table("LatAccel", np.random.uniform(-1.5, 1.5, n_samples))
+    channels["LongAccel"] = make_table("LongAccel", np.random.uniform(-1.5, 1.5, n_samples))
+    channels["Brake"] = make_table("Brake", np.random.uniform(0, 1, n_samples))
+    channels["Throttle"] = make_table("Throttle", np.random.uniform(0, 1, n_samples))
+    channels["SteeringWheelAngle"] = make_table(
+        "SteeringWheelAngle", np.random.uniform(-3, 3, n_samples)
+    )
+
+    # iRacing: 3 zones per tire
+    for pos in ["LF", "RF", "LR", "RR"]:
+        for zone in ["L", "M", "R"]:
+            channels[f"{pos}temp{zone}"] = make_table(
+                f"{pos}temp{zone}", np.random.uniform(60, 100, n_samples)
+            )
+
+    return channels
+
+
+@pytest.fixture
+def iracing_channel_names():
+    """Channel names dict for iRacing 3-zone tire setup."""
+    names = {
+        "lateral_g": "LatAccel",
+        "inline_g": "LongAccel",
+        "brake": "Brake",
+        "throttle": "Throttle",
+        "steering": "SteeringWheelAngle",
+    }
+    iracing_corners = {"fl": "LF", "fr": "RF", "rl": "LR", "rr": "RR"}
+    zones = ["L", "M", "R"]
+    for corner_key, prefix in iracing_corners.items():
+        for i, zone in enumerate(zones, start=1):
+            names[f"tire_temp_{corner_key}_{i}"] = f"{prefix}temp{zone}"
+    return names
 
 
 @pytest.fixture
@@ -250,22 +322,30 @@ def test_get_top_laps_empty_result():
 # ============================================================================
 
 
-def test_plot_tire_thermography_returns_figure(sample_lap_channels):
+def test_plot_tire_thermography_returns_figure(sample_lap_channels, aim_channel_names):
     """Test that plot_tire_thermography returns a Plotly figure."""
-    fig = plot_tire_thermography(sample_lap_channels)
+    fig = plot_tire_thermography(sample_lap_channels, aim_channel_names)
 
     assert isinstance(fig, go.Figure)
 
 
-def test_plot_tire_thermography_has_traces(sample_lap_channels):
+def test_plot_tire_thermography_has_traces(sample_lap_channels, aim_channel_names):
     """Test that figure has expected number of traces."""
-    fig = plot_tire_thermography(sample_lap_channels)
+    fig = plot_tire_thermography(sample_lap_channels, aim_channel_names)
 
     # 4 heatmaps + 2 speed/G traces + 3 driver input traces = 9 traces
     assert len(fig.data) == 9
 
 
-def test_plot_tire_thermography_missing_channels():
+def test_plot_tire_thermography_legacy_no_channel_names(sample_lap_channels):
+    """Test backwards compatibility without channel_names (legacy hardcoded names)."""
+    fig = plot_tire_thermography(sample_lap_channels)
+
+    assert isinstance(fig, go.Figure)
+    assert len(fig.data) == 9
+
+
+def test_plot_tire_thermography_missing_channels(aim_channel_names):
     """Test that missing tire channels raises error."""
     timecodes = pa.array([60000, 70000, 80000], type=pa.int64())
     channels = {
@@ -273,15 +353,46 @@ def test_plot_tire_thermography_missing_channels():
         "speed_kmh": pa.table({"timecodes": timecodes, "speed_kmh": pa.array([100, 110, 105])}),
     }
 
-    with pytest.raises(ValueError, match="Missing channels"):
-        plot_tire_thermography(channels)
+    # Tire temp channel names exist in channel_names but not in channels data,
+    # so _discover_tire_temp_channels filters them out → "No tire temperature channels"
+    with pytest.raises(ValueError, match="No tire temperature channels found"):
+        plot_tire_thermography(channels, aim_channel_names)
 
 
-def test_plot_tire_thermography_custom_title(sample_lap_channels):
+def test_plot_tire_thermography_custom_title(sample_lap_channels, aim_channel_names):
     """Test custom title is applied."""
-    fig = plot_tire_thermography(sample_lap_channels, title="Custom Title")
+    fig = plot_tire_thermography(sample_lap_channels, aim_channel_names, title="Custom Title")
 
     assert fig.layout.title.text == "Custom Title"
+
+
+def test_plot_tire_thermography_iracing_3_zones(iracing_lap_channels, iracing_channel_names):
+    """Test that iRacing 3-zone tire temps render correctly."""
+    fig = plot_tire_thermography(iracing_lap_channels, iracing_channel_names)
+
+    assert isinstance(fig, go.Figure)
+    # 4 heatmaps + 2 speed/G traces + 3 driver input traces = 9 traces
+    assert len(fig.data) == 9
+
+    # First 4 traces should be heatmaps with 3 sensors each
+    for i in range(4):
+        heatmap = fig.data[i]
+        assert isinstance(heatmap, go.Heatmap)
+        assert heatmap.z.shape[0] == 3  # 3 sensors
+
+
+def test_plot_tire_thermography_no_tire_channels():
+    """Test that missing tire_temp keys in channel_names raises error."""
+    channel_names = {
+        "lateral_g": "LateralAcc",
+        "inline_g": "InlineAcc",
+        "brake": "BrakePress",
+        "throttle": "PPS",
+        "steering": "SteerAngle",
+    }
+
+    with pytest.raises(ValueError, match="No tire temperature channels found"):
+        plot_tire_thermography({}, channel_names)
 
 
 # ============================================================================
@@ -505,13 +616,6 @@ def test_plot_corner_inputs_has_corner_annotations(sample_corner_data, sample_co
 # ============================================================================
 
 
-class MockLogFile:
-    """Mock LogFile for testing channel-based functions."""
-
-    def __init__(self, channels: dict[str, pa.Table]):
-        self.channels = channels
-
-
 @pytest.fixture
 def sample_channel_tables():
     """Create sample PyArrow channel tables with different sample rates."""
@@ -584,8 +688,6 @@ def sample_laps_for_channels():
             "lap_time": pd.to_timedelta([60, 58, 57, 59, 61], unit="s"),
         }
     )
-
-
 
 
 # ============================================================================

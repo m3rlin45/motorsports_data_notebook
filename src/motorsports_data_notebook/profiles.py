@@ -19,8 +19,7 @@ import yaml
 from ._util import validate_channel_names as _validate_channel_names
 
 if TYPE_CHECKING:
-    from libxrk.base import LogFile
-
+    from ._types import LogFile
     from .suspension import MotionRatios
 
 
@@ -46,6 +45,10 @@ DEFAULT_CHANNEL_NAMES: dict[str, str] = {
     "tpms_temp_fr": "TPMS_Temp_RF",
     "tpms_temp_rl": "TPMS_Temp_LR",
     "tpms_temp_rr": "TPMS_Temp_RR",
+    **{f"tire_temp_fl_{i}": f"FL_Ch{i}" for i in range(1, 9)},
+    **{f"tire_temp_fr_{i}": f"FR_Ch{i}" for i in range(1, 9)},
+    **{f"tire_temp_rl_{i}": f"RL_Ch{i}" for i in range(1, 9)},
+    **{f"tire_temp_rr_{i}": f"RR_Ch{i}" for i in range(1, 9)},
 }
 
 ALL_CANONICAL_KEYS: list[str] = list(DEFAULT_CHANNEL_NAMES.keys())
@@ -330,6 +333,10 @@ def save_profile_for_logger(logger_id: str, profile: VehicleProfile) -> None:
 def get_logger_id(log: LogFile) -> str | None:
     """Extract the logger serial number from a LogFile's metadata.
 
+    For AIM files, returns the logger serial number.
+    For iRacing IBT files, returns ``"iracing"`` (all iRacing cars use
+    the same channel names).
+
     Parameters
     ----------
     log : LogFile
@@ -342,5 +349,27 @@ def get_logger_id(log: LogFile) -> str | None:
     """
     if not hasattr(log, "metadata") or not isinstance(log.metadata, dict):
         return None
+    # AIM logger ID
     val = log.metadata.get("Logger ID") or log.metadata.get("logger_id")
-    return str(val) if val is not None else None
+    if val is not None:
+        return str(val)
+    # iRacing: all IBT files use the same channel names
+    if "session_info_yaml" in log.metadata:
+        return "iracing"
+    return None
+
+
+def is_iracing_session(log: LogFile) -> bool:
+    """Check if a LogFile was loaded from an iRacing IBT file.
+
+    Parameters
+    ----------
+    log : LogFile
+        A loaded telemetry log file.
+
+    Returns
+    -------
+    bool
+        True if the log file contains iRacing session metadata.
+    """
+    return get_logger_id(log) == "iracing"
