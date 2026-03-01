@@ -284,12 +284,18 @@ class DriverTab(BaseAnalysisTab):
         fig = self.chart_view.get_figure()
 
         if self.chart_view.is_map:
+            opp_scores = {
+                cd.corner.id: cd.opportunity_score
+                for cd in self._result_a.corner_data
+                if cd.opportunity_score > 0
+            }
             draw_track_map(
                 fig,
                 self._result_a.ref_lat,
                 self._result_a.ref_lon,
                 self._result_a.ref_distance,
                 self._result_a.segments,
+                opportunity_scores=opp_scores if opp_scores else None,
             )
             self.chart_view.redraw()
             return

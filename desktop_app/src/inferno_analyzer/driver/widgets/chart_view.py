@@ -173,12 +173,10 @@ class ChartView(ctk.CTkFrame):
         assert self._canvas is not None
 
         axes = self._figure.get_axes()
-        if len(axes) == 3:
+        if any(hasattr(ax, "_tooltip_data") for ax in axes):
+            self._tooltip_axes = list(axes)
+        elif len(axes) == 3:
             self._crosshair_axes = list(axes)
-        elif len(axes) == 2:
-            # Summary box plot — check for tooltip data
-            if any(hasattr(ax, "_tooltip_data") for ax in axes):
-                self._tooltip_axes = list(axes)
         else:
             return
 
