@@ -41,6 +41,9 @@ def find_throttle_acceptance(
     throttle_threshold : float or None, default=None
         Throttle value to consider as "full throttle".
         If None, auto-detected from data scale (98% of scale).
+        When the sensor's maximum output is 90-100% of scale, the threshold
+        is automatically scaled proportionally (e.g. 98% threshold with a
+        98.7% max sensor becomes 98.7 * 98/100 = 96.7%).
     sustain_time_ms : float, default=500.0
         Time in milliseconds that throttle must be sustained to count as "maintained".
     smoothing_window : int, default=10
@@ -103,11 +106,19 @@ def find_throttle_acceptance(
     if len(exit_data) == 0:
         return None
 
+    # Adapt threshold for sensors that don't reach 100% but are clearly at full throttle
+    # (only scale when max is above 90% — below that the driver isn't at full throttle)
+    max_throttle = float(lap_data[throttle_col].max())
+    if 90.0 <= max_throttle < 100.0:
+        effective_threshold = max_throttle * (throttle_threshold / 100.0)
+    else:
+        effective_threshold = throttle_threshold
+
     # Find first point where throttle >= threshold and is sustained for sustain_time_ms
     exit_data = exit_data.sort_values("timecodes").reset_index(drop=True)
 
     for i in range(len(exit_data)):
-        if cast(float, exit_data.loc[i, throttle_col]) >= throttle_threshold:
+        if cast(float, exit_data.loc[i, throttle_col]) >= effective_threshold:
             start_time = cast(float, exit_data.loc[i, "timecodes"])
             end_time = start_time + sustain_time_ms
 
@@ -120,7 +131,7 @@ def find_throttle_acceptance(
                 continue
 
             # Check if all points in the sustain window are above threshold
-            if (sustain_data[throttle_col] >= throttle_threshold).all():
+            if (sustain_data[throttle_col] >= effective_threshold).all():
                 # Found sustained full throttle - use smoothed lateral G
                 lateral_g_at_throttle = exit_data.loc[i, "LateralAcc_smooth"]
                 throttle_acceptance_pct = (lateral_g_at_throttle / peak_lateral_g) * 100
