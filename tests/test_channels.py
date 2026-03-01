@@ -16,36 +16,62 @@ from motorsports_data_notebook.channels import (
 class TestGetBestLap:
     """Tests for get_best_lap function."""
 
-    def test_finds_fastest_lap(self):
-        """Should return the fastest lap excluding first and last."""
-        # Lap durations: 60s, 60s, 58s (fastest), 60s, 60s
+    def test_finds_fastest_full_lap(self):
+        """Should return the fastest full lap when lap_type column is present."""
         laps = pd.DataFrame(
             {
                 "start_time": [0, 60000, 120000, 178000, 238000],
                 "end_time": [60000, 120000, 178000, 238000, 298000],
+                "lap_type": ["out", "full", "full", "full", "in"],
             }
         )
 
         best = get_best_lap(laps)
-        # Lap 2 (index 2) has duration 58000ms, the fastest among middle laps
+        # Lap at index 2 has duration 58000ms, the fastest among full laps
         assert best["start_time"] == 120000
         assert best["end_time"] == 178000
 
-    def test_excludes_first_and_last(self):
-        """First and last laps should be excluded."""
+    def test_excludes_non_full_laps(self):
+        """Non-full laps should be excluded when lap_type is present."""
         laps = pd.DataFrame(
             {
                 "start_time": [0, 60000, 120000, 180000],
                 "end_time": [50000, 120000, 180000, 230000],  # First lap is fastest
+                "lap_type": ["out", "full", "full", "in"],
             }
         )
 
         best = get_best_lap(laps)
-        # Should not be lap 0, should be lap 1 or 2
+        # Should not be out/in laps, should be one of the full laps
         assert best["start_time"] in [60000, 120000]
 
-    def test_raises_with_too_few_laps(self):
-        """Should raise ValueError with fewer than 3 laps."""
+    def test_raises_no_full_laps(self):
+        """Should raise ValueError when no full laps exist."""
+        laps = pd.DataFrame(
+            {
+                "start_time": [0, 60000],
+                "end_time": [60000, 120000],
+                "lap_type": ["out", "in"],
+            }
+        )
+
+        with pytest.raises(ValueError, match="No full laps"):
+            get_best_lap(laps)
+
+    def test_fallback_excludes_first_and_last(self):
+        """Without lap_type column, should fall back to excluding first/last laps."""
+        laps = pd.DataFrame(
+            {
+                "start_time": [0, 60000, 120000, 180000],
+                "end_time": [50000, 120000, 180000, 230000],
+            }
+        )
+
+        best = get_best_lap(laps)
+        assert best["start_time"] in [60000, 120000]
+
+    def test_fallback_raises_with_too_few_laps(self):
+        """Without lap_type, should raise ValueError with fewer than 3 laps."""
         laps = pd.DataFrame({"start_time": [0, 60000], "end_time": [60000, 120000]})
 
         with pytest.raises(ValueError, match="at least 3 laps"):
@@ -67,12 +93,13 @@ class TestGetBestLapChannels:
             )
         }
 
-        # Create laps with lap 2 being fastest (58s vs 60s)
+        # Create laps with lap 3 being fastest (58s vs 60s)
         laps = pd.DataFrame(
             {
                 "num": [1, 2, 3, 4, 5],
                 "start_time": [0, 60000, 120000, 178000, 238000],
                 "end_time": [60000, 120000, 178000, 238000, 298000],
+                "lap_type": ["out", "full", "full", "full", "in"],
             }
         )
 
@@ -99,24 +126,35 @@ class TestGetBestLapChannels:
 class TestGetTopLaps:
     """Tests for get_top_laps function."""
 
-    def test_filters_by_threshold(self):
-        """Should return laps within threshold of best."""
+    def test_filters_by_threshold_with_lap_type(self):
+        """Should return full laps within threshold of best."""
         laps = pd.DataFrame(
             {
                 "lap_time": pd.to_timedelta([60, 61, 62, 63, 70, 65], unit="s"),
+                "lap_type": ["out", "full", "full", "full", "full", "in"],
             }
         )
 
-        # 103% of 61s = 62.83s, so laps 1-3 (61, 62, 63s) should pass
+        # Full laps: 61, 62, 63, 70. Best is 61s.
+        # 103% of 61 = 62.83, so 61, 62 pass
         result = get_top_laps(laps, threshold_pct=1.03)
-
-        # Excludes first (index 0) and last (index 5)
-        # From middle laps [61, 62, 63, 70], best is 61s
-        # 103% of 61 = 62.83, so 61, 62 pass, 63 and 70 fail
         assert len(result) == 2
 
-    def test_excludes_first_and_last(self):
-        """First and last laps should be excluded."""
+    def test_excludes_non_full_laps(self):
+        """Non-full laps should be excluded when lap_type is present."""
+        laps = pd.DataFrame(
+            {
+                "lap_time": pd.to_timedelta([50, 60, 60, 60, 50], unit="s"),
+                "lap_type": ["out", "full", "full", "full", "in"],
+            }
+        )
+
+        result = get_top_laps(laps, threshold_pct=1.5)
+        # Only the 3 full laps should be included
+        assert len(result) == 3
+
+    def test_fallback_excludes_first_and_last(self):
+        """Without lap_type, should fall back to excluding first/last laps."""
         laps = pd.DataFrame(
             {
                 "lap_time": pd.to_timedelta([50, 60, 60, 60, 50], unit="s"),
@@ -124,5 +162,18 @@ class TestGetTopLaps:
         )
 
         result = get_top_laps(laps, threshold_pct=1.5)
-        # Even though first and last are fastest, they should be excluded
+        # Excludes first and last, leaves middle 3
         assert len(result) == 3
+
+    def test_fallback_filters_by_threshold(self):
+        """Without lap_type, should filter middle laps by threshold."""
+        laps = pd.DataFrame(
+            {
+                "lap_time": pd.to_timedelta([60, 61, 62, 63, 70, 65], unit="s"),
+            }
+        )
+
+        # Middle laps [61, 62, 63, 70], best is 61s
+        # 103% of 61 = 62.83, so 61, 62 pass
+        result = get_top_laps(laps, threshold_pct=1.03)
+        assert len(result) == 2

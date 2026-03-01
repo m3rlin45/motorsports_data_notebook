@@ -136,9 +136,16 @@ def load_session(file_data: str | bytes) -> "LogFile":
     LogFile
         The enriched LogFile object with derived channels and lap_time column.
     """
+    log: LogFile
     if detect_file_type(file_data) == "ibt":
-        return _load_ibt_session(file_data)
-    return _load_aim_session(file_data)
+        from libibt import ibt
+
+        log = ibt(file_data)
+    else:
+        from libxrk import aim_xrk
+
+        log = aim_xrk(file_data)
+    return _post_process_session(log)
 
 
 def _add_lap_time(log: "LogFile") -> None:
@@ -216,93 +223,28 @@ def clean_laps(laps_table: pa.Table) -> pa.Table:
     return laps_table.take(keep_indices)
 
 
-def clean_ibt_laps(laps_table: pa.Table, channels: dict) -> pa.Table:
-    """Remove IBT-specific bad laps: pit markers and partial laps via LapDistPct.
+def _post_process_session(log: "LogFile") -> "LogFile":
+    """Add derived channels and clean laps for any telemetry format.
 
-    Parameters
-    ----------
-    laps_table : pa.Table
-        Laps table with 'num', 'start_time', 'end_time' columns.
-    channels : dict
-        Channel data dict (must contain 'LapDistPct' for partial lap detection).
-
-    Returns
-    -------
-    pa.Table
-        Filtered laps table.
+    Resolves the speed channel name via the profile system, then adds
+    speed_kmh, distance_m, and lap_time columns. Filters to full laps
+    if a ``lap_type`` column is present.
     """
-    if len(laps_table) == 0 or "LapDistPct" not in channels:
-        return laps_table
+    from .profiles import DEFAULT_CHANNEL_NAMES, get_logger_id, get_profile_for_logger
 
-    start_times = laps_table.column("start_time").to_numpy()
-    end_times = laps_table.column("end_time").to_numpy()
-    durations_ms = end_times - start_times
-    n = len(laps_table)
+    # Resolve speed channel name from profile (or default)
+    speed_channel = DEFAULT_CHANNEL_NAMES["gps_speed"]
+    logger_id = get_logger_id(log)
+    if logger_id is not None:
+        profile = get_profile_for_logger(logger_id)
+        if profile is not None:
+            speed_channel = profile.channel_names.get("gps_speed", speed_channel)
 
-    valid = durations_ms >= 10_000  # Remove pit markers (< 10s)
-
-    ldp_table = channels["LapDistPct"]
-    ldp_vals = ldp_table.column("LapDistPct").to_numpy(zero_copy_only=False)
-    ldp_tc = ldp_table.column("timecodes").to_numpy()
-
-    for i in range(n):
-        if not valid[i]:
-            continue
-        mask = (ldp_tc >= start_times[i]) & (ldp_tc < end_times[i])
-        lap_ldp = ldp_vals[mask]
-        if len(lap_ldp) < 2:
-            valid[i] = False
-            continue
-        start_pct = float(lap_ldp[0])
-        end_pct = float(lap_ldp[-1])
-        # Out-lap: didn't start near S/F line
-        if 0.02 < start_pct < 0.98:
-            valid[i] = False
-        # In-lap: didn't reach S/F line
-        if 0.02 < end_pct < 0.98:
-            valid[i] = False
-
-    keep_indices = [i for i in range(n) if valid[i]]
-    if not keep_indices:
-        return laps_table
-    return laps_table.take(keep_indices)
-
-
-def _load_aim_session(file_data: str | bytes) -> "LogFile":
-    """Load and prepare session data from an AIM XRK/XRZ file."""
-    from libxrk import aim_xrk
-
-    log = aim_xrk(file_data)
-
-    has_gps_speed = "GPS Speed" in log.channels
-    if has_gps_speed:
-        gps_speed_table = log.channels["GPS Speed"]
-        timecodes = gps_speed_table.column("timecodes")
-        gps_speed = gps_speed_table.column("GPS Speed")
-
-        speed_kmh = pc.multiply(gps_speed, 3.6)
-        log.channels["speed_kmh"] = pa.table({"timecodes": timecodes, "speed_kmh": speed_kmh})
-
-    _add_lap_time(log)
-
-    if has_gps_speed:
-        _add_distance_channel(log, "GPS Speed", timecodes, gps_speed)
-
-    log.laps = clean_laps(log.laps)
-    return log
-
-
-def _load_ibt_session(file_data: str | bytes) -> "LogFile":
-    """Load and prepare session data from an iRacing IBT file."""
-    from libibt import ibt
-
-    log = ibt(file_data)
-
-    has_speed = "Speed" in log.channels
+    has_speed = speed_channel in log.channels
     if has_speed:
-        speed_table = log.channels["Speed"]
+        speed_table = log.channels[speed_channel]
         timecodes = speed_table.column("timecodes")
-        speed_ms = speed_table.column("Speed")
+        speed_ms = speed_table.column(speed_channel)
 
         speed_kmh = pc.multiply(speed_ms, 3.6)
         log.channels["speed_kmh"] = pa.table({"timecodes": timecodes, "speed_kmh": speed_kmh})
@@ -310,9 +252,11 @@ def _load_ibt_session(file_data: str | bytes) -> "LogFile":
     _add_lap_time(log)
 
     if has_speed:
-        _add_distance_channel(log, "Speed", timecodes, speed_ms)
+        _add_distance_channel(log, speed_channel, timecodes, speed_ms)
 
-    # IBT-specific filtering before generic cleanup
-    log.laps = clean_ibt_laps(log.laps, log.channels)
+    # Filter to full laps if lap_type column exists (e.g. iRacing IBT)
+    if "lap_type" in log.laps.column_names:
+        log.laps = log.laps.filter(pc.equal(log.laps.column("lap_type"), "full"))
+
     log.laps = clean_laps(log.laps)
     return log
