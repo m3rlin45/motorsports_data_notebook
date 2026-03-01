@@ -1446,7 +1446,7 @@ requires-dist = [
     { name = "jupyterlab", marker = "extra == 'app'", specifier = ">=4.4.10,<5.0.0" },
     { name = "jupyterlite-core", marker = "extra == 'jupyterlite'", specifier = "==0.7.1" },
     { name = "jupyterlite-pyodide-kernel", marker = "extra == 'jupyterlite'", specifier = "==0.7.0" },
-    { name = "libibt", specifier = ">=0.0.1" },
+    { name = "libibt", specifier = ">=0.0.4" },
     { name = "libxrk", specifier = ">=0.11.0" },
     { name = "matplotlib", marker = "extra == 'app'", specifier = ">=3.10.7,<4.0.0" },
     { name = "nbconvert", marker = "extra == 'jupyterlite'", specifier = ">=7.0.0" },

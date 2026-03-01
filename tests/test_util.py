@@ -5,7 +5,6 @@ import pyarrow as pa
 import pytest
 
 from motorsports_data_notebook._util import (
-    clean_ibt_laps,
     clean_laps,
     detect_file_type,
     infer_channel_scale,
@@ -159,77 +158,3 @@ class TestCleanLaps:
         result = clean_laps(laps)
         # Only lap 0 exists, would be removed — fallback returns original
         assert len(result) == 1
-
-
-class TestCleanIbtLaps:
-    """Tests for clean_ibt_laps function."""
-
-    def _make_laps(self, nums, start_times, end_times):
-        """Helper to create a laps PyArrow table."""
-        return pa.table(
-            {
-                "num": pa.array(nums, type=pa.int64()),
-                "start_time": pa.array(start_times, type=pa.int64()),
-                "end_time": pa.array(end_times, type=pa.int64()),
-            }
-        )
-
-    def test_removes_pit_markers(self):
-        """iRacing pit markers (< 10s) should be removed."""
-        laps = self._make_laps(
-            nums=[1, 1, 2, 2, 3],
-            start_times=[0, 60000, 60016, 120000, 180000],
-            end_times=[60000, 60016, 120000, 180000, 240000],
-        )
-        ldp_table = pa.table(
-            {
-                "timecodes": pa.array(list(range(0, 250000, 1000)), type=pa.int64()),
-                "LapDistPct": pa.array(
-                    [(t % 60000) / 60000.0 for t in range(0, 250000, 1000)],
-                    type=pa.float64(),
-                ),
-            }
-        )
-        result = clean_ibt_laps(laps, {"LapDistPct": ldp_table})
-        result = clean_laps(result)
-        nums = result.column("num").to_pylist()
-        assert 0 not in nums
-        assert len(nums) == len(set(nums))
-
-    def test_removes_partial_laps(self):
-        """Partial laps (didn't start/end near S/F) should be removed."""
-        laps = self._make_laps(
-            nums=[1, 2, 3],
-            start_times=[0, 60000, 120000],
-            end_times=[60000, 120000, 180000],
-        )
-        tc = list(range(0, 180000, 100))
-        ldp = []
-        for t in tc:
-            if t < 60000:
-                ldp.append((t % 60000) / 60000.0)
-            elif t < 120000:
-                ldp.append(0.5 + ((t - 60000) / 60000.0) * 0.5)
-            else:
-                ldp.append(((t - 120000) % 60000) / 60000.0)
-        ldp_table = pa.table(
-            {
-                "timecodes": pa.array(tc, type=pa.int64()),
-                "LapDistPct": pa.array(ldp, type=pa.float64()),
-            }
-        )
-        result = clean_ibt_laps(laps, {"LapDistPct": ldp_table})
-        nums = result.column("num").to_pylist()
-        assert 2 not in nums
-        assert 1 in nums
-        assert 3 in nums
-
-    def test_no_lapdistpct_returns_unchanged(self):
-        """Without LapDistPct channel, returns table unchanged."""
-        laps = self._make_laps(
-            nums=[0, 1, 2, 3],
-            start_times=[0, 60000, 120000, 180000],
-            end_times=[60000, 120000, 180000, 240000],
-        )
-        result = clean_ibt_laps(laps, {})
-        assert len(result) == len(laps)

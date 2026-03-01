@@ -19,7 +19,8 @@ if TYPE_CHECKING:
 def get_best_lap(laps_df: pd.DataFrame) -> pd.Series:
     """Find the best (fastest) lap by duration.
 
-    Excludes the first and last laps to avoid pit entry/exit laps.
+    If a ``lap_type`` column is present (IBT files), filters to ``"full"`` laps.
+    Otherwise falls back to excluding the first and last laps (AIM files).
 
     Parameters
     ----------
@@ -34,11 +35,14 @@ def get_best_lap(laps_df: pd.DataFrame) -> pd.Series:
     if not {"start_time", "end_time"}.issubset(laps_df.columns):
         raise ValueError("Expected start_time and end_time columns in laps table")
 
-    if len(laps_df) <= 2:
-        raise ValueError("Need at least 3 laps to exclude first and last laps")
-
-    # Exclude first and last laps
-    laps_subset = laps_df.iloc[1:-1].copy()
+    if "lap_type" in laps_df.columns:
+        laps_subset = laps_df[laps_df["lap_type"] == "full"].copy()
+        if len(laps_subset) == 0:
+            raise ValueError("No full laps found")
+    else:
+        if len(laps_df) <= 2:
+            raise ValueError("Need at least 3 laps to exclude first and last laps")
+        laps_subset = laps_df.iloc[1:-1].copy()
 
     laps_subset["lap_duration_ms"] = laps_subset["end_time"] - laps_subset["start_time"]
     best_idx = laps_subset["lap_duration_ms"].idxmin()
@@ -107,8 +111,12 @@ def get_top_laps(laps: pd.DataFrame, threshold_pct: float = 1.03) -> pd.DataFram
     if "lap_time" not in laps.columns:
         raise ValueError("Expected lap_time column in laps table")
 
-    # Exclude first/last laps and zero-duration laps
-    valid_laps: pd.DataFrame = laps[laps["lap_time"] > pd.Timedelta(0)][1:-1].copy()
+    positive = laps[laps["lap_time"] > pd.Timedelta(0)]
+    if "lap_type" in laps.columns:
+        valid_laps: pd.DataFrame = positive[positive["lap_type"] == "full"].copy()
+    else:
+        # Fallback for AIM files: exclude first/last laps
+        valid_laps = positive.iloc[1:-1].copy()
 
     if len(valid_laps) == 0:
         return valid_laps
