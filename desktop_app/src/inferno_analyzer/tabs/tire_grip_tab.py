@@ -43,9 +43,9 @@ class TireGripTab(BaseAnalysisTab):
     def _create_tab_widgets(self) -> None:
         self.chart_view = ChartView(
             self.tab_frame,
-            on_maximize_toggle=self._on_chart_maximize,
             on_metric_changed=self._on_metric_changed,
             on_percentile_changed=self._on_percentile_changed,
+            on_stats_click=self.toggle_stats_window,
         )
 
     def _layout_tab_widgets(self) -> None:
@@ -142,7 +142,7 @@ class TireGripTab(BaseAnalysisTab):
         return StatsPanel(parent)
 
     # ------------------------------------------------------------------
-    # Metric mode toggle + chart maximize
+    # Metric mode toggle
     # ------------------------------------------------------------------
 
     def _on_percentile_changed(self) -> None:
@@ -153,6 +153,3 @@ class TireGripTab(BaseAnalysisTab):
         """Handle metric mode toggle from chart toolbar."""
         self.on_selection_changed()
 
-    def _on_chart_maximize(self, maximized: bool) -> None:
-        """Handle chart maximize/restore toggle."""
-        self.app.on_chart_maximize(maximized)

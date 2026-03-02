@@ -163,7 +163,7 @@ class BaseAnalysisTab(ABC):
                 self._stats_window.destroy()
                 self._stats_window = None
                 self.stats_panel = None
-                self._get_config_panel().set_stats_button_text("Show Statistics")
+                self.chart_view.set_stats_button_text("Statistics")
                 return
         except Exception:
             self._stats_window = None
@@ -182,7 +182,7 @@ class BaseAnalysisTab(ABC):
             self._display_stats()
 
         self._stats_window.protocol("WM_DELETE_WINDOW", self._on_stats_window_close)
-        self._get_config_panel().set_stats_button_text("Hide Statistics")
+        self.chart_view.set_stats_button_text("Hide Stats")
 
         self._stats_window.after(100, self._bring_stats_to_front)
 
@@ -201,7 +201,7 @@ class BaseAnalysisTab(ABC):
             self._stats_window.destroy()
             self._stats_window = None
             self.stats_panel = None
-            self._get_config_panel().set_stats_button_text("Show Statistics")
+            self.chart_view.set_stats_button_text("Statistics")
 
     def close_stats_window(self) -> None:
         """Close the stats window if open (used when switching tabs)."""

@@ -51,7 +51,6 @@ class ConfigPanel(BaseConfigPanel):
     def __init__(
         self,
         parent: ctk.CTkFrame,
-        on_stats_click: Callable[[], None] | None = None,
         on_config_changed: Callable[[], None] | None = None,
         on_save_profile: Callable[[], None] | None = None,
     ) -> None:
@@ -61,8 +60,6 @@ class ConfigPanel(BaseConfigPanel):
         ----------
         parent : ctk.CTkFrame
             Parent widget.
-        on_stats_click : callable, optional
-            Callback when statistics button is clicked.
         on_config_changed : callable, optional
             Callback when any configuration value changes.
         on_save_profile : callable, optional
@@ -73,7 +70,6 @@ class ConfigPanel(BaseConfigPanel):
             parent,
             channel_defaults=DEFAULT_CHANNEL_NAMES.copy(),
             channel_display_names=_CHANNEL_DISPLAY_NAMES,
-            on_stats_click=on_stats_click,
             on_config_changed=on_config_changed,
         )
         self._create_threshold_widgets()
@@ -141,7 +137,7 @@ class ConfigPanel(BaseConfigPanel):
 
     def _layout_widgets(self) -> None:
         """Arrange all widgets in the panel."""
-        self.title_label.pack(anchor="w", padx=5, pady=(2, 5))
+        self.title_label.pack(anchor="w", padx=5, pady=(2, 2))
 
         # Channels
         self._pack_channels()
