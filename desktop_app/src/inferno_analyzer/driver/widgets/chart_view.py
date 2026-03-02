@@ -22,8 +22,8 @@ class ChartView(ctk.CTkFrame):
     def __init__(
         self,
         parent: ctk.CTk | ctk.CTkFrame,
-        on_maximize_toggle: Callable[[bool], None] | None = None,
         on_map_toggle: Callable[[bool], None] | None = None,
+        on_stats_click: Callable[[], None] | None = None,
     ) -> None:
         """Initialize the chart view.
 
@@ -31,19 +31,18 @@ class ChartView(ctk.CTkFrame):
         ----------
         parent : ctk.CTk | ctk.CTkFrame
             Parent widget.
-        on_maximize_toggle : Callable[[bool], None], optional
-            Callback when maximize button is toggled.
         on_map_toggle : Callable[[bool], None], optional
             Callback when map button is toggled.
+        on_stats_click : Callable[[], None], optional
+            Callback when statistics button is clicked.
         """
         super().__init__(parent)
 
         self._figure: Figure | None = None
         self._canvas: FigureCanvasTkAgg | None = None
         self._toolbar: NavigationToolbar2Tk | None = None
-        self._on_maximize_toggle = on_maximize_toggle
         self._on_map_toggle = on_map_toggle
-        self._is_maximized = False
+        self._on_stats_click = on_stats_click
         self._is_map = False
         self._dpi = get_screen_dpi()
 
@@ -65,19 +64,20 @@ class ChartView(ctk.CTkFrame):
         self._canvas = FigureCanvasTkAgg(self._figure, master=self)
         self._canvas.draw()
 
-        # Toolbar frame with maximize button
+        # Toolbar frame
         toolbar_frame = ctk.CTkFrame(self)
         toolbar_frame.pack(side="top", fill="x")
 
-        self._maximize_btn = ctk.CTkButton(
+        # Statistics button
+        self._stats_btn = ctk.CTkButton(
             toolbar_frame,
-            text="Maximize",
-            width=100,
+            text="Statistics",
+            width=90,
             height=24,
             font=ctk.CTkFont(size=11),
-            command=self._toggle_maximize,
+            command=self._on_stats_btn_click,
         )
-        self._maximize_btn.pack(side="right", padx=5, pady=2)
+        self._stats_btn.pack(side="right", padx=5, pady=2)
 
         self._map_btn = ctk.CTkButton(
             toolbar_frame,
@@ -96,16 +96,14 @@ class ChartView(ctk.CTkFrame):
 
         self._show_placeholder()
 
-    def _toggle_maximize(self) -> None:
-        """Toggle maximize state."""
-        self._is_maximized = not self._is_maximized
-        if self._is_maximized:
-            self._maximize_btn.configure(text="Restore")
-        else:
-            self._maximize_btn.configure(text="Maximize")
+    def _on_stats_btn_click(self) -> None:
+        """Handle statistics button click."""
+        if self._on_stats_click:
+            self._on_stats_click()
 
-        if self._on_maximize_toggle:
-            self._on_maximize_toggle(self._is_maximized)
+    def set_stats_button_text(self, text: str) -> None:
+        """Update the statistics button text."""
+        self._stats_btn.configure(text=text)
 
     def _toggle_map(self) -> None:
         """Toggle track map view."""

@@ -64,8 +64,8 @@ class DriverTab(BaseAnalysisTab):
         # Chart view (right, main area)
         self.chart_view = ChartView(
             self.tab_frame,
-            on_maximize_toggle=self._on_chart_maximize,
             on_map_toggle=self._on_map_toggle,
+            on_stats_click=self.toggle_stats_window,
         )
 
     def _layout_tab_widgets(self) -> None:
@@ -312,10 +312,3 @@ class DriverTab(BaseAnalysisTab):
 
         self.chart_view.redraw()
 
-    def _on_chart_maximize(self, maximized: bool) -> None:
-        """Handle chart maximize/restore toggle."""
-        if maximized:
-            self.corner_selector.pack_forget()
-        else:
-            self.corner_selector.pack(side="left", fill="y", padx=(0, 5), before=self.chart_view)
-        self.app.on_chart_maximize(maximized)

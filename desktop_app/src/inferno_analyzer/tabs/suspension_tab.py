@@ -42,10 +42,7 @@ class SuspensionTab(BaseAnalysisTab):
     # ------------------------------------------------------------------
 
     def _create_tab_widgets(self) -> None:
-        self.chart_view = ChartView(
-            self.tab_frame,
-            on_maximize_toggle=self._on_chart_maximize,
-        )
+        self.chart_view = ChartView(self.tab_frame, on_stats_click=self.toggle_stats_window)
 
     def _layout_tab_widgets(self) -> None:
         self.chart_view.pack(fill="both", expand=True)
@@ -138,10 +135,3 @@ class SuspensionTab(BaseAnalysisTab):
     def _create_stats_panel(self, parent: ctk.CTkFrame) -> Any:
         return StatsPanel(parent)
 
-    # ------------------------------------------------------------------
-    # Chart maximize
-    # ------------------------------------------------------------------
-
-    def _on_chart_maximize(self, maximized: bool) -> None:
-        """Handle chart maximize/restore toggle."""
-        self.app.on_chart_maximize(maximized)
