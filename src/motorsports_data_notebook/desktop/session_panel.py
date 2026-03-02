@@ -73,7 +73,7 @@ class SessionPanel(ctk.CTkFrame):
         )
 
         # Drop zone frame (compact)
-        self.drop_frame = ctk.CTkFrame(self, height=50, fg_color=("gray85", "gray25"))
+        self.drop_frame = ctk.CTkFrame(self, height=40, fg_color=("gray85", "gray25"))
         self.drop_label = ctk.CTkLabel(
             self.drop_frame,
             text="Drop XRK/XRZ/IBT file here or click to browse",
@@ -91,15 +91,9 @@ class SessionPanel(ctk.CTkFrame):
 
         # Lap selector frame
         self.laps_frame = ctk.CTkFrame(self)
-        self.laps_label = ctk.CTkLabel(
-            self.laps_frame,
-            text="Select Laps:",
-            font=ctk.CTkFont(size=12, weight="bold"),
-            anchor="w",
-        )
 
         # Scrollable frame for lap checkboxes (compact height)
-        self.laps_scroll = ctk.CTkScrollableFrame(self.laps_frame, height=80)
+        self.laps_scroll = ctk.CTkScrollableFrame(self.laps_frame, height=65)
 
         # Selection buttons
         self.btn_frame = ctk.CTkFrame(self.laps_frame, fg_color="transparent")
@@ -139,14 +133,13 @@ class SessionPanel(ctk.CTkFrame):
 
         # Drop zone (compact padding)
         self.drop_frame.pack(fill="x", padx=5, pady=3)
-        self.drop_label.pack(expand=True, pady=5)
+        self.drop_label.pack(expand=True, pady=3)
 
         # File info
         self.file_label.pack(fill="x", padx=5, pady=2)
 
         # Lap selector frame
-        self.laps_frame.pack(fill="both", expand=True, padx=5, pady=5)
-        self.laps_label.pack(anchor="w", padx=5, pady=2)
+        self.laps_frame.pack(fill="both", expand=True, padx=5, pady=3)
 
         # Button frame
         self.btn_frame.pack(fill="x", padx=5, pady=2)
@@ -156,7 +149,7 @@ class SessionPanel(ctk.CTkFrame):
         self.select_none_btn.pack(side="left", padx=2)
 
         # Scrollable lap list
-        self.laps_scroll.pack(fill="both", expand=True, padx=5, pady=5)
+        self.laps_scroll.pack(fill="both", expand=True, padx=5, pady=(2, 3))
 
     def _setup_dnd(self) -> None:
         """Set up drag-and-drop handling."""
