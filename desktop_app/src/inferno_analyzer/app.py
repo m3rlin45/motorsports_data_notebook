@@ -60,6 +60,9 @@ class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
         # Track active tab
         self._active_tab_name = "Suspension"
 
+        # Collapse state for top panel
+        self._top_collapsed = False
+
         # Build UI
         self._create_widgets()
         self._layout_widgets()
@@ -93,24 +96,51 @@ class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
 
         self.suspension_config_panel = SuspensionConfigPanel(
             self._config_container,
-            on_stats_click=self._on_stats_click,
             on_config_changed=self._on_selection_changed,
             on_save_profile=self._on_save_profile,
         )
 
         self.driver_config_panel = DriverConfigPanel(
             self._config_container,
-            on_stats_click=self._on_stats_click,
             on_config_changed=self._on_selection_changed,
             on_save_profile=self._on_save_profile,
         )
 
         self.tire_grip_config_panel = TireGripConfigPanel(
             self._config_container,
-            on_stats_click=self._on_stats_click,
             on_config_changed=self._on_selection_changed,
             on_save_profile=self._on_save_profile,
         )
+
+        # Collapse button (top-right of top_frame)
+        self._collapse_btn = ctk.CTkButton(
+            self.top_frame,
+            text="\u25b2",
+            width=28,
+            height=28,
+            font=ctk.CTkFont(size=12),
+            command=self._toggle_top_panel,
+        )
+
+        # Collapsed summary bar (hidden by default)
+        self._collapsed_frame = ctk.CTkFrame(self, height=30)
+        self._collapsed_label = ctk.CTkLabel(
+            self._collapsed_frame,
+            text="A: No file  |  B: No file",
+            font=ctk.CTkFont(size=11),
+            anchor="w",
+        )
+        self._expand_btn = ctk.CTkButton(
+            self._collapsed_frame,
+            text="\u25bc Expand",
+            width=80,
+            height=24,
+            font=ctk.CTkFont(size=10),
+            command=self._toggle_top_panel,
+        )
+        # Layout collapsed frame internals (frame itself not packed until collapse)
+        self._collapsed_label.pack(side="left", fill="x", expand=True, padx=10)
+        self._expand_btn.pack(side="right", padx=10)
 
         # Tab view for analysis area
         self.tabview = ctk.CTkTabview(
@@ -129,12 +159,13 @@ class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
     def _layout_widgets(self) -> None:
         """Arrange widgets in the window."""
         # Top frame
-        self.top_frame.pack(fill="x", padx=10, pady=5)
+        self.top_frame.pack(fill="x", padx=10, pady=3)
 
         # Session panels + config container side by side
         self.session_a_panel.grid(row=0, column=0, padx=3, pady=3, sticky="nsew")
         self.session_b_panel.grid(row=0, column=1, padx=3, pady=3, sticky="nsew")
         self._config_container.grid(row=0, column=2, padx=3, pady=3, sticky="nsew")
+        self._collapse_btn.grid(row=0, column=3, padx=(0, 3), pady=3, sticky="ne")
 
         self.top_frame.grid_columnconfigure(0, weight=1)
         self.top_frame.grid_columnconfigure(1, weight=1)
@@ -292,12 +323,6 @@ class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
         if active_tab is not None:
             active_tab.on_selection_changed()
 
-    def _on_stats_click(self) -> None:
-        """Handle stats button click — route to active tab."""
-        active_tab = self._get_active_tab()
-        if active_tab is not None:
-            active_tab.toggle_stats_window()
-
     def _on_save_profile(self) -> None:
         """Save a merged vehicle profile from both config panels.
 
@@ -343,17 +368,46 @@ class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
             active_tab._update_status(f"Profile saved for logger {logger_id}")
 
     # ------------------------------------------------------------------
-    # Chart maximize (shared by both tabs)
+    # Collapsible top panel
     # ------------------------------------------------------------------
 
-    def on_chart_maximize(self, maximized: bool) -> None:
-        """Handle chart maximize/restore toggle (called by tabs)."""
-        if maximized:
-            self.top_frame.pack_forget()
-            self.tabview._segmented_button.pack_forget()  # Hide tab bar
-        else:
-            # Restore normal layout
+    def _toggle_top_panel(self) -> None:
+        """Toggle the top panel between expanded and collapsed states."""
+        if self._top_collapsed:
+            # Expand: swap collapsed bar -> full top frame
+            self._collapsed_frame.pack_forget()
             self.tabview.pack_forget()
-            self.top_frame.pack(fill="x", padx=10, pady=5)
+            self.top_frame.pack(fill="x", padx=10, pady=3)
             self.tabview.pack(fill="both", expand=True, padx=10, pady=5)
-            self.tabview._segmented_button.pack(fill="x", padx=10, pady=0)
+            self._top_collapsed = False
+        else:
+            # Collapse: swap full top frame -> collapsed bar
+            self._update_collapsed_summary()
+            self.top_frame.pack_forget()
+            self.tabview.pack_forget()
+            self._collapsed_frame.pack(fill="x", padx=10, pady=2)
+            self.tabview.pack(fill="both", expand=True, padx=10, pady=5)
+            self._top_collapsed = True
+
+    def _update_collapsed_summary(self) -> None:
+        """Update the collapsed bar text with current session info."""
+        # Session A
+        if self.session_a_panel.log is not None:
+            a_name = self.session_a_panel._file_path.name if self.session_a_panel._file_path else "?"
+            a_selected = len(self.session_a_panel.get_selected_laps())
+            a_total = len(self.session_a_panel._lap_vars)
+            a_text = f"A: {a_name} ({a_selected}/{a_total} laps)"
+        else:
+            a_text = "A: No file"
+
+        # Session B
+        if self.session_b_panel.log is not None:
+            b_name = self.session_b_panel._file_path.name if self.session_b_panel._file_path else "?"
+            b_selected = len(self.session_b_panel.get_selected_laps())
+            b_total = len(self.session_b_panel._lap_vars)
+            b_text = f"B: {b_name} ({b_selected}/{b_total} laps)"
+        else:
+            b_text = "B: No file"
+
+        self._collapsed_label.configure(text=f"{a_text}  |  {b_text}")
+

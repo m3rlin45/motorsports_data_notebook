@@ -27,13 +27,11 @@ class BaseConfigPanel(ctk.CTkFrame):
         parent: ctk.CTkFrame,
         channel_defaults: dict[str, str],
         channel_display_names: dict[str, str],
-        on_stats_click: Callable[[], None] | None = None,
         on_config_changed: Callable[[], None] | None = None,
     ) -> None:
         super().__init__(parent)
         self._default_channels = channel_defaults
         self._channel_display_names = channel_display_names
-        self._on_stats_click = on_stats_click
         self._on_config_changed = on_config_changed
 
         # Session state
@@ -53,7 +51,7 @@ class BaseConfigPanel(ctk.CTkFrame):
 
     def _create_base_widgets(self, channel_display_names: dict[str, str]) -> None:
         """Create title, channel entries, and status widgets."""
-        # Title
+        # Title (merged with channel names header)
         self.title_label = ctk.CTkLabel(
             self,
             text="CONFIGURATION",
@@ -64,8 +62,8 @@ class BaseConfigPanel(ctk.CTkFrame):
         self.channels_frame = ctk.CTkFrame(self)
         self.channels_label = ctk.CTkLabel(
             self.channels_frame,
-            text="Channel Names:",
-            font=ctk.CTkFont(size=12, weight="bold"),
+            text="Channels:",
+            font=ctk.CTkFont(size=11, weight="bold"),
         )
 
         # Session A channel name entries
@@ -118,21 +116,13 @@ class BaseConfigPanel(ctk.CTkFrame):
             checkbox_height=16,
         )
 
-        # Status and actions frame
+        # Status frame
         self.status_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.status_label = ctk.CTkLabel(
             self.status_frame,
             text="",
             font=ctk.CTkFont(size=11),
             anchor="w",
-        )
-        self.stats_btn = ctk.CTkButton(
-            self.status_frame,
-            text="Show Statistics",
-            width=110,
-            height=26,
-            font=ctk.CTkFont(size=11),
-            command=self._on_stats_btn_click,
         )
 
     # ------------------------------------------------------------------
@@ -179,11 +169,7 @@ class BaseConfigPanel(ctk.CTkFrame):
             widget.grid_forget()
 
         row = 0
-        # Row 0: section header
-        self.channels_label.grid(row=row, column=0, columnspan=4, sticky="w", padx=2, pady=1)
-        row += 1
-
-        # Row 1: session selector + sync (only when B entries exist)
+        # Row 0: session selector + sync (only when B entries exist)
         if self._channel_entries_b is not None:
             self._session_selector.grid(row=row, column=0, columnspan=3, padx=2, pady=2, sticky="w")
             if self._active_session == "B":
@@ -429,20 +415,10 @@ class BaseConfigPanel(ctk.CTkFrame):
     # ------------------------------------------------------------------
 
     def _pack_status(self) -> None:
-        """Pack the status frame with label and stats button."""
+        """Pack the status frame with label."""
         self.status_frame.pack(fill="x", padx=5, pady=(5, 2))
         self.status_label.pack(side="left", fill="x", expand=True, padx=2)
-        self.stats_btn.pack(side="right", padx=2)
-
-    def _on_stats_btn_click(self) -> None:
-        """Handle statistics button click."""
-        if self._on_stats_click:
-            self._on_stats_click()
 
     def set_status(self, message: str) -> None:
         """Update the status label text."""
         self.status_label.configure(text=message)
-
-    def set_stats_button_text(self, text: str) -> None:
-        """Update the statistics button text."""
-        self.stats_btn.configure(text=text)
