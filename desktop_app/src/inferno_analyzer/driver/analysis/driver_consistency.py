@@ -12,14 +12,16 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
-from motorsports_data_notebook.channels import get_best_lap_channels, get_top_laps
 from motorsports_data_notebook.corners import Corner, identify_corners
-from motorsports_data_notebook.driver_analysis import find_throttle_acceptance
+from motorsports_data_notebook.driver_analysis import (
+    find_throttle_acceptance_from_arrays,
+    prepare_throttle_acceptance,
+)
 from motorsports_data_notebook.zones import (
     TrackSegment,
-    compute_segment_stats,
+    compute_segment_stats_from_arrays,
     create_track_segments,
-    detect_zones_averaged,
+    detect_zones_from_arrays,
 )
 
 if TYPE_CHECKING:
@@ -180,9 +182,6 @@ def analyze_driver_consistency(
 
     # Step 1: Get best lap GPS for corner detection
     gps_channels = [channel_names["gps_lat"], channel_names["gps_lon"], "distance_m"]
-    # Use get_top_laps to get laps for zone averaging
-    top_laps = selected_laps_df
-
     # Use fastest selected lap for GPS reference (avoids out-laps / incomplete laps)
     selected_laps_df["_duration"] = selected_laps_df["end_time"] - selected_laps_df["start_time"]
     best_lap = selected_laps_df.loc[selected_laps_df["_duration"].idxmin()]
@@ -213,42 +212,75 @@ def analyze_driver_consistency(
     # Get track length from best lap distance
     track_length = float(ref_dist[-1])
 
-    # Step 3: Detect zones
-    zone_channel_names = {
-        "throttle": channel_names["throttle"],
-        "brake": channel_names["brake"],
-        "gps_speed": channel_names["gps_speed"],
-    }
-    braking_zones, accel_zones = detect_zones_averaged(log, top_laps, zone_channel_names)
+    # Step 3-5: Single-pass per-lap extraction + zone detection + segment stats + TA
+    throttle_ch = channel_names["throttle"]
+    brake_ch = channel_names["brake"]
+    lateral_g_ch = channel_names["lateral_g"]
+    gps_speed_ch = channel_names["gps_speed"]
 
-    # Step 4: Create segments
+    # Build deduplicated channel list for extraction
+    all_channels = ["distance_m", throttle_ch, brake_ch, lateral_g_ch, "speed_kmh", gps_speed_ch]
+    all_channels = list(dict.fromkeys(all_channels))
+
+    # Per-lap caches
+    lap_distances: list[np.ndarray] = []
+    lap_speeds: list[np.ndarray] = []
+    lap_brakes: list[np.ndarray] = []
+    lap_throttles: list[np.ndarray] = []
+    lap_gps_speeds: list[np.ndarray] = []
+    lap_lateral_gs: list[np.ndarray] = []
+    lap_timecodes_list: list[np.ndarray] = []
+    lap_num_list: list[int] = []
+    lap_time_list: list[float] = []
+
+    for _, lap_row in selected_laps_df.iterrows():
+        lap_num = int(lap_row["num"])
+        try:
+            aligned = (
+                log.filter_by_lap(lap_num)
+                .select_channels(all_channels)
+                .resample_to_channel("distance_m")
+                .channels
+            )
+        except Exception:
+            continue
+
+        ref_table = aligned["distance_m"]
+        distance = ref_table.column("distance_m").to_numpy()
+        if len(distance) == 0:
+            continue
+
+        lap_distances.append(distance)
+        lap_timecodes_list.append(ref_table.column("timecodes").to_numpy())
+        lap_brakes.append(aligned[brake_ch].column(brake_ch).to_numpy())
+        lap_throttles.append(aligned[throttle_ch].column(throttle_ch).to_numpy())
+        lap_speeds.append(aligned["speed_kmh"].column("speed_kmh").to_numpy())
+        lap_gps_speeds.append(aligned[gps_speed_ch].column(gps_speed_ch).to_numpy())
+        lap_lateral_gs.append(aligned[lateral_g_ch].column(lateral_g_ch).to_numpy())
+        lap_num_list.append(lap_num)
+        lap_time_list.append(lap_row["lap_time"])
+
+    # Zone detection (no filter_by_lap)
+    braking_zones, accel_zones = detect_zones_from_arrays(
+        lap_distances, lap_brakes, lap_throttles, lap_gps_speeds,
+    )
+
+    # Create segments (unchanged)
     segments = create_track_segments(corners, braking_zones, accel_zones, track_length)
 
-    # Step 5: Compute segment stats
-    seg_channel_names = {
-        "throttle": channel_names["throttle"],
-        "brake": channel_names["brake"],
-    }
-    stats_df = compute_segment_stats(log, selected_laps_df, segments, seg_channel_names)
+    # Segment stats (no filter_by_lap)
+    stats_df = compute_segment_stats_from_arrays(
+        lap_distances, lap_speeds, lap_brakes, lap_throttles,
+        lap_num_list, lap_time_list, segments,
+    )
 
-    # Step 6 & 7: Per-corner analysis
-    corner_data_list = []
-    # Channels needed for trace extraction (including timecodes for TA calculation)
-    extract_channels = [
-        "distance_m",
-        channel_names["throttle"],
-        channel_names["brake"],
-        channel_names["lateral_g"],
-    ]
-    ta_channel_names = {
-        "throttle": channel_names["throttle"],
-        "lateral_g": channel_names["lateral_g"],
-    }
+    # Pre-compute per-corner metadata
+    corner_data_list: list[CornerConsistencyData] = []
+    trace_bounds: list[tuple[float, float]] = []
 
     for corner in corners:
         cd = CornerConsistencyData(corner=corner)
 
-        # Extract braking point stats from stats_df for this corner
         corner_braking = stats_df[
             (stats_df["corner_id"] == corner.id) & (stats_df["segment_type"] == "braking")
         ]
@@ -258,7 +290,6 @@ def analyze_driver_consistency(
                 cd.bp_values = bp_vals
                 cd.bp_std = float(np.std(bp_vals))
 
-        # Extract min speed stats
         corner_seg = stats_df[
             (stats_df["corner_id"] == corner.id) & (stats_df["segment_type"] == "corner")
         ]
@@ -269,7 +300,6 @@ def analyze_driver_consistency(
                 cd.speed_mean = float(np.mean(speed_vals))
                 cd.speed_std = float(np.std(speed_vals))
 
-        # Extract exit speed stats
         if len(corner_seg) > 0 and "exit_speed" in corner_seg.columns:
             exit_vals = corner_seg["exit_speed"].dropna().tolist()
             if exit_vals:
@@ -277,7 +307,6 @@ def analyze_driver_consistency(
                 cd.exit_speed_mean = float(np.mean(exit_vals))
                 cd.exit_speed_std = float(np.std(exit_vals))
 
-        # Compute accel zone length and opportunity score
         accel_seg = next(
             (s for s in segments if s.corner_id == corner.id and s.segment_type == "acceleration"),
             None,
@@ -287,12 +316,10 @@ def analyze_driver_consistency(
             if cd.exit_speed_std > 0:
                 cd.opportunity_score = cd.exit_speed_std * cd.accel_zone_length
 
-        # Find braking zone start for this corner to extend trace view
         braking_seg = next(
             (s for s in segments if s.corner_id == corner.id and s.segment_type == "braking"),
             None,
         )
-        # Trace starts at braking zone start (+ 50m extra), or 150m before corner
         trace_margin_before = 50.0
         if braking_seg is not None:
             trace_start = braking_seg.start_dist - trace_margin_before
@@ -300,67 +327,51 @@ def analyze_driver_consistency(
         else:
             trace_start = corner.start_dist - 150.0
         trace_end = corner.end_dist + 50.0
+        trace_bounds.append((trace_start, trace_end))
 
-        # Per-lap throttle acceptance and trace extraction
-        for lap_num in selected_laps:
-            try:
-                lap_log = log.filter_by_lap(lap_num)
-                # Extract channels aligned to distance_m, preserving timecodes
-                aligned = (
-                    lap_log.select_channels(extract_channels)
-                    .resample_to_channel("distance_m")
-                    .channels
-                )
-                # Build DataFrame with timecodes (from any channel table)
-                ref_table = aligned["distance_m"]
-                corner_df = pd.DataFrame(
-                    {
-                        "timecodes": ref_table.column("timecodes").to_numpy(),
-                        **{
-                            name: aligned[name].column(name).to_numpy() for name in extract_channels
-                        },
-                    }
-                )
+        corner_data_list.append(cd)
 
-                # Filter to extended region (braking zone through corner exit)
-                trace_mask = (corner_df["distance_m"] >= trace_start) & (
-                    corner_df["distance_m"] <= trace_end
-                )
-                trace_df = corner_df[trace_mask].copy()
+    # Per-lap TA + trace extraction (using cached arrays, no filter_by_lap)
+    for i, (lap_distance, lap_timecodes, lap_throttle, lap_brake, lap_lateral_g) in enumerate(
+        zip(lap_distances, lap_timecodes_list, lap_throttles, lap_brakes, lap_lateral_gs)
+    ):
+        lap_num = lap_num_list[i]
 
-                if len(trace_df) == 0:
-                    continue
+        # Prepare TA shared data once per lap
+        smoothed, eff_thresh = prepare_throttle_acceptance(
+            lap_throttle, lap_lateral_g, throttle_threshold=throttle_threshold,
+        )
 
-                # Throttle acceptance (uses corner boundaries internally)
-                ta_result = find_throttle_acceptance(
-                    trace_df,
-                    corner,
-                    ta_channel_names,
-                    throttle_threshold=throttle_threshold,
-                    sustain_time_ms=sustain_time_ms,
-                )
-                if ta_result is not None:
-                    cd.ta_values.append(ta_result["throttle_acceptance_pct"])
-
-                # Extract trace data
-                trace = LapTraceData(
-                    lap_num=lap_num,
-                    distance=trace_df["distance_m"].to_numpy(),
-                    throttle=trace_df[channel_names["throttle"]].to_numpy(),
-                    brake=trace_df[channel_names["brake"]].to_numpy(),
-                    lateral_g=trace_df[channel_names["lateral_g"]].to_numpy(),
-                )
-                cd.lap_traces.append(trace)
-
-            except Exception:
+        for ci, corner in enumerate(corners):
+            trace_start, trace_end = trace_bounds[ci]
+            si = np.searchsorted(lap_distance, trace_start)
+            ei = np.searchsorted(lap_distance, trace_end, side="right")
+            if si >= ei:
                 continue
 
-        # Compute TA aggregates
+            corner_data_list[ci].lap_traces.append(
+                LapTraceData(
+                    lap_num=lap_num,
+                    distance=lap_distance[si:ei].copy(),
+                    throttle=lap_throttle[si:ei].copy(),
+                    brake=lap_brake[si:ei].copy(),
+                    lateral_g=lap_lateral_g[si:ei].copy(),
+                )
+            )
+
+            result = find_throttle_acceptance_from_arrays(
+                lap_distance, lap_timecodes, lap_throttle, lap_lateral_g, corner,
+                smoothed_lateral_g=smoothed, effective_threshold=eff_thresh,
+                sustain_time_ms=sustain_time_ms,
+            )
+            if result is not None:
+                corner_data_list[ci].ta_values.append(result["throttle_acceptance_pct"])
+
+    # Post-loop: compute TA aggregates
+    for cd in corner_data_list:
         if cd.ta_values:
             cd.ta_mean = float(np.mean(cd.ta_values))
             cd.ta_std = float(np.std(cd.ta_values))
-
-        corner_data_list.append(cd)
 
     return DriverConsistencyResult(
         corners=corners,

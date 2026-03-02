@@ -8,7 +8,11 @@ import pandas as pd
 import pytest
 
 from motorsports_data_notebook.corners import Corner
-from motorsports_data_notebook.driver_analysis import find_throttle_acceptance
+from motorsports_data_notebook.driver_analysis import (
+    find_throttle_acceptance,
+    find_throttle_acceptance_from_arrays,
+    prepare_throttle_acceptance,
+)
 
 # Test channel names mapping (matches the test data column names)
 TEST_CHANNEL_NAMES = {
@@ -332,3 +336,228 @@ class TestFindThrottleAcceptance:
         assert abs(result_smoothed["peak_lateral_g"] - 1.5) < abs(
             result_no_smooth["peak_lateral_g"] - 1.5
         )
+
+
+class TestPrepareThrottleAcceptance:
+    """Tests for prepare_throttle_acceptance function."""
+
+    def test_returns_smoothed_and_threshold(self):
+        """Test that it returns smoothed lateral G and effective threshold."""
+        throttle = np.ones(100) * 100.0
+        lateral_g = np.ones(100) * 1.5
+
+        smoothed, eff_thresh = prepare_throttle_acceptance(
+            throttle, lateral_g, throttle_threshold=98.0, smoothing_window=5
+        )
+
+        assert len(smoothed) == len(lateral_g)
+        assert eff_thresh == pytest.approx(98.0)
+
+    def test_adapts_threshold_for_capped_sensor(self):
+        """Test threshold adaptation when sensor max is below 100%."""
+        throttle = np.ones(100) * 97.0
+        throttle[0] = 98.7  # Sensor max
+        lateral_g = np.ones(100) * 1.0
+
+        _, eff_thresh = prepare_throttle_acceptance(throttle, lateral_g, throttle_threshold=98.0)
+
+        # effective = 98.7 * (98.0 / 100.0) = 96.726
+        assert eff_thresh == pytest.approx(98.7 * 0.98, rel=1e-3)
+
+    def test_auto_detects_scale(self):
+        """Test auto-detection of 0-1 vs 0-100 scale."""
+        throttle_01 = np.ones(100) * 1.0
+        throttle_100 = np.ones(100) * 100.0
+        lateral_g = np.ones(100) * 1.0
+
+        _, thresh_01 = prepare_throttle_acceptance(throttle_01, lateral_g)
+        _, thresh_100 = prepare_throttle_acceptance(throttle_100, lateral_g)
+
+        # 0-1 scale: threshold = 0.98 * 1.0 = 0.98
+        assert thresh_01 == pytest.approx(0.98, rel=1e-2)
+        # 0-100 scale: threshold = 0.98 * 100 = 98.0
+        assert thresh_100 == pytest.approx(98.0, rel=1e-2)
+
+    def test_smoothing_window_affects_output(self):
+        """Test that larger smoothing window produces smoother output."""
+        np.random.seed(42)
+        lateral_g = np.ones(200) * 1.5 + np.random.normal(0, 0.3, 200)
+        throttle = np.ones(200) * 100.0
+
+        smoothed_small, _ = prepare_throttle_acceptance(throttle, lateral_g, smoothing_window=3)
+        smoothed_large, _ = prepare_throttle_acceptance(throttle, lateral_g, smoothing_window=25)
+
+        # Larger window should produce smaller variance
+        assert np.std(smoothed_large) < np.std(smoothed_small)
+
+
+class TestFindThrottleAcceptanceFromArrays:
+    """Tests for find_throttle_acceptance_from_arrays function."""
+
+    def create_corner(
+        self,
+        start_dist=100.0,
+        end_dist=200.0,
+        apex_dist=150.0,
+    ) -> Corner:
+        """Helper to create a test corner."""
+        return Corner(
+            id=1,
+            name="Turn 1",
+            direction="L",
+            start_idx=100,
+            end_idx=200,
+            start_dist=start_dist,
+            end_dist=end_dist,
+            apex_idx=150,
+            apex_dist=apex_dist,
+            max_curvature=0.01,
+        )
+
+    def _make_arrays(self, n_points=200, throttle_start_dist=250.0, peak_lat_g=1.5):
+        """Helper to create test arrays matching DataFrame-based tests."""
+        distance = np.linspace(50, 350, n_points)
+        timecodes = np.linspace(0, 10000, n_points)
+        throttle = np.zeros(n_points)
+        lateral_g = np.zeros(n_points)
+
+        for i in range(n_points):
+            d = distance[i]
+            if 100 <= d <= 300:
+                if d <= 200:
+                    lateral_g[i] = peak_lat_g
+                else:
+                    progress = (d - 200) / 100
+                    lateral_g[i] = peak_lat_g * (1 - progress * 0.7)
+
+        throttle_start_idx = np.searchsorted(distance, throttle_start_dist)
+        throttle[throttle_start_idx:] = 100.0
+
+        return distance, timecodes, throttle, lateral_g
+
+    def test_basic_detection(self):
+        """Test basic throttle acceptance detection from arrays."""
+        corner = self.create_corner(start_dist=100.0, end_dist=300.0, apex_dist=200.0)
+        distance, timecodes, throttle, lateral_g = self._make_arrays()
+
+        result = find_throttle_acceptance_from_arrays(
+            distance,
+            timecodes,
+            throttle,
+            lateral_g,
+            corner,
+            throttle_threshold=98.0,
+            sustain_time_ms=500,
+            smoothing_window=5,
+        )
+
+        assert result is not None
+        assert result["throttle_acceptance_pct"] > 0
+        assert "lateral_g_at_throttle" in result
+        assert "peak_lateral_g" in result
+        assert "full_throttle_dist" in result
+
+    def test_matches_dataframe_version(self):
+        """Test that array version gives same result as DataFrame version."""
+        corner = self.create_corner(start_dist=100.0, end_dist=300.0, apex_dist=200.0)
+        distance, timecodes, throttle, lateral_g = self._make_arrays()
+
+        # DataFrame version
+        lap_data = pd.DataFrame(
+            {
+                "distance_m": distance,
+                "timecodes": timecodes,
+                "PPS": throttle,
+                "LateralAcc": lateral_g,
+            }
+        )
+        result_df = find_throttle_acceptance(
+            lap_data,
+            corner,
+            TEST_CHANNEL_NAMES,
+            throttle_threshold=98.0,
+            sustain_time_ms=500,
+            smoothing_window=5,
+        )
+
+        # Array version
+        result_arr = find_throttle_acceptance_from_arrays(
+            distance,
+            timecodes,
+            throttle,
+            lateral_g,
+            corner,
+            throttle_threshold=98.0,
+            sustain_time_ms=500,
+            smoothing_window=5,
+        )
+
+        assert result_df is not None
+        assert result_arr is not None
+        assert result_arr["throttle_acceptance_pct"] == pytest.approx(
+            result_df["throttle_acceptance_pct"], rel=0.05
+        )
+
+    def test_with_precomputed_data(self):
+        """Test using prepare_throttle_acceptance + find_throttle_acceptance_from_arrays."""
+        corner = self.create_corner(start_dist=100.0, end_dist=300.0, apex_dist=200.0)
+        distance, timecodes, throttle, lateral_g = self._make_arrays()
+
+        smoothed, eff_thresh = prepare_throttle_acceptance(
+            throttle,
+            lateral_g,
+            throttle_threshold=98.0,
+            smoothing_window=5,
+        )
+
+        result = find_throttle_acceptance_from_arrays(
+            distance,
+            timecodes,
+            throttle,
+            lateral_g,
+            corner,
+            smoothed_lateral_g=smoothed,
+            effective_threshold=eff_thresh,
+            sustain_time_ms=500,
+        )
+
+        assert result is not None
+        assert result["throttle_acceptance_pct"] > 0
+
+    def test_returns_none_no_corner_data(self):
+        """Test None when no data in corner bounds."""
+        corner = self.create_corner(start_dist=100.0, end_dist=200.0, apex_dist=150.0)
+
+        distance = np.linspace(300, 400, 50)
+        timecodes = np.linspace(0, 2500, 50)
+        throttle = np.ones(50) * 100.0
+        lateral_g = np.ones(50) * 1.0
+
+        result = find_throttle_acceptance_from_arrays(
+            distance,
+            timecodes,
+            throttle,
+            lateral_g,
+            corner,
+        )
+
+        assert result is None
+
+    def test_returns_none_negligible_lateral_g(self):
+        """Test None for negligible lateral G."""
+        corner = self.create_corner(start_dist=100.0, end_dist=200.0, apex_dist=150.0)
+
+        distance = np.linspace(50, 250, 100)
+        timecodes = np.linspace(0, 5000, 100)
+        throttle = np.ones(100) * 100.0
+        lateral_g = np.ones(100) * 0.05
+
+        result = find_throttle_acceptance_from_arrays(
+            distance,
+            timecodes,
+            throttle,
+            lateral_g,
+            corner,
+        )
+
+        assert result is None
