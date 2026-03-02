@@ -254,6 +254,50 @@ class TestFindThrottleAcceptance:
         assert result is not None
         assert result["throttle_acceptance_pct"] > 0
 
+    def test_adapts_threshold_for_capped_sensor(self):
+        """Test that threshold adapts when sensor max is below 100%."""
+        corner = self.create_corner(start_dist=100.0, end_dist=300.0, apex_dist=200.0)
+
+        n_points = 200
+        lap_data = pd.DataFrame(
+            {
+                "distance_m": np.linspace(50, 350, n_points),
+                "timecodes": np.linspace(0, 10000, n_points),
+                "PPS": np.zeros(n_points),
+                "LateralAcc": np.zeros(n_points),
+            }
+        )
+
+        # Lateral G profile
+        for i, row in lap_data.iterrows():
+            d = row["distance_m"]
+            if 100 <= d <= 300:
+                if d <= 200:
+                    lap_data.loc[i, "LateralAcc"] = 1.5
+                else:
+                    progress = (d - 200) / 100
+                    lap_data.loc[i, "LateralAcc"] = 1.5 * (1 - progress * 0.7)
+
+        # Sensor caps at 98.7% — full throttle plateau at 97%
+        throttle_start_idx = lap_data[lap_data["distance_m"] >= 250].index[0]
+        lap_data.loc[throttle_start_idx:, "PPS"] = 97.0
+        # A few samples at the sensor max
+        lap_data.loc[throttle_start_idx, "PPS"] = 98.7
+
+        # With fixed 98% threshold, this would fail (97 < 98)
+        # With adaptive threshold, effective = 98.7 * 0.98 = 96.7, so 97 passes
+        result = find_throttle_acceptance(
+            lap_data,
+            corner,
+            TEST_CHANNEL_NAMES,
+            throttle_threshold=98.0,
+            sustain_time_ms=500,
+            smoothing_window=5,
+        )
+
+        assert result is not None
+        assert result["throttle_acceptance_pct"] > 0
+
     def test_smoothing_reduces_noise(self):
         """Test that smoothing window affects the result."""
         corner = self.create_corner(start_dist=100.0, end_dist=300.0, apex_dist=200.0)
