@@ -752,6 +752,17 @@ def _find_min_speed(lap_data: pd.DataFrame, segment: TrackSegment, speed_col: st
     return float(seg_data[speed_col].min())
 
 
+def _find_exit_speed(lap_data: pd.DataFrame, segment: TrackSegment, speed_col: str) -> float | None:
+    """Find speed at the exit (end) of a segment."""
+    mask = (lap_data["distance_m"] >= segment.start_dist) & (
+        lap_data["distance_m"] <= segment.end_dist
+    )
+    seg_data = lap_data[mask]
+    if len(seg_data) == 0:
+        return None
+    return float(seg_data.sort_values("distance_m")[speed_col].iloc[-1])
+
+
 def compute_segment_stats(
     log: "LogFile",
     laps: pd.DataFrame,
@@ -764,7 +775,7 @@ def compute_segment_stats(
 
     Computes:
     - For braking segments: braking point distance and offset from segment start
-    - For corner segments: minimum speed through the corner
+    - For corner segments: minimum speed and exit speed through the corner
     - For acceleration segments: throttle application point and offset
 
     Parameters
@@ -793,7 +804,7 @@ def compute_segment_stats(
         - segment_id, segment_name, segment_type, corner_id
         - lap_num, lap_time
         - braking_point, brake_offset (for braking segments)
-        - min_speed (for corner segments)
+        - min_speed, exit_speed (for corner segments)
         - throttle_point, throttle_offset (for acceleration segments)
 
     Raises
@@ -871,6 +882,7 @@ def compute_segment_stats(
 
             elif seg.segment_type == "corner":
                 stat["min_speed"] = _find_min_speed(lap_data, seg, "speed_kmh")
+                stat["exit_speed"] = _find_exit_speed(lap_data, seg, "speed_kmh")
 
             elif seg.segment_type == "acceleration":
                 throttle_point = _find_throttle_point(

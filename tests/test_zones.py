@@ -742,6 +742,44 @@ class TestComputeSegmentStats:
         assert len(accel_stats) > 0
         assert "throttle_point" in accel_stats.columns
 
+    def test_compute_segment_stats_exit_speed(
+        self, mock_log_for_stats, sample_laps_for_stats, sample_segments_for_stats
+    ):
+        """Test that corner exit speed is computed."""
+        stats_df = compute_segment_stats(
+            mock_log_for_stats,
+            sample_laps_for_stats,
+            sample_segments_for_stats,
+            TEST_CHANNEL_NAMES,
+        )
+
+        corner_stats = stats_df[stats_df["segment_type"] == "corner"]
+        assert len(corner_stats) > 0
+        assert "exit_speed" in corner_stats.columns
+
+        # Exit speed should be around 80 km/h (synthetic corner speed in fixture)
+        valid_corners = corner_stats.dropna(subset=["exit_speed"])
+        assert len(valid_corners) > 0
+        for val in valid_corners["exit_speed"]:
+            assert val == pytest.approx(80, abs=5)
+
+    def test_compute_segment_stats_exit_speed_gte_min_speed(
+        self, mock_log_for_stats, sample_laps_for_stats, sample_segments_for_stats
+    ):
+        """Test that exit speed >= min speed for all corner rows."""
+        stats_df = compute_segment_stats(
+            mock_log_for_stats,
+            sample_laps_for_stats,
+            sample_segments_for_stats,
+            TEST_CHANNEL_NAMES,
+        )
+
+        corner_stats = stats_df[stats_df["segment_type"] == "corner"].dropna(
+            subset=["exit_speed", "min_speed"]
+        )
+        assert len(corner_stats) > 0
+        assert all(corner_stats["exit_speed"] >= corner_stats["min_speed"])
+
     def test_compute_segment_stats_rows_per_lap(
         self, mock_log_for_stats, sample_laps_for_stats, sample_segments_for_stats
     ):
