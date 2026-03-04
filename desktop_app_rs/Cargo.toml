@@ -1,0 +1,33 @@
+[workspace]
+members = ["crates/inferno-app", "crates/inferno-core", "crates/inferno-ui"]
+resolver = "2"
+
+[workspace.dependencies]
+# Telemetry parsers
+libxrk = { git = "https://github.com/m3rlin45/libxrk.git", tag = "v0.11.1", features = ["arrow"] }
+libibt = { git = "https://github.com/m3rlin45/libibt.git", tag = "v0.0.4", features = ["arrow"] }
+
+# Data
+arrow = { version = "57", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+
+# GUI
+eframe = "0.33"
+egui = "0.33"
+egui_plot = "0.33"
+rfd = "0.15"
+
+# Utilities
+rayon = "1.10"
+thiserror = "2"
+dirs = "6"
+
+# Internal crates
+inferno-core = { path = "crates/inferno-core" }
+inferno-ui = { path = "crates/inferno-ui" }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = "symbols"

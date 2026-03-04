@@ -1,0 +1,12 @@
+[package]
+name = "inferno-app"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Inferno Analyzer — motorsports telemetry analysis desktop app"
+
+[dependencies]
+inferno-core = { workspace = true }
+inferno-ui = { workspace = true }
+eframe = { workspace = true }
+egui = { workspace = true }
