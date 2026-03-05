@@ -421,6 +421,9 @@ def _detect_off_track_laps(
     dict[int, set[int]]
         Mapping of corner_id -> set of off-track lap numbers.
     """
+    if not per_lap_gps or not corners:
+        return {}
+
     R = 6371000.0
 
     # Compute shared reference center from all GPS data
