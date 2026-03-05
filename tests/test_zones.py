@@ -12,8 +12,13 @@ from helpers import MockLogFile, make_channel_table
 from motorsports_data_notebook.corners import Corner
 from motorsports_data_notebook.zones import (
     TrackSegment,
+    _compute_deceleration,
+    _find_brake_release_np,
+    _find_peak_brake_np,
     average_zones_across_laps,
+    compute_g_utilization,
     compute_segment_stats,
+    compute_segment_stats_from_arrays,
     create_track_segments,
     detect_zones_averaged,
     get_corner_data,
@@ -986,3 +991,490 @@ class TestGetCornerData:
         assert "BrakePress" in result.columns
         assert "LateralAcc" in result.columns
         assert "SteerAngle" in result.columns
+
+
+# ============================================================================
+# Tests for braking helper functions
+# ============================================================================
+
+
+class TestFindPeakBrake:
+    """Tests for _find_peak_brake_np function."""
+
+    def test_clear_peak(self):
+        """Test with a clear peak at known distance."""
+        distance = np.linspace(0, 500, 250)
+        brake = np.zeros(250)
+        # Peak at ~200m
+        peak_mask = (distance >= 180) & (distance <= 220)
+        brake[peak_mask] = 60
+        # Make the actual peak at ~200m
+        peak_idx = np.argmin(np.abs(distance - 200))
+        brake[peak_idx] = 80
+
+        result = _find_peak_brake_np(brake, distance, 100, 300)
+
+        assert result is not None
+        peak_value, peak_dist = result
+        assert peak_value == pytest.approx(80.0)
+        assert peak_dist == pytest.approx(200.0, abs=3)
+
+    def test_returns_none_for_empty_segment(self):
+        """Test returns None when si >= ei."""
+        distance = np.linspace(0, 500, 250)
+        brake = np.ones(250) * 50
+
+        # start_dist > end_dist => si >= ei
+        result = _find_peak_brake_np(brake, distance, 300, 100)
+        assert result is None
+
+    def test_returns_none_for_equal_bounds(self):
+        """Test returns None when start == end."""
+        distance = np.linspace(0, 500, 250)
+        brake = np.ones(250) * 50
+
+        result = _find_peak_brake_np(brake, distance, 200, 200)
+        assert result is None
+
+    def test_peak_value_and_distance_correct(self):
+        """Test that both value and distance are correct."""
+        distance = np.arange(0, 100, dtype=float)
+        brake = np.zeros(100)
+        brake[50] = 90.0  # Peak at distance 50
+
+        result = _find_peak_brake_np(brake, distance, 0, 100)
+
+        assert result is not None
+        assert result[0] == pytest.approx(90.0)
+        assert result[1] == pytest.approx(50.0)
+
+
+class TestFindBrakeRelease:
+    """Tests for _find_brake_release_np function."""
+
+    def test_release_detected(self):
+        """Test with brake that rises, peaks at 50 bar, then drops to 0."""
+        distance = np.arange(0, 200, dtype=float)
+        brake = np.zeros(200)
+        # Rise to peak at index 80
+        brake[60:80] = np.linspace(0, 50, 20)
+        brake[80] = 50
+        # Drop from peak
+        brake[81:120] = np.linspace(45, 0, 39)
+
+        result = _find_brake_release_np(brake, distance, 0, 200)
+
+        assert result is not None
+        # Release should occur where brake drops below 10% of 50 = 5 bar
+        # That happens somewhere around index 115-120
+        assert result > 80  # After the peak
+        assert result < 200  # Before end
+
+    def test_threshold_pct_behavior(self):
+        """Test with different threshold_pct values."""
+        distance = np.arange(0, 100, dtype=float)
+        brake = np.zeros(100)
+        brake[20] = 50  # Peak at 50
+        brake[21:60] = np.linspace(48, 0, 39)  # Linear drop
+
+        result_10 = _find_brake_release_np(brake, distance, 0, 100, threshold_pct=0.10)
+        result_50 = _find_brake_release_np(brake, distance, 0, 100, threshold_pct=0.50)
+
+        assert result_10 is not None
+        assert result_50 is not None
+        # Higher threshold => release detected earlier
+        assert result_50 < result_10
+
+    def test_returns_none_when_brake_held(self):
+        """Test returns None when brake never drops below threshold."""
+        distance = np.arange(0, 100, dtype=float)
+        brake = np.ones(100) * 50  # Constant high pressure
+
+        result = _find_brake_release_np(brake, distance, 0, 100)
+        assert result is None
+
+    def test_returns_none_for_empty_segment(self):
+        """Test returns None when si >= ei."""
+        distance = np.arange(0, 100, dtype=float)
+        brake = np.ones(100) * 50
+
+        result = _find_brake_release_np(brake, distance, 80, 20)
+        assert result is None
+
+    def test_returns_none_for_zero_brake(self):
+        """Test returns None when peak brake is zero."""
+        distance = np.arange(0, 100, dtype=float)
+        brake = np.zeros(100)
+
+        result = _find_brake_release_np(brake, distance, 0, 100)
+        assert result is None
+
+
+class TestComputeDeceleration:
+    """Tests for _compute_deceleration function."""
+
+    def test_known_deceleration(self):
+        """Test with synthetic speed drop: 200 -> 100 km/h over 100m."""
+        distance = np.linspace(0, 200, 1000)
+        # Speed drops linearly from 200 to 100 km/h between 50m and 150m
+        speed = np.ones(1000) * 200.0
+        mask = distance >= 50
+        speed[mask] = 200 - (distance[mask] - 50) * (100 / 100)
+        speed[distance >= 150] = 100
+
+        result = _compute_deceleration(speed, distance, 50, 150)
+
+        # v0 = 200/3.6 ≈ 55.56 m/s, v1 = 100/3.6 ≈ 27.78 m/s
+        # a = (55.56² - 27.78²) / (2 * 100) / 9.81 ≈ 1.18 g
+        assert result is not None
+        assert result == pytest.approx(1.18, abs=0.1)
+
+    def test_returns_none_for_zero_distance(self):
+        """Test returns None when distance is zero."""
+        distance = np.array([100.0, 100.0, 100.0])
+        speed = np.array([200.0, 150.0, 100.0])
+
+        result = _compute_deceleration(speed, distance, 100, 100)
+        assert result is None
+
+    def test_returns_none_for_acceleration(self):
+        """Test returns None when speed is increasing (negative decel)."""
+        distance = np.linspace(0, 200, 100)
+        # Speed increases from 100 to 200 km/h
+        speed = np.linspace(100, 200, 100)
+
+        result = _compute_deceleration(speed, distance, 0, 200)
+        assert result is None
+
+
+# ============================================================================
+# Tests for compute_segment_stats_from_arrays (braking segment stats)
+# ============================================================================
+
+
+class TestBrakingSegmentStats:
+    """Tests for braking segment fields in compute_segment_stats_from_arrays."""
+
+    @pytest.fixture
+    def braking_arrays(self):
+        """Create synthetic arrays with clear braking pattern."""
+        n = 500
+        distance = np.linspace(0, 1000, n)
+
+        # Speed: 200 km/h, drops through braking zone 50-150m to 80 km/h
+        speed = np.ones(n) * 200.0
+        braking_mask = (distance >= 80) & (distance <= 150)
+        speed[braking_mask] = np.linspace(200, 80, int(braking_mask.sum()))
+        speed[distance > 150] = 80
+
+        # Brake pressure: peaks at ~100m
+        brake = np.zeros(n)
+        brake_mask = (distance >= 80) & (distance <= 180)
+        brake_indices = np.where(brake_mask)[0]
+        # Rise to peak at ~100m then decay
+        for i, idx in enumerate(brake_indices):
+            d = distance[idx]
+            if d < 100:
+                brake[idx] = (d - 80) / 20 * 60  # rise to 60
+            elif d < 140:
+                brake[idx] = 60 - (d - 100) / 40 * 60  # decay from 60 to 0
+            else:
+                brake[idx] = 0
+
+        # Throttle: picks up after corner at 250m
+        throttle = np.zeros(n)
+        throttle_mask = distance >= 250
+        throttle[throttle_mask] = 80
+
+        return distance, speed, brake, throttle
+
+    @pytest.fixture
+    def braking_segments(self):
+        """Create segments matching the synthetic data."""
+        return [
+            TrackSegment(
+                id=1,
+                segment_type="braking",
+                start_dist=50,
+                end_dist=180,
+                name="Turn 1 Braking",
+                corner_id=1,
+            ),
+            TrackSegment(
+                id=2,
+                segment_type="corner",
+                start_dist=180,
+                end_dist=250,
+                name="Turn 1",
+                corner_id=1,
+                apex_dist=215,
+            ),
+            TrackSegment(
+                id=3,
+                segment_type="acceleration",
+                start_dist=250,
+                end_dist=400,
+                name="Turn 1 Exit",
+                corner_id=1,
+            ),
+        ]
+
+    def test_braking_segment_has_new_fields(self, braking_arrays, braking_segments):
+        """Test that braking segments have the new stat fields."""
+        distance, speed, brake, throttle = braking_arrays
+
+        df = compute_segment_stats_from_arrays(
+            distances=[distance],
+            speeds=[speed],
+            brakes=[brake],
+            throttles=[throttle],
+            lap_nums=[1],
+            lap_times=[60.0],
+            segments=braking_segments,
+        )
+
+        braking_rows = df[df["segment_type"] == "braking"]
+        assert len(braking_rows) == 1
+        row = braking_rows.iloc[0]
+
+        # Check new fields exist
+        assert "peak_brake" in df.columns
+        assert "peak_brake_dist" in df.columns
+        assert "brake_release_point" in df.columns
+        assert "entry_speed" in df.columns
+        assert "braking_distance" in df.columns
+        assert "mean_decel_g" in df.columns
+
+    def test_peak_brake_reasonable(self, braking_arrays, braking_segments):
+        """Test peak brake is a reasonable value."""
+        distance, speed, brake, throttle = braking_arrays
+
+        df = compute_segment_stats_from_arrays(
+            distances=[distance],
+            speeds=[speed],
+            brakes=[brake],
+            throttles=[throttle],
+            lap_nums=[1],
+            lap_times=[60.0],
+            segments=braking_segments,
+        )
+
+        row = df[df["segment_type"] == "braking"].iloc[0]
+        assert pd.notna(row["peak_brake"])
+        assert row["peak_brake"] == pytest.approx(60.0, abs=5)
+
+    def test_entry_speed_reasonable(self, braking_arrays, braking_segments):
+        """Test entry speed is close to initial speed."""
+        distance, speed, brake, throttle = braking_arrays
+
+        df = compute_segment_stats_from_arrays(
+            distances=[distance],
+            speeds=[speed],
+            brakes=[brake],
+            throttles=[throttle],
+            lap_nums=[1],
+            lap_times=[60.0],
+            segments=braking_segments,
+        )
+
+        row = df[df["segment_type"] == "braking"].iloc[0]
+        if pd.notna(row.get("entry_speed")):
+            # Entry speed should be near 200 km/h (braking starts at ~80m)
+            assert row["entry_speed"] >= 150
+
+    def test_mean_decel_positive(self, braking_arrays, braking_segments):
+        """Test mean deceleration is positive for actual braking."""
+        distance, speed, brake, throttle = braking_arrays
+
+        df = compute_segment_stats_from_arrays(
+            distances=[distance],
+            speeds=[speed],
+            brakes=[brake],
+            throttles=[throttle],
+            lap_nums=[1],
+            lap_times=[60.0],
+            segments=braking_segments,
+        )
+
+        row = df[df["segment_type"] == "braking"].iloc[0]
+        if pd.notna(row.get("mean_decel_g")):
+            assert row["mean_decel_g"] > 0
+
+
+# ============================================================================
+# Tests for compute_g_utilization
+# ============================================================================
+
+
+class TestComputeGUtilization:
+    """Tests for compute_g_utilization function."""
+
+    @pytest.fixture
+    def g_util_data(self):
+        """Create synthetic data with known G patterns."""
+        n = 500
+        distance = np.linspace(0, 1000, n)
+        speed = np.ones(n) * 150.0  # 150 km/h constant
+
+        # Lateral G: 0 in straights, 1.2g in corner (200-400m)
+        lateral_g = np.zeros(n)
+        corner_mask = (distance >= 200) & (distance <= 400)
+        lateral_g[corner_mask] = 1.2
+
+        # Inline G: -1.0g braking (100-200m), +0.5g accel (400-600m)
+        inline_g = np.zeros(n)
+        braking_mask = (distance >= 100) & (distance <= 200)
+        inline_g[braking_mask] = -1.0
+        accel_mask = (distance >= 400) & (distance <= 600)
+        inline_g[accel_mask] = 0.5
+
+        return distance, speed, lateral_g, inline_g
+
+    @pytest.fixture
+    def g_util_segments(self):
+        """Create segments for G utilization test."""
+        return [
+            TrackSegment(
+                id=1,
+                segment_type="braking",
+                start_dist=100,
+                end_dist=200,
+                name="Turn 1 Braking",
+                corner_id=1,
+            ),
+            TrackSegment(
+                id=2,
+                segment_type="corner",
+                start_dist=200,
+                end_dist=400,
+                name="Turn 1",
+                corner_id=1,
+                apex_dist=300,
+            ),
+            TrackSegment(
+                id=3,
+                segment_type="acceleration",
+                start_dist=400,
+                end_dist=600,
+                name="Turn 1 Exit",
+                corner_id=1,
+            ),
+        ]
+
+    @pytest.fixture
+    def g_util_corners(self):
+        """Create corners for G utilization test."""
+        return [
+            Corner(
+                id=1,
+                name="Turn 1",
+                direction="L",
+                start_idx=100,
+                end_idx=200,
+                start_dist=200.0,
+                end_dist=400.0,
+                apex_idx=150,
+                apex_dist=300.0,
+                max_curvature=0.01,
+            )
+        ]
+
+    def test_output_has_expected_columns(self, g_util_data, g_util_segments, g_util_corners):
+        """Test output DataFrame has expected columns."""
+        distance, speed, lateral_g, inline_g = g_util_data
+
+        df = compute_g_utilization(
+            distances=[distance],
+            speeds=[speed],
+            lateral_gs=[lateral_g],
+            inline_gs=[inline_g],
+            lap_nums=[1],
+            segments=g_util_segments,
+            corners=g_util_corners,
+        )
+
+        expected_cols = [
+            "corner_id",
+            "corner_name",
+            "lap_num",
+            "total_g_mean",
+            "total_g_max",
+            "total_g_min",
+            "total_g_min_phase",
+            "g_utilization_pct",
+            "braking_g_mean",
+            "entry_g_mean",
+            "mid_g_mean",
+            "exit_g_mean",
+        ]
+        for col in expected_cols:
+            assert col in df.columns
+
+    def test_one_row_per_corner_per_lap(self, g_util_data, g_util_segments, g_util_corners):
+        """Test one row per corner per lap."""
+        distance, speed, lateral_g, inline_g = g_util_data
+
+        df = compute_g_utilization(
+            distances=[distance, distance],
+            speeds=[speed, speed],
+            lateral_gs=[lateral_g, lateral_g],
+            inline_gs=[inline_g, inline_g],
+            lap_nums=[1, 2],
+            segments=g_util_segments,
+            corners=g_util_corners,
+        )
+
+        assert len(df) == 2  # 1 corner × 2 laps
+
+    def test_phase_means_computed(self, g_util_data, g_util_segments, g_util_corners):
+        """Test that phase means are computed correctly."""
+        distance, speed, lateral_g, inline_g = g_util_data
+
+        df = compute_g_utilization(
+            distances=[distance],
+            speeds=[speed],
+            lateral_gs=[lateral_g],
+            inline_gs=[inline_g],
+            lap_nums=[1],
+            segments=g_util_segments,
+            corners=g_util_corners,
+        )
+
+        row = df.iloc[0]
+        # Braking phase (100-200m): inline_g = -1.0, lateral_g = 0 => total_g = 1.0
+        assert row["braking_g_mean"] is not None
+        assert row["braking_g_mean"] == pytest.approx(1.0, abs=0.1)
+
+    def test_with_inline_gs_none(self, g_util_data, g_util_segments, g_util_corners):
+        """Test with inline_gs=None (derived from speed) — should not crash."""
+        distance, speed, lateral_g, _ = g_util_data
+
+        df = compute_g_utilization(
+            distances=[distance],
+            speeds=[speed],
+            lateral_gs=[lateral_g],
+            inline_gs=None,
+            lap_nums=[1],
+            segments=g_util_segments,
+            corners=g_util_corners,
+        )
+
+        assert len(df) == 1
+        assert pd.notna(df.iloc[0]["total_g_mean"])
+
+    def test_g_utilization_pct_in_range(self, g_util_data, g_util_segments, g_util_corners):
+        """Test g_utilization_pct is in reasonable range (0-100)."""
+        distance, speed, lateral_g, inline_g = g_util_data
+
+        df = compute_g_utilization(
+            distances=[distance],
+            speeds=[speed],
+            lateral_gs=[lateral_g],
+            inline_gs=[inline_g],
+            lap_nums=[1],
+            segments=g_util_segments,
+            corners=g_util_corners,
+        )
+
+        pct = df.iloc[0]["g_utilization_pct"]
+        assert 0 <= pct <= 100

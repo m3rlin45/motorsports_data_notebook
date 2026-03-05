@@ -764,6 +764,128 @@ def _find_braking_point_np(
     return float(distance[si + idx]) if mask[idx] else None
 
 
+def _find_peak_brake_np(
+    brake: np.ndarray,
+    distance: np.ndarray,
+    start_dist: float,
+    end_dist: float,
+) -> tuple[float, float] | None:
+    """Find peak brake pressure and its distance within a segment.
+
+    Parameters
+    ----------
+    brake : np.ndarray
+        Brake pressure array.
+    distance : np.ndarray
+        Distance array (meters).
+    start_dist : float
+        Start of segment.
+    end_dist : float
+        End of segment.
+
+    Returns
+    -------
+    tuple[float, float] | None
+        (peak_value, peak_dist) or None if segment is empty.
+    """
+    si = np.searchsorted(distance, start_dist)
+    ei = np.searchsorted(distance, end_dist, side="right")
+    if si >= ei:
+        return None
+    seg_brake = brake[si:ei]
+    peak_idx = np.argmax(seg_brake)
+    return float(seg_brake[peak_idx]), float(distance[si + peak_idx])
+
+
+def _find_brake_release_np(
+    brake: np.ndarray,
+    distance: np.ndarray,
+    start_dist: float,
+    end_dist: float,
+    threshold_pct: float = 0.10,
+) -> float | None:
+    """Find where brake pressure drops below threshold_pct * peak_value.
+
+    Searches forward from peak brake position to end of segment.
+
+    Parameters
+    ----------
+    brake : np.ndarray
+        Brake pressure array.
+    distance : np.ndarray
+        Distance array (meters).
+    start_dist : float
+        Start of segment.
+    end_dist : float
+        End of segment.
+    threshold_pct : float, default=0.10
+        Fraction of peak below which brake is considered released.
+
+    Returns
+    -------
+    float | None
+        Distance at release point, or None if brake held through segment.
+    """
+    si = np.searchsorted(distance, start_dist)
+    ei = np.searchsorted(distance, end_dist, side="right")
+    if si >= ei:
+        return None
+    seg_brake = brake[si:ei]
+    peak_idx = np.argmax(seg_brake)
+    peak_value = seg_brake[peak_idx]
+    if peak_value <= 0:
+        return None
+    release_threshold = threshold_pct * peak_value
+    # Search forward from peak to end of segment
+    after_peak = seg_brake[peak_idx:]
+    release_mask = after_peak < release_threshold
+    if not np.any(release_mask):
+        return None
+    release_idx = np.argmax(release_mask)
+    return float(distance[si + peak_idx + release_idx])
+
+
+def _compute_deceleration(
+    speed: np.ndarray,
+    distance: np.ndarray,
+    start_dist: float,
+    end_dist: float,
+) -> float | None:
+    """Compute mean deceleration in g between two distances.
+
+    Uses v² = v0² - 2*a*d to compute deceleration from speed change
+    over distance. Speed is expected in km/h.
+
+    Parameters
+    ----------
+    speed : np.ndarray
+        Speed array (km/h).
+    distance : np.ndarray
+        Distance array (meters).
+    start_dist : float
+        Start distance (braking point).
+    end_dist : float
+        End distance (brake release).
+
+    Returns
+    -------
+    float | None
+        Mean deceleration in g (positive value), or None if insufficient data.
+    """
+    si = np.searchsorted(distance, start_dist)
+    ei = np.searchsorted(distance, end_dist, side="right")
+    if si >= ei or ei > len(speed):
+        return None
+    v0 = speed[si] / 3.6  # km/h -> m/s
+    v1 = speed[ei - 1] / 3.6
+    d = distance[ei - 1] - distance[si]
+    if d <= 0:
+        return None
+    # v1² = v0² - 2*a*d  =>  a = (v0² - v1²) / (2*d)
+    decel = (v0**2 - v1**2) / (2 * d) / 9.81
+    return float(decel) if decel > 0 else None
+
+
 def _find_throttle_point_np(
     distance: np.ndarray,
     throttle: np.ndarray,
@@ -908,6 +1030,10 @@ def compute_segment_stats_from_arrays(
         - segment_id, segment_name, segment_type, corner_id
         - lap_num, lap_time
         - braking_point, brake_offset (for braking segments)
+        - peak_brake, peak_brake_dist (for braking segments)
+        - brake_release_point, brake_release_offset (for braking segments)
+        - entry_speed (km/h at braking point, for braking segments)
+        - braking_distance, mean_decel_g (for braking segments)
         - min_speed, exit_speed (for corner segments)
         - throttle_point, throttle_offset (for acceleration segments)
     """
@@ -929,7 +1055,7 @@ def compute_segment_stats_from_arrays(
 
         assert brake_threshold is not None
         assert throttle_threshold is not None
-        for seg in segments:
+        for seg_idx, seg in enumerate(segments):
             stat: dict = {
                 "segment_id": seg.id,
                 "segment_name": seg.name,
@@ -946,6 +1072,33 @@ def compute_segment_stats_from_arrays(
                 stat["braking_point"] = braking_point
                 if braking_point is not None:
                     stat["brake_offset"] = braking_point - seg.start_dist
+
+                # Peak brake pressure
+                peak_result = _find_peak_brake_np(brake, distance, seg.start_dist, seg.end_dist)
+                if peak_result is not None:
+                    stat["peak_brake"] = peak_result[0]
+                    stat["peak_brake_dist"] = peak_result[1]
+
+                # Brake release point — extend search into next corner (trail braking)
+                release_end = seg.end_dist
+                if seg_idx + 1 < len(segments) and segments[seg_idx + 1].segment_type == "corner":
+                    release_end = segments[seg_idx + 1].end_dist
+                release_dist = _find_brake_release_np(brake, distance, seg.start_dist, release_end)
+                stat["brake_release_point"] = release_dist
+                if release_dist is not None:
+                    stat["brake_release_offset"] = release_dist - seg.start_dist
+
+                # Entry speed (speed at braking point)
+                if braking_point is not None:
+                    bp_idx = np.searchsorted(distance, braking_point)
+                    if bp_idx < len(speed):
+                        stat["entry_speed"] = float(speed[bp_idx])
+
+                # Braking distance and mean deceleration
+                if braking_point is not None and release_dist is not None:
+                    stat["braking_distance"] = release_dist - braking_point
+                    decel = _compute_deceleration(speed, distance, braking_point, release_dist)
+                    stat["mean_decel_g"] = decel
 
             elif seg.segment_type == "corner":
                 stat["min_speed"] = _find_min_speed_np(
@@ -1015,6 +1168,10 @@ def compute_segment_stats(
         - segment_id, segment_name, segment_type, corner_id
         - lap_num, lap_time
         - braking_point, brake_offset (for braking segments)
+        - peak_brake, peak_brake_dist (for braking segments)
+        - brake_release_point, brake_release_offset (for braking segments)
+        - entry_speed (km/h at braking point, for braking segments)
+        - braking_distance, mean_decel_g (for braking segments)
         - min_speed, exit_speed (for corner segments)
         - throttle_point, throttle_offset (for acceleration segments)
 
@@ -1069,3 +1226,211 @@ def compute_segment_stats(
         brake_threshold=brake_threshold,
         throttle_threshold=throttle_threshold,
     )
+
+
+def compute_g_utilization(
+    distances: list[np.ndarray],
+    speeds: list[np.ndarray],
+    lateral_gs: list[np.ndarray],
+    inline_gs: list[np.ndarray] | None,
+    lap_nums: list[int],
+    segments: list[TrackSegment],
+    corners: list["Corner"],
+) -> pd.DataFrame:
+    """Compute G utilization metrics per corner per lap.
+
+    Total G = sqrt(lateral_g² + inline_g²) measures grip usage.
+    When inline_gs is None, longitudinal G is derived from speed.
+
+    Parameters
+    ----------
+    distances : list[np.ndarray]
+        Per-lap distance arrays (meters).
+    speeds : list[np.ndarray]
+        Per-lap speed arrays (km/h).
+    lateral_gs : list[np.ndarray]
+        Per-lap lateral G arrays.
+    inline_gs : list[np.ndarray] | None
+        Per-lap inline G arrays, or None to derive from speed.
+    lap_nums : list[int]
+        Lap numbers.
+    segments : list[TrackSegment]
+        Track segments.
+    corners : list[Corner]
+        Corner definitions.
+
+    Returns
+    -------
+    pd.DataFrame
+        Per-corner, per-lap G utilization with columns:
+        corner_id, corner_name, lap_num,
+        total_g_mean, total_g_max, total_g_min, total_g_min_phase,
+        g_utilization_pct, early_braking_coast_m, braking_g_mean,
+        entry_g_mean, mid_g_mean, exit_g_mean
+    """
+    # Build lookup: corner_id -> (braking_segment, accel_segment)
+    braking_segs: dict[int, TrackSegment] = {}
+    accel_segs: dict[int, TrackSegment] = {}
+    for seg in segments:
+        if seg.segment_type == "braking":
+            braking_segs[seg.corner_id] = seg
+        elif seg.segment_type == "acceleration":
+            accel_segs[seg.corner_id] = seg
+
+    rows: list[dict] = []
+
+    for lap_idx, (dist, spd, lat_g, lap_num) in enumerate(
+        zip(distances, speeds, lateral_gs, lap_nums)
+    ):
+        if len(dist) < 10:
+            continue
+
+        # Compute or use inline G
+        if inline_gs is not None:
+            inl_g = inline_gs[lap_idx]
+        else:
+            # Derive longitudinal G from speed
+            spd_ms = spd / 3.6
+            # Estimate dt from distance differences and speed
+            dd = np.diff(dist)
+            # Average speed between consecutive points
+            avg_spd = (spd_ms[:-1] + spd_ms[1:]) / 2
+            # Avoid division by zero
+            safe_avg = np.where(avg_spd > 0.1, avg_spd, 0.1)
+            dt = dd / safe_avg
+            dv = np.diff(spd_ms)
+            # Avoid division by zero in dt
+            safe_dt = np.where(dt > 1e-6, dt, 1e-6)
+            accel = dv / safe_dt / 9.81
+            # Pad to same length and smooth with 5-point rolling window
+            accel = np.concatenate([[accel[0]], accel])
+            kernel = np.ones(5) / 5
+            inl_g = np.convolve(accel, kernel, mode="same")
+
+        total_g = np.sqrt(lat_g**2 + inl_g**2)
+
+        for corner in corners:
+            brake_seg = braking_segs.get(corner.id)
+            accel_seg = accel_segs.get(corner.id)
+
+            # Full corner complex: from braking start to accel end
+            complex_start = brake_seg.start_dist if brake_seg else corner.start_dist
+            complex_end = accel_seg.end_dist if accel_seg else corner.end_dist
+
+            # Get indices for the full complex
+            ci = np.searchsorted(dist, complex_start)
+            ce = np.searchsorted(dist, complex_end, side="right")
+            if ci >= ce:
+                continue
+
+            complex_total_g = total_g[ci:ce]
+            complex_dist = dist[ci:ce]
+            total_g_mean = float(np.mean(complex_total_g))
+            total_g_max = float(np.max(complex_total_g))
+
+            # Find the G hole: valley between braking peak and cornering peak.
+            # The braking peak is the max total G before the corner starts,
+            # the cornering peak is the max total G within the corner.
+            # The G hole is the minimum between these two peaks.
+            corner_si = np.searchsorted(dist, corner.start_dist)
+            corner_ei = np.searchsorted(dist, corner.end_dist, side="right")
+
+            # Braking peak: max total G from complex start to corner start
+            brake_peak_idx = ci  # fallback
+            if corner_si > ci:
+                brake_slice = total_g[ci:corner_si]
+                brake_peak_idx = ci + int(np.argmax(brake_slice))
+
+            # Cornering peak: max total G within the corner
+            corner_peak_idx = corner_si  # fallback
+            if corner_ei > corner_si:
+                corner_slice = total_g[corner_si:corner_ei]
+                corner_peak_idx = corner_si + int(np.argmax(corner_slice))
+
+            # G hole: minimum between the two peaks (by index order)
+            peak_lo = min(brake_peak_idx, corner_peak_idx)
+            peak_hi = max(brake_peak_idx, corner_peak_idx)
+            if peak_hi > peak_lo + 1:
+                valley_slice = total_g[peak_lo:peak_hi]
+                valley_min_idx = peak_lo + int(np.argmin(valley_slice))
+            else:
+                # Peaks are adjacent — use the lower one
+                valley_min_idx = peak_lo if total_g[peak_lo] < total_g[peak_hi] else peak_hi
+
+            total_g_min_val = float(total_g[valley_min_idx])
+            total_g_min_dist = float(dist[valley_min_idx])
+
+            # Define phase boundaries
+            corner_len = corner.end_dist - corner.start_dist
+            mid_half = 0.10 * corner_len
+            apex = (
+                corner.apex_dist
+                if corner.apex_dist is not None
+                else (corner.start_dist + corner_len / 2)
+            )
+
+            phase_defs = {
+                "braking": (complex_start, corner.start_dist),
+                "entry": (corner.start_dist, apex),
+                "mid": (apex - mid_half, apex + mid_half),
+                "exit": (apex + mid_half, corner.end_dist),
+            }
+
+            # Determine which phase the G hole falls in
+            min_phase = "entry"
+            for phase_name, (ps, pe) in phase_defs.items():
+                if ps <= total_g_min_dist <= pe:
+                    min_phase = phase_name
+                    break
+
+            phase_means: dict[str, float | None] = {}
+            for phase_name, (ps, pe) in phase_defs.items():
+                pi = np.searchsorted(dist, ps)
+                pj = np.searchsorted(dist, pe, side="right")
+                if pi < pj:
+                    phase_means[phase_name] = float(np.mean(total_g[pi:pj]))
+                else:
+                    phase_means[phase_name] = None
+
+            # G utilization: valley depth relative to the lower of the two peaks
+            peak_g = min(float(total_g[brake_peak_idx]), float(total_g[corner_peak_idx]))
+            g_util_pct = total_g_min_val / max(peak_g, 1e-6) * 100 if peak_g > 0 else 0.0
+
+            # Early braking detection: when G hole is in the braking phase,
+            # measure the "coast" distance from where braking G fades to
+            # the corner start.  This tells the driver how early they braked.
+            early_braking_coast_m: float | None = None
+            if min_phase == "braking" and corner_si > brake_peak_idx:
+                # Find where total G first drops below 50% of braking peak
+                # after the peak but before the corner start.
+                brake_peak_g = float(total_g[brake_peak_idx])
+                threshold = brake_peak_g * 0.5
+                post_peak = total_g[brake_peak_idx:corner_si]
+                below = np.where(post_peak < threshold)[0]
+                if len(below) > 0:
+                    fade_idx = brake_peak_idx + int(below[0])
+                    fade_dist = float(dist[fade_idx])
+                    coast = corner.start_dist - fade_dist
+                    if coast > 0:
+                        early_braking_coast_m = round(coast, 1)
+
+            rows.append(
+                {
+                    "corner_id": corner.id,
+                    "corner_name": corner.name,
+                    "lap_num": lap_num,
+                    "total_g_mean": total_g_mean,
+                    "total_g_max": total_g_max,
+                    "total_g_min": total_g_min_val,
+                    "total_g_min_dist": total_g_min_dist,
+                    "total_g_min_phase": min_phase,
+                    "g_utilization_pct": g_util_pct,
+                    "early_braking_coast_m": early_braking_coast_m,
+                    "braking_g_mean": phase_means.get("braking"),
+                    "entry_g_mean": phase_means.get("entry"),
+                    "mid_g_mean": phase_means.get("mid"),
+                    "exit_g_mean": phase_means.get("exit"),
+                }
+            )
+
+    return pd.DataFrame(rows)
