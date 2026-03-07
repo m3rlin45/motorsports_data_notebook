@@ -7,6 +7,8 @@ with JSON-serializable output.
 from __future__ import annotations
 
 import json
+import urllib.request
+import urllib.parse
 from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING
 
@@ -48,6 +50,59 @@ class SessionMetadata:
     total_laps: int
     valid_laps: int
     top_lap_count: int
+    driver: str | None
+    vehicle: str | None
+    venue: str | None
+    log_date: str | None
+    log_time: str | None
+    session_id: str | None = None
+    session_notes: str | None = None
+
+
+# WMO weather interpretation codes
+# https://open-meteo.com/en/docs#weathervariables
+_WMO_WEATHER_CODES: dict[int, str] = {
+    0: "Clear sky",
+    1: "Mainly clear",
+    2: "Partly cloudy",
+    3: "Overcast",
+    45: "Fog",
+    48: "Depositing rime fog",
+    51: "Light drizzle",
+    53: "Moderate drizzle",
+    55: "Dense drizzle",
+    56: "Light freezing drizzle",
+    57: "Dense freezing drizzle",
+    61: "Slight rain",
+    63: "Moderate rain",
+    65: "Heavy rain",
+    66: "Light freezing rain",
+    67: "Heavy freezing rain",
+    71: "Slight snow",
+    73: "Moderate snow",
+    75: "Heavy snow",
+    77: "Snow grains",
+    80: "Slight rain showers",
+    81: "Moderate rain showers",
+    82: "Violent rain showers",
+    85: "Slight snow showers",
+    86: "Heavy snow showers",
+    95: "Thunderstorm",
+    96: "Thunderstorm with slight hail",
+    99: "Thunderstorm with heavy hail",
+}
+
+
+@dataclass
+class WeatherConditions:
+    """Weather conditions at the circuit during the session."""
+
+    temperature_c: float | None
+    relative_humidity_pct: int | None
+    wind_speed_kmh: float | None
+    wind_direction_deg: int | None
+    weather_code: int | None
+    weather_description: str | None
 
 
 @dataclass
@@ -99,6 +154,24 @@ class CornerBestLap:
     total_g_min: float | None = None
     total_g_min_dist: float | None = None
     total_g_min_phase: str | None = None
+    early_braking_coast_m: float | None = None
+
+
+@dataclass
+class CornerLapMetrics:
+    """Raw per-lap data for a single corner."""
+
+    lap_num: int
+    braking_point: float | None
+    entry_speed: float | None
+    min_speed: float | None
+    exit_speed: float | None
+    throttle_point: float | None
+    throttle_acceptance_pct: float | None
+    peak_brake: float | None
+    brake_release_point: float | None
+    braking_distance: float | None
+    mean_decel_g: float | None
 
 
 @dataclass
@@ -132,12 +205,15 @@ class CornerConsistency:
     g_utilization_std: float | None = None
     total_g_min_mean: float | None = None
     total_g_min_phase: str | None = None
+    early_braking_coast_mean: float | None = None
     braking_g_mean_val: float | None = None
     entry_g_mean_val: float | None = None
     mid_g_mean_val: float | None = None
     exit_g_mean_val: float | None = None
     # Off-track detection
     excluded_laps: list[int] = field(default_factory=list)
+    # Per-lap raw metrics
+    per_lap_metrics: list[CornerLapMetrics] = field(default_factory=list)
 
 
 @dataclass
@@ -155,6 +231,15 @@ class TireGripSummary:
     metric_mode: str
     units: dict[str, str]
     per_wheel: dict[str, dict[str, float]]
+
+
+@dataclass
+class TireConditionsSummary:
+    """Per-lap max tire pressure and temperature."""
+
+    pressure_unit: str | None
+    temperature_unit: str | None
+    per_lap: list[dict]
 
 
 @dataclass
@@ -181,6 +266,8 @@ class SessionReport:
     track_length_m: float
     suspension: SuspensionSummary | None
     tire_grip: TireGripSummary | None
+    tire_conditions: TireConditionsSummary | None
+    weather: WeatherConditions | None
     available_analyses: list[str]
     skipped_analyses: dict[str, str]
     braking_balance: BrakingBalanceSummary | None = None
@@ -195,6 +282,79 @@ class SessionReport:
 # ── Helpers ──────────────────────────────────────────────────────────────────────
 
 
+def _fetch_weather(
+    latitude: float,
+    longitude: float,
+    log_date: str,
+    log_time: str,
+    timeout: float = 5.0,
+) -> WeatherConditions:
+    """Fetch historical weather from Open-Meteo for the session's location and time.
+
+    Parameters
+    ----------
+    latitude, longitude
+        Circuit center coordinates.
+    log_date
+        Date string in MM/DD/YYYY format (from AIM metadata).
+    log_time
+        Time string in HH:MM:SS format (from AIM metadata).
+    timeout
+        HTTP request timeout in seconds.
+    """
+    # Parse date to ISO format
+    parts = log_date.split("/")
+    iso_date = f"{parts[2]}-{parts[0]}-{parts[1]}"
+
+    # Parse hour from log_time
+    hour = int(log_time.split(":")[0])
+
+    params = urllib.parse.urlencode(
+        {
+            "latitude": f"{latitude:.4f}",
+            "longitude": f"{longitude:.4f}",
+            "start_date": iso_date,
+            "end_date": iso_date,
+            "hourly": "temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m,weather_code",
+            "timezone": "auto",
+        }
+    )
+    url = f"https://archive-api.open-meteo.com/v1/archive?{params}"
+
+    req = urllib.request.Request(url)
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        data = json.loads(resp.read().decode())
+
+    hourly = data["hourly"]
+    # Find the index matching the session start hour
+    idx = hour  # hourly data starts at T00:00, one entry per hour
+    if idx >= len(hourly["temperature_2m"]):
+        idx = len(hourly["temperature_2m"]) - 1
+
+    weather_code = hourly["weather_code"][idx]
+    if weather_code is not None:
+        weather_code = int(weather_code)
+
+    return WeatherConditions(
+        temperature_c=hourly["temperature_2m"][idx],
+        relative_humidity_pct=(
+            int(hourly["relative_humidity_2m"][idx])
+            if hourly["relative_humidity_2m"][idx] is not None
+            else None
+        ),
+        wind_speed_kmh=hourly["wind_speed_10m"][idx],
+        wind_direction_deg=(
+            int(hourly["wind_direction_10m"][idx])
+            if hourly["wind_direction_10m"][idx] is not None
+            else None
+        ),
+        weather_code=weather_code,
+        weather_description=(
+            _WMO_WEATHER_CODES.get(weather_code) if weather_code is not None else None
+        ),
+    )
+
+
 def _check_channels_available(
     log: LogFile, channel_names: dict[str, str], required_keys: list[str]
 ) -> tuple[bool, list[str]]:
@@ -206,6 +366,35 @@ def _check_channels_available(
         elif channel_names[key] not in log.channels:
             missing.append(key)
     return (len(missing) == 0, missing)
+
+
+def _make_session_id(log_date: str | None, log_time: str | None, session_num: int) -> str | None:
+    """Build a session ID string from AIM metadata date/time and session number.
+
+    Parameters
+    ----------
+    log_date
+        Date string in ``MM/DD/YYYY`` format (from AIM metadata).
+    log_time
+        Time string in ``HH:MM:SS`` format (from AIM metadata).
+    session_num
+        1-based session number for the day.
+
+    Returns
+    -------
+    str or None
+        e.g. ``"2026-01-12_1300_s01"``, or None if date/time are missing.
+    """
+    if not log_date or not log_time:
+        return None
+    try:
+        parts = log_date.split("/")
+        iso_date = f"{parts[2]}-{parts[0].zfill(2)}-{parts[1].zfill(2)}"
+        time_parts = log_time.split(":")
+        hhmm = f"{time_parts[0].zfill(2)}{time_parts[1].zfill(2)}"
+        return f"{iso_date}_{hhmm}_s{session_num:02d}"
+    except (IndexError, ValueError):
+        return None
 
 
 def _corner_to_info(corner: Corner) -> CornerInfo:
@@ -234,6 +423,69 @@ def _format_lap_time(seconds: float) -> str:
     minutes = int(seconds // 60)
     remainder = seconds - minutes * 60
     return f"{minutes}:{remainder:06.3f}"
+
+
+def _collate_per_lap_metrics(
+    bp_vals: list[tuple[int, float]],
+    entry_speed_vals: list[tuple[int, float]],
+    min_speed_vals: list[tuple[int, float]],
+    exit_speed_vals: list[tuple[int, float]],
+    tp_vals: list[tuple[int, float]],
+    ta_entries: list[tuple[int, float]],
+    peak_brake_vals: list[tuple[int, float]],
+    brake_release_vals: list[tuple[int, float]],
+    braking_distance_vals: list[tuple[int, float]],
+    mean_decel_g_vals: list[tuple[int, float]],
+) -> list[CornerLapMetrics]:
+    """Collate per-lap metric tuples into CornerLapMetrics objects."""
+    # Collect all lap numbers that appear in any metric list
+    all_laps: set[int] = set()
+    all_lists = [
+        bp_vals,
+        entry_speed_vals,
+        min_speed_vals,
+        exit_speed_vals,
+        tp_vals,
+        ta_entries,
+        peak_brake_vals,
+        brake_release_vals,
+        braking_distance_vals,
+        mean_decel_g_vals,
+    ]
+    for vals in all_lists:
+        for lap_num, _ in vals:
+            all_laps.add(lap_num)
+
+    # Build lookup dicts
+    bp_map = dict(bp_vals)
+    entry_map = dict(entry_speed_vals)
+    ms_map = dict(min_speed_vals)
+    es_map = dict(exit_speed_vals)
+    tp_map = dict(tp_vals)
+    ta_map = dict(ta_entries)
+    pb_map = dict(peak_brake_vals)
+    br_map = dict(brake_release_vals)
+    bd_map = dict(braking_distance_vals)
+    mdg_map = dict(mean_decel_g_vals)
+
+    result = []
+    for lap_num in sorted(all_laps):
+        result.append(
+            CornerLapMetrics(
+                lap_num=lap_num,
+                braking_point=bp_map.get(lap_num),
+                entry_speed=entry_map.get(lap_num),
+                min_speed=ms_map.get(lap_num),
+                exit_speed=es_map.get(lap_num),
+                throttle_point=tp_map.get(lap_num),
+                throttle_acceptance_pct=ta_map.get(lap_num),
+                peak_brake=pb_map.get(lap_num),
+                brake_release_point=br_map.get(lap_num),
+                braking_distance=bd_map.get(lap_num),
+                mean_decel_g=mdg_map.get(lap_num),
+            )
+        )
+    return result
 
 
 def _get_per_lap_metric(
@@ -532,6 +784,72 @@ def _extract_tire_grip_summary(result: TireGripResult) -> TireGripSummary:
     )
 
 
+def _extract_tire_conditions(
+    log: LogFile,
+    lap_numbers: list[int],
+    channel_names: dict[str, str],
+    has_pressure: bool,
+    has_temperature: bool,
+) -> TireConditionsSummary:
+    """Extract per-lap max tire pressure and temperature."""
+    press_keys = ["tpms_press_fl", "tpms_press_fr", "tpms_press_rl", "tpms_press_rr"]
+    temp_keys = ["tpms_temp_fl", "tpms_temp_fr", "tpms_temp_rl", "tpms_temp_rr"]
+    wheel_names = ["FL", "FR", "RL", "RR"]
+
+    pressure_unit = None
+    temperature_unit = None
+    per_lap: list[dict] = []
+
+    for lap_num in lap_numbers:
+        try:
+            lap_log = log.filter_by_lap(lap_num)
+            entry: dict = {"lap_num": lap_num}
+
+            if has_pressure:
+                press_channels = [channel_names[k] for k in press_keys]
+                aligned = (
+                    lap_log.select_channels(press_channels)
+                    .resample_to_channel(press_channels[0])
+                    .channels
+                )
+                max_press = {}
+                for wn, ch in zip(wheel_names, press_channels):
+                    arr = aligned[ch].column(ch).to_numpy()
+                    max_press[wn] = round(float(arr.max()), 3)
+                    if pressure_unit is None:
+                        from motorsports_data_notebook._util import get_channel_unit
+
+                        pressure_unit = get_channel_unit(aligned[ch], ch)
+                entry["max_pressure"] = max_press
+
+            if has_temperature:
+                temp_channels = [channel_names[k] for k in temp_keys]
+                aligned = (
+                    lap_log.select_channels(temp_channels)
+                    .resample_to_channel(temp_channels[0])
+                    .channels
+                )
+                max_temp = {}
+                for wn, ch in zip(wheel_names, temp_channels):
+                    arr = aligned[ch].column(ch).to_numpy()
+                    max_temp[wn] = round(float(arr.max()), 1)
+                    if temperature_unit is None:
+                        from motorsports_data_notebook._util import get_channel_unit
+
+                        temperature_unit = get_channel_unit(aligned[ch], ch)
+                entry["max_temperature"] = max_temp
+
+            per_lap.append(entry)
+        except Exception:
+            continue
+
+    return TireConditionsSummary(
+        pressure_unit=pressure_unit,
+        temperature_unit=temperature_unit,
+        per_lap=per_lap,
+    )
+
+
 # ── Main Function ───────────────────────────────────────────────────────────────
 
 
@@ -541,6 +859,7 @@ def generate_session_report(
     motion_ratios: MotionRatios | None = None,
     top_lap_threshold: float = 1.03,
     file_name: str = "",
+    session_num: int = 1,
 ) -> SessionReport:
     """Generate a complete session analysis report.
 
@@ -560,6 +879,8 @@ def generate_session_report(
         Include laps within this fraction of the best lap time.
     file_name : str, default=""
         Source file name for metadata.
+    session_num : int, default=1
+        1-based session number for the day (used in session_id).
 
     Returns
     -------
@@ -616,6 +937,7 @@ def generate_session_report(
     corners_raw: list[Corner] = []
     corners_info: list[CornerInfo] = []
     track_length = 0.0
+    gps_center: tuple[float, float] | None = None
 
     gps_ok, gps_missing = _check_channels_available(
         log, channel_names, ["gps_latitude", "gps_longitude"]
@@ -634,6 +956,8 @@ def generate_session_report(
 
         # Filter to valid GPS samples
         valid_gps = (lat != 0.0) | (lon != 0.0)
+        if np.any(valid_gps):
+            gps_center = (float(np.mean(lat[valid_gps])), float(np.mean(lon[valid_gps])))
         if not np.all(valid_gps):
             dist = dist[valid_gps]
 
@@ -816,6 +1140,20 @@ def generate_session_report(
                 mean_decel_g_vals=mean_decel_g_vals,
             )
 
+            # Collate per-lap metrics keyed by lap_num
+            per_lap_metrics = _collate_per_lap_metrics(
+                bp_vals,
+                entry_speed_vals,
+                min_speed_vals,
+                exit_speed_vals,
+                tp_vals,
+                ta_entries,
+                peak_brake_vals,
+                brake_release_vals,
+                braking_distance_vals,
+                mean_decel_g_vals,
+            )
+
             corner_consistency.append(
                 CornerConsistency(
                     corner=corner_info,
@@ -841,6 +1179,7 @@ def generate_session_report(
                     mean_decel_g_mean=float(np.mean(mdg_values)) if mdg_values else None,
                     mean_decel_g_std=float(np.std(mdg_values)) if mdg_values else None,
                     excluded_laps=excluded,
+                    per_lap_metrics=per_lap_metrics,
                 )
             )
     elif not corners_raw:
@@ -1011,6 +1350,10 @@ def generate_session_report(
                         from collections import Counter
 
                         cc.total_g_min_phase = Counter(phases).most_common(1)[0][0]
+                    # Early braking coast distance (mean across laps where detected)
+                    coast_arr = np.asarray(corner_rows["early_braking_coast_m"].dropna().values)
+                    if len(coast_arr) > 0:
+                        cc.early_braking_coast_mean = round(float(np.mean(coast_arr)), 1)
                     for col, attr in [
                         ("braking_g_mean", "braking_g_mean_val"),
                         ("entry_g_mean", "entry_g_mean_val"),
@@ -1032,6 +1375,10 @@ def generate_session_report(
                             cc.best_lap.total_g_min = round(float(row["total_g_min"]), 3)
                             cc.best_lap.total_g_min_dist = round(float(row["total_g_min_dist"]), 1)
                             cc.best_lap.total_g_min_phase = str(row["total_g_min_phase"])
+                            if pd.notna(row.get("early_braking_coast_m")):
+                                cc.best_lap.early_braking_coast_m = round(
+                                    float(row["early_braking_coast_m"]), 1
+                                )
 
                 available.append("g_utilization")
         except Exception as e:
@@ -1089,9 +1436,49 @@ def generate_session_report(
             missing_parts.append("TPMS pressure/temperature")
         skipped["tire_grip"] = f"Missing channels: {', '.join(missing_parts)}"
 
+    # ── 9. Tire conditions (per-lap max pressure & temperature) ──────────────
+    tire_conditions = None
+    if press_ok or temp_ok:
+        try:
+            tire_conditions = _extract_tire_conditions(
+                log, top_lap_nums, channel_names, has_pressure=press_ok, has_temperature=temp_ok
+            )
+            available.append("tire_conditions")
+        except Exception as e:
+            skipped["tire_conditions"] = str(e)
+
+    # ── 10. Weather conditions ────────────────────────────────────────────────
+    weather = None
+    raw_meta_pre = log.metadata if log.metadata else {}
+    log_date_str = raw_meta_pre.get("Log Date")
+    log_time_str = raw_meta_pre.get("Log Time")
+    if gps_center and log_date_str and log_time_str:
+        try:
+            weather = _fetch_weather(gps_center[0], gps_center[1], log_date_str, log_time_str)
+            available.append("weather")
+        except Exception as e:
+            skipped["weather"] = str(e)
+    elif not gps_center:
+        skipped["weather"] = "No GPS data available for location"
+    else:
+        skipped["weather"] = "Missing Log Date or Log Time in session metadata"
+
     # ── Build report ─────────────────────────────────────────────────────────
     total_laps = len(laps_df)
     valid_laps_count = len(laps_df[laps_df["num"] > 0]) if "num" in laps_df.columns else total_laps
+
+    raw_meta = log.metadata if log.metadata else {}
+    log_date_val = raw_meta.get("Log Date")
+    log_time_val = raw_meta.get("Log Time")
+    session_id = _make_session_id(log_date_val, log_time_val, session_num)
+
+    # Combine Long Comment and Short Comment into session notes
+    _long_raw = raw_meta.get("Long Comment")
+    _short_raw = raw_meta.get("Short Comment")
+    long_comment = _long_raw.replace("\r\n", "\n").strip() if isinstance(_long_raw, str) else ""
+    short_comment = _short_raw.strip() if isinstance(_short_raw, str) else ""
+    notes_parts = [p for p in [short_comment, long_comment] if p]
+    session_notes = "\n".join(notes_parts) if notes_parts else None
 
     metadata = SessionMetadata(
         file_name=file_name,
@@ -1100,6 +1487,13 @@ def generate_session_report(
         total_laps=total_laps,
         valid_laps=valid_laps_count,
         top_lap_count=len(top_lap_nums),
+        driver=raw_meta.get("Driver"),
+        vehicle=raw_meta.get("Vehicle"),
+        venue=raw_meta.get("Venue"),
+        log_date=log_date_val,
+        log_time=log_time_val,
+        session_id=session_id,
+        session_notes=session_notes,
     )
 
     return SessionReport(
@@ -1110,6 +1504,8 @@ def generate_session_report(
         track_length_m=track_length,
         suspension=suspension,
         tire_grip=tire_grip,
+        tire_conditions=tire_conditions,
+        weather=weather,
         available_analyses=available,
         skipped_analyses=skipped,
         braking_balance=braking_balance,
