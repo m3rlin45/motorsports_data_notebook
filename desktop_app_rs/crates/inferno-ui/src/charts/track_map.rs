@@ -34,6 +34,10 @@ pub fn draw_track_map(ui: &mut Ui, result: &DriverConsistencyResult) {
         .fold(f64::INFINITY, f64::min);
     let opp_range = (max_opp - min_opp).max(1e-6);
 
+    let label_color = ui.visuals().text_color();
+    let bg = ui.visuals().window_fill;
+    let label_bg = egui::Color32::from_rgba_unmultiplied(bg.r(), bg.g(), bg.b(), 200);
+
     Plot::new("track_map")
         .data_aspect(1.0)
         .allow_drag(true)
@@ -87,6 +91,11 @@ pub fn draw_track_map(ui: &mut Ui, result: &DriverConsistencyResult) {
                 );
             }
 
+            // Compute label offset in data coordinates (3.5% of Y range)
+            let y_range = y.iter().cloned().fold(f64::NEG_INFINITY, f64::max)
+                - y.iter().cloned().fold(f64::INFINITY, f64::min);
+            let label_offset = y_range * 0.035;
+
             // Apex markers (dark red circles with corner name labels)
             for corner in &result.corners {
                 if corner.apex_idx < x.len() {
@@ -100,14 +109,14 @@ pub fn draw_track_map(ui: &mut Ui, result: &DriverConsistencyResult) {
                             .shape(MarkerShape::Circle),
                     );
 
-                    plot_ui.text(
-                        Text::new(
-                            format!("label_{}", corner.id),
-                            PlotPoint::new(ax, ay),
-                            &corner.name,
-                        )
-                        .color(egui::Color32::BLACK),
-                    );
+                    plot_ui.text(Text::new(
+                        format!("label_{}", corner.id),
+                        PlotPoint::new(ax, ay + label_offset),
+                        egui::RichText::new(&corner.name)
+                            .size(14.0)
+                            .color(label_color)
+                            .background_color(label_bg),
+                    ));
                 }
             }
 
