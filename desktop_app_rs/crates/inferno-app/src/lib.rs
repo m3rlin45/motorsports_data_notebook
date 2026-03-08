@@ -352,7 +352,7 @@ impl eframe::App for InfernoApp {
             if let Some(session) = &self.session_a.session {
                 let logger_id = profile::get_logger_id(session);
                 if let Some(prof) = profile::get_profile_for_logger(&logger_id) {
-                    self.status = format!("Loaded — logger {} | profile: {}", logger_id, prof.name);
+                    self.status = format!("Loaded — logger {logger_id} | profile: {}", prof.name);
                     self.config.set_from_profile(&prof);
                 } else {
                     self.status =

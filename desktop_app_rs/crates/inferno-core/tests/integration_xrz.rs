@@ -65,7 +65,7 @@ fn test_xrk_loads_can_bus_channels() {
     // Specific CAN bus channel that must be present for the 86
     assert!(
         names.contains(&"PPS"),
-        "Missing throttle channel 'PPS'. Available: {names:?}"
+        "Missing throttle channel 'PPS'. Available: {names:?}",
     );
 }
 
