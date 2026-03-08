@@ -5,8 +5,11 @@ use inferno_core::analysis::driver_consistency::CornerConsistencyData;
 
 use super::colors;
 
-/// Stroke for box outlines, whiskers, and median line (dark for visibility on light backgrounds).
-const BOX_STROKE: fn() -> Stroke = || Stroke::new(1.5, egui::Color32::from_rgb(0x22, 0x22, 0x22));
+/// Stroke for box outlines, whiskers, and median line — uses the theme's text color
+/// so whiskers are visible on both dark and light backgrounds.
+fn box_stroke(ui: &Ui) -> Stroke {
+    Stroke::new(1.5, ui.visuals().text_color())
+}
 const BOX_STROKE_A: fn() -> Stroke = || Stroke::new(1.5, egui::Color32::from_rgb(0x20, 0x40, 0x80));
 const BOX_STROKE_B: fn() -> Stroke = || Stroke::new(1.5, egui::Color32::from_rgb(0x80, 0x40, 0x00));
 
@@ -254,6 +257,8 @@ pub fn draw_summary(ui: &mut Ui, corner_data: &[CornerConsistencyData]) {
         .fold(f64::INFINITY, f64::min);
     let opp_range = (max_opp - min_opp).max(1e-6);
 
+    let stroke = box_stroke(ui);
+
     // --- Braking Points (centered around mean) ---
     ui.label("Braking Points (\u{0394} from mean, m)");
     {
@@ -283,7 +288,7 @@ pub fn draw_summary(ui: &mut Ui, corner_data: &[CornerConsistencyData]) {
                             BoxElem::new((i + 1) as f64, spread.clone())
                                 .name(&cd.corner.name)
                                 .fill(colors::DARKORANGE)
-                                .stroke(BOX_STROKE())
+                                .stroke(stroke)
                                 .box_width(0.5)
                                 .whisker_width(0.3),
                         );
@@ -321,7 +326,7 @@ pub fn draw_summary(ui: &mut Ui, corner_data: &[CornerConsistencyData]) {
                             BoxElem::new((i + 1) as f64, spread.clone())
                                 .name(&cd.corner.name)
                                 .fill(colors::STEELBLUE)
-                                .stroke(BOX_STROKE())
+                                .stroke(stroke)
                                 .box_width(0.5)
                                 .whisker_width(0.3),
                         );
@@ -361,7 +366,7 @@ pub fn draw_summary(ui: &mut Ui, corner_data: &[CornerConsistencyData]) {
                             BoxElem::new((i + 1) as f64, spread.clone())
                                 .name(&cd.corner.name)
                                 .fill(color)
-                                .stroke(BOX_STROKE())
+                                .stroke(stroke)
                                 .box_width(0.5)
                                 .whisker_width(0.3),
                         );
