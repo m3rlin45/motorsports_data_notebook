@@ -40,7 +40,7 @@ pub fn identify_zones_single_lap(
     gear_change_time: f64,
 ) -> (Vec<Zone>, Vec<Zone>) {
     let n = distance.len();
-    if n == 0 {
+    if n == 0 || brake_press.len() < n || throttle.len() < n || speed.len() < n {
         return (vec![], vec![]);
     }
 
@@ -390,10 +390,12 @@ pub fn compute_segment_stats_from_arrays(
             match seg.segment_type {
                 SegmentType::Braking => {
                     // First point where brake > threshold
-                    for j in si..ei {
-                        if brake[j] > brake_threshold {
-                            stat.braking_point = Some(dist[j]);
-                            break;
+                    if !brake.is_empty() {
+                        for j in si..ei.min(brake.len()) {
+                            if brake[j] > brake_threshold {
+                                stat.braking_point = Some(dist[j]);
+                                break;
+                            }
                         }
                     }
                 }

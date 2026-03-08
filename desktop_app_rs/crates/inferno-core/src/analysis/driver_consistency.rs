@@ -155,6 +155,15 @@ pub fn analyze_driver_consistency(
         return Err(Error::NoValidLaps);
     }
 
+    // Check which channels are available (brake/throttle are optional for GPS-only loggers)
+    if !lap_data.iter().any(|ld| ld.get("speed_kmh").is_some()) {
+        let available: Vec<&str> = session.channel_names();
+        return Err(Error::MissingChannel(format!(
+            "speed_kmh (derived) not found. Available: {}",
+            available.join(", ")
+        )));
+    }
+
     // Collect arrays for zone detection
     let distances: Vec<Vec<f64>> = lap_data.iter().map(|ld| ld.dist().to_vec()).collect();
     let brake_presses: Vec<Vec<f64>> = lap_data

@@ -52,14 +52,26 @@ impl Session {
     pub fn from_xrk(path: &Path) -> Result<Self> {
         let xrk = libxrk::read_xrk_file(path)?;
 
-        // Build channel RecordBatches via libxrk's arrow module
-        let channel_batches = libxrk::arrow::build_all_channel_batches(
-            xrk.raw.channel_data,
-            &xrk.raw.channels,
-            |f| format!("{f}"),
-        )?;
+        // Build channel RecordBatches from parsed channels.
+        // Note: xrk.raw.channel_data is empty (std::mem::take'd by read_xrk),
+        // so we must use xrk.channels which has the actual decoded data.
+        let mut channels: HashMap<String, RecordBatch> = HashMap::new();
+        for ch in xrk.channels {
+            let mut metadata = HashMap::new();
+            metadata.insert("units".to_string(), ch.units.clone());
+            metadata.insert("dec_pts".to_string(), ch.dec_pts.to_string());
+            metadata.insert(
+                "interpolate".to_string(),
+                if ch.interpolate { "True" } else { "False" }.to_string(),
+            );
 
-        let mut channels: HashMap<String, RecordBatch> = channel_batches.into_iter().collect();
+            let ch_data = libxrk::ChannelData {
+                timecodes: ch.timecodes,
+                values: ch.values,
+            };
+            let batch = libxrk::arrow::build_channel_batch(&ch.name, ch_data, metadata)?;
+            channels.insert(ch.name, batch);
+        }
 
         // Add GPS channels if available
         if let Some(gps) = xrk.gps {
@@ -212,7 +224,17 @@ impl LapData {
         }
 
         let target_tc = channel::get_timecodes(&lap_dist)?.clone();
-        let distance = channel::get_values_f64(&lap_dist)?;
+        let raw_distance = channel::get_values_f64(&lap_dist)?;
+
+        // Zero-base distance so each lap starts at 0m (matches corner detection's GPS distance scale)
+        let first_dist = raw_distance.value(0);
+        let distance = Float64Array::from(
+            raw_distance
+                .values()
+                .iter()
+                .map(|d| d - first_dist)
+                .collect::<Vec<f64>>(),
+        );
 
         let mut channels = HashMap::new();
         for &name in channel_names {
