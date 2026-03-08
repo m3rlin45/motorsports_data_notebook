@@ -260,3 +260,113 @@ def _post_process_session(log: "LogFile") -> "LogFile":
 
     log.laps = clean_laps(log.laps)
     return log
+
+
+# ---------------------------------------------------------------------------
+# Session merging
+# ---------------------------------------------------------------------------
+
+
+class MergedLogFile:
+    """Wrapper that presents multiple LogFile objects as a single session.
+
+    Used when a single on-track session is split across multiple files
+    (e.g., car restart after a spin). Renumbers laps sequentially and
+    delegates filter_by_lap() to the correct underlying file.
+
+    The wrapper is duck-type compatible with LogFile — it exposes the same
+    attributes (metadata, channels, laps, file_name) and the critical
+    filter_by_lap() method that the analysis pipeline relies on.
+    """
+
+    def __init__(self, logs: list) -> None:
+        if len(logs) < 2:
+            raise ValueError("MergedLogFile requires at least 2 LogFile objects")
+
+        self._logs = logs
+
+        # Build lap mapping: new_num -> (log_index, original_num)
+        self._lap_map: dict[int, tuple[int, int]] = {}
+
+        # Collect all lap durations to compute median for partial-lap detection
+        all_durations: list[float] = []
+        for log in logs:
+            laps = log.laps
+            if len(laps) == 0:
+                continue
+            starts = laps.column("start_time").to_numpy()
+            ends = laps.column("end_time").to_numpy()
+            all_durations.extend((ends - starts).tolist())
+        median_duration = float(np.median(all_durations)) if all_durations else 0.0
+
+        # Identify boundary laps that are likely partial (< 75% of median).
+        # These occur when a file ends mid-lap (e.g., car spins then logger restarts).
+        boundary_skip: set[tuple[int, int]] = set()  # (log_idx, original_lap_num)
+        for log_idx, log in enumerate(logs):
+            laps = log.laps
+            if len(laps) == 0:
+                continue
+            nums = laps.column("num").to_pylist()
+            starts = laps.column("start_time").to_numpy()
+            ends = laps.column("end_time").to_numpy()
+
+            # Last lap of non-last files
+            if log_idx < len(logs) - 1:
+                dur = float(ends[-1] - starts[-1])
+                if median_duration > 0 and dur < median_duration * 0.75:
+                    boundary_skip.add((log_idx, nums[-1]))
+
+            # First lap of non-first files
+            if log_idx > 0:
+                dur = float(ends[0] - starts[0])
+                if median_duration > 0 and dur < median_duration * 0.75:
+                    boundary_skip.add((log_idx, nums[0]))
+
+        # Renumber laps sequentially, skipping partial boundary laps
+        parts: list[pa.Table] = []
+        next_num = 1
+        for log_idx, log in enumerate(logs):
+            laps = log.laps
+            n = len(laps)
+            if n == 0:
+                continue
+
+            orig_nums = laps.column("num").to_pylist()
+            keep_indices: list[int] = []
+            for i, orig_num in enumerate(orig_nums):
+                if (log_idx, orig_num) in boundary_skip:
+                    continue
+                self._lap_map[next_num] = (log_idx, orig_num)
+                keep_indices.append(i)
+                next_num += 1
+
+            if not keep_indices:
+                continue
+
+            kept = laps.take(keep_indices)
+            new_nums = pa.array(
+                list(range(next_num - len(keep_indices), next_num)),
+                type=kept.column("num").type,
+            )
+            num_idx = kept.schema.get_field_index("num")
+            parts.append(kept.set_column(num_idx, "num", new_nums))
+
+        self.laps = pa.concat_tables(parts) if parts else logs[0].laps
+
+        # Use first file's metadata
+        self.metadata = logs[0].metadata
+        self.file_name = logs[0].file_name
+
+        # Union of channels (for existence checks; actual data accessed via filter_by_lap)
+        self.channels: dict = {}
+        for log in logs:
+            for ch_name in log.channels:
+                if ch_name not in self.channels:
+                    self.channels[ch_name] = log.channels[ch_name]
+
+    def filter_by_lap(self, lap_num: int):
+        """Delegate to the correct underlying LogFile."""
+        if lap_num not in self._lap_map:
+            raise ValueError(f"Lap {lap_num} not found in merged session")
+        log_idx, orig_num = self._lap_map[lap_num]
+        return self._logs[log_idx].filter_by_lap(orig_num)
