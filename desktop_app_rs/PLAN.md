@@ -24,46 +24,19 @@ desktop_app_rs/
 - [x] **Phase 1: Core data model** — Session/Channel/Lap types, XRK+IBT loading via Arrow, derived channels (speed_kmh, distance_m), lap filtering, resampling, LapData extraction
 - [x] **Phase 1c: Vehicle profiles** — YAML persistence compatible with Python app, logger ID mapping
 - [x] **Phase 2: Analysis algorithms** — math utils, corner detection (GPS→XY→curvature), zone detection (grid voting), throttle acceptance, full driver consistency pipeline with rayon parallelism
+- [x] **Phase 3: Widgets** — theme colors, session panel (file dialog + drag-drop + lap checkboxes), config panel (channel names + thresholds + profile save), corner selector (summary/detail radio + corner list), stats window (grid tables)
+- [x] **Phase 4: Charts** — viridis colormap + colors, summary box plots (BP/TA/exit speed + A/B comparison + opportunity bands), detail line plots (throttle/brake/lat_g + viridis per-lap + VLine markers + TA annotation), track map (segment coloring + apex markers + opportunity diamonds)
+- [x] **Phase 5: App integration** — InfernoApp state, background analysis (std::thread + mpsc + 300ms debounce + panic catch), layout (collapsible top panel + corner sidebar + chart area + status bar), widget/chart wiring, profile auto-load, auto-throttle threshold (95% of peak), save profile, Statistics popup, Show/Hide toggle
+- [x] **Phase 5.5: Integration tests** — 20 integration tests against real XRZ data (86 + SFJ), 4 tiers: regression (CAN channels, lap-relative distance), data integrity (monotonic distance, corner data completeness), invariants (corner distances, segment refs, TA bounds), edge cases (single lap, missing channels, high threshold)
 
-**Test count:** 34 passing, clippy clean
-
-### Remaining — Parallel Work Plan
-
-Three independent workstreams, all writing to separate files:
-
-#### Agent: charts (inferno-ui)
-Files: `src/charts/{mod,colors,summary,detail,track_map}.rs`
-
-- [ ] `colors.rs` — viridis colormap, opportunity gradient (steelblue→gold), segment colors
-- [ ] `summary.rs` — 3 stacked box plots (BP centered, TA%, exit speed) using BoxPlot/BoxElem/BoxSpread, A/B comparison, opportunity highlight bands
-- [ ] `detail.rs` — 3 linked line plots (throttle, brake, lat G) with viridis per-lap coloring, VLine markers (brake/entry/apex/exit), TA annotation
-- [ ] `track_map.rs` — Plot::data_aspect(1.0), segment coloring (red/orange/green), apex markers, top-3 opportunity stars
-
-#### Agent: widgets (inferno-ui)
-Files: `src/{theme,widgets/{mod,session_panel,config_panel,corner_selector,stats_window}}.rs`
-
-- [ ] `theme.rs` — color constants (#1a1a2e bg, steelblue, darkorange, gold accents)
-- [ ] `session_panel.rs` — file dialog (rfd), drag-drop, lap checkboxes, file name display
-- [ ] `config_panel.rs` — channel name text inputs, threshold sliders (corner 0.006, throttle 98%, sustain 500ms), A/B session toggle, profile load/save
-- [ ] `corner_selector.rs` — Summary/Detail radio, scrollable corner radio buttons, auto-switch to detail on corner select
-- [ ] `stats_window.rs` — egui::Window popup, scrollable Grid tables (entry consistency, corner speed, opportunity ranking, interpretation guide)
-
-#### Me: app integration (inferno-app + inferno-ui wiring)
-Files: `inferno-ui/src/lib.rs`, `inferno-app/src/main.rs`
-
-- [ ] App state struct (sessions, analysis state, UI state, config)
-- [ ] Background analysis thread (std::thread + mpsc, 300ms debounce)
-- [ ] Layout: collapsible top panel → session panels + config | corner selector sidebar | chart area | status bar
-- [ ] Wire widgets + charts together, view mode switching
-- [ ] Profile persistence on session load
-- [ ] Error handling UX (status bar messages)
-- [ ] Auto-throttle threshold (95% of peak on load)
+**Test count:** 34 unit + 20 integration = 54 passing, clippy clean
 
 ### Future (not in this PR)
 
 - [ ] Suspension Velocity tab
 - [ ] Tire Grip tab
 - [ ] `AnalysisTab` trait when adding second tab
+- [ ] **Headless screenshot mode** — `--screenshot <xrz_file> <output.png>` flag that loads a file, runs analysis, renders one frame to PNG, and exits. Enables Claude to self-test UI changes without a human in the loop. Approach: use `eframe`'s offscreen rendering or `egui`'s `Context::run()` with a software rasterizer (e.g. `tiny-skia` via `epaint`), capture the framebuffer, write PNG. Could also drive specific views (summary, detail for corner N, track map) via CLI args. Opens the door to snapshot regression tests comparing output PNGs against golden files.
 
 ## Key Design Decisions
 
@@ -80,9 +53,12 @@ Each commit must pass:
 cargo build && cargo clippy && cargo test
 ```
 
-End-to-end test (after charts + widgets + integration):
+End-to-end test checklist:
 1. `cargo run --release` → dark window opens
 2. Drop .xrz file → corners detected, summary box plots render
 3. Click corner → detail overlay with lap traces
 4. Toggle track map → colored segments
 5. Open stats → tables populated
+6. Load Session B → A/B comparison boxes appear
+7. Adjust thresholds → analysis re-runs after debounce
+8. Save Profile → writes to ~/.config/motorsports_data_notebook/profiles.yaml
