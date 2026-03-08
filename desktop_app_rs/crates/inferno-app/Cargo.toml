@@ -10,3 +10,7 @@ inferno-core = { workspace = true }
 inferno-ui = { workspace = true }
 eframe = { workspace = true }
 egui = { workspace = true }
+
+[dev-dependencies]
+egui_kittest = { workspace = true }
+image = { workspace = true }
