@@ -86,6 +86,18 @@ struct ProfilesFile {
     logger_map: HashMap<String, String>,
 }
 
+/// Builtin profiles embedded at compile time (same file as the Python app).
+const BUILTIN_PROFILES_YAML: &str =
+    include_str!("../../../../src/motorsports_data_notebook/data/builtin_profiles.yaml");
+
+/// Load the builtin profiles.
+fn load_builtin_profiles() -> ProfilesFile {
+    serde_yaml::from_str(BUILTIN_PROFILES_YAML).unwrap_or(ProfilesFile {
+        profiles: HashMap::new(),
+        logger_map: HashMap::new(),
+    })
+}
+
 /// Load profiles from a YAML file.
 fn load_profiles_from_file(path: &Path) -> Result<ProfilesFile> {
     let content = std::fs::read_to_string(path)?;
@@ -131,13 +143,19 @@ pub fn load_user_logger_map() -> HashMap<String, String> {
 }
 
 /// Look up a profile by logger ID string.
+/// Checks user profiles first, then falls back to builtin profiles.
 pub fn get_profile_for_logger(logger_id: &str) -> Option<VehicleProfile> {
-    let path = user_profiles_path()?;
-    if !path.exists() {
-        return None;
+    // Try user profiles first
+    if let Some(profile) = lookup_profile_in_file(logger_id, &load_user_file()) {
+        return Some(profile);
     }
 
-    let file = load_profiles_from_file(&path).ok()?;
+    // Fall back to builtin profiles
+    lookup_profile_in_file(logger_id, &load_builtin_profiles())
+}
+
+/// Try to find a profile for the given logger ID in a ProfilesFile.
+fn lookup_profile_in_file(logger_id: &str, file: &ProfilesFile) -> Option<VehicleProfile> {
     let profile_id = file.logger_map.get(logger_id)?;
     let mut profile = file.profiles.get(profile_id).cloned()?;
 
@@ -151,6 +169,23 @@ pub fn get_profile_for_logger(logger_id: &str) -> Option<VehicleProfile> {
     }
 
     Some(profile)
+}
+
+/// Load user profiles file, returning empty if not found.
+fn load_user_file() -> ProfilesFile {
+    let path = match user_profiles_path() {
+        Some(p) if p.exists() => p,
+        _ => {
+            return ProfilesFile {
+                profiles: HashMap::new(),
+                logger_map: HashMap::new(),
+            }
+        }
+    };
+    load_profiles_from_file(&path).unwrap_or(ProfilesFile {
+        profiles: HashMap::new(),
+        logger_map: HashMap::new(),
+    })
 }
 
 /// Save a profile for a logger ID.
