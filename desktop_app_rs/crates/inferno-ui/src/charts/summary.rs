@@ -115,6 +115,9 @@ fn summary_plot<'a>(id: &str, names: &'a [String]) -> Plot<'a> {
         .height(200.0)
         .allow_drag(true)
         .allow_zoom(true)
+        .cursor_color(egui::Color32::TRANSPARENT)
+        .show_x(false)
+        .show_y(false)
         .show_axes([true, true])
         .x_axis_formatter(x_formatter(names))
         .x_grid_spacer(corner_spacer(names.len()))
@@ -132,6 +135,65 @@ fn y_range(spreads: &[Option<BoxSpread>]) -> (f64, f64) {
         (0.0, 1.0)
     } else {
         (lo, hi)
+    }
+}
+
+/// Info about a box element for custom hover detection.
+struct BoxInfo {
+    name: String,
+    x: f64,
+    spread: BoxSpread,
+}
+
+/// Show a summary plot with custom box hover tooltips.
+/// The built-in BoxPlot hover renders text above the box (goes off-screen),
+/// so we disable it and show a shaded tooltip next to the pointer instead.
+fn show_summary_plot(
+    plot: Plot<'_>,
+    ui: &mut Ui,
+    tooltip_id: &str,
+    boxes: &[BoxInfo],
+    build: impl FnOnce(&mut egui_plot::PlotUi),
+) {
+    let resp = plot.show(ui, build);
+    let layer_id = resp.response.layer_id;
+    let hover_pos = resp.response.hover_pos();
+    let transform = resp.transform;
+    resp.response.on_hover_cursor(egui::CursorIcon::Default);
+
+    if boxes.is_empty() {
+        return;
+    }
+
+    // Custom tooltip when hovering near a box
+    if let Some(hover_pos) = hover_pos {
+        let pt = transform.value_from_position(hover_pos);
+        if let Some(info) = boxes.iter().min_by(|a, b| {
+            let da = (a.x - pt.x).abs();
+            let db = (b.x - pt.x).abs();
+            da.partial_cmp(&db).unwrap()
+        }) {
+            if (info.x - pt.x).abs() < 0.4 {
+                egui::Tooltip::always_open(
+                    ui.ctx().clone(),
+                    layer_id,
+                    egui::Id::new(tooltip_id),
+                    egui::PopupAnchor::Pointer,
+                )
+                .gap(12.0)
+                .show(|ui| {
+                    ui.label(egui::RichText::new(&info.name).strong());
+                    ui.label(format!(
+                        "Max: {:.1}\nQ3:  {:.1}\nMed: {:.1}\nQ1:  {:.1}\nMin: {:.1}",
+                        info.spread.upper_whisker,
+                        info.spread.quartile3,
+                        info.spread.median,
+                        info.spread.quartile1,
+                        info.spread.lower_whisker,
+                    ));
+                });
+            }
+        }
     }
 }
 
@@ -154,6 +216,22 @@ fn draw_opportunity_bands(plot_ui: &mut egui_plot::PlotUi, top3: &[usize], y_min
                 .stroke(Stroke::NONE),
         );
     }
+}
+
+/// Collect BoxInfo entries from spreads and names for hover detection.
+fn collect_box_infos(names: &[String], spreads: &[Option<BoxSpread>]) -> Vec<BoxInfo> {
+    names
+        .iter()
+        .zip(spreads.iter())
+        .enumerate()
+        .filter_map(|(i, (name, spread))| {
+            spread.as_ref().map(|s| BoxInfo {
+                name: name.clone(),
+                x: (i + 1) as f64,
+                spread: s.clone(),
+            })
+        })
+        .collect()
 }
 
 /// Draw the 3-stacked summary box plots: Braking Points, Throttle Acceptance, Exit Speed.
@@ -188,27 +266,34 @@ pub fn draw_summary(ui: &mut Ui, corner_data: &[CornerConsistencyData]) {
             })
             .collect();
         let (y_lo, y_hi) = y_range(&spreads);
+        let box_infos = collect_box_infos(&names, &spreads);
 
-        summary_plot("summary_bp", &names).show(ui, |plot_ui| {
-            draw_opportunity_bands(plot_ui, &top3, y_lo, y_hi);
+        show_summary_plot(
+            summary_plot("summary_bp", &names),
+            ui,
+            "bp_tip",
+            &box_infos,
+            |plot_ui| {
+                draw_opportunity_bands(plot_ui, &top3, y_lo, y_hi);
 
-            let mut elems = Vec::new();
-            for (i, (cd, spread)) in corner_data.iter().zip(spreads.iter()).enumerate() {
-                if let Some(spread) = spread {
-                    elems.push(
-                        BoxElem::new((i + 1) as f64, spread.clone())
-                            .name(&cd.corner.name)
-                            .fill(colors::DARKORANGE)
-                            .stroke(BOX_STROKE())
-                            .box_width(0.5)
-                            .whisker_width(0.3),
-                    );
+                let mut elems = Vec::new();
+                for (i, (cd, spread)) in corner_data.iter().zip(spreads.iter()).enumerate() {
+                    if let Some(spread) = spread {
+                        elems.push(
+                            BoxElem::new((i + 1) as f64, spread.clone())
+                                .name(&cd.corner.name)
+                                .fill(colors::DARKORANGE)
+                                .stroke(BOX_STROKE())
+                                .box_width(0.5)
+                                .whisker_width(0.3),
+                        );
+                    }
                 }
-            }
-            if !elems.is_empty() {
-                plot_ui.box_plot(BoxPlot::new("BP", elems));
-            }
-        });
+                if !elems.is_empty() {
+                    plot_ui.box_plot(BoxPlot::new("BP", elems).allow_hover(false));
+                }
+            },
+        );
     }
 
     // --- Throttle Acceptance ---
@@ -219,27 +304,34 @@ pub fn draw_summary(ui: &mut Ui, corner_data: &[CornerConsistencyData]) {
             .map(|cd| compute_box_spread(&cd.ta_values))
             .collect();
         let (y_lo, y_hi) = y_range(&spreads);
+        let box_infos = collect_box_infos(&names, &spreads);
 
-        summary_plot("summary_ta", &names).show(ui, |plot_ui| {
-            draw_opportunity_bands(plot_ui, &top3, y_lo, y_hi);
+        show_summary_plot(
+            summary_plot("summary_ta", &names),
+            ui,
+            "ta_tip",
+            &box_infos,
+            |plot_ui| {
+                draw_opportunity_bands(plot_ui, &top3, y_lo, y_hi);
 
-            let mut elems = Vec::new();
-            for (i, (cd, spread)) in corner_data.iter().zip(spreads.iter()).enumerate() {
-                if let Some(spread) = spread {
-                    elems.push(
-                        BoxElem::new((i + 1) as f64, spread.clone())
-                            .name(&cd.corner.name)
-                            .fill(colors::STEELBLUE)
-                            .stroke(BOX_STROKE())
-                            .box_width(0.5)
-                            .whisker_width(0.3),
-                    );
+                let mut elems = Vec::new();
+                for (i, (cd, spread)) in corner_data.iter().zip(spreads.iter()).enumerate() {
+                    if let Some(spread) = spread {
+                        elems.push(
+                            BoxElem::new((i + 1) as f64, spread.clone())
+                                .name(&cd.corner.name)
+                                .fill(colors::STEELBLUE)
+                                .stroke(BOX_STROKE())
+                                .box_width(0.5)
+                                .whisker_width(0.3),
+                        );
+                    }
                 }
-            }
-            if !elems.is_empty() {
-                plot_ui.box_plot(BoxPlot::new("TA%", elems));
-            }
-        });
+                if !elems.is_empty() {
+                    plot_ui.box_plot(BoxPlot::new("TA%", elems).allow_hover(false));
+                }
+            },
+        );
     }
 
     // --- Exit Speed ---
@@ -250,29 +342,36 @@ pub fn draw_summary(ui: &mut Ui, corner_data: &[CornerConsistencyData]) {
             .map(|cd| compute_box_spread(&cd.exit_speed_values))
             .collect();
         let (y_lo, y_hi) = y_range(&spreads);
+        let box_infos = collect_box_infos(&names, &spreads);
 
-        summary_plot("summary_exit_speed", &names).show(ui, |plot_ui| {
-            draw_opportunity_bands(plot_ui, &top3, y_lo, y_hi);
+        show_summary_plot(
+            summary_plot("summary_exit_speed", &names),
+            ui,
+            "es_tip",
+            &box_infos,
+            |plot_ui| {
+                draw_opportunity_bands(plot_ui, &top3, y_lo, y_hi);
 
-            let mut elems = Vec::new();
-            for (i, (cd, spread)) in corner_data.iter().zip(spreads.iter()).enumerate() {
-                if let Some(spread) = spread {
-                    let t = (cd.opportunity_score - min_opp) / opp_range;
-                    let color = colors::opportunity_gradient(t);
-                    elems.push(
-                        BoxElem::new((i + 1) as f64, spread.clone())
-                            .name(&cd.corner.name)
-                            .fill(color)
-                            .stroke(BOX_STROKE())
-                            .box_width(0.5)
-                            .whisker_width(0.3),
-                    );
+                let mut elems = Vec::new();
+                for (i, (cd, spread)) in corner_data.iter().zip(spreads.iter()).enumerate() {
+                    if let Some(spread) = spread {
+                        let t = (cd.opportunity_score - min_opp) / opp_range;
+                        let color = colors::opportunity_gradient(t);
+                        elems.push(
+                            BoxElem::new((i + 1) as f64, spread.clone())
+                                .name(&cd.corner.name)
+                                .fill(color)
+                                .stroke(BOX_STROKE())
+                                .box_width(0.5)
+                                .whisker_width(0.3),
+                        );
+                    }
                 }
-            }
-            if !elems.is_empty() {
-                plot_ui.box_plot(BoxPlot::new("Exit Speed", elems));
-            }
-        });
+                if !elems.is_empty() {
+                    plot_ui.box_plot(BoxPlot::new("Exit Speed", elems).allow_hover(false));
+                }
+            },
+        );
     }
 }
 
@@ -299,131 +398,199 @@ pub fn draw_summary_comparison(
 
     // --- Braking Points ---
     ui.label("Braking Points (\u{0394} from mean, m)");
-    summary_plot("summary_bp_cmp", &names).show(ui, |plot_ui| {
-        let mut elems_a = Vec::new();
-        let mut elems_b = Vec::new();
+    {
+        let box_infos = collect_cmp_box_infos(corner_data_a, corner_data_b, n, offset, |cd| {
+            let m = inferno_core::analysis::math::mean(&cd.bp_values);
+            let centered: Vec<f64> = cd.bp_values.iter().map(|v| v - m).collect();
+            compute_box_spread(&centered)
+        });
+        show_summary_plot(
+            summary_plot("summary_bp_cmp", &names),
+            ui,
+            "bp_cmp_tip",
+            &box_infos,
+            |plot_ui| {
+                let mut elems_a = Vec::new();
+                let mut elems_b = Vec::new();
 
-        for i in 0..n {
-            let x = (i + 1) as f64;
-            if let Some(cd) = corner_data_a.get(i) {
-                let m = inferno_core::analysis::math::mean(&cd.bp_values);
-                let centered: Vec<f64> = cd.bp_values.iter().map(|v| v - m).collect();
-                if let Some(spread) = compute_box_spread(&centered) {
-                    elems_a.push(
-                        BoxElem::new(x - offset, spread)
-                            .name(format!("{} (A)", cd.corner.name))
-                            .fill(colors::STEELBLUE)
-                            .stroke(BOX_STROKE_A())
-                            .box_width(0.35)
-                            .whisker_width(0.2),
-                    );
+                for i in 0..n {
+                    let x = (i + 1) as f64;
+                    if let Some(cd) = corner_data_a.get(i) {
+                        let m = inferno_core::analysis::math::mean(&cd.bp_values);
+                        let centered: Vec<f64> = cd.bp_values.iter().map(|v| v - m).collect();
+                        if let Some(spread) = compute_box_spread(&centered) {
+                            elems_a.push(
+                                BoxElem::new(x - offset, spread)
+                                    .name(format!("{} (A)", cd.corner.name))
+                                    .fill(colors::STEELBLUE)
+                                    .stroke(BOX_STROKE_A())
+                                    .box_width(0.35)
+                                    .whisker_width(0.2),
+                            );
+                        }
+                    }
+                    if let Some(cd) = corner_data_b.get(i) {
+                        let m = inferno_core::analysis::math::mean(&cd.bp_values);
+                        let centered: Vec<f64> = cd.bp_values.iter().map(|v| v - m).collect();
+                        if let Some(spread) = compute_box_spread(&centered) {
+                            elems_b.push(
+                                BoxElem::new(x + offset, spread)
+                                    .name(format!("{} (B)", cd.corner.name))
+                                    .fill(colors::DARKORANGE)
+                                    .stroke(BOX_STROKE_B())
+                                    .box_width(0.35)
+                                    .whisker_width(0.2),
+                            );
+                        }
+                    }
                 }
-            }
-            if let Some(cd) = corner_data_b.get(i) {
-                let m = inferno_core::analysis::math::mean(&cd.bp_values);
-                let centered: Vec<f64> = cd.bp_values.iter().map(|v| v - m).collect();
-                if let Some(spread) = compute_box_spread(&centered) {
-                    elems_b.push(
-                        BoxElem::new(x + offset, spread)
-                            .name(format!("{} (B)", cd.corner.name))
-                            .fill(colors::DARKORANGE)
-                            .stroke(BOX_STROKE_B())
-                            .box_width(0.35)
-                            .whisker_width(0.2),
-                    );
-                }
-            }
-        }
 
-        if !elems_a.is_empty() {
-            plot_ui.box_plot(BoxPlot::new("A", elems_a));
-        }
-        if !elems_b.is_empty() {
-            plot_ui.box_plot(BoxPlot::new("B", elems_b));
-        }
-    });
+                if !elems_a.is_empty() {
+                    plot_ui.box_plot(BoxPlot::new("A", elems_a).allow_hover(false));
+                }
+                if !elems_b.is_empty() {
+                    plot_ui.box_plot(BoxPlot::new("B", elems_b).allow_hover(false));
+                }
+            },
+        );
+    }
 
     // --- Throttle Acceptance ---
     ui.label("Throttle Acceptance (%)");
-    summary_plot("summary_ta_cmp", &names).show(ui, |plot_ui| {
-        let mut elems_a = Vec::new();
-        let mut elems_b = Vec::new();
+    {
+        let box_infos = collect_cmp_box_infos(corner_data_a, corner_data_b, n, offset, |cd| {
+            compute_box_spread(&cd.ta_values)
+        });
+        show_summary_plot(
+            summary_plot("summary_ta_cmp", &names),
+            ui,
+            "ta_cmp_tip",
+            &box_infos,
+            |plot_ui| {
+                let mut elems_a = Vec::new();
+                let mut elems_b = Vec::new();
 
-        for i in 0..n {
-            let x = (i + 1) as f64;
-            if let Some(cd) = corner_data_a.get(i) {
-                if let Some(spread) = compute_box_spread(&cd.ta_values) {
-                    elems_a.push(
-                        BoxElem::new(x - offset, spread)
-                            .name(format!("{} (A)", cd.corner.name))
-                            .fill(colors::STEELBLUE)
-                            .stroke(BOX_STROKE_A())
-                            .box_width(0.35)
-                            .whisker_width(0.2),
-                    );
+                for i in 0..n {
+                    let x = (i + 1) as f64;
+                    if let Some(cd) = corner_data_a.get(i) {
+                        if let Some(spread) = compute_box_spread(&cd.ta_values) {
+                            elems_a.push(
+                                BoxElem::new(x - offset, spread)
+                                    .name(format!("{} (A)", cd.corner.name))
+                                    .fill(colors::STEELBLUE)
+                                    .stroke(BOX_STROKE_A())
+                                    .box_width(0.35)
+                                    .whisker_width(0.2),
+                            );
+                        }
+                    }
+                    if let Some(cd) = corner_data_b.get(i) {
+                        if let Some(spread) = compute_box_spread(&cd.ta_values) {
+                            elems_b.push(
+                                BoxElem::new(x + offset, spread)
+                                    .name(format!("{} (B)", cd.corner.name))
+                                    .fill(colors::DARKORANGE)
+                                    .stroke(BOX_STROKE_B())
+                                    .box_width(0.35)
+                                    .whisker_width(0.2),
+                            );
+                        }
+                    }
                 }
-            }
-            if let Some(cd) = corner_data_b.get(i) {
-                if let Some(spread) = compute_box_spread(&cd.ta_values) {
-                    elems_b.push(
-                        BoxElem::new(x + offset, spread)
-                            .name(format!("{} (B)", cd.corner.name))
-                            .fill(colors::DARKORANGE)
-                            .stroke(BOX_STROKE_B())
-                            .box_width(0.35)
-                            .whisker_width(0.2),
-                    );
-                }
-            }
-        }
 
-        if !elems_a.is_empty() {
-            plot_ui.box_plot(BoxPlot::new("A", elems_a));
-        }
-        if !elems_b.is_empty() {
-            plot_ui.box_plot(BoxPlot::new("B", elems_b));
-        }
-    });
+                if !elems_a.is_empty() {
+                    plot_ui.box_plot(BoxPlot::new("A", elems_a).allow_hover(false));
+                }
+                if !elems_b.is_empty() {
+                    plot_ui.box_plot(BoxPlot::new("B", elems_b).allow_hover(false));
+                }
+            },
+        );
+    }
 
     // --- Exit Speed ---
     ui.label("Exit Speed (km/h)");
-    summary_plot("summary_exit_cmp", &names).show(ui, |plot_ui| {
-        let mut elems_a = Vec::new();
-        let mut elems_b = Vec::new();
+    {
+        let box_infos = collect_cmp_box_infos(corner_data_a, corner_data_b, n, offset, |cd| {
+            compute_box_spread(&cd.exit_speed_values)
+        });
+        show_summary_plot(
+            summary_plot("summary_exit_cmp", &names),
+            ui,
+            "es_cmp_tip",
+            &box_infos,
+            |plot_ui| {
+                let mut elems_a = Vec::new();
+                let mut elems_b = Vec::new();
 
-        for i in 0..n {
-            let x = (i + 1) as f64;
-            if let Some(cd) = corner_data_a.get(i) {
-                if let Some(spread) = compute_box_spread(&cd.exit_speed_values) {
-                    elems_a.push(
-                        BoxElem::new(x - offset, spread)
-                            .name(format!("{} (A)", cd.corner.name))
-                            .fill(colors::STEELBLUE)
-                            .stroke(BOX_STROKE_A())
-                            .box_width(0.35)
-                            .whisker_width(0.2),
-                    );
+                for i in 0..n {
+                    let x = (i + 1) as f64;
+                    if let Some(cd) = corner_data_a.get(i) {
+                        if let Some(spread) = compute_box_spread(&cd.exit_speed_values) {
+                            elems_a.push(
+                                BoxElem::new(x - offset, spread)
+                                    .name(format!("{} (A)", cd.corner.name))
+                                    .fill(colors::STEELBLUE)
+                                    .stroke(BOX_STROKE_A())
+                                    .box_width(0.35)
+                                    .whisker_width(0.2),
+                            );
+                        }
+                    }
+                    if let Some(cd) = corner_data_b.get(i) {
+                        if let Some(spread) = compute_box_spread(&cd.exit_speed_values) {
+                            elems_b.push(
+                                BoxElem::new(x + offset, spread)
+                                    .name(format!("{} (B)", cd.corner.name))
+                                    .fill(colors::DARKORANGE)
+                                    .stroke(BOX_STROKE_B())
+                                    .box_width(0.35)
+                                    .whisker_width(0.2),
+                            );
+                        }
+                    }
                 }
-            }
-            if let Some(cd) = corner_data_b.get(i) {
-                if let Some(spread) = compute_box_spread(&cd.exit_speed_values) {
-                    elems_b.push(
-                        BoxElem::new(x + offset, spread)
-                            .name(format!("{} (B)", cd.corner.name))
-                            .fill(colors::DARKORANGE)
-                            .stroke(BOX_STROKE_B())
-                            .box_width(0.35)
-                            .whisker_width(0.2),
-                    );
-                }
-            }
-        }
 
-        if !elems_a.is_empty() {
-            plot_ui.box_plot(BoxPlot::new("A", elems_a));
+                if !elems_a.is_empty() {
+                    plot_ui.box_plot(BoxPlot::new("A", elems_a).allow_hover(false));
+                }
+                if !elems_b.is_empty() {
+                    plot_ui.box_plot(BoxPlot::new("B", elems_b).allow_hover(false));
+                }
+            },
+        );
+    }
+}
+
+/// Collect BoxInfo entries for comparison mode (both A and B boxes).
+fn collect_cmp_box_infos(
+    corner_data_a: &[CornerConsistencyData],
+    corner_data_b: &[CornerConsistencyData],
+    n: usize,
+    offset: f64,
+    spread_fn: impl Fn(&CornerConsistencyData) -> Option<BoxSpread>,
+) -> Vec<BoxInfo> {
+    let mut infos = Vec::new();
+    for i in 0..n {
+        let x = (i + 1) as f64;
+        if let Some(cd) = corner_data_a.get(i) {
+            if let Some(spread) = spread_fn(cd) {
+                infos.push(BoxInfo {
+                    name: format!("{} (A)", cd.corner.name),
+                    x: x - offset,
+                    spread,
+                });
+            }
         }
-        if !elems_b.is_empty() {
-            plot_ui.box_plot(BoxPlot::new("B", elems_b));
+        if let Some(cd) = corner_data_b.get(i) {
+            if let Some(spread) = spread_fn(cd) {
+                infos.push(BoxInfo {
+                    name: format!("{} (B)", cd.corner.name),
+                    x: x + offset,
+                    spread,
+                });
+            }
         }
-    });
+    }
+    infos
 }

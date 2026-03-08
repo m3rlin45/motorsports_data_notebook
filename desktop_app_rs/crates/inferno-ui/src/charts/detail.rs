@@ -45,6 +45,7 @@ pub fn draw_detail(ui: &mut Ui, corner_data: &CornerConsistencyData) {
         .link_cursor(cursor_group, egui::Vec2b::new(true, false))
         .allow_drag(true)
         .allow_zoom(true)
+        .cursor_color(egui::Color32::TRANSPARENT)
         .legend(egui_plot::Legend::default())
         .show(ui, |plot_ui| {
             draw_vline_markers(plot_ui, braking_start, entry_dist, apex_dist, exit_dist);
@@ -83,7 +84,9 @@ pub fn draw_detail(ui: &mut Ui, corner_data: &CornerConsistencyData) {
                     );
                 }
             }
-        });
+        })
+        .response
+        .on_hover_cursor(egui::CursorIcon::Default);
 
     // --- Brake ---
     ui.label("Brake Pressure");
@@ -93,6 +96,7 @@ pub fn draw_detail(ui: &mut Ui, corner_data: &CornerConsistencyData) {
         .link_cursor(cursor_group, egui::Vec2b::new(true, false))
         .allow_drag(true)
         .allow_zoom(true)
+        .cursor_color(egui::Color32::TRANSPARENT)
         .legend(egui_plot::Legend::default())
         .show(ui, |plot_ui| {
             draw_vline_markers(plot_ui, braking_start, entry_dist, apex_dist, exit_dist);
@@ -112,7 +116,9 @@ pub fn draw_detail(ui: &mut Ui, corner_data: &CornerConsistencyData) {
                         .width(1.5),
                 );
             }
-        });
+        })
+        .response
+        .on_hover_cursor(egui::CursorIcon::Default);
 
     // --- Lateral G ---
     ui.label("Lateral G");
@@ -122,6 +128,7 @@ pub fn draw_detail(ui: &mut Ui, corner_data: &CornerConsistencyData) {
         .link_cursor(cursor_group, egui::Vec2b::new(true, false))
         .allow_drag(true)
         .allow_zoom(true)
+        .cursor_color(egui::Color32::TRANSPARENT)
         .legend(egui_plot::Legend::default())
         .show(ui, |plot_ui| {
             draw_vline_markers(plot_ui, braking_start, entry_dist, apex_dist, exit_dist);
@@ -141,7 +148,9 @@ pub fn draw_detail(ui: &mut Ui, corner_data: &CornerConsistencyData) {
                         .width(1.5),
                 );
             }
-        });
+        })
+        .response
+        .on_hover_cursor(egui::CursorIcon::Default);
 }
 
 /// Draw VLine markers for braking start, corner entry, apex, and corner exit.

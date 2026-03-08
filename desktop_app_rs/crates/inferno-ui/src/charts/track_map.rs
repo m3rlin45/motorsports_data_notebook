@@ -39,6 +39,7 @@ pub fn draw_track_map(ui: &mut Ui, result: &DriverConsistencyResult) {
         .allow_drag(true)
         .allow_zoom(true)
         .show_axes([false, false])
+        .cursor_color(egui::Color32::TRANSPARENT)
         .legend(Legend::default())
         .show(ui, |plot_ui| {
             // Base track line (gray)
@@ -127,7 +128,65 @@ pub fn draw_track_map(ui: &mut Ui, result: &DriverConsistencyResult) {
                     }
                 }
             }
+        })
+        .response
+        .on_hover_cursor(egui::CursorIcon::Default);
+}
+
+/// Draw a small clickable track map thumbnail. Returns true if clicked.
+pub fn draw_track_map_thumbnail(ui: &mut Ui, result: &DriverConsistencyResult) -> bool {
+    if result.ref_lat.is_empty() || result.ref_lon.is_empty() {
+        return false;
+    }
+
+    let (x, y) = gps_to_local_xy(&result.ref_lat, &result.ref_lon);
+    let ref_dist = &result.ref_distance;
+
+    let resp = Plot::new("track_map_thumb")
+        .data_aspect(1.0)
+        .allow_drag(false)
+        .allow_zoom(false)
+        .allow_scroll(false)
+        .allow_boxed_zoom(false)
+        .show_x(false)
+        .show_y(false)
+        .show_axes([false, false])
+        .show_grid(false)
+        .show(ui, |plot_ui| {
+            // Base track line
+            let base_pts: Vec<[f64; 2]> =
+                x.iter().zip(y.iter()).map(|(&xi, &yi)| [xi, yi]).collect();
+            plot_ui.line(
+                Line::new("Track", PlotPoints::new(base_pts))
+                    .color(colors::segment::TRACK_BASE)
+                    .width(2.0),
+            );
+
+            // Segment coloring (simplified — no legend names)
+            for seg in &result.segments {
+                let si = searchsorted(ref_dist, seg.start_dist);
+                let ei = searchsorted(ref_dist, seg.end_dist).min(x.len());
+                if si >= ei || si >= x.len() {
+                    continue;
+                }
+                let seg_pts: Vec<[f64; 2]> = (si..ei).map(|j| [x[j], y[j]]).collect();
+                if seg_pts.is_empty() {
+                    continue;
+                }
+                let color = match seg.segment_type {
+                    SegmentType::Braking => colors::segment::BRAKING,
+                    SegmentType::Corner => colors::segment::CORNER,
+                    SegmentType::Acceleration => colors::segment::ACCELERATION,
+                };
+                plot_ui.line(
+                    Line::new(&seg.name, PlotPoints::new(seg_pts))
+                        .color(color)
+                        .width(3.0),
+                );
+            }
         });
+
+    resp.response.clicked()
 }
 
 /// Find the indices of the top-N corners by opportunity score.

@@ -1,10 +1,11 @@
 use inferno_core::analysis::corners::Corner;
 
-/// View mode: summary of all corners or detail of a single corner.
+/// View mode: summary of all corners, detail of a single corner, or full track map.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ViewMode {
     Summary,
     Detail(usize),
+    TrackMap,
 }
 
 /// Sidebar widget for selecting view mode and individual corners.
@@ -38,7 +39,6 @@ impl CornerSelector {
             ui.separator();
 
             // Summary / Detail radio
-            let was_summary = self.view_mode == ViewMode::Summary;
             if ui
                 .radio_value(&mut self.view_mode, ViewMode::Summary, "Summary")
                 .changed()
@@ -82,7 +82,7 @@ impl CornerSelector {
             }
 
             // Keep Detail mode in sync with selected corner
-            if !was_summary && self.view_mode != ViewMode::Summary {
+            if matches!(self.view_mode, ViewMode::Detail(_)) {
                 self.view_mode = ViewMode::Detail(self.selected_corner);
             }
         });
@@ -113,7 +113,7 @@ impl CornerSelector {
     pub fn selected_corner_index(&self) -> Option<usize> {
         match self.view_mode {
             ViewMode::Detail(i) => Some(i),
-            ViewMode::Summary => None,
+            ViewMode::Summary | ViewMode::TrackMap => None,
         }
     }
 }
