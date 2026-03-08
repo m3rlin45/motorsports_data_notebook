@@ -80,7 +80,7 @@ pub fn draw_detail(ui: &mut Ui, corner_data: &CornerConsistencyData) {
                             egui_plot::PlotPoint::new(d_min + 5.0, 95.0),
                             &ta_text,
                         )
-                        .color(egui::Color32::WHITE),
+                        .color(egui::Color32::DARK_GRAY),
                     );
                 }
             }

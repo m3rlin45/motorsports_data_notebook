@@ -106,7 +106,7 @@ pub fn draw_track_map(ui: &mut Ui, result: &DriverConsistencyResult) {
                             PlotPoint::new(ax, ay),
                             &corner.name,
                         )
-                        .color(egui::Color32::WHITE),
+                        .color(egui::Color32::BLACK),
                     );
                 }
             }
