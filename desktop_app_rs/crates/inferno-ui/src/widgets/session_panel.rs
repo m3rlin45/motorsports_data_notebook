@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use egui::RichText;
-use inferno_core::lap::Lap;
+use inferno_core::lap::{get_best_lap, get_top_laps, Lap};
 use inferno_core::session::Session;
 
 /// Response events from the session panel.
@@ -56,6 +56,7 @@ impl SessionPanel {
                     if let Some(path) = path {
                         self.load_file(&path);
                         response.file_loaded = self.session.clone();
+                        response.selection_changed = true;
                     }
                 }
 
@@ -76,24 +77,42 @@ impl SessionPanel {
                 if let Some(path) = &file.path {
                     self.load_file(path);
                     response.file_loaded = self.session.clone();
+                    response.selection_changed = true;
                     break;
                 }
             }
 
             // Lap selection
             if let Some(session) = &self.session {
+                let best_num = get_best_lap(&session.laps).map(|l| l.num);
+                let num_laps = session.laps.len();
+                let lap_info: Vec<(String, i32)> = session
+                    .laps
+                    .iter()
+                    .map(|lap| (format_lap_label(lap, best_num), lap.num))
+                    .collect();
+
                 ui.add_space(8.0);
+                let selected_count = self.lap_selected.iter().filter(|&&s| s).count();
                 ui.label(
-                    RichText::new(format!("{} laps", session.laps.len()))
+                    RichText::new(format!("{selected_count}/{num_laps} laps selected"))
                         .color(crate::theme::STEELBLUE),
                 );
 
                 ui.horizontal(|ui| {
-                    if ui.button("Select All").clicked() {
+                    if ui.button("Best").clicked() {
+                        self.select_best();
+                        response.selection_changed = true;
+                    }
+                    if ui.button("Top 103%").clicked() {
+                        self.select_top_103();
+                        response.selection_changed = true;
+                    }
+                    if ui.button("All").clicked() {
                         self.lap_selected.fill(true);
                         response.selection_changed = true;
                     }
-                    if ui.button("Clear").clicked() {
+                    if ui.button("None").clicked() {
                         self.lap_selected.fill(false);
                         response.selection_changed = true;
                     }
@@ -102,12 +121,11 @@ impl SessionPanel {
                 egui::ScrollArea::vertical()
                     .max_height(200.0)
                     .show(ui, |ui| {
-                        for (i, lap) in session.laps.iter().enumerate() {
-                            if i < self.lap_selected.len() {
-                                let label = format_lap_label(lap);
-                                if ui.checkbox(&mut self.lap_selected[i], label).changed() {
-                                    response.selection_changed = true;
-                                }
+                        for (i, (label, _)) in lap_info.iter().enumerate() {
+                            if i < self.lap_selected.len()
+                                && ui.checkbox(&mut self.lap_selected[i], label).changed()
+                            {
+                                response.selection_changed = true;
                             }
                         }
                     });
@@ -135,21 +153,50 @@ impl SessionPanel {
     fn load_file(&mut self, path: &std::path::Path) {
         match Session::open(path) {
             Ok(session) => {
-                let num_laps = session.laps.len();
                 self.file_path = Some(path.to_path_buf());
                 self.session = Some(Arc::new(session));
-                self.lap_selected = vec![true; num_laps];
+                // Auto-select top 103% on load
+                self.select_top_103();
             }
             Err(e) => {
                 eprintln!("Failed to load session: {e}");
             }
         }
     }
+
+    fn select_best(&mut self) {
+        let Some(session) = &self.session else {
+            return;
+        };
+        self.lap_selected.fill(false);
+        if let Some(best) = get_best_lap(&session.laps) {
+            for (i, lap) in session.laps.iter().enumerate() {
+                if lap.num == best.num {
+                    self.lap_selected[i] = true;
+                }
+            }
+        }
+    }
+
+    fn select_top_103(&mut self) {
+        let Some(session) = &self.session else {
+            return;
+        };
+        self.lap_selected = vec![false; session.laps.len()];
+        let top = get_top_laps(&session.laps, 1.03);
+        let top_nums: Vec<i32> = top.iter().map(|l| l.num).collect();
+        for (i, lap) in session.laps.iter().enumerate() {
+            if top_nums.contains(&lap.num) {
+                self.lap_selected[i] = true;
+            }
+        }
+    }
 }
 
-fn format_lap_label(lap: &Lap) -> String {
+fn format_lap_label(lap: &Lap, best_num: Option<i32>) -> String {
     let duration_ms = lap.duration_ms();
     let mins = duration_ms / 60_000;
     let secs = (duration_ms % 60_000) as f64 / 1000.0;
-    format!("Lap {} ({mins}:{secs:06.3})", lap.num)
+    let star = if best_num == Some(lap.num) { " *" } else { "" };
+    format!("Lap {} ({mins}:{secs:06.3}){star}", lap.num)
 }
