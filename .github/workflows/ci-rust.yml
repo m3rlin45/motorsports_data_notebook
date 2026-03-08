@@ -1,0 +1,114 @@
+name: Rust CI
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'desktop_app_rs/**'
+      - '.github/workflows/ci-rust.yml'
+  pull_request:
+    branches: [master]
+    paths:
+      - 'desktop_app_rs/**'
+      - '.github/workflows/ci-rust.yml'
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  check:
+    name: Clippy & Format
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: desktop_app_rs
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            desktop_app_rs/target
+          key: check-${{ runner.os }}-${{ hashFiles('desktop_app_rs/Cargo.lock') }}
+          restore-keys: check-${{ runner.os }}-
+
+      - name: Check formatting
+        run: cargo fmt --check
+
+      - name: Run clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: desktop_app_rs
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            desktop_app_rs/target
+          key: test-${{ runner.os }}-${{ hashFiles('desktop_app_rs/Cargo.lock') }}
+          restore-keys: test-${{ runner.os }}-
+
+      - name: Run unit tests
+        run: cargo test --lib
+
+      - name: Run integration tests
+        run: cargo test --test integration_xrz
+
+  test-snapshots:
+    name: Snapshot Tests
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: desktop_app_rs
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev mesa-vulkan-drivers
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            desktop_app_rs/target
+          key: snapshots-${{ runner.os }}-${{ hashFiles('desktop_app_rs/Cargo.lock') }}
+          restore-keys: snapshots-${{ runner.os }}-
+
+      - name: Run snapshot tests
+        run: cargo test --test snapshot_tests
+
+      - name: Upload snapshot artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshot-test-results
+          path: desktop_app_rs/crates/inferno-app/tests/snapshots/
+          retention-days: 7
