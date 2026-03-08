@@ -357,6 +357,20 @@ impl eframe::App for InfernoApp {
             .default_width(150.0)
             .show(ctx, |ui| {
                 self.corner_selector.show(ui);
+
+                // Track map thumbnail at the bottom of the sidebar
+                if let Some(result) = &self.result_a {
+                    ui.add_space(8.0);
+                    ui.separator();
+                    ui.label(
+                        egui::RichText::new("Track Map")
+                            .strong()
+                            .color(inferno_ui::theme::STEELBLUE),
+                    );
+                    if charts::track_map::draw_track_map_thumbnail(ui, result) {
+                        self.corner_selector.view_mode = ViewMode::TrackMap;
+                    }
+                }
             });
 
         // Central chart area
@@ -389,6 +403,15 @@ impl eframe::App for InfernoApp {
                             charts::detail::draw_detail(ui, cd);
                         });
                     }
+                } else {
+                    ui.centered_and_justified(|ui| {
+                        ui.heading("Load a telemetry file to begin analysis");
+                    });
+                }
+            }
+            ViewMode::TrackMap => {
+                if let Some(result) = &self.result_a {
+                    charts::track_map::draw_track_map(ui, result);
                 } else {
                     ui.centered_and_justified(|ui| {
                         ui.heading("Load a telemetry file to begin analysis");
