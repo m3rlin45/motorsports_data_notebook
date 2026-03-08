@@ -97,11 +97,11 @@ pub mod segment {
     pub const APEX_MARKER: Color32 = Color32::from_rgb(139, 0, 0);
 }
 
-/// Cyan for braking start VLine.
-pub const BRAKING_START_COLOR: Color32 = Color32::from_rgb(0, 200, 200);
+/// Teal for braking start VLine (visible on both dark and light backgrounds).
+pub const BRAKING_START_COLOR: Color32 = Color32::from_rgb(0, 150, 150);
 
-/// Yellow for corner entry/exit VLines.
-pub const CORNER_BOUNDARY_COLOR: Color32 = Color32::from_rgb(230, 230, 0);
+/// Dark yellow/olive for corner entry/exit VLines (visible on both dark and light backgrounds).
+pub const CORNER_BOUNDARY_COLOR: Color32 = Color32::from_rgb(180, 160, 0);
 
 /// Red for apex VLine.
 pub const APEX_VLINE_COLOR: Color32 = Color32::from_rgb(220, 50, 50);
