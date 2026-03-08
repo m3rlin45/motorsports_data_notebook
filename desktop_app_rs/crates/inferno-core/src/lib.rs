@@ -1,3 +1,4 @@
+pub mod analysis;
 pub mod channel;
 pub mod error;
 pub mod lap;
