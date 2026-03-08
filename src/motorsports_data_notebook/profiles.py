@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 DEFAULT_CHANNEL_NAMES: dict[str, str] = {
     "throttle": "PPS",
     "brake": "BrakePress",
+    "brake_rear": "",
     "gps_speed": "GPS Speed",
     "gps_latitude": "GPS Latitude",
     "gps_longitude": "GPS Longitude",

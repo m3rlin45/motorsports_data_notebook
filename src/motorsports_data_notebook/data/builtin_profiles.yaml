@@ -106,6 +106,7 @@ profiles:
     channel_names:
       throttle: Throttle
       brake: F_BRK
+      brake_rear: R_BRK
       gps_speed: GPS Speed
       gps_latitude: GPS Latitude
       gps_longitude: GPS Longitude

@@ -38,6 +38,8 @@ __all__ = [
     "plot_tire_grip_scatter",
     "plot_tire_thermography",
     "plot_track_segments",
+    "save_corner_comparison",
+    "save_corner_map",
     "show_fig",
     "visualize_throttle_acceptance",
 ]
@@ -1535,3 +1537,317 @@ def plot_tire_grip_scatter(
     fig.update_yaxes(title_text=accel_label, row=2, col=1)
 
     return fig
+
+
+# ── Track map image (matplotlib) ─────────────────────────────────────────────
+
+
+def save_track_map(
+    lat: np.ndarray,
+    lon: np.ndarray,
+    distance: np.ndarray,
+    segments: list["TrackSegment"],
+    output_path: str,
+    title: str = "Track Map",
+    dpi: int = 150,
+) -> None:
+    """Save a track map image with labeled corners using matplotlib.
+
+    Parameters
+    ----------
+    lat : np.ndarray
+        GPS latitude values for the reference lap.
+    lon : np.ndarray
+        GPS longitude values for the reference lap.
+    distance : np.ndarray
+        Distance along track in meters for the reference lap.
+    segments : list[TrackSegment]
+        Track segments to color-code.
+    output_path : str
+        Path to save the image (PNG, JPG, etc.).
+    title : str
+        Chart title.
+    dpi : int
+        Image resolution.
+    """
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    from motorsports_data_notebook.corners import gps_to_local_xy
+
+    x, y = gps_to_local_xy(lat, lon)
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.set_facecolor("#1a1a2e")
+    fig.set_facecolor("#1a1a2e")
+    ax.set_title(title, fontsize=12, color="white", pad=10)
+
+    # Base track (gray)
+    ax.plot(x, y, color="#444444", linewidth=2, zorder=1)
+
+    # Color-coded segments
+    segment_colors = {"braking": "#FF4444", "corner": "#FF8800", "acceleration": "#44BB44"}
+    legend_added: dict[str, bool] = {}
+    legend_names = {"braking": "Braking", "corner": "Corner", "acceleration": "Acceleration"}
+
+    for seg in segments:
+        mask = (distance >= seg.start_dist) & (distance <= seg.end_dist)
+        indices = np.where(mask)[0]
+        if len(indices) == 0:
+            continue
+
+        color = segment_colors.get(seg.segment_type, "gray")
+        label = None
+        if seg.segment_type not in legend_added:
+            legend_added[seg.segment_type] = True
+            label = legend_names.get(seg.segment_type, seg.segment_type)
+
+        ax.plot(x[indices], y[indices], color=color, linewidth=4, zorder=2, label=label)
+
+    # Corner apex markers with labels
+    for seg in segments:
+        if seg.segment_type == "corner" and seg.apex_dist is not None:
+            apex_idx = int(np.argmin(np.abs(distance - seg.apex_dist)))
+            ax.plot(x[apex_idx], y[apex_idx], "o", color="darkred", markersize=6, zorder=3)
+            ax.annotate(
+                seg.name,
+                (x[apex_idx], y[apex_idx]),
+                textcoords="offset points",
+                xytext=(8, 8),
+                fontsize=9,
+                fontweight="bold",
+                color="white",
+                zorder=4,
+            )
+
+    ax.set_aspect("equal")
+    ax.legend(
+        fontsize=9, loc="upper left", facecolor="#2a2a4e", edgecolor="gray", labelcolor="white"
+    )
+    ax.tick_params(colors="white", labelsize=8)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    ax.set_xticks([])
+    ax.set_yticks([])
+
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=dpi, bbox_inches="tight", facecolor=fig.get_facecolor())
+    plt.close(fig)
+
+
+def save_corner_comparison(
+    per_lap_data: dict[int, dict[str, np.ndarray]],
+    best_lap_num: int,
+    corner_name: str,
+    x_start: float,
+    x_end: float,
+    output_path: str,
+    braking_start: float | None = None,
+    corner_start: float | None = None,
+    corner_end: float | None = None,
+    apex_dist: float | None = None,
+    dpi: int = 150,
+) -> None:
+    """Save a stacked input comparison plot for a single corner.
+
+    Shows speed, throttle, brake, and optionally steering and total G
+    as subplots sharing a distance x-axis. Best lap is bold colored, others gray.
+
+    Parameters
+    ----------
+    per_lap_data : dict[int, dict[str, np.ndarray]]
+        Per-lap channel arrays keyed by lap number. Each inner dict must
+        have "distance_m", "speed", "throttle", "brake".
+        Optional: "steering", "total_g".
+    best_lap_num : int
+        Lap number to highlight as best execution.
+    corner_name : str
+        Corner label for the title.
+    x_start : float
+        Distance start for the x-axis range.
+    x_end : float
+        Distance end for the x-axis range.
+    output_path : str
+        Path to save the image.
+    braking_start : float, optional
+        Distance of braking start for reference line.
+    corner_start : float, optional
+        Distance of corner entry for reference line.
+    corner_end : float, optional
+        Distance of corner exit for reference line.
+    apex_dist : float, optional
+        Distance of apex for reference line.
+    dpi : int
+        Image resolution.
+    """
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    # Determine which optional channels are available
+    has_steering = any("steering" in d for d in per_lap_data.values())
+    has_total_g = any("total_g" in d for d in per_lap_data.values())
+    subplot_keys = ["speed", "throttle", "brake"]
+    subplot_labels = ["Speed (km/h)", "Throttle (%)", "Brake (bar)"]
+    subplot_colors = ["#00BFFF", "#00FF88", "#FF4444"]
+    if has_steering:
+        subplot_keys.append("steering")
+        subplot_labels.append("Steering (°)")
+        subplot_colors.append("#FFD700")
+    if has_total_g:
+        subplot_keys.append("total_g")
+        subplot_labels.append("Total G")
+        subplot_colors.append("#CC66FF")
+    n_subplots = len(subplot_keys)
+
+    fig, axes = plt.subplots(n_subplots, 1, figsize=(10, 2.5 * n_subplots), sharex=True)
+    fig.set_facecolor("#1a1a2e")
+    fig.suptitle(f"Corner Comparison — {corner_name}", fontsize=13, color="white", y=0.98)
+
+    for ax_idx, (ax, key, label, color) in enumerate(
+        zip(axes, subplot_keys, subplot_labels, subplot_colors)
+    ):
+        ax.set_facecolor("#1a1a2e")
+        ax.set_ylabel(label, fontsize=9, color="white")
+        ax.tick_params(colors="white", labelsize=8)
+        for spine in ax.spines.values():
+            spine.set_color("#444444")
+
+        # Plot other laps first (gray)
+        for lap_num, data in per_lap_data.items():
+            if lap_num == best_lap_num:
+                continue
+            if key not in data:
+                continue
+            dist = data["distance_m"]
+            mask = (dist >= x_start) & (dist <= x_end)
+            if not np.any(mask):
+                continue
+            ax.plot(dist[mask], data[key][mask], color="#666666", linewidth=0.8, alpha=0.4)
+
+        # Plot best lap (bold)
+        if best_lap_num in per_lap_data:
+            best = per_lap_data[best_lap_num]
+            if key in best:
+                dist = best["distance_m"]
+                mask = (dist >= x_start) & (dist <= x_end)
+                if np.any(mask):
+                    ax.plot(
+                        dist[mask],
+                        best[key][mask],
+                        color=color,
+                        linewidth=2.5,
+                        label=f"Lap {best_lap_num} (best)",
+                    )
+
+        # Reference lines
+        ref_lines = [
+            (braking_start, "cyan", "dotted", "Brake start"),
+            (corner_start, "#FFD700", "dashed", "Corner start"),
+            (corner_end, "#FFD700", "dashed", "Corner end"),
+            (apex_dist, "#FF4444", "solid", "Apex"),
+        ]
+        for ref_dist, ref_color, ref_style, ref_label in ref_lines:
+            if ref_dist is not None and x_start <= ref_dist <= x_end:
+                ax.axvline(
+                    ref_dist,
+                    color=ref_color,
+                    linestyle=ref_style,
+                    linewidth=1,
+                    alpha=0.7,
+                    label=ref_label if ax_idx == 0 else None,
+                )
+
+        if ax_idx == 0:
+            ax.legend(
+                fontsize=8,
+                loc="upper right",
+                facecolor="#2a2a4e",
+                edgecolor="gray",
+                labelcolor="white",
+            )
+
+    axes[-1].set_xlabel("Distance (m)", fontsize=9, color="white")
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=dpi, bbox_inches="tight", facecolor=fig.get_facecolor())
+    plt.close(fig)
+
+
+def save_corner_map(
+    per_lap_gps: dict[int, tuple[np.ndarray, np.ndarray]],
+    best_lap_num: int,
+    corner_name: str,
+    output_path: str,
+    apex_xy: tuple[float, float] | None = None,
+    dpi: int = 150,
+) -> None:
+    """Save a zoomed GPS trace of a corner region.
+
+    Best lap is bold orange, other laps are gray.
+
+    Parameters
+    ----------
+    per_lap_gps : dict[int, tuple[np.ndarray, np.ndarray]]
+        Per-lap (x, y) local coordinates for the corner region.
+    best_lap_num : int
+        Lap number to highlight.
+    corner_name : str
+        Corner label for the title.
+    output_path : str
+        Path to save the image.
+    apex_xy : tuple[float, float], optional
+        (x, y) coordinates of the apex on the best lap trace.
+    dpi : int
+        Image resolution.
+    """
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(6, 6))
+    ax.set_facecolor("#1a1a2e")
+    fig.set_facecolor("#1a1a2e")
+    ax.set_title(f"Corner Map — {corner_name}", fontsize=12, color="white", pad=10)
+
+    # Plot other laps (gray)
+    for lap_num, (lx, ly) in per_lap_gps.items():
+        if lap_num == best_lap_num:
+            continue
+        ax.plot(lx, ly, color="#666666", linewidth=1, alpha=0.4)
+
+    # Plot best lap (bold orange)
+    if best_lap_num in per_lap_gps:
+        bx, by = per_lap_gps[best_lap_num]
+        ax.plot(bx, by, color="#FF8800", linewidth=3, label=f"Lap {best_lap_num} (best)")
+
+    # Apex marker
+    if apex_xy is not None:
+        ax.plot(apex_xy[0], apex_xy[1], "o", color="#FF4444", markersize=8, zorder=5)
+        ax.annotate(
+            "Apex",
+            apex_xy,
+            textcoords="offset points",
+            xytext=(8, 8),
+            fontsize=9,
+            fontweight="bold",
+            color="white",
+            zorder=6,
+        )
+
+    ax.set_aspect("equal")
+    ax.legend(
+        fontsize=9, loc="upper left", facecolor="#2a2a4e", edgecolor="gray", labelcolor="white"
+    )
+    ax.tick_params(colors="white", labelsize=8)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    ax.set_xticks([])
+    ax.set_yticks([])
+
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=dpi, bbox_inches="tight", facecolor=fig.get_facecolor())
+    plt.close(fig)
