@@ -1,0 +1,68 @@
+name: Build & Publish MCP Server
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Build wheel (bundles motorsports_data_notebook)
+        working-directory: inferno-driving-coach
+        run: |
+          cp -r ../src/motorsports_data_notebook src/
+          uv build --out-dir dist
+          rm -rf src/motorsports_data_notebook
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: inferno-driving-coach-dist
+          path: inferno-driving-coach/dist/
+
+  publish:
+    needs: build
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: inferno-driving-coach-dist
+          path: dist/
+
+      - name: Publish to PyPI
+        run: uv publish dist/*
+
+  attach-to-release:
+    needs: build
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: inferno-driving-coach-dist
+          path: dist/
+
+      - name: Attach wheel to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.whl
