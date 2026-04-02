@@ -3,6 +3,11 @@
 
 Usage:
     uv run python scripts/analyze_session.py path/to/session.xrz [options]
+    uv run python scripts/analyze_session.py file1.xrk file2.xrk [options]
+
+When multiple files are provided, they are merged into a single session
+(e.g., when a session is split across files due to a car restart). Laps
+are renumbered sequentially across all files.
 
 Options:
     --output FILE            Write JSON to file instead of stdout
@@ -21,7 +26,7 @@ from pathlib import Path
 
 import numpy as np
 
-from motorsports_data_notebook._util import load_session
+from motorsports_data_notebook._util import MergedLogFile, load_session
 from motorsports_data_notebook.profiles import (
     DEFAULT_CHANNEL_NAMES,
     get_logger_id,
@@ -36,7 +41,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Generate a structured session analysis report from AIM telemetry data."
     )
-    parser.add_argument("session_file", help="Path to XRK/XRZ/IBT telemetry file")
+    parser.add_argument(
+        "session_file",
+        nargs="+",
+        help="Path(s) to XRK/XRZ/IBT telemetry file(s). Multiple files are merged into one session.",
+    )
     parser.add_argument("--output", "-o", help="Output file path (default: stdout)")
     parser.add_argument("--profile", "-p", help="Vehicle profile name (overrides auto-detect)")
     parser.add_argument(
@@ -54,19 +63,36 @@ def main() -> int:
         "--comparison-dir",
         help="Save corner comparison images (inputs + map) to this directory",
     )
+    parser.add_argument(
+        "--session-num",
+        type=int,
+        default=1,
+        help="Session number for the day (1-based, used in session_id)",
+    )
     args = parser.parse_args()
 
-    session_path = Path(args.session_file)
-    if not session_path.exists():
-        print(f"Error: file not found: {session_path}", file=sys.stderr)
-        return 1
+    session_paths = [Path(f) for f in args.session_file]
+    for p in session_paths:
+        if not p.exists():
+            print(f"Error: file not found: {p}", file=sys.stderr)
+            return 1
 
-    # Load session
+    # Load session(s)
     try:
-        log = load_session(str(session_path))
+        logs = [load_session(str(p)) for p in session_paths]
+        if len(logs) == 1:
+            log = logs[0]
+        else:
+            log = MergedLogFile(logs)
+            print(
+                f"Merged {len(logs)} files into one session "
+                f"({len(log.laps)} total laps)",
+                file=sys.stderr,
+            )
     except Exception as e:
         print(f"Error loading session: {e}", file=sys.stderr)
         return 2
+    session_path = session_paths[0]
 
     # Resolve profile and channel names
     if args.profile:
@@ -100,6 +126,7 @@ def main() -> int:
             motion_ratios=motion_ratios,
             top_lap_threshold=args.threshold,
             file_name=session_path.name,
+            session_num=args.session_num,
         )
     except Exception as e:
         print(f"Error generating report: {e}", file=sys.stderr)
@@ -398,7 +425,9 @@ def _generate_comparison_images(
         count += 1
 
     if count > 0:
-        print(f"Corner comparison images saved to {comparison_dir} ({count} corners)", file=sys.stderr)
+        print(
+            f"Corner comparison images saved to {comparison_dir} ({count} corners)", file=sys.stderr
+        )
 
 
 if __name__ == "__main__":
