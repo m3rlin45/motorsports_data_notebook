@@ -370,3 +370,11 @@ class MergedLogFile:
             raise ValueError(f"Lap {lap_num} not found in merged session")
         log_idx, orig_num = self._lap_map[lap_num]
         return self._logs[log_idx].filter_by_lap(orig_num)
+
+    def select_channels(self, channels):
+        """Delegate to the first underlying LogFile.
+
+        Only valid for whole-session operations (e.g., suspension analysis)
+        where the data doesn't need per-lap isolation.
+        """
+        return self._logs[0].select_channels(channels)
