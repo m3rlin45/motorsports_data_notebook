@@ -5,6 +5,7 @@ Strip all dependencies from a wheel for JupyterLite.
 Used for external wheels (e.g. libxrk) whose native dependencies are already
 provided by the Pyodide runtime and would fail to resolve via micropip.
 """
+
 import re
 import sys
 import zipfile
