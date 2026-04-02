@@ -1,6 +1,6 @@
 [project]
 name = "inferno-driving-coach"
-version = "0.1.0"
+version = "0.12.0"
 description = "MCP server for motorsports telemetry coaching — session analysis, day reviews, and driving KPIs"
 authors = [
     {name = "Christopher Dewan", email = "chris.dewan@m3rlin.net"}
