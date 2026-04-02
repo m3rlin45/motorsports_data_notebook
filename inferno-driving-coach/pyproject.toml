@@ -1,0 +1,58 @@
+[project]
+name = "inferno-driving-coach"
+version = "0.1.0"
+description = "MCP server for motorsports telemetry coaching — session analysis, day reviews, and driving KPIs"
+authors = [
+    {name = "Christopher Dewan", email = "chris.dewan@m3rlin.net"}
+]
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.12,<4.0"
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+    "mcp>=1.2.0",
+    # motorsports-data-notebook deps (bundled directly)
+    "numpy>=2.0.0,<3.0.0",
+    "pandas>=2.0.0,<3.0.0",
+    "pyarrow>=18.0.0,<23.0.0",
+    "plotly>=6.0.0,<7.0.0",
+    "libxrk>=0.11.0",
+    "ipywidgets>=8.0.0,<9.0.0",
+    "pyyaml>=6.0,<7.0",
+    "libibt>=0.0.4",
+    "matplotlib>=3.9.0",
+]
+
+[project.scripts]
+inferno-driving-coach = "inferno_driving_coach:main"
+
+[build-system]
+requires = ["setuptools>=75.0.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+inferno_driving_coach = ["data/*.md"]
+motorsports_data_notebook = ["data/*.yaml"]
+
+[tool.black]
+line-length = 100
+target-version = ['py312']
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["mcp.*", "motorsports_data_notebook.*"]
+ignore_missing_imports = true
