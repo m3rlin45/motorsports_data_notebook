@@ -20,10 +20,16 @@ Analyze motorsports telemetry sessions, identify improvement areas, set KPIs, an
 For each provided file path, run:
 
 ```bash
-uv run python scripts/analyze_session.py "<file_path>" --output .session-analysis/report.json --track-map .session-analysis/track_map.png --comparison-dir .session-analysis/comparisons/
+uv run python scripts/analyze_session.py "<file_path>" --output .session-analysis/report.json --track-map .session-analysis/track_map.png --comparison-dir .session-analysis/comparisons/ --session-num <N>
 ```
 
-Read the JSON output with the Read tool. The `--track-map` flag generates a track map image with labeled corners. The `--comparison-dir` flag generates per-corner input comparison plots and zoomed GPS maps for the top 5 opportunity corners.
+Where `<N>` is the 1-based session number for the day (default: 1). This populates `metadata.session_id` in the JSON.
+
+Read the JSON output with the Read tool. After reading the JSON, use `metadata.session_id` for naming output files when called from the day-review skill (e.g., `session_2026-01-12_1300_s01_report.md`). For standalone use, the default names are fine.
+
+**No ad-hoc code:** The `analyze_session.py` script is the ONLY command you run via Bash. Do NOT run inline Python scripts, `python -c` one-liners, or any other data processing commands. All telemetry processing, metric computation, and image generation is handled by `analyze_session.py`. After it produces JSON + images, use only the Read tool to read the data and the Write tool to produce markdown reports. Everything you need is in the JSON output.
+
+The `--track-map` flag generates a track map image with labeled corners. The `--comparison-dir` flag generates per-corner input comparison plots and zoomed GPS maps for the top 5 opportunity corners.
 
 ### 2. Check for Previous Reports
 
@@ -60,15 +66,15 @@ Rank corners by impact and select the **top 3** for the main report. All remaini
 
 For each improvement area, use the `best_lap` data in the corner's consistency entry:
 
-> **Turn N — Corner Exit Speed**
-> Your best execution was on **Lap X**: you braked Ym later than average, carried Z km/h more through the apex, and exited W km/h faster.
-> **Target**: Replicate this on 80%+ of laps.
+**Turn N — Corner Exit Speed**
+Your best execution was on **Lap X**: you braked Ym later than average, carried Z km/h more through the apex, and exited W km/h faster.
+**Target**: Replicate this on 80%+ of laps.
 
 When braking metrics are available, include them in the best-lap description:
 
-> **Turn N — Braking Zone**
-> Your best execution was on **Lap X**: you braked W bar harder, released Y m earlier, and carried Z km/h more entry speed than average.
-> **Target**: Replicate this on 80%+ of laps.
+**Turn N — Braking Zone**
+Your best execution was on **Lap X**: you braked W bar harder, released Y m earlier, and carried Z km/h more entry speed than average.
+**Target**: Replicate this on 80%+ of laps.
 
 Reference `best_lap.vs_mean` for the specific deltas and `best_lap.selection_reason` for context.
 
@@ -79,9 +85,9 @@ Reference `best_lap.vs_mean` for the specific deltas and `best_lap.selection_rea
 
 Format the explanation as a ranked list of contributing factors:
 
-> **Why was Lap X faster at Turn N?**
-> 1. **Got on throttle 8m earlier** — the biggest factor
-> 2. **Carried 2.4 km/h more through the apex**
+**Why was Lap X faster at Turn N?**
+1. **Got on throttle 8m earlier** — the biggest factor
+2. **Carried 2.4 km/h more through the apex**
 
 Only include factors with meaningful deltas (speed > 1 km/h, distance > 2m, TA > 5%). Rank by impact magnitude. If no clear cause can be determined from the data, state that rather than guessing.
 
@@ -92,7 +98,9 @@ Only include factors with meaningful deltas (speed > 1 km/h, distance > 2m, TA >
 | entry | "Trail brake deeper — releasing brake before turn-in wastes lateral G" |
 | exit | "Get on throttle earlier — pause between turning and accelerating costs grip" |
 | mid | "Commit through the apex — lifting mid-corner breaks momentum" |
-| braking | "Apply brakes more progressively — abrupt application creates a grip gap" |
+| braking | "Brake later — you finished braking before the corner and coasted into the turn" |
+
+When `total_g_min_phase = "braking"`, always check `early_braking_coast_m` (on the best lap or the corner-level mean `early_braking_coast_mean`). This measures the distance from where braking G faded to the corner start — the "dead zone" where the driver is neither braking nor turning. Include the distance in the note: "You coasted Xm before the corner — brake that much later to flow directly into turn-in."
 
 Only mention G utilization for corners where it's below 70%. Don't add a standalone G utilization table — fold it into the improvement area notes.
 
@@ -126,32 +134,34 @@ Output the **main report** (focused, actionable) and an **appendix** (full data 
    3. **T4**: Full throttle sooner — you proved it on Lap 9
    ```
    Each item should be one line with the corner ID and the specific action. Reference a lap number where the driver proved they can do it. This must be concise enough to remember while driving.
-3. **Session Overview** — Include the session date/time (`metadata.log_date`, `metadata.log_time`), driver (`metadata.driver`), vehicle (`metadata.vehicle`), venue (`metadata.venue`), weather conditions (`weather`), lap times, and track info. Format example:
+3. **Session Overview** — Include the session date/time (`metadata.log_date`, `metadata.log_time`), driver (`metadata.driver`), vehicle (`metadata.vehicle`), venue (`metadata.venue`), weather conditions (`weather`), lap times, and track info. If `metadata.session_notes` is present, include it as a blockquote — these are engineer/driver notes recorded at the track (setup changes, driver feedback, tire compound, etc.). Use these notes to add context to the analysis (e.g., if notes say "lots of oversteer," correlate that with rear grip data). If the notes contain abbreviations or references you don't understand, ask the user for clarification rather than guessing. Format example:
    ```
    **Date:** 2026-01-12 13:00 | **Driver:** CMD | **Vehicle:** Inferno 86
    **Venue:** Sodegaura | **Weather:** Clear sky, 8.7°C, 37% humidity, wind 4.2 km/h WNW
+
+   > **Session Notes:** Rear 23, still lots of oversteer, lots of pickup
    ```
    Weather comes from the Open-Meteo historical API (fetched automatically using circuit GPS center). Include `weather_description`, `temperature_c`, `relative_humidity_pct`, `wind_speed_kmh`, and `wind_direction_deg` (convert degrees to compass direction). Omit the weather line if `weather` is null.
 4. **Top 3 Improvement Areas** — the 3 highest-impact corners only. For each corner, use this format:
    ```
    ### N. Turn X — Short Description (Opportunity: NNNN)
 
-   | Metric | Value | Std | Best Lap |
-   |--------|-------|-----|----------|
-   | Min Speed | 93.5 km/h | 4.2 km/h | 95.3 km/h (L11) |
-   | Exit Speed | 120.8 km/h | 2.7 km/h | 124.9 km/h (L11) |
-   | Throttle Acceptance | 78.4% | 17.8% | 98.8% (L11) |
-   | Braking Point | 450m | 4.1m | 452.6m (L11) |
+   | Metric | Value | Consistency | Best Lap |
+   |--------|-------|-------------|----------|
+   | Min Speed | 93.5 km/h | 4.2 km/h | 95.3 km/h (Lap 11) |
+   | Exit Speed | 120.8 km/h | 2.7 km/h | 124.9 km/h (Lap 11) |
+   | Throttle Acceptance | 78.4% | 17.8% | 98.8% (Lap 11) |
+   | Braking Point | 450m | 4.1m | 452.6m (Lap 11) |
    | G Utilization | 40.3% | — | — |
 
    (Only include rows for metrics that are relevant/available for this corner.)
 
-   > **Best Execution: Lap 11**
-   > ...root cause analysis...
-   >
-   > **Technique:** ...G utilization note if < 70%...
-   >
-   > **Target:** ...
+   **Best Execution: Lap 11**
+   ...root cause analysis...
+
+   **Technique:** ...G utilization note if < 70%...
+
+   **Target:** ...
 
    ![Turn X Inputs](comparisons/comparison_t{id}_inputs.png)
    ![Turn X Map](comparisons/comparison_t{id}_map.png)
@@ -161,7 +171,7 @@ Output the **main report** (focused, actionable) and an **appendix** (full data 
    ```
    ## Tire Conditions
 
-   Best lap (L9):
+   Best lap (Lap 9):
    | Wheel | Max Pressure | Max Temperature |
    |-------|-------------|-----------------|
    | FL | 2.29 bar | 55 C |
@@ -170,6 +180,8 @@ Output the **main report** (focused, actionable) and an **appendix** (full data 
    | RR | 2.16 bar | 44 C |
    ```
    Include units from `tire_conditions.pressure_unit` and `tire_conditions.temperature_unit`. Show whichever metrics are available (both pressure and temperature when present). Omit this section if `tire_conditions` is null.
+
+   **Important:** Present tire data as-is without making qualitative judgments (e.g., "low" or "high"). Normal pressure and temperature ranges vary by car, tire compound, and target setup — the analysis tool has no reference values to judge against. Only note objective cross-wheel differences (e.g., "RR pressure 0.10 bar lower than other corners") and trends across laps or sessions. Leave interpretation to the driver/engineer.
 6. **KPIs** — at most 3 targets for next session, all tied to the highlighted corners
 7. **Skipped Analyses** — any analyses that couldn't run and why (omit if none)
 
@@ -186,18 +198,67 @@ Write a separate appendix file alongside the main report (e.g., `report_appendix
 
 Link to the appendix from the main report: `See [full corner analysis](report_appendix.md) for all corners, brake balance, and setup notes.`
 
+### File Naming
+
+When `metadata.session_id` is available, use it for output file naming to make files self-describing:
+
+- Report: `session_<session_id>_report.md` (e.g., `session_2026-01-12_1300_s01_report.md`)
+- Appendix: `session_<session_id>_appendix.md`
+- JSON: `session_<session_id>_data.json`
+
+Include the driver name and vehicle in the report's H1 heading:
+```
+# Session Report — CMD / Inferno 86 — Sodegaura S1
+```
+Where "CMD" is `metadata.driver`, "Inferno 86" is `metadata.vehicle`, "Sodegaura" is `metadata.venue`, and "S1" is the session number. Omit any field that is null.
+
+When called from the day-review skill with step-based naming, the step prefix takes precedence but the session_id should still appear in the report heading.
+
+### Driver & Vehicle Awareness
+
+Always display driver and vehicle prominently:
+- **Report H1 heading**: Include driver, vehicle, venue, and session number (see File Naming above)
+- **Session Overview**: Always show `metadata.driver` and `metadata.vehicle` even if null (display "Unknown" as placeholder)
+
+When comparing across sessions, check `metadata.driver` and `metadata.vehicle`:
+
+- **Same driver + same car**: Full comparison is valid — compare all metrics
+- **Different driver + same car**: Compare **best-lap values** across drivers as proof of car capability. Any metric where the other driver achieved a better best-lap value is valid evidence that the car can do it:
+  - Speeds: `best_lap.exit_speed`, `best_lap.min_speed`, `best_lap.entry_speed`
+  - Technique: `best_lap.throttle_acceptance_pct`, `best_lap.braking_point`, `best_lap.brake_release_point`, `best_lap.g_utilization_pct`, `best_lap.early_braking_coast_m`
+  - Use phrasing like: "Sobu San achieved 95% throttle acceptance at T5 in S2 — this proves the car allows aggressive throttle application here. Your best was 84% — room to improve."
+  - Do **NOT** compare consistency/progression metrics across drivers: all `_std` metrics, `_mean` metrics, `opportunity_score`. These reflect driver skill level, not car capability.
+  - Do **NOT** compare driver progression (e.g., "Driver A improved more than Driver B"). Each driver's progression is tracked independently.
+- **Different car**: Skip cross-session corner comparison entirely (different car = different physics)
+
 ### Cross-Session Comparison
 
 When previous session report(s) are available:
 
 1. **Verify track match**: corner count and track layout should match (same turn IDs)
-2. **Compare KPIs**: read the KPI table from the previous report and calculate progress:
+2. **Check weather stability** before comparing per-corner data:
+
+   | Condition | Threshold |
+   |-----------|-----------|
+   | Temperature | Within 5°C |
+   | Rain transition | No dry↔wet (WMO codes 0–3 = dry, 51+ = precipitation) |
+   | Wind speed | Within 15 km/h |
+
+   If weather changed significantly, note it in the report and skip per-corner lap-level comparisons for that session pair. KPI trend comparison (mean/std) is still valid.
+
+3. **Compare KPIs**: read the KPI table from the previous report and calculate progress:
    - Status: **MET** (reached target), **IMPROVED** (moved toward target), **REGRESSED** (moved away), **UNCHANGED** (< 5% change)
-3. **Generate comparison section** in the report showing previous → current → target for each KPI
-4. **Update KPIs** — keep unmet KPIs, adjust targets for met ones, add new areas
+4. **Per-corner lap-level comparison** (new): When previous session JSON is available and weather is stable:
+   - Read `corner_consistency[*].per_lap_metrics` from the previous JSON
+   - Compare current session's per-corner best values against previous session's per-lap data at matching corners (same corner ID)
+   - Report improvements: "Your best exit at T3 was 124.9 km/h (Lap 11), up from 122.1 km/h best in Session 1 (Lap 7)"
+   - **Causality**: only reference older sessions, never newer ones
+5. **Generate comparison section** in the report showing previous → current → target for each KPI
+6. **Update KPIs** — keep unmet KPIs, adjust targets for met ones, add new areas
 
 ### Important Notes
 
+- **Prefer `.xrk` over `.xrz`:** When both formats exist, use `.xrk`. XRK files have correct metadata (driver, vehicle, etc.) while XRZ compressed archives can have stale/incorrect metadata fields.
 - The report JSON uses canonical channel key names, not raw AIM channel names
 - `opportunity_score = exit_speed_std × accel_zone_length` — higher means more lap time to gain
 - All speeds are in km/h, distances in meters, times in seconds
@@ -222,7 +283,7 @@ G utilization measures how continuously the driver uses available tire grip thro
 - `total_g_min_phase = "entry"` → trail braking gap — brakes released before turn-in builds lateral G. Fix: maintain brake pressure deeper into the turn, release gradually as steering input increases
 - `total_g_min_phase = "exit"` → exit hesitation — gap between turning and accelerating. Fix: begin throttle application earlier while still unwinding steering
 - `total_g_min_phase = "mid"` → mid-corner lift — driver pauses or lifts at apex. Fix: carry more commitment through the apex
-- `total_g_min_phase = "braking"` → late/abrupt brake application creating a gap before peak braking force
+- `total_g_min_phase = "braking"` → braking too early — driver finished braking and coasted before the corner started. Check `early_braking_coast_m` for the distance. Fix: brake later so braking flows directly into turn-in via trail braking
 
 **Severity thresholds:**
 - `g_utilization_mean` < 30% → HIGH — large G holes, major coaching priority
@@ -231,6 +292,14 @@ G utilization measures how continuously the driver uses available tire grip thro
 - `g_utilization_mean` >= 70% → OK — smooth transitions
 
 Compare per-phase G means (`braking_g_mean_val`, `entry_g_mean_val`, `mid_g_mean_val`, `exit_g_mean_val`): the lowest phase is where the driver is leaving grip on the table.
+
+### Report Formatting Conventions
+
+- **Lap references**: Always write "Lap 1", "Lap 2", etc. — never abbreviate to "L1", "L2"
+- **Throttle acceptance**: Always write "throttle acceptance" in full — never abbreviate to "TA"
+- **Consistency, not std**: When describing variation to the driver, say "consistency" not "std" or "standard deviation". E.g., "exit speed consistency: 2.7 km/h" not "exit speed std: 2.7 km/h". The underlying metric names in code/tables can still use `_std` but narrative text should say consistency.
+- **No blockquotes for analysis details**: Use normal formatting (bold headers, paragraphs, lists) for best execution descriptions, technique notes, and targets. Do not wrap them in blockquotes (`>`). Blockquotes are only for session notes from the logger metadata.
+- **Table headers**: Use "Consistency" instead of "Std" as the column header in metrics tables
 
 ### Brake Balance Interpretation
 
