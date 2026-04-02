@@ -22,40 +22,64 @@ Print the list of files found and confirm with the user before proceeding.
 
 ### 2. Analyze Each Session
 
-For each session file **sequentially**, spawn a sub-agent that:
-
-1. Runs `/session-analysis <file_path>`
-2. The sub-agent writes its analysis to `.session-analysis/latest.json` and `.session-analysis/history/`
-3. Each subsequent session picks up the previous state automatically via the cross-session comparison workflow in `/session-analysis`
-
-**Key design:** Each sub-agent writes to disk (`.session-analysis/` files). The orchestrating agent reads results from disk rather than receiving them in-context. This keeps the main context clean regardless of how many sessions are analyzed.
-
-The sub-agent should be spawned with:
-```
-Agent tool with:
-  - subagent_type: general-purpose
-  - prompt: "Run /session-analysis on <file_path>. After the analysis completes, copy .session-analysis/latest.json to .session-analysis/steps/step<NN>_<session_name>.json where <NN> is the zero-padded step number and <session_name> is the base filename without extension."
-```
+Process sessions **sequentially** — each one builds on the previous session's KPIs via `.session-analysis/latest.json`.
 
 Create the steps directory first:
 ```bash
-mkdir -p .session-analysis/steps
+rm -rf .session-analysis && mkdir -p .session-analysis/steps .session-analysis/history
 ```
 
-### 3. Read Results
+For each session file, spawn a **background** sub-agent:
 
-After all sessions are processed:
+```
+Agent tool with:
+  - subagent_type: general-purpose
+  - mode: bypassPermissions
+  - run_in_background: true
+  - prompt: |
+      Follow the session-analysis skill at .claude/skills/session-analysis/SKILL.md.
 
-1. Read `.session-analysis/latest.json` for the final cumulative state
-2. Read each `.session-analysis/steps/step*.json` for individual session snapshots
-3. Extract from each step file:
-   - `session_file` — which file was analyzed
-   - `report.lap_times` — best and mean lap times
-   - `kpis` — KPI values at that point in the day
+      Session file: <file_path>
+      Step number: <NN> (zero-padded, e.g., 01, 02)
 
-### 4. Generate Day Summary
+      1. Run: uv run python scripts/analyze_session.py "<file_path>" --output /tmp/session_report.json --track-map /tmp/track_map.png --comparison-dir /tmp/comparisons/
+      2. Read the JSON output with the Read tool
+      3. Check if .session-analysis/latest.json exists for cross-session comparison
+      4. Follow the SKILL.md: identify improvements, set KPIs, generate markdown report
+      5. Save state to .session-analysis/latest.json and .session-analysis/history/
+      6. Copy .session-analysis/latest.json to .session-analysis/steps/step<NN>_<session_basename>.json
+      7. Copy /tmp/track_map.png to .session-analysis/step<NN>_track_map.png
+      8. Copy /tmp/comparisons/ to .session-analysis/step<NN>_comparisons/ (if it exists)
+      9. Write the markdown report to .session-analysis/step<NN>_report.md (reference the track map as ![Track Map](step<NN>_track_map.png) and comparison images as ![Turn N Inputs](step<NN>_comparisons/comparison_t{id}_inputs.png))
+```
 
-Output a structured markdown report covering:
+**CRITICAL — context isolation:**
+- Each sub-agent MUST run with `run_in_background: true` so its results stay out of the main conversation context
+- Wait for each sub-agent to complete (via the automatic completion notification) before spawning the next one
+- Do NOT read the sub-agent's output back into the main context — the results are on disk
+- Give the user a brief status update after each session completes (e.g., "Session 2/4 done") but do NOT summarize the sub-agent's findings
+
+### 3. Generate Day Summary
+
+After all sessions are processed, spawn one final **background** sub-agent to read the step files from disk and generate the day summary:
+
+```
+Agent tool with:
+  - subagent_type: general-purpose
+  - mode: bypassPermissions
+  - run_in_background: true
+  - prompt: |
+      Read the step JSON files and session reports from .session-analysis/steps/ and
+      .session-analysis/step*_report.md. Follow the day summary format in
+      .claude/skills/session-day-review/SKILL.md section "Day Summary Format".
+      Write the result to .session-analysis/day_summary_YYYY-MM-DD.md.
+```
+
+When the day summary agent completes, tell the user the file path and offer to show it.
+
+### Day Summary Format
+
+The day summary markdown should cover:
 
 #### Lap Time Progression
 - Table: Session # | Best Lap | Mean Top Lap | Lap Count | Improvement vs Previous
@@ -89,7 +113,7 @@ Based on the final KPI state and day-long trends:
 - Setup suggestions if flagged (suspension, brake balance)
 - Session planning advice (e.g., "Focus first session on Turn 3 braking, use later sessions for full-lap consistency")
 
-### 5. Save Day Summary
+### 4. Save Day Summary
 
 Write the day summary markdown to:
 

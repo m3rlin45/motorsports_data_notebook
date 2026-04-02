@@ -56,8 +56,10 @@ class LapTimeSummary:
 
     best_lap_num: int
     best_lap_time_s: float
+    best_lap_time_fmt: str
     top_laps: list[dict]
     mean_top_lap_time_s: float
+    mean_top_lap_time_fmt: str
     std_top_lap_time_s: float
     all_lap_times: list[dict]
 
@@ -134,6 +136,8 @@ class CornerConsistency:
     entry_g_mean_val: float | None = None
     mid_g_mean_val: float | None = None
     exit_g_mean_val: float | None = None
+    # Off-track detection
+    excluded_laps: list[int] = field(default_factory=list)
 
 
 @dataclass
@@ -163,6 +167,7 @@ class BrakingBalanceSummary:
     per_corner: list[dict]
     overall_balance_pct: float
     overall_balance_std: float
+    min_brake_threshold: float = 0.0
 
 
 @dataclass
@@ -222,6 +227,13 @@ def _lap_time_to_seconds(lap_time) -> float:
     if isinstance(lap_time, pd.Timedelta):
         return lap_time.total_seconds()
     return float(lap_time)
+
+
+def _format_lap_time(seconds: float) -> str:
+    """Format seconds as M:SS.mmm (e.g. 117.566 -> '1:57.566')."""
+    minutes = int(seconds // 60)
+    remainder = seconds - minutes * 60
+    return f"{minutes}:{remainder:06.3f}"
 
 
 def _get_per_lap_metric(
@@ -384,6 +396,81 @@ def _compute_best_lap(
     )
 
 
+def _detect_off_track_laps(
+    per_lap_gps: dict[int, tuple[np.ndarray, np.ndarray, np.ndarray]],
+    corners: list[Corner],
+    deviation_threshold: float = 10.0,
+) -> dict[int, set[int]]:
+    """Detect laps that went off-track at each corner via GPS deviation.
+
+    For each corner, interpolates all laps onto a common distance grid,
+    computes the median path as reference, and flags laps whose max
+    deviation exceeds the threshold.
+
+    Parameters
+    ----------
+    per_lap_gps : dict[int, tuple[np.ndarray, np.ndarray, np.ndarray]]
+        Per-lap (distance_m, latitude, longitude) arrays.
+    corners : list[Corner]
+        Detected corners.
+    deviation_threshold : float
+        Max allowed deviation from median path in meters.
+
+    Returns
+    -------
+    dict[int, set[int]]
+        Mapping of corner_id -> set of off-track lap numbers.
+    """
+    R = 6371000.0
+
+    # Compute shared reference center from all GPS data
+    all_lat = np.concatenate([d[1] for d in per_lap_gps.values()])
+    all_lon = np.concatenate([d[2] for d in per_lap_gps.values()])
+    valid = (all_lat != 0.0) | (all_lon != 0.0)
+    if not np.any(valid):
+        return {}
+    lat0 = np.radians(float(np.mean(all_lat[valid])))
+    lon0 = np.radians(float(np.mean(all_lon[valid])))
+
+    off_track: dict[int, set[int]] = {}
+
+    for corner in corners:
+        margin = 50.0
+        c_start = corner.start_dist - margin
+        c_end = corner.end_dist + margin
+        grid = np.arange(c_start, c_end, 1.0)
+        if len(grid) < 5:
+            continue
+
+        # Interpolate each lap's XY onto the common grid
+        lap_xys: dict[int, tuple[np.ndarray, np.ndarray]] = {}
+        for lap_num, (dist_arr, lat_arr, lon_arr) in per_lap_gps.items():
+            mask = (dist_arr >= c_start - 10) & (dist_arr <= c_end + 10)
+            if np.sum(mask) < 3:
+                continue
+            lx = R * (np.radians(lon_arr[mask]) - lon0) * np.cos(lat0)
+            ly = R * (np.radians(lat_arr[mask]) - lat0)
+            x_interp = np.interp(grid, dist_arr[mask], lx)
+            y_interp = np.interp(grid, dist_arr[mask], ly)
+            lap_xys[lap_num] = (x_interp, y_interp)
+
+        if len(lap_xys) < 3:
+            continue
+
+        # Median reference path
+        x_stack = np.stack([xy[0] for xy in lap_xys.values()])
+        y_stack = np.stack([xy[1] for xy in lap_xys.values()])
+        ref_x = np.median(x_stack, axis=0)
+        ref_y = np.median(y_stack, axis=0)
+
+        for lap_num, (lx, ly) in lap_xys.items():
+            deviations = np.sqrt((lx - ref_x) ** 2 + (ly - ref_y) ** 2)
+            if float(np.max(deviations)) > deviation_threshold:
+                off_track.setdefault(corner.id, set()).add(lap_num)
+
+    return off_track
+
+
 def _extract_suspension_summary(result: VelocityHistogramResult) -> SuspensionSummary:
     """Extract JSON-serializable suspension stats from VelocityHistogramResult."""
     per_wheel = {}
@@ -492,25 +579,32 @@ def generate_session_report(
     available.append("lap_times")
 
     top_lap_entries = []
+    top_times: list[float] = []
     for _, row in top_laps_df.iterrows():
+        t = _lap_time_to_seconds(row["lap_time"])
         top_lap_entries.append(
-            {"num": int(row["num"]), "lap_time_s": _lap_time_to_seconds(row["lap_time"])}
+            {"num": int(row["num"]), "lap_time_s": t, "lap_time_fmt": _format_lap_time(t)}
         )
-    top_times = [e["lap_time_s"] for e in top_lap_entries]
+        top_times.append(t)
 
     all_lap_entries = []
     for _, row in laps_df.iterrows():
         if int(row["num"]) == 0:
             continue
+        t = _lap_time_to_seconds(row["lap_time"])
         all_lap_entries.append(
-            {"num": int(row["num"]), "lap_time_s": _lap_time_to_seconds(row["lap_time"])}
+            {"num": int(row["num"]), "lap_time_s": t, "lap_time_fmt": _format_lap_time(t)}
         )
 
+    best_time = _lap_time_to_seconds(best_lap["lap_time"])
+    mean_top = float(np.mean(top_times)) if top_times else 0.0
     lap_times = LapTimeSummary(
         best_lap_num=best_lap_num,
-        best_lap_time_s=_lap_time_to_seconds(best_lap["lap_time"]),
+        best_lap_time_s=best_time,
+        best_lap_time_fmt=_format_lap_time(best_time),
         top_laps=top_lap_entries,
-        mean_top_lap_time_s=float(np.mean(top_times)) if top_times else 0.0,
+        mean_top_lap_time_s=mean_top,
+        mean_top_lap_time_fmt=_format_lap_time(mean_top),
         std_top_lap_time_s=float(np.std(top_times)) if top_times else 0.0,
         all_lap_times=all_lap_entries,
     )
@@ -614,8 +708,40 @@ def generate_session_report(
         else:
             skipped["driver_analysis"] = f"Missing channels: {ta_missing}"
 
+        # ── GPS off-track detection ─────────────────────────────────────────
+        off_track_laps: dict[int, set[int]] = {}
+        if gps_ok and len(top_lap_nums) >= 3:
+            lat_ch = channel_names["gps_latitude"]
+            lon_ch = channel_names["gps_longitude"]
+            gps_extract_chs = list(dict.fromkeys(["distance_m", lat_ch, lon_ch]))
+
+            per_lap_gps_raw: dict[int, tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
+            for lap_num in top_lap_nums:
+                try:
+                    aligned = (
+                        log.filter_by_lap(lap_num)
+                        .select_channels(gps_extract_chs)
+                        .resample_to_channel("distance_m")
+                        .channels
+                    )
+                except Exception:
+                    continue
+                d = aligned["distance_m"].column("distance_m").to_numpy()
+                if len(d) == 0:
+                    continue
+                la = aligned[lat_ch].column(lat_ch).to_numpy()
+                lo = aligned[lon_ch].column(lon_ch).to_numpy()
+                per_lap_gps_raw[lap_num] = (d, la, lo)
+
+            if len(per_lap_gps_raw) >= 3:
+                off_track_laps = _detect_off_track_laps(
+                    per_lap_gps_raw, corners_raw, deviation_threshold=10.0
+                )
+
         # Build CornerConsistency for each corner
         for corner_raw, corner_info in zip(corners_raw, corners_info):
+            excluded = sorted(off_track_laps.get(corner_raw.id, set()))
+
             bp_vals = _get_per_lap_metric(stats_df, corner_raw.id, "braking", "braking_point")
             min_speed_vals = _get_per_lap_metric(stats_df, corner_raw.id, "corner", "min_speed")
             exit_speed_vals = _get_per_lap_metric(stats_df, corner_raw.id, "corner", "exit_speed")
@@ -636,6 +762,22 @@ def generate_session_report(
             mean_decel_g_vals = _get_per_lap_metric(
                 stats_df, corner_raw.id, "braking", "mean_decel_g"
             )
+
+            # Filter off-track laps from all metric lists
+            if excluded:
+                exc_set = set(excluded)
+                bp_vals = [(n, v) for n, v in bp_vals if n not in exc_set]
+                min_speed_vals = [(n, v) for n, v in min_speed_vals if n not in exc_set]
+                exit_speed_vals = [(n, v) for n, v in exit_speed_vals if n not in exc_set]
+                tp_vals = [(n, v) for n, v in tp_vals if n not in exc_set]
+                ta_entries = [(n, v) for n, v in ta_entries if n not in exc_set]
+                peak_brake_vals = [(n, v) for n, v in peak_brake_vals if n not in exc_set]
+                entry_speed_vals = [(n, v) for n, v in entry_speed_vals if n not in exc_set]
+                brake_release_vals = [(n, v) for n, v in brake_release_vals if n not in exc_set]
+                braking_distance_vals = [
+                    (n, v) for n, v in braking_distance_vals if n not in exc_set
+                ]
+                mean_decel_g_vals = [(n, v) for n, v in mean_decel_g_vals if n not in exc_set]
 
             bp_values = [v for _, v in bp_vals]
             ms_values = [v for _, v in min_speed_vals]
@@ -695,6 +837,7 @@ def generate_session_report(
                     braking_distance_std=float(np.std(bd_values)) if bd_values else None,
                     mean_decel_g_mean=float(np.mean(mdg_values)) if mdg_values else None,
                     mean_decel_g_std=float(np.std(mdg_values)) if mdg_values else None,
+                    excluded_laps=excluded,
                 )
             )
     elif not corners_raw:
@@ -714,8 +857,8 @@ def generate_session_report(
         and corners_raw
         and zones_ok
     ):
-        all_balance_pcts: list[float] = []
-        per_corner_balance: list[dict] = []
+        # Collect per-corner balance data with individual pcts for later filtering
+        per_corner_data: list[tuple[dict, list[float]]] = []
 
         for corner_raw, corner_info in zip(corners_raw, corners_info):
             braking_seg = next(
@@ -730,6 +873,7 @@ def generate_session_report(
                 continue
 
             corner_pcts: list[float] = []
+            corner_peaks: list[float] = []
             for lap_num in top_lap_nums:
                 try:
                     aligned = (
@@ -752,31 +896,42 @@ def generate_session_report(
                 rear_peak = float(np.max(rear_arr)) if len(rear_arr) > 0 else 0.0
                 total = front_peak + rear_peak
                 if total > 0:
-                    pct = front_peak / total * 100.0
-                    corner_pcts.append(pct)
+                    corner_pcts.append(front_peak / total * 100.0)
+                    corner_peaks.append(total)
 
             if corner_pcts:
-                all_balance_pcts.extend(corner_pcts)
-                per_corner_balance.append(
-                    {
-                        "corner_id": corner_raw.id,
-                        "corner_name": corner_raw.name,
-                        "balance_pct_mean": round(float(np.mean(corner_pcts)), 1),
-                        "balance_pct_std": round(float(np.std(corner_pcts)), 1),
-                        "n_samples": len(corner_pcts),
-                    }
-                )
+                entry = {
+                    "corner_id": corner_raw.id,
+                    "corner_name": corner_raw.name,
+                    "balance_pct_mean": round(float(np.mean(corner_pcts)), 1),
+                    "balance_pct_std": round(float(np.std(corner_pcts)), 1),
+                    "n_samples": len(corner_pcts),
+                    "peak_brake_mean": round(float(np.mean(corner_peaks)), 1),
+                }
+                per_corner_data.append((entry, corner_pcts))
 
-        if all_balance_pcts:
-            braking_balance = BrakingBalanceSummary(
-                available=True,
-                front_channel=front_brake_ch,
-                rear_channel=brake_rear_key,
-                per_corner=per_corner_balance,
-                overall_balance_pct=round(float(np.mean(all_balance_pcts)), 1),
-                overall_balance_std=round(float(np.std(all_balance_pcts)), 1),
-            )
-            available.append("braking_balance")
+        if per_corner_data:
+            # Filter out low-brake corners (lift-and-turn) that add noise
+            session_max_peak = max(e["peak_brake_mean"] for e, _ in per_corner_data)
+            brake_threshold = session_max_peak * 0.2
+            filtered_pcts: list[float] = []
+            filtered_corners: list[dict] = []
+            for entry, pcts in per_corner_data:
+                if entry["peak_brake_mean"] >= brake_threshold:
+                    filtered_corners.append(entry)
+                    filtered_pcts.extend(pcts)
+
+            if filtered_pcts:
+                braking_balance = BrakingBalanceSummary(
+                    available=True,
+                    front_channel=front_brake_ch,
+                    rear_channel=brake_rear_key,
+                    per_corner=filtered_corners,
+                    overall_balance_pct=round(float(np.mean(filtered_pcts)), 1),
+                    overall_balance_std=round(float(np.std(filtered_pcts)), 1),
+                    min_brake_threshold=round(brake_threshold, 1),
+                )
+                available.append("braking_balance")
 
     # ── G utilization ────────────────────────────────────────────────────────
     g_ok, g_missing = _check_channels_available(log, channel_names, ["lateral_g"])
