@@ -15,7 +15,6 @@ from pathlib import Path
 import nbformat
 from nbconvert.preprocessors import ClearOutputPreprocessor, ExecutePreprocessor
 
-
 # 5 minute timeout per notebook
 EXECUTION_TIMEOUT = 300
 KERNEL_NAME = "python3"

@@ -6,6 +6,7 @@ Some packages (like pyarrow) are compiled C extensions available in the Pyodide
 distribution but not installable via micropip from PyPI. This script downloads
 their wheels from the Pyodide CDN so piplite can serve them locally.
 """
+
 import json
 import subprocess
 import sys
@@ -21,7 +22,11 @@ def main():
     pypi_dir.mkdir(parents=True, exist_ok=True)
 
     version = subprocess.check_output(
-        [sys.executable, "-c", "import importlib.metadata; print(importlib.metadata.version('pyodide-build'))"],
+        [
+            sys.executable,
+            "-c",
+            "import importlib.metadata; print(importlib.metadata.version('pyodide-build'))",
+        ],
         text=True,
     ).strip()
     base_url = f"https://cdn.jsdelivr.net/pyodide/v{version}/full"
