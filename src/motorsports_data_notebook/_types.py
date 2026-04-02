@@ -8,4 +8,6 @@ if TYPE_CHECKING:
     from libxrk.base import LogFile as AimLogFile
     from libibt.base import LogFile as IbtLogFile
 
-    LogFile = AimLogFile | IbtLogFile
+    from ._util import MergedLogFile
+
+    LogFile = AimLogFile | IbtLogFile | MergedLogFile
