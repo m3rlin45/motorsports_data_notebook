@@ -1,3 +1,8 @@
+---
+name: session-analysis
+description: Analyze a motorsports telemetry session (.xrz/.xrk), identify improvement areas, and set KPIs.
+---
+
 # Session Analysis Skill
 
 Analyze motorsports telemetry sessions, identify improvement areas, set KPIs, and track progress.
@@ -10,23 +15,25 @@ Analyze motorsports telemetry sessions, identify improvement areas, set KPIs, an
 
 ## Workflow
 
-### 1. Generate Report
+### 1. Generate Report Data
 
 For each provided file path, run:
 
 ```bash
-uv run python scripts/analyze_session.py "<file_path>" --output /tmp/session_report.json --track-map /tmp/track_map.png --comparison-dir /tmp/comparisons/
+uv run python scripts/analyze_session.py "<file_path>" --output .session-analysis/report.json --track-map .session-analysis/track_map.png --comparison-dir .session-analysis/comparisons/
 ```
 
 Read the JSON output with the Read tool. The `--track-map` flag generates a track map image with labeled corners. The `--comparison-dir` flag generates per-corner input comparison plots and zoomed GPS maps for the top 5 opportunity corners.
 
-### 2. Check Previous State
+### 2. Check for Previous Reports
 
-Look for `.session-analysis/latest.json` in the project root. If it exists, this is a **cross-session comparison**. If not, this is a **first analysis**.
+If previous session report(s) are provided (e.g., as file paths in the prompt), read them for **cross-session comparison**. For standalone use, check if `.session-analysis/report.md` exists from a prior run.
+
+Previous reports contain KPI tables and improvement areas in markdown — use these directly for comparison rather than parsing JSON state.
 
 ### 3. Identify Improvement Areas
 
-Rank the top 3–5 improvement areas by impact using corner consistency data from the report:
+Rank corners by impact and select the **top 3** for the main report. All remaining corners go to a separate appendix file (see step 7).
 
 **Priority ranking:**
 
@@ -91,19 +98,7 @@ Only mention G utilization for corners where it's below 70%. Don't add a standal
 
 ### 5. Set KPIs
 
-For each improvement area, define a measurable KPI:
-
-```json
-{
-  "name": "Turn 3 exit speed consistency",
-  "area": "corner_exit",
-  "corner_id": 3,
-  "metric_key": "exit_speed_std",
-  "current_value": 4.2,
-  "target_value": 2.0,
-  "unit": "km/h"
-}
-```
+Define **at most 3 KPIs**, all tied to the highlighted corners. Pick the metrics that would most directly address the root causes identified in step 4. Not every corner needs a KPI — if two corners share the same underlying issue, one KPI may cover both.
 
 Realistic targets:
 - `exit_speed_std`: reduce by 40–50%
@@ -118,7 +113,9 @@ Realistic targets:
 
 ### 6. Generate Report
 
-Output a structured markdown report with:
+Output the **main report** (focused, actionable) and an **appendix** (full data for reference).
+
+#### Main report
 
 1. **Track Map** — embed the track map image: `![Track Map](track_map.png)` (using the image generated in step 1)
 2. **Quick Reference** — extremely brief, memorizable list of the top 3 technique focuses. Format:
@@ -129,8 +126,13 @@ Output a structured markdown report with:
    3. **T4**: Full throttle sooner — you proved it on Lap 9
    ```
    Each item should be one line with the corner ID and the specific action. Reference a lap number where the driver proved they can do it. This must be concise enough to remember while driving.
-3. **Session Overview** — metadata, lap times, track info
-4. **Top Improvement Areas** — ranked list. For each corner, use this format:
+3. **Session Overview** — Include the session date/time (`metadata.log_date`, `metadata.log_time`), driver (`metadata.driver`), vehicle (`metadata.vehicle`), venue (`metadata.venue`), weather conditions (`weather`), lap times, and track info. Format example:
+   ```
+   **Date:** 2026-01-12 13:00 | **Driver:** CMD | **Vehicle:** Inferno 86
+   **Venue:** Sodegaura | **Weather:** Clear sky, 8.7°C, 37% humidity, wind 4.2 km/h WNW
+   ```
+   Weather comes from the Open-Meteo historical API (fetched automatically using circuit GPS center). Include `weather_description`, `temperature_c`, `relative_humidity_pct`, `wind_speed_kmh`, and `wind_direction_deg` (convert degrees to compass direction). Omit the weather line if `weather` is null.
+4. **Top 3 Improvement Areas** — the 3 highest-impact corners only. For each corner, use this format:
    ```
    ### N. Turn X — Short Description (Opportunity: NNNN)
 
@@ -155,50 +157,44 @@ Output a structured markdown report with:
    ![Turn X Map](comparisons/comparison_t{id}_map.png)
    ```
    Include: metrics table, root cause analysis for exit speed gains, G utilization technique notes where applicable (< 70%), comparison images
-5. **Corner-by-Corner Summary** — table of all corners with key consistency metrics
-6. **Brake Balance** — filtered summary (low-brake corners are excluded automatically by the report generator)
-7. **Setup Notes** — suspension and tire grip findings (if available)
-8. **KPIs** — table of targets for next session
-9. **Skipped Analyses** — any analyses that couldn't run and why
+5. **Tire Conditions** — if `tire_conditions` is available in the report, show per-lap max pressure and temperature for the best lap (and optionally a few other top laps for comparison):
+   ```
+   ## Tire Conditions
 
-When saving the report, copy the track map image and comparison images to `.session-analysis/` alongside the markdown report so the relative image references work.
+   Best lap (L9):
+   | Wheel | Max Pressure | Max Temperature |
+   |-------|-------------|-----------------|
+   | FL | 2.29 bar | 55 C |
+   | FR | 2.20 bar | 50 C |
+   | RL | 2.20 bar | 48 C |
+   | RR | 2.16 bar | 44 C |
+   ```
+   Include units from `tire_conditions.pressure_unit` and `tire_conditions.temperature_unit`. Show whichever metrics are available (both pressure and temperature when present). Omit this section if `tire_conditions` is null.
+6. **KPIs** — at most 3 targets for next session, all tied to the highlighted corners
+7. **Skipped Analyses** — any analyses that couldn't run and why (omit if none)
 
-### 7. Save State
+The track map and comparison images are already in `.session-analysis/` from step 1, so the relative image references in the markdown report work without copying.
 
-Save the full state for future comparison:
+#### Appendix
 
-```bash
-mkdir -p .session-analysis/history
-```
+Write a separate appendix file alongside the main report (e.g., `report_appendix.md` or `step<NN>_appendix.md` when called from day-review). This contains:
 
-Write `.session-analysis/latest.json`:
+1. **Corner-by-Corner Summary** — table of all corners with key consistency metrics
+2. **Remaining Corner Analyses** — same format as the top 3 but for corners ranked 4+
+3. **Brake Balance** — filtered summary (low-brake corners are excluded automatically by the report generator)
+4. **Setup Notes** — suspension and tire grip findings (if available)
 
-```json
-{
-  "analysis_date": "YYYY-MM-DDTHH:MM:SS",
-  "session_file": "<file_path>",
-  "track_info": {
-    "track_length_m": 4523.0,
-    "corner_count": 12
-  },
-  "report": { "/* SessionReport.to_dict() */" : "..." },
-  "kpis": [ "/* KPI objects */" ]
-}
-```
-
-Archive to `.session-analysis/history/YYYY-MM-DD_<session_name>.json` (same content).
+Link to the appendix from the main report: `See [full corner analysis](report_appendix.md) for all corners, brake balance, and setup notes.`
 
 ### Cross-Session Comparison
 
-When `.session-analysis/latest.json` exists:
+When previous session report(s) are available:
 
-1. **Verify track match**: corner count must match, `track_length_m` within 5%
-2. **Calculate KPI progress** for each previous KPI:
-   - `% change` = (current - previous) / previous × 100
+1. **Verify track match**: corner count and track layout should match (same turn IDs)
+2. **Compare KPIs**: read the KPI table from the previous report and calculate progress:
    - Status: **MET** (reached target), **IMPROVED** (moved toward target), **REGRESSED** (moved away), **UNCHANGED** (< 5% change)
-3. **Generate comparison table** showing previous → current → target for each KPI
+3. **Generate comparison section** in the report showing previous → current → target for each KPI
 4. **Update KPIs** — keep unmet KPIs, adjust targets for met ones, add new areas
-5. **Save updated state** to `latest.json` and archive
 
 ### Important Notes
 
