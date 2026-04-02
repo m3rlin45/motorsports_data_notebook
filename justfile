@@ -1,14 +1,14 @@
 # Linting and formatting
 format:
-    uv run black src/ tests/ inferno-driving-coach/src/
+    uv run black src/ tests/ scripts/ inferno-driving-coach/src/
 
 lint:
-    uv run black --check src/ tests/ inferno-driving-coach/src/
+    uv run black --check src/ tests/ scripts/ inferno-driving-coach/src/
 
 typecheck:
     #!/usr/bin/env bash
     set -uo pipefail
-    uv run mypy src/
+    uv run mypy src/ scripts/
     rc1=$?
     cd inferno-driving-coach && uv run mypy src/
     rc2=$?
