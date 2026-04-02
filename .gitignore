@@ -65,5 +65,8 @@ _output/
 desktop_app/.wine_build/
 desktop_app_driver/.wine_build/
 
+# Claude Code
+.claude/settings.local.json
+
 # Session analysis state
 .session-analysis/
