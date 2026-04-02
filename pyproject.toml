@@ -60,7 +60,7 @@ motorsports_data_notebook = ["py.typed", "data/*.yaml"]
 prerelease = "if-necessary-or-explicit"
 
 [tool.uv.workspace]
-members = ["desktop_app"]
+members = ["desktop_app", "inferno-driving-coach"]
 
 [tool.black]
 line-length = 100
