@@ -1,12 +1,18 @@
 # Linting and formatting
 format:
-    uv run black src/ tests/
+    uv run black src/ tests/ inferno-driving-coach/src/
 
 lint:
-    uv run black --check src/ tests/
+    uv run black --check src/ tests/ inferno-driving-coach/src/
 
 typecheck:
+    #!/usr/bin/env bash
+    set -uo pipefail
     uv run mypy src/
+    rc1=$?
+    cd inferno-driving-coach && uv run mypy src/
+    rc2=$?
+    exit $(( rc1 > rc2 ? rc1 : rc2 ))
 
 format-notebooks:
     uv run nbqa black workspace_template/en/ workspace_template/ja/
