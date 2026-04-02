@@ -402,8 +402,10 @@ class TestSessionReportSerialization:
             lap_times=LapTimeSummary(
                 best_lap_num=2,
                 best_lap_time_s=90.5,
+                best_lap_time_fmt="1:30.500",
                 top_laps=[{"num": 2, "lap_time_s": 90.5}],
                 mean_top_lap_time_s=91.0,
+                mean_top_lap_time_fmt="1:31.000",
                 std_top_lap_time_s=0.5,
                 all_lap_times=[{"num": 1, "lap_time_s": 95.0}, {"num": 2, "lap_time_s": 90.5}],
             ),
@@ -630,8 +632,10 @@ class TestBrakingBalance:
             lap_times=LapTimeSummary(
                 best_lap_num=2,
                 best_lap_time_s=90.5,
+                best_lap_time_fmt="1:30.500",
                 top_laps=[],
                 mean_top_lap_time_s=91.0,
+                mean_top_lap_time_fmt="1:31.000",
                 std_top_lap_time_s=0.5,
                 all_lap_times=[],
             ),
@@ -674,8 +678,10 @@ class TestBrakingBalance:
             lap_times=LapTimeSummary(
                 best_lap_num=1,
                 best_lap_time_s=95.0,
+                best_lap_time_fmt="1:35.000",
                 top_laps=[],
                 mean_top_lap_time_s=95.0,
+                mean_top_lap_time_fmt="1:35.000",
                 std_top_lap_time_s=0.0,
                 all_lap_times=[],
             ),
