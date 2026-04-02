@@ -1402,6 +1402,7 @@ class TestComputeGUtilization:
             "total_g_min",
             "total_g_min_phase",
             "g_utilization_pct",
+            "early_braking_coast_m",
             "braking_g_mean",
             "entry_g_mean",
             "mid_g_mean",

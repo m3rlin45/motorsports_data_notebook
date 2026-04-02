@@ -79,6 +79,23 @@ class CornerInfo:
 
 
 @dataclass
+class CornerLapMetrics:
+    """Raw per-lap data for a single corner."""
+
+    lap_num: int
+    braking_point: float | None
+    entry_speed: float | None
+    min_speed: float | None
+    exit_speed: float | None
+    throttle_point: float | None
+    throttle_acceptance_pct: float | None
+    peak_brake: float | None
+    brake_release_point: float | None
+    braking_distance: float | None
+    mean_decel_g: float | None
+
+
+@dataclass
 class CornerBestLap:
     """Best execution at a specific corner."""
 
@@ -421,6 +438,9 @@ def _detect_off_track_laps(
     dict[int, set[int]]
         Mapping of corner_id -> set of off-track lap numbers.
     """
+    if not per_lap_gps or not corners:
+        return {}
+
     R = 6371000.0
 
     # Compute shared reference center from all GPS data
