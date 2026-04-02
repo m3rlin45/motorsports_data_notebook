@@ -4,3 +4,5 @@ pub mod session_panel;
 pub mod stats_window;
 pub mod suspension_config;
 pub mod suspension_stats;
+pub mod tire_grip_config;
+pub mod tire_grip_stats;

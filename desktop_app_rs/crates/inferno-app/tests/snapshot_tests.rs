@@ -115,3 +115,27 @@ fn snapshot_suspension_light() {
         .try_snapshot("suspension_light")
         .expect("snapshot failed");
 }
+
+// === Tire Grip tab (dark) ===
+
+#[test]
+fn snapshot_tire_grip() {
+    let mut harness = create_app_with_data();
+    harness.state_mut().active_tab = ActiveTab::TireGrip;
+    harness.run();
+    harness
+        .try_snapshot("tire_grip")
+        .expect("snapshot failed");
+}
+
+// === Tire Grip tab (light) ===
+
+#[test]
+fn snapshot_tire_grip_light() {
+    let mut harness = create_app_light();
+    harness.state_mut().active_tab = ActiveTab::TireGrip;
+    harness.run();
+    harness
+        .try_snapshot("tire_grip_light")
+        .expect("snapshot failed");
+}

@@ -36,11 +36,11 @@ desktop_app_rs/
 
 - [x] **Suspension Velocity tab** — Full histogram analysis (velocity from shock pot displacement, motion ratios, zero-centered binning, skewness/kurtosis), 2×2 histogram chart with velocity range shading, suspension config panel (shock channels, motion ratios, velocity thresholds), suspension stats window (balance analysis), A/B comparison, tab switching in InfernoApp
 
-**Test count:** 46 unit + 20 integration + 6 snapshot = 72 passing
+- [x] **Tire Grip tab** — Bucketed percentile analysis (total G vs tire pressure/temperature), 2×2 line+marker chart, pressure/temperature mode toggle, tire grip config panel (TPMS channels, percentile), tire grip stats window, integration tests with real TPMS data
+
+**Test count:** 53 unit + 33 integration + 10 snapshot = 96 passing
 
 ### Future
-
-- [ ] Tire Grip tab
 
 ## Key Design Decisions
 
