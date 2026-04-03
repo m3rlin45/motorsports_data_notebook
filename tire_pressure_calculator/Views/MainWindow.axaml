@@ -4,8 +4,8 @@
         x:Class="TirePressureCalculator.Views.MainWindow"
         x:DataType="vm:MainViewModel"
         Title="Tire Pressure Calculator"
-        Width="700" Height="520"
-        MinWidth="600" MinHeight="400">
+        Width="720" Height="560"
+        MinWidth="620" MinHeight="480">
 
   <Window.Resources>
     <DataTemplate x:Key="CornerTemplate" x:DataType="vm:TireCornerViewModel">
@@ -27,15 +27,30 @@
                            HorizontalContentAlignment="Center" />
           </Border>
 
-          <TextBlock Grid.Row="0" Grid.Column="2" Text="Target °C"
+          <TextBlock Grid.Row="0" Grid.Column="2" Text="Target °C (Corr. °C)"
                      FontSize="11" HorizontalAlignment="Center" Margin="0,2" />
           <Border Grid.Row="1" Grid.Column="2"
                   BorderBrush="#40FF4040" BorderThickness="1.5" CornerRadius="4">
-            <NumericUpDown Value="{Binding TargetHotTemp}"
-                           Minimum="0" Maximum="200"
-                           FormatString="F1" Increment="1"
-                           ShowButtonSpinner="False"
-                           HorizontalContentAlignment="Center" />
+            <Panel>
+              <NumericUpDown Value="{Binding TargetHotTemp}"
+                             Minimum="0" Maximum="200"
+                             FormatString="F1" Increment="1"
+                             ShowButtonSpinner="False"
+                             HorizontalContentAlignment="Center" />
+              <!-- Overlay showing "80.0 (92.8)" when not editing -->
+              <TextBlock Text="{Binding TargetHotTempDisplay}"
+                         HorizontalAlignment="Center"
+                         VerticalAlignment="Center"
+                         IsHitTestVisible="False" />
+              <Panel.Styles>
+                <Style Selector="Panel:not(:focus-within) > NumericUpDown">
+                  <Setter Property="Foreground" Value="Transparent" />
+                </Style>
+                <Style Selector="Panel:focus-within > TextBlock">
+                  <Setter Property="IsVisible" Value="False" />
+                </Style>
+              </Panel.Styles>
+            </Panel>
           </Border>
         </Grid>
 
@@ -100,10 +115,21 @@
     <ContentControl Grid.Row="2" Grid.Column="1"
                     Content="{Binding RearRight}"
                     ContentTemplate="{StaticResource CornerTemplate}" />
-    <!-- Reset button -->
-    <Button Grid.Row="3" Grid.ColumnSpan="2"
+    <!-- Bottom bar: reset + slider -->
+    <Button Grid.Row="3" Grid.Column="0"
             Content="Reset to Defaults"
             Command="{Binding ResetCommand}"
-            HorizontalAlignment="Left" Margin="8,4,0,8" />
+            HorizontalAlignment="Left" VerticalAlignment="Center"
+            Margin="8,4,0,8" />
+    <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal"
+                HorizontalAlignment="Right" VerticalAlignment="Center"
+                Margin="0,4,8,8" Spacing="8">
+      <TextBlock Text="{Binding TempAdjustLabel}"
+                 VerticalAlignment="Center" FontSize="12" />
+      <Slider Value="{Binding TempAdjustPercent}"
+              Minimum="-15" Maximum="15"
+              TickFrequency="0.5" IsSnapToTickEnabled="True"
+              Width="150" VerticalAlignment="Center" />
+    </StackPanel>
   </Grid>
 </Window>

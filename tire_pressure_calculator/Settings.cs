@@ -16,6 +16,7 @@ public class AppSettings
     public CornerSettings FrontRight { get; set; } = new();
     public CornerSettings RearLeft { get; set; } = new();
     public CornerSettings RearRight { get; set; } = new();
+    public double TempAdjustPercent { get; set; }
 
     private static string FilePath =>
         Path.Combine(
