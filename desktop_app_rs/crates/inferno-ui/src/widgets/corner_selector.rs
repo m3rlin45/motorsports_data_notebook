@@ -12,6 +12,7 @@ pub enum ViewMode {
 pub struct CornerSelector {
     pub view_mode: ViewMode,
     pub corners: Vec<(String, char)>,
+    pub hovered_corner: Option<usize>,
     selected_corner: usize,
 }
 
@@ -26,6 +27,7 @@ impl CornerSelector {
         Self {
             view_mode: ViewMode::Summary,
             corners: Vec::new(),
+            hovered_corner: None,
             selected_corner: 0,
         }
     }
