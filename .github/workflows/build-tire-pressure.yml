@@ -1,0 +1,112 @@
+name: Build Tire Pressure Calculator
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'tire_pressure_calculator/**'
+      - '.github/workflows/build-tire-pressure.yml'
+  pull_request:
+    branches: [master]
+    paths:
+      - 'tire_pressure_calculator/**'
+      - '.github/workflows/build-tire-pressure.yml'
+  release:
+    types: [published]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Check formatting
+        working-directory: tire_pressure_calculator
+        run: dotnet format --verify-no-changes
+
+      - name: Run tests
+        working-directory: tire_pressure_calculator
+        run: dotnet test Tests/TirePressureCalculator.Tests.csproj --verbosity normal
+
+  build-windows:
+    needs: lint-and-test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish
+        working-directory: tire_pressure_calculator
+        run: dotnet publish -c Release -r win-x64 --self-contained
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TirePressureCalculator-Windows
+          path: tire_pressure_calculator/bin/Release/net10.0/win-x64/publish/TirePressureCalculator.exe
+          retention-days: 30
+
+  build-linux:
+    needs: lint-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install AOT dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang zlib1g-dev
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish
+        working-directory: tire_pressure_calculator
+        run: dotnet publish -c Release -r linux-x64 --self-contained
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TirePressureCalculator-Linux
+          path: tire_pressure_calculator/bin/Release/net10.0/linux-x64/publish/TirePressureCalculator
+          retention-days: 30
+
+  attach-to-release:
+    needs: [build-windows, build-linux]
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: TirePressureCalculator-Windows
+          path: dist/
+
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: TirePressureCalculator-Linux
+          path: dist/
+
+      - name: Rename Linux binary
+        run: mv dist/TirePressureCalculator dist/TirePressureCalculator-Linux
+
+      - name: Attach to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/TirePressureCalculator.exe
+            dist/TirePressureCalculator-Linux

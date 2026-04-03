@@ -28,6 +28,7 @@ src/motorsports_data_notebook/   # Main package
 tests/             # Unit tests (pytest), one file per module
 workspace_template/ # Example notebooks + sample .xrz data file
 scripts/           # Build utilities (lite wheel builder, notebook executor)
+tire_pressure_calculator/ # C# Avalonia cold tire pressure calculator (.NET 10)
 ```
 
 ## Common Commands
@@ -134,6 +135,42 @@ Run (displays via WSLg on WSL2):
 ```bash
 /home/m3rlin45/code/motorsports_data_notebook/desktop_app/dist/InfernoAnalyzer
 ```
+
+## Tire Pressure Calculator
+
+The `tire_pressure_calculator/` directory contains a C# Avalonia GUI app that calculates cold tire pressure settings using Gay-Lussac's Law. Four quadrants (FL/FR/RL/RR) each take current temp (°C), target hot temp (°C), and target hot pressure (bar), then compute the cold gauge pressure to set.
+
+```
+tire_pressure_calculator/
+  TirePressureCalculator.csproj  # .NET 10, Avalonia 11.3, NativeAOT-ready
+  Program.cs
+  App.axaml / App.axaml.cs
+  ViewModels/
+    MainViewModel.cs             # Holds 4 TireCornerViewModel instances
+    TireCornerViewModel.cs       # Per-corner inputs + computed ColdPressure
+  Views/
+    MainWindow.axaml             # 2x2 grid layout with DataTemplate
+    MainWindow.axaml.cs
+```
+
+### Building
+
+```bash
+# Dev run (requires display - WSLg or X11):
+cd /home/m3rlin45/code/motorsports_data_notebook-worktree/tire_pressure_calculator && dotnet run
+
+# Windows single-file exe (cross-compiled from Linux, trimmed, not AOT):
+cd /home/m3rlin45/code/motorsports_data_notebook-worktree/tire_pressure_calculator && \
+dotnet publish -c Release -r win-x64 --self-contained \
+  -p:PublishAot=false -p:PublishTrimmed=true -p:TrimMode=full \
+  -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+
+# Linux AOT native binary (requires clang, zlib1g-dev):
+cd /home/m3rlin45/code/motorsports_data_notebook-worktree/tire_pressure_calculator && \
+dotnet publish -c Release -r linux-x64 --self-contained
+```
+
+Note: Cross-OS NativeAOT is not supported. Windows builds from Linux use trimmed single-file instead. NativeAOT works for linux-x64 when building on Linux.
 
 ## Code Style & Conventions
 
