@@ -537,8 +537,12 @@ fn test_suspension_histogram_sums_to_100() {
 fn test_suspension_range_pcts_sum_to_100() {
     let result = run_suspension_86();
     for w in &result.wheels {
-        let total =
-            w.pct_friction + w.pct_slow_bump + w.pct_slow_rebound + w.pct_fast_bump + w.pct_fast_rebound + w.pct_curb;
+        let total = w.pct_friction
+            + w.pct_slow_bump
+            + w.pct_slow_rebound
+            + w.pct_fast_bump
+            + w.pct_fast_rebound
+            + w.pct_curb;
         assert!(
             (total - 100.0).abs() < 0.5,
             "Wheel {} range pcts sum to {:.2}, expected ~100",
@@ -572,9 +576,8 @@ fn test_suspension_wheel_names() {
 fn test_suspension_single_lap() {
     let session = load_86();
     let laps = valid_lap_nums(&session);
-    let result =
-        analyze_suspension_velocity(&session, &laps[..1], &SuspensionConfig::default())
-            .expect("Single lap suspension analysis failed");
+    let result = analyze_suspension_velocity(&session, &laps[..1], &SuspensionConfig::default())
+        .expect("Single lap suspension analysis failed");
     for w in &result.wheels {
         assert!(!w.histogram.is_empty());
     }
@@ -636,7 +639,11 @@ fn test_tire_grip_bucket_values_positive() {
     let result = run_tire_grip_86(MetricMode::Pressure);
     for w in &result.wheels {
         for &v in &w.bucket_values {
-            assert!(v > 0.0, "Wheel {} bucket value should be positive G", w.name);
+            assert!(
+                v > 0.0,
+                "Wheel {} bucket value should be positive G",
+                w.name
+            );
         }
     }
 }
