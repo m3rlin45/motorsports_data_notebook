@@ -38,12 +38,7 @@ fn compute_bounds(
     // Add 5% padding
     let x_pad = (x_max - x_min).abs() * 0.05;
     let y_pad = (y_max - y_min).abs() * 0.05;
-    (
-        x_min - x_pad,
-        x_max + x_pad,
-        y_min - y_pad,
-        y_max + y_pad,
-    )
+    (x_min - x_pad, x_max + x_pad, y_min - y_pad, y_max + y_pad)
 }
 
 /// Draw 2x2 tire grip scatter/line plots (single session).
@@ -84,11 +79,7 @@ pub fn draw_grip(ui: &mut Ui, result: &TireGripResult) {
 }
 
 /// Draw 2x2 tire grip scatter/line plots (A/B comparison).
-pub fn draw_grip_comparison(
-    ui: &mut Ui,
-    result_a: &TireGripResult,
-    result_b: &TireGripResult,
-) {
+pub fn draw_grip_comparison(ui: &mut Ui, result_a: &TireGripResult, result_b: &TireGripResult) {
     let x_label = metric_label(result_a);
     let y_label = accel_label(result_a);
     let bounds = compute_bounds(result_a, Some(result_b));
@@ -97,8 +88,7 @@ pub fn draw_grip_comparison(
     let cell_w = avail.x / 2.0;
     let cell_h = avail.y / 2.0;
 
-    let pairs: [(_, _); 4] =
-        std::array::from_fn(|i| (&result_a.wheels[i], &result_b.wheels[i]));
+    let pairs: [(_, _); 4] = std::array::from_fn(|i| (&result_a.wheels[i], &result_b.wheels[i]));
 
     ui.horizontal(|ui| {
         ui.vertical(|ui| {

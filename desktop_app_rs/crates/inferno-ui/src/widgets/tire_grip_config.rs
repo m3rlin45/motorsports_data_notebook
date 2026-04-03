@@ -94,14 +94,10 @@ impl TireGripConfigPanel {
                 }
                 MetricMode::Temperature => {
                     ui.collapsing("Temperature Channels", |ui| {
-                        changed |=
-                            channel_input(ui, &mut self.channel_names, "tpms_temp_fl", "FL");
-                        changed |=
-                            channel_input(ui, &mut self.channel_names, "tpms_temp_fr", "FR");
-                        changed |=
-                            channel_input(ui, &mut self.channel_names, "tpms_temp_rl", "RL");
-                        changed |=
-                            channel_input(ui, &mut self.channel_names, "tpms_temp_rr", "RR");
+                        changed |= channel_input(ui, &mut self.channel_names, "tpms_temp_fl", "FL");
+                        changed |= channel_input(ui, &mut self.channel_names, "tpms_temp_fr", "FR");
+                        changed |= channel_input(ui, &mut self.channel_names, "tpms_temp_rl", "RL");
+                        changed |= channel_input(ui, &mut self.channel_names, "tpms_temp_rr", "RR");
                     });
                 }
             }
