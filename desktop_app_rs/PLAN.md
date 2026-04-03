@@ -34,11 +34,13 @@ desktop_app_rs/
 
 **Test count:** 34 unit + 20 integration + 6 snapshot = 60 passing, clippy clean
 
+- [x] **Suspension Velocity tab** — Full histogram analysis (velocity from shock pot displacement, motion ratios, zero-centered binning, skewness/kurtosis), 2×2 histogram chart with velocity range shading, suspension config panel (shock channels, motion ratios, velocity thresholds), suspension stats window (balance analysis), A/B comparison, tab switching in InfernoApp
+
+**Test count:** 46 unit + 20 integration + 6 snapshot = 72 passing
+
 ### Future
 
-- [ ] Suspension Velocity tab
 - [ ] Tire Grip tab
-- [ ] `AnalysisTab` trait when adding second tab
 
 ## Key Design Decisions
 

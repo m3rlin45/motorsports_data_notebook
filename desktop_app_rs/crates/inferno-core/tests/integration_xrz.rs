@@ -6,6 +6,9 @@ use inferno_core::analysis::driver_consistency::{
     analyze_driver_consistency, ChannelConfig, DriverConsistencyResult,
 };
 use inferno_core::analysis::math;
+use inferno_core::analysis::suspension::{
+    analyze_suspension_velocity, SuspensionConfig, SuspensionResult,
+};
 use inferno_core::session::{LapData, Session};
 
 // ── Test data paths ──────────────────────────────────────────────────
@@ -478,4 +481,113 @@ fn test_lap_data_channels_same_length() {
             );
         }
     }
+}
+
+// ── Suspension velocity integration tests ──────────────────────────
+
+fn run_suspension_86() -> SuspensionResult {
+    let session = load_86();
+    let laps = valid_lap_nums(&session);
+    assert!(!laps.is_empty(), "No valid laps in 86 data");
+    analyze_suspension_velocity(&session, &laps, &SuspensionConfig::default())
+        .expect("Suspension analysis failed")
+}
+
+#[test]
+fn test_suspension_all_wheels_have_data() {
+    let result = run_suspension_86();
+    for w in &result.wheels {
+        assert!(
+            !w.histogram.is_empty(),
+            "Wheel {} should have histogram data",
+            w.name
+        );
+        assert!(
+            !w.bin_centers.is_empty(),
+            "Wheel {} should have bin centers",
+            w.name
+        );
+        assert_eq!(
+            w.histogram.len(),
+            w.bin_centers.len(),
+            "Wheel {} histogram and bin_centers must match",
+            w.name
+        );
+    }
+}
+
+#[test]
+fn test_suspension_histogram_sums_to_100() {
+    let result = run_suspension_86();
+    for w in &result.wheels {
+        let total: f64 = w.histogram.iter().sum();
+        assert!(
+            (total - 100.0).abs() < 0.5,
+            "Wheel {} histogram sums to {:.2}, expected ~100",
+            w.name,
+            total
+        );
+    }
+}
+
+#[test]
+fn test_suspension_range_pcts_sum_to_100() {
+    let result = run_suspension_86();
+    for w in &result.wheels {
+        let total = w.pct_friction
+            + w.pct_slow_bump
+            + w.pct_slow_rebound
+            + w.pct_fast_bump
+            + w.pct_fast_rebound
+            + w.pct_curb;
+        assert!(
+            (total - 100.0).abs() < 0.5,
+            "Wheel {} range pcts sum to {:.2}, expected ~100",
+            w.name,
+            total
+        );
+    }
+}
+
+#[test]
+fn test_suspension_std_positive() {
+    let result = run_suspension_86();
+    for w in &result.wheels {
+        assert!(
+            w.std > 0.0,
+            "Wheel {} std should be positive, got {}",
+            w.name,
+            w.std
+        );
+    }
+}
+
+#[test]
+fn test_suspension_wheel_names() {
+    let result = run_suspension_86();
+    let names: Vec<&str> = result.wheels.iter().map(|w| w.name.as_str()).collect();
+    assert_eq!(names, ["FL", "FR", "RL", "RR"]);
+}
+
+#[test]
+fn test_suspension_single_lap() {
+    let session = load_86();
+    let laps = valid_lap_nums(&session);
+    let result = analyze_suspension_velocity(&session, &laps[..1], &SuspensionConfig::default())
+        .expect("Single lap suspension analysis failed");
+    for w in &result.wheels {
+        assert!(!w.histogram.is_empty());
+    }
+}
+
+#[test]
+fn test_suspension_missing_channel() {
+    let session = load_86();
+    let laps = valid_lap_nums(&session);
+    let config = SuspensionConfig {
+        shock_fl: "NONEXISTENT_CHANNEL".into(),
+        ..SuspensionConfig::default()
+    };
+    let result = analyze_suspension_velocity(&session, &laps, &config);
+    assert!(result.is_err(), "Should fail with missing channel");
 }
