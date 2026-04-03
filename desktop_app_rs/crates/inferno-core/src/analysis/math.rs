@@ -178,6 +178,28 @@ pub fn kurtosis(data: &[f64]) -> f64 {
     data.iter().map(|&x| ((x - m) / s).powi(4)).sum::<f64>() / n as f64 - 3.0
 }
 
+/// Compute the p-th percentile of data using linear interpolation.
+/// `p` is in the range [0, 100]. Matches numpy.percentile default ("linear").
+pub fn percentile(data: &mut [f64], p: f64) -> f64 {
+    let n = data.len();
+    if n == 0 {
+        return 0.0;
+    }
+    if n == 1 {
+        return data[0];
+    }
+    data.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let rank = p / 100.0 * (n - 1) as f64;
+    let lo = rank.floor() as usize;
+    let hi = rank.ceil() as usize;
+    if lo == hi {
+        data[lo]
+    } else {
+        let frac = rank - lo as f64;
+        data[lo] * (1.0 - frac) + data[hi] * frac
+    }
+}
+
 /// Compute cumulative distance from XY coordinates.
 pub fn cumulative_distance(x: &[f64], y: &[f64]) -> Vec<f64> {
     let n = x.len();
@@ -300,5 +322,28 @@ mod tests {
         assert_eq!(kurtosis(&[]), 0.0);
         assert_eq!(kurtosis(&[5.0]), 0.0);
         assert_eq!(kurtosis(&[3.0, 3.0]), 0.0); // zero variance
+    }
+
+    #[test]
+    fn test_percentile() {
+        let mut data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
+        assert!((percentile(&mut data, 0.0) - 1.0).abs() < 1e-10);
+        assert!((percentile(&mut data, 50.0) - 3.0).abs() < 1e-10);
+        assert!((percentile(&mut data, 100.0) - 5.0).abs() < 1e-10);
+        assert!((percentile(&mut data, 25.0) - 2.0).abs() < 1e-10);
+        assert!((percentile(&mut data, 75.0) - 4.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_percentile_interpolation() {
+        // numpy.percentile([0, 10], 30) == 3.0
+        let mut data = vec![0.0, 10.0];
+        assert!((percentile(&mut data, 30.0) - 3.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_percentile_edge_cases() {
+        assert_eq!(percentile(&mut [], 50.0), 0.0);
+        assert_eq!(percentile(&mut [7.0], 99.9), 7.0);
     }
 }

@@ -9,6 +9,7 @@ use inferno_core::analysis::driver_consistency::{
     analyze_driver_consistency, DriverConsistencyResult,
 };
 use inferno_core::analysis::suspension::{analyze_suspension_velocity, SuspensionResult};
+use inferno_core::analysis::tire_grip::{analyze_tire_grip, TireGripResult};
 use inferno_core::channel;
 use inferno_core::error::Error;
 use inferno_core::lap::get_top_laps;
@@ -22,16 +23,20 @@ use inferno_ui::widgets::session_panel::SessionPanel;
 use inferno_ui::widgets::stats_window::StatsWindow;
 use inferno_ui::widgets::suspension_config::SuspensionConfigPanel;
 use inferno_ui::widgets::suspension_stats::SuspensionStatsWindow;
+use inferno_ui::widgets::tire_grip_config::TireGripConfigPanel;
+use inferno_ui::widgets::tire_grip_stats::TireGripStatsWindow;
 
 const DEBOUNCE_MS: u64 = 300;
 
 type DriverAnalysisResult = Result<DriverConsistencyResult, Error>;
 type SuspensionAnalysisResult = Result<SuspensionResult, Error>;
+type TireGripAnalysisResult = Result<TireGripResult, Error>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActiveTab {
     DriverConsistency,
     Suspension,
+    TireGrip,
 }
 
 pub struct InfernoApp {
@@ -58,6 +63,14 @@ pub struct InfernoApp {
     susp_result_b: Option<SuspensionResult>,
     susp_rx_a: Option<mpsc::Receiver<SuspensionAnalysisResult>>,
     susp_rx_b: Option<mpsc::Receiver<SuspensionAnalysisResult>>,
+
+    // Tire grip tab
+    tire_config: TireGripConfigPanel,
+    tire_stats: TireGripStatsWindow,
+    tire_result_a: Option<TireGripResult>,
+    tire_result_b: Option<TireGripResult>,
+    tire_rx_a: Option<mpsc::Receiver<TireGripAnalysisResult>>,
+    tire_rx_b: Option<mpsc::Receiver<TireGripAnalysisResult>>,
 
     // State
     status: String,
@@ -95,6 +108,12 @@ impl InfernoApp {
             susp_result_b: None,
             susp_rx_a: None,
             susp_rx_b: None,
+            tire_config: TireGripConfigPanel::new(),
+            tire_stats: TireGripStatsWindow::default(),
+            tire_result_a: None,
+            tire_result_b: None,
+            tire_rx_a: None,
+            tire_rx_b: None,
             status: "Load a telemetry file to begin".into(),
             analyzing: false,
             pending_a: false,
@@ -114,6 +133,7 @@ impl InfernoApp {
         if let Some(prof) = profile::get_profile_for_logger(&logger_id) {
             self.config.set_from_profile(&prof);
             self.susp_config.set_from_profile(&prof);
+            self.tire_config.set_from_profile(&prof);
         }
 
         // Auto-detect throttle threshold: 95% of peak throttle value
@@ -172,6 +192,12 @@ impl InfernoApp {
         {
             self.susp_result_a = Some(susp_result);
         }
+
+        // Run tire grip analysis synchronously
+        let tire_config = self.tire_config.to_tire_grip_config();
+        if let Ok(tire_result) = analyze_tire_grip(&session, &selected_laps, &tire_config) {
+            self.tire_result_a = Some(tire_result);
+        }
     }
 
     fn schedule_analysis(&mut self, target_b: bool) {
@@ -196,11 +222,13 @@ impl InfernoApp {
             self.pending_a = false;
             self.fire_driver_analysis(ctx, false);
             self.fire_suspension_analysis(ctx, false);
+            self.fire_tire_grip_analysis(ctx, false);
         }
         if self.pending_b {
             self.pending_b = false;
             self.fire_driver_analysis(ctx, true);
             self.fire_suspension_analysis(ctx, true);
+            self.fire_tire_grip_analysis(ctx, true);
         }
     }
 
@@ -303,6 +331,50 @@ impl InfernoApp {
         });
     }
 
+    fn fire_tire_grip_analysis(&mut self, ctx: &egui::Context, target_b: bool) {
+        let panel = if target_b {
+            &self.session_b
+        } else {
+            &self.session_a
+        };
+        let session = match panel.session.clone() {
+            Some(s) => s,
+            None => return,
+        };
+        let laps = panel.selected_laps();
+        if laps.is_empty() {
+            return;
+        }
+
+        let config = self.tire_config.to_tire_grip_config();
+        let (tx, rx) = mpsc::channel();
+        if target_b {
+            self.tire_rx_b = Some(rx);
+        } else {
+            self.tire_rx_a = Some(rx);
+        }
+
+        let ctx_c = ctx.clone();
+        std::thread::spawn(move || {
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                analyze_tire_grip(&session, &laps, &config)
+            }));
+            let result = match result {
+                Ok(r) => r,
+                Err(panic) => {
+                    let msg = panic
+                        .downcast_ref::<String>()
+                        .map(|s| s.as_str())
+                        .or_else(|| panic.downcast_ref::<&str>().copied())
+                        .unwrap_or("unknown panic");
+                    Err(Error::Other(format!("Tire grip analysis panicked: {msg}")))
+                }
+            };
+            let _ = tx.send(result);
+            ctx_c.request_repaint();
+        });
+    }
+
     fn poll_results(&mut self) {
         // Driver consistency results
         if let Some(rx) = &self.rx_a {
@@ -386,13 +458,52 @@ impl InfernoApp {
                 Err(mpsc::TryRecvError::Empty) => {}
             }
         }
+
+        // Tire grip results
+        if let Some(rx) = &self.tire_rx_a {
+            match rx.try_recv() {
+                Ok(result) => {
+                    self.tire_rx_a = None;
+                    match result {
+                        Ok(tr) => self.tire_result_a = Some(tr),
+                        Err(_) => self.tire_result_a = None,
+                    }
+                    self.update_analyzing();
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    self.tire_rx_a = None;
+                    self.update_analyzing();
+                }
+                Err(mpsc::TryRecvError::Empty) => {}
+            }
+        }
+
+        if let Some(rx) = &self.tire_rx_b {
+            match rx.try_recv() {
+                Ok(result) => {
+                    self.tire_rx_b = None;
+                    match result {
+                        Ok(tr) => self.tire_result_b = Some(tr),
+                        Err(_) => self.tire_result_b = None,
+                    }
+                    self.update_analyzing();
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    self.tire_rx_b = None;
+                    self.update_analyzing();
+                }
+                Err(mpsc::TryRecvError::Empty) => {}
+            }
+        }
     }
 
     fn update_analyzing(&mut self) {
         self.analyzing = self.rx_a.is_some()
             || self.rx_b.is_some()
             || self.susp_rx_a.is_some()
-            || self.susp_rx_b.is_some();
+            || self.susp_rx_b.is_some()
+            || self.tire_rx_a.is_some()
+            || self.tire_rx_b.is_some();
     }
 }
 
@@ -420,6 +531,11 @@ impl eframe::App for InfernoApp {
                     self.susp_stats.show(ctx, result);
                 }
             }
+            ActiveTab::TireGrip => {
+                if let Some(result) = &self.tire_result_a {
+                    self.tire_stats.show(ctx, result);
+                }
+            }
         }
 
         // Bottom status bar
@@ -436,6 +552,7 @@ impl eframe::App for InfernoApp {
                         let has_stats = match self.active_tab {
                             ActiveTab::DriverConsistency => self.result_a.is_some(),
                             ActiveTab::Suspension => self.susp_result_a.is_some(),
+                            ActiveTab::TireGrip => self.tire_result_a.is_some(),
                         };
                         if has_stats && ui.button("Statistics").clicked() {
                             match self.active_tab {
@@ -444,6 +561,9 @@ impl eframe::App for InfernoApp {
                                 }
                                 ActiveTab::Suspension => {
                                     self.susp_stats.open = !self.susp_stats.open;
+                                }
+                                ActiveTab::TireGrip => {
+                                    self.tire_stats.open = !self.tire_stats.open;
                                 }
                             }
                         }
@@ -461,9 +581,8 @@ impl eframe::App for InfernoApp {
 
         // Top panel — tab selector + session loading + config (collapsible)
         if !self.top_collapsed {
-            egui::TopBottomPanel::top("config")
-                .resizable(true)
-                .default_height(220.0)
+            let panel_resp = egui::TopBottomPanel::top("config")
+                .exact_height(220.0)
                 .show(ctx, |ui| {
                     // Tab selector bar
                     ui.horizontal(|ui| {
@@ -477,9 +596,16 @@ impl eframe::App for InfernoApp {
                             ActiveTab::Suspension,
                             "Suspension Velocity",
                         );
+                        ui.selectable_value(
+                            &mut self.active_tab,
+                            ActiveTab::TireGrip,
+                            "Tire Grip",
+                        );
                     });
                     ui.separator();
 
+                    // Save the 3rd column rect for the config overlay
+                    let mut config_col_rect = egui::Rect::NOTHING;
                     ui.columns(3, |cols| {
                         // Session A
                         let resp = self.session_a.show(&mut cols[0]);
@@ -500,18 +626,40 @@ impl eframe::App for InfernoApp {
                             trigger_b = true;
                         }
 
-                        // Tab-specific config
-                        match self.active_tab {
-                            ActiveTab::DriverConsistency => {
-                                config_changed = self.config.show(&mut cols[2]);
-                                save_profile = self.config.save_requested;
-                            }
-                            ActiveTab::Suspension => {
-                                config_changed = self.susp_config.show(&mut cols[2]);
-                                save_profile = self.susp_config.save_requested;
-                            }
-                        }
+                        // 3rd column: just capture its rect
+                        config_col_rect = cols[2].available_rect_before_wrap();
                     });
+
+                    config_col_rect
+                });
+
+            // Config overlay — foreground Area at the 3rd column position,
+            // can extend below the top panel over the chart area
+            let col_rect = panel_resp.inner;
+            egui::Area::new(egui::Id::new("config_overlay"))
+                .fixed_pos(col_rect.left_top())
+                .order(egui::Order::Foreground)
+                .show(ctx, |ui| {
+                    egui::Frame::new()
+                        .fill(ui.visuals().panel_fill)
+                        .inner_margin(4.0)
+                        .show(ui, |ui| {
+                            ui.set_width(col_rect.width() - 8.0);
+                            match self.active_tab {
+                                ActiveTab::DriverConsistency => {
+                                    config_changed = self.config.show(ui);
+                                    save_profile = self.config.save_requested;
+                                }
+                                ActiveTab::Suspension => {
+                                    config_changed = self.susp_config.show(ui);
+                                    save_profile = self.susp_config.save_requested;
+                                }
+                                ActiveTab::TireGrip => {
+                                    config_changed = self.tire_config.show(ui);
+                                    save_profile = self.tire_config.save_requested;
+                                }
+                            }
+                        });
                 });
         }
 
@@ -523,6 +671,7 @@ impl eframe::App for InfernoApp {
                     self.status = format!("Loaded — logger {} | profile: {}", logger_id, prof.name);
                     self.config.set_from_profile(&prof);
                     self.susp_config.set_from_profile(&prof);
+                    self.tire_config.set_from_profile(&prof);
                 } else {
                     self.status =
                         format!("Loaded — logger {logger_id} | no profile found, using defaults");
@@ -597,6 +746,7 @@ impl eframe::App for InfernoApp {
         egui::CentralPanel::default().show(ctx, |ui| match self.active_tab {
             ActiveTab::DriverConsistency => self.draw_driver_tab(ui),
             ActiveTab::Suspension => self.draw_suspension_tab(ui),
+            ActiveTab::TireGrip => self.draw_tire_grip_tab(ui),
         });
     }
 }
@@ -654,6 +804,20 @@ impl InfernoApp {
                 charts::histogram::draw_histograms_comparison(ui, result, rb);
             } else {
                 charts::histogram::draw_histograms(ui, result);
+            }
+        } else {
+            ui.centered_and_justified(|ui| {
+                ui.heading("Load a telemetry file to begin analysis");
+            });
+        }
+    }
+
+    fn draw_tire_grip_tab(&self, ui: &mut egui::Ui) {
+        if let Some(result) = &self.tire_result_a {
+            if let Some(rb) = &self.tire_result_b {
+                charts::grip::draw_grip_comparison(ui, result, rb);
+            } else {
+                charts::grip::draw_grip(ui, result);
             }
         } else {
             ui.centered_and_justified(|ui| {
