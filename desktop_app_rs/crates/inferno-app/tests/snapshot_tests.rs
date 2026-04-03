@@ -121,9 +121,7 @@ fn snapshot_tire_grip() {
     let mut harness = create_app_with_data();
     harness.state_mut().active_tab = ActiveTab::TireGrip;
     harness.run();
-    harness
-        .try_snapshot("tire_grip")
-        .expect("snapshot failed");
+    harness.try_snapshot("tire_grip").expect("snapshot failed");
 }
 
 // === Tire Grip tab (light) ===

@@ -596,11 +596,7 @@ impl eframe::App for InfernoApp {
                             ActiveTab::Suspension,
                             "Suspension Velocity",
                         );
-                        ui.selectable_value(
-                            &mut self.active_tab,
-                            ActiveTab::TireGrip,
-                            "Tire Grip",
-                        );
+                        ui.selectable_value(&mut self.active_tab, ActiveTab::TireGrip, "Tire Grip");
                     });
                     ui.separator();
 
@@ -735,7 +731,11 @@ impl eframe::App for InfernoApp {
                                 .strong()
                                 .color(inferno_ui::theme::STEELBLUE),
                         );
-                        if charts::track_map::draw_track_map_thumbnail(ui, result) {
+                        if charts::track_map::draw_track_map_thumbnail(
+                            ui,
+                            result,
+                            self.corner_selector.hovered_corner,
+                        ) {
                             self.corner_selector.view_mode = ViewMode::TrackMap;
                         }
                     }
@@ -752,20 +752,21 @@ impl eframe::App for InfernoApp {
 }
 
 impl InfernoApp {
-    fn draw_driver_tab(&self, ui: &mut egui::Ui) {
+    fn draw_driver_tab(&mut self, ui: &mut egui::Ui) {
         match &self.corner_selector.view_mode {
             ViewMode::Summary => {
                 if let Some(result) = &self.result_a {
                     egui::ScrollArea::vertical().show(ui, |ui| {
-                        if let Some(rb) = &self.result_b {
+                        let h = if let Some(rb) = &self.result_b {
                             charts::summary::draw_summary_comparison(
                                 ui,
                                 &result.corner_data,
                                 &rb.corner_data,
-                            );
+                            )
                         } else {
-                            charts::summary::draw_summary(ui, &result.corner_data);
-                        }
+                            charts::summary::draw_summary(ui, &result.corner_data)
+                        };
+                        self.corner_selector.hovered_corner = h;
                     });
                 } else {
                     ui.centered_and_justified(|ui| {
@@ -774,6 +775,7 @@ impl InfernoApp {
                 }
             }
             ViewMode::Detail(idx) => {
+                self.corner_selector.hovered_corner = None;
                 if let Some(result) = &self.result_a {
                     if let Some(cd) = result.corner_data.get(*idx) {
                         egui::ScrollArea::vertical().show(ui, |ui| {
@@ -787,6 +789,7 @@ impl InfernoApp {
                 }
             }
             ViewMode::TrackMap => {
+                self.corner_selector.hovered_corner = None;
                 if let Some(result) = &self.result_a {
                     charts::track_map::draw_track_map(ui, result);
                 } else {

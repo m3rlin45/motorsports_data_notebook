@@ -124,7 +124,10 @@ fn compute_wheel_grip(
 
     // Create evenly spaced bin edges across metric range
     let metric_min = tire_metric.iter().cloned().fold(f64::INFINITY, f64::min);
-    let metric_max = tire_metric.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+    let metric_max = tire_metric
+        .iter()
+        .cloned()
+        .fold(f64::NEG_INFINITY, f64::max);
 
     if (metric_max - metric_min).abs() < 1e-12 || num_buckets == 0 {
         return WheelGripData {
@@ -195,14 +198,7 @@ fn get_channel_unit(session: &Session, channel_name: &str) -> String {
     session
         .channels
         .get(channel_name)
-        .and_then(|batch| {
-            batch
-                .schema()
-                .field(1)
-                .metadata()
-                .get("units")
-                .cloned()
-        })
+        .and_then(|batch| batch.schema().field(1).metadata().get("units").cloned())
         .unwrap_or_default()
 }
 
