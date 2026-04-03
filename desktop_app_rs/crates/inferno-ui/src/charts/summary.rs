@@ -145,19 +145,19 @@ fn y_range(spreads: &[Option<BoxSpread>]) -> (f64, f64) {
 struct BoxInfo {
     name: String,
     x: f64,
+    corner_index: usize,
     spread: BoxSpread,
 }
 
 /// Show a summary plot with custom box hover tooltips.
-/// The built-in BoxPlot hover renders text above the box (goes off-screen),
-/// so we disable it and show a shaded tooltip next to the pointer instead.
+/// Returns the corner index being hovered, if any.
 fn show_summary_plot(
     plot: Plot<'_>,
     ui: &mut Ui,
     tooltip_id: &str,
     boxes: &[BoxInfo],
     build: impl FnOnce(&mut egui_plot::PlotUi),
-) {
+) -> Option<usize> {
     let resp = plot.show(ui, build);
     let layer_id = resp.response.layer_id;
     let hover_pos = resp.response.hover_pos();
@@ -165,8 +165,10 @@ fn show_summary_plot(
     resp.response.on_hover_cursor(egui::CursorIcon::Default);
 
     if boxes.is_empty() {
-        return;
+        return None;
     }
+
+    let mut hovered = None;
 
     // Custom tooltip when hovering near a box
     if let Some(hover_pos) = hover_pos {
@@ -177,6 +179,7 @@ fn show_summary_plot(
             da.partial_cmp(&db).unwrap()
         }) {
             if (info.x - pt.x).abs() < 0.4 {
+                hovered = Some(info.corner_index);
                 egui::Tooltip::always_open(
                     ui.ctx().clone(),
                     layer_id,
@@ -198,6 +201,8 @@ fn show_summary_plot(
             }
         }
     }
+
+    hovered
 }
 
 /// Draw semi-transparent gold highlight bands at the top-3 opportunity corners.
@@ -231,6 +236,7 @@ fn collect_box_infos(names: &[String], spreads: &[Option<BoxSpread>]) -> Vec<Box
             spread.as_ref().map(|s| BoxInfo {
                 name: name.clone(),
                 x: (i + 1) as f64,
+                corner_index: i,
                 spread: s.clone(),
             })
         })
@@ -238,11 +244,13 @@ fn collect_box_infos(names: &[String], spreads: &[Option<BoxSpread>]) -> Vec<Box
 }
 
 /// Draw the 3-stacked summary box plots: Braking Points, Throttle Acceptance, Exit Speed.
-pub fn draw_summary(ui: &mut Ui, corner_data: &[CornerConsistencyData]) {
+/// Returns the corner index being hovered in any of the 3 plots.
+pub fn draw_summary(ui: &mut Ui, corner_data: &[CornerConsistencyData]) -> Option<usize> {
     if corner_data.is_empty() {
         ui.label("No corner data available");
-        return;
+        return None;
     }
+    let mut hovered: Option<usize> = None;
 
     let top3 = top_opportunity_indices(corner_data, 3);
     let names = corner_names(corner_data);
@@ -273,7 +281,7 @@ pub fn draw_summary(ui: &mut Ui, corner_data: &[CornerConsistencyData]) {
         let (y_lo, y_hi) = y_range(&spreads);
         let box_infos = collect_box_infos(&names, &spreads);
 
-        show_summary_plot(
+        hovered = hovered.or(show_summary_plot(
             summary_plot("summary_bp", &names),
             ui,
             "bp_tip",
@@ -298,7 +306,7 @@ pub fn draw_summary(ui: &mut Ui, corner_data: &[CornerConsistencyData]) {
                     plot_ui.box_plot(BoxPlot::new("BP", elems).allow_hover(false));
                 }
             },
-        );
+        ));
     }
 
     // --- Throttle Acceptance ---
@@ -311,7 +319,7 @@ pub fn draw_summary(ui: &mut Ui, corner_data: &[CornerConsistencyData]) {
         let (y_lo, y_hi) = y_range(&spreads);
         let box_infos = collect_box_infos(&names, &spreads);
 
-        show_summary_plot(
+        hovered = hovered.or(show_summary_plot(
             summary_plot("summary_ta", &names),
             ui,
             "ta_tip",
@@ -336,7 +344,7 @@ pub fn draw_summary(ui: &mut Ui, corner_data: &[CornerConsistencyData]) {
                     plot_ui.box_plot(BoxPlot::new("TA%", elems).allow_hover(false));
                 }
             },
-        );
+        ));
     }
 
     // --- Exit Speed ---
@@ -349,7 +357,7 @@ pub fn draw_summary(ui: &mut Ui, corner_data: &[CornerConsistencyData]) {
         let (y_lo, y_hi) = y_range(&spreads);
         let box_infos = collect_box_infos(&names, &spreads);
 
-        show_summary_plot(
+        hovered = hovered.or(show_summary_plot(
             summary_plot("summary_exit_speed", &names),
             ui,
             "es_tip",
@@ -376,8 +384,10 @@ pub fn draw_summary(ui: &mut Ui, corner_data: &[CornerConsistencyData]) {
                     plot_ui.box_plot(BoxPlot::new("Exit Speed", elems).allow_hover(false));
                 }
             },
-        );
+        ));
     }
+
+    hovered
 }
 
 /// Draw the summary with comparison mode (A vs B side-by-side boxes).
@@ -385,11 +395,12 @@ pub fn draw_summary_comparison(
     ui: &mut Ui,
     corner_data_a: &[CornerConsistencyData],
     corner_data_b: &[CornerConsistencyData],
-) {
+) -> Option<usize> {
     if corner_data_a.is_empty() && corner_data_b.is_empty() {
         ui.label("No corner data available");
-        return;
+        return None;
     }
+    let mut hovered: Option<usize> = None;
 
     let n = corner_data_a.len().max(corner_data_b.len());
     let offset = 0.2;
@@ -409,7 +420,7 @@ pub fn draw_summary_comparison(
             let centered: Vec<f64> = cd.bp_values.iter().map(|v| v - m).collect();
             compute_box_spread(&centered)
         });
-        show_summary_plot(
+        hovered = hovered.or(show_summary_plot(
             summary_plot("summary_bp_cmp", &names),
             ui,
             "bp_cmp_tip",
@@ -457,7 +468,7 @@ pub fn draw_summary_comparison(
                     plot_ui.box_plot(BoxPlot::new("B", elems_b).allow_hover(false));
                 }
             },
-        );
+        ));
     }
 
     // --- Throttle Acceptance ---
@@ -466,7 +477,7 @@ pub fn draw_summary_comparison(
         let box_infos = collect_cmp_box_infos(corner_data_a, corner_data_b, n, offset, |cd| {
             compute_box_spread(&cd.ta_values)
         });
-        show_summary_plot(
+        hovered = hovered.or(show_summary_plot(
             summary_plot("summary_ta_cmp", &names),
             ui,
             "ta_cmp_tip",
@@ -510,7 +521,7 @@ pub fn draw_summary_comparison(
                     plot_ui.box_plot(BoxPlot::new("B", elems_b).allow_hover(false));
                 }
             },
-        );
+        ));
     }
 
     // --- Exit Speed ---
@@ -519,7 +530,7 @@ pub fn draw_summary_comparison(
         let box_infos = collect_cmp_box_infos(corner_data_a, corner_data_b, n, offset, |cd| {
             compute_box_spread(&cd.exit_speed_values)
         });
-        show_summary_plot(
+        hovered = hovered.or(show_summary_plot(
             summary_plot("summary_exit_cmp", &names),
             ui,
             "es_cmp_tip",
@@ -563,8 +574,10 @@ pub fn draw_summary_comparison(
                     plot_ui.box_plot(BoxPlot::new("B", elems_b).allow_hover(false));
                 }
             },
-        );
+        ));
     }
+
+    hovered
 }
 
 /// Collect BoxInfo entries for comparison mode (both A and B boxes).
@@ -583,6 +596,7 @@ fn collect_cmp_box_infos(
                 infos.push(BoxInfo {
                     name: format!("{} (A)", cd.corner.name),
                     x: x - offset,
+                    corner_index: i,
                     spread,
                 });
             }
@@ -592,6 +606,7 @@ fn collect_cmp_box_infos(
                 infos.push(BoxInfo {
                     name: format!("{} (B)", cd.corner.name),
                     x: x + offset,
+                    corner_index: i,
                     spread,
                 });
             }
