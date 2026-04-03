@@ -639,7 +639,11 @@ fn test_tire_grip_bucket_values_positive() {
     let result = run_tire_grip_86(MetricMode::Pressure);
     for w in &result.wheels {
         for &v in &w.bucket_values {
-            assert!(v > 0.0, "Wheel {} bucket value should be positive G", w.name);
+            assert!(
+                v > 0.0,
+                "Wheel {} bucket value should be positive G",
+                w.name
+            );
         }
     }
 }
