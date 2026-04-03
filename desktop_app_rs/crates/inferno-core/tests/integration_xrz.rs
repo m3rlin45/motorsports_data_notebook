@@ -9,6 +9,9 @@ use inferno_core::analysis::math;
 use inferno_core::analysis::suspension::{
     analyze_suspension_velocity, SuspensionConfig, SuspensionResult,
 };
+use inferno_core::analysis::tire_grip::{
+    analyze_tire_grip, MetricMode, TireGripConfig, TireGripResult,
+};
 use inferno_core::session::{LapData, Session};
 
 // ── Test data paths ──────────────────────────────────────────────────
@@ -590,4 +593,89 @@ fn test_suspension_missing_channel() {
     };
     let result = analyze_suspension_velocity(&session, &laps, &config);
     assert!(result.is_err(), "Should fail with missing channel");
+}
+
+// ── Tire grip integration tests ────────────────────────────────────
+
+fn run_tire_grip_86(mode: MetricMode) -> TireGripResult {
+    let session = load_86();
+    let laps = valid_lap_nums(&session);
+    let config = TireGripConfig {
+        metric_mode: mode,
+        ..TireGripConfig::default()
+    };
+    analyze_tire_grip(&session, &laps, &config).expect("Tire grip analysis failed")
+}
+
+#[test]
+fn test_tire_grip_pressure_all_wheels() {
+    let result = run_tire_grip_86(MetricMode::Pressure);
+    for w in &result.wheels {
+        assert!(
+            !w.bucket_centers.is_empty(),
+            "Wheel {} should have bucket data",
+            w.name
+        );
+        assert_eq!(w.bucket_centers.len(), w.bucket_values.len());
+        assert_eq!(w.bucket_centers.len(), w.bucket_counts.len());
+    }
+}
+
+#[test]
+fn test_tire_grip_temperature_mode() {
+    let result = run_tire_grip_86(MetricMode::Temperature);
+    assert_eq!(result.metric_mode, MetricMode::Temperature);
+    for w in &result.wheels {
+        assert!(
+            !w.bucket_centers.is_empty(),
+            "Wheel {} should have temperature bucket data",
+            w.name
+        );
+    }
+}
+
+#[test]
+fn test_tire_grip_bucket_values_positive() {
+    let result = run_tire_grip_86(MetricMode::Pressure);
+    for w in &result.wheels {
+        for &v in &w.bucket_values {
+            assert!(
+                v > 0.0,
+                "Wheel {} bucket value should be positive G",
+                w.name
+            );
+        }
+    }
+}
+
+#[test]
+fn test_tire_grip_stats_positive() {
+    let result = run_tire_grip_86(MetricMode::Pressure);
+    for w in &result.wheels {
+        assert!(w.mean_g > 0.0, "Wheel {} mean_g should be positive", w.name);
+        assert!(w.std_g > 0.0, "Wheel {} std_g should be positive", w.name);
+        assert!(
+            w.mean_metric > 0.0,
+            "Wheel {} mean pressure should be positive",
+            w.name
+        );
+    }
+}
+
+#[test]
+fn test_tire_grip_wheel_names() {
+    let result = run_tire_grip_86(MetricMode::Pressure);
+    let names: Vec<&str> = result.wheels.iter().map(|w| w.name.as_str()).collect();
+    assert_eq!(names, ["FL", "FR", "RL", "RR"]);
+}
+
+#[test]
+fn test_tire_grip_missing_channel() {
+    let session = load_86();
+    let laps = valid_lap_nums(&session);
+    let config = TireGripConfig {
+        lateral_g: "NONEXISTENT".into(),
+        ..TireGripConfig::default()
+    };
+    assert!(analyze_tire_grip(&session, &laps, &config).is_err());
 }
