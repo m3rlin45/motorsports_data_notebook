@@ -3,68 +3,91 @@
         xmlns:vm="using:TirePressureCalculator.ViewModels"
         x:Class="TirePressureCalculator.Views.MainWindow"
         x:DataType="vm:MainViewModel"
-        Title="Cold Tire Pressure Calculator"
+        Title="Tire Pressure Calculator"
         Width="700" Height="520"
         MinWidth="600" MinHeight="400">
 
   <Window.Resources>
     <DataTemplate x:Key="CornerTemplate" x:DataType="vm:TireCornerViewModel">
-      <Border Margin="6" Padding="12" CornerRadius="8"
-              Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
-              BorderBrush="{DynamicResource SystemControlForegroundBaseMediumBrush}"
-              BorderThickness="1">
-        <StackPanel Spacing="6">
-          <TextBlock Text="{Binding Label}"
-                     FontSize="20" FontWeight="Bold"
-                     HorizontalAlignment="Center" />
+      <StackPanel Spacing="4" Margin="16,8">
+        <TextBlock Text="{Binding Label}"
+                   FontSize="18" FontWeight="Bold"
+                   HorizontalAlignment="Center" />
 
-          <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto">
-            <TextBlock Grid.Row="0" Grid.Column="0" Text="Current Temp (°C)"
-                       VerticalAlignment="Center" Margin="0,4" />
-            <NumericUpDown Grid.Row="0" Grid.Column="1"
-                           Value="{Binding CurrentTemp}"
+        <!-- Cold temp and hot temp side by side -->
+        <Grid ColumnDefinitions="*,8,*" RowDefinitions="Auto,Auto">
+          <TextBlock Grid.Row="0" Grid.Column="0" Text="Current °C"
+                     FontSize="11" HorizontalAlignment="Center" Margin="0,2" />
+          <Border Grid.Row="1" Grid.Column="0"
+                  BorderBrush="#406090FF" BorderThickness="1.5" CornerRadius="4">
+            <NumericUpDown Value="{Binding CurrentTemp}"
                            Minimum="-40" Maximum="60"
                            FormatString="F1" Increment="0.5"
-                           Margin="8,4,0,4" HorizontalAlignment="Stretch" />
+                           ShowButtonSpinner="False"
+                           HorizontalContentAlignment="Center" />
+          </Border>
 
-            <TextBlock Grid.Row="1" Grid.Column="0" Text="Target Hot Temp (°C)"
-                       VerticalAlignment="Center" Margin="0,4" />
-            <NumericUpDown Grid.Row="1" Grid.Column="1"
-                           Value="{Binding TargetHotTemp}"
+          <TextBlock Grid.Row="0" Grid.Column="2" Text="Target °C"
+                     FontSize="11" HorizontalAlignment="Center" Margin="0,2" />
+          <Border Grid.Row="1" Grid.Column="2"
+                  BorderBrush="#40FF4040" BorderThickness="1.5" CornerRadius="4">
+            <NumericUpDown Value="{Binding TargetHotTemp}"
                            Minimum="0" Maximum="200"
                            FormatString="F1" Increment="1"
-                           Margin="8,4,0,4" HorizontalAlignment="Stretch" />
+                           ShowButtonSpinner="False"
+                           HorizontalContentAlignment="Center" />
+          </Border>
+        </Grid>
 
-            <TextBlock Grid.Row="2" Grid.Column="0" Text="Target Hot Press (bar)"
-                       VerticalAlignment="Center" Margin="0,4" />
-            <NumericUpDown Grid.Row="2" Grid.Column="1"
-                           Value="{Binding TargetHotPressure}"
+        <!-- Target pressure centered below -->
+        <StackPanel HorizontalAlignment="Center" Margin="0,4,0,0">
+          <TextBlock Text="Target bar"
+                     FontSize="11" HorizontalAlignment="Center" Margin="0,2" />
+          <Border BorderBrush="#40FF4040" BorderThickness="1.5" CornerRadius="4">
+            <NumericUpDown Value="{Binding TargetHotPressure}"
                            Minimum="0" Maximum="5"
                            FormatString="F3" Increment="0.01"
-                           Margin="8,4,0,4" HorizontalAlignment="Stretch" />
-          </Grid>
-
-          <Separator Margin="0,4" />
-
-          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
-            <TextBlock Text="Set Cold:" FontWeight="SemiBold" FontSize="16"
-                       VerticalAlignment="Center" />
-            <TextBlock Text="{Binding ColdPressure, StringFormat='{}{0:F3} bar'}"
-                       FontSize="20" FontWeight="Bold"
-                       Foreground="#2196F3"
-                       VerticalAlignment="Center" />
-          </StackPanel>
+                           ShowButtonSpinner="False"
+                           HorizontalContentAlignment="Center"
+                           MinWidth="100" />
+          </Border>
         </StackPanel>
-      </Border>
+
+        <Separator Margin="0,4" />
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
+          <TextBlock Text="Set Cold:" FontWeight="SemiBold" FontSize="16"
+                     VerticalAlignment="Center" />
+          <TextBlock Text="{Binding ColdPressure, StringFormat='{}{0:F3} bar'}"
+                     FontSize="20" FontWeight="Bold"
+                     Foreground="{DynamicResource SystemAccentColor}"
+                     VerticalAlignment="Center" />
+        </StackPanel>
+      </StackPanel>
     </DataTemplate>
   </Window.Resources>
 
-  <Grid RowDefinitions="Auto,*,*" ColumnDefinitions="*,*" Margin="8">
-    <TextBlock Grid.Row="0" Grid.ColumnSpan="2"
-               Text="Cold Tire Pressure Calculator"
-               FontSize="22" FontWeight="Bold"
-               HorizontalAlignment="Center" Margin="0,8,0,4" />
+  <Grid RowDefinitions="Auto,*,*" ColumnDefinitions="*,*">
 
+    <!-- Front arrow (broad, flat) centered at top -->
+    <Panel Grid.Row="0" Grid.ColumnSpan="2" Height="32" Margin="0,6,0,0">
+      <Polygon Points="0,28 100,0 200,28"
+               Stroke="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+               StrokeThickness="2"
+               HorizontalAlignment="Center" VerticalAlignment="Center" />
+    </Panel>
+
+    <!-- Vertical divider line (overlaps arrow row by 1px to close gap) -->
+    <Border Grid.Row="0" Grid.RowSpan="3" Grid.ColumnSpan="2"
+            HorizontalAlignment="Center" Width="2" Margin="0,37,0,8"
+            Background="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+
+    <!-- Horizontal divider line -->
+    <Border Grid.Row="1" Grid.RowSpan="2" Grid.ColumnSpan="2"
+            VerticalAlignment="Center" Height="2" Margin="8,0"
+            Background="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+
+    <!-- Four quadrants -->
     <ContentControl Grid.Row="1" Grid.Column="0"
                     Content="{Binding FrontLeft}"
                     ContentTemplate="{StaticResource CornerTemplate}" />
