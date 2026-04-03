@@ -51,6 +51,34 @@ jobs:
           path: desktop_app_rs/target/release/inferno-app
           retention-days: 30
 
+  build-macos:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: desktop_app_rs
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            desktop_app_rs/target
+          key: build-macos-${{ runner.os }}-${{ hashFiles('desktop_app_rs/Cargo.lock') }}
+          restore-keys: build-macos-${{ runner.os }}-
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: InfernoAnalyzer-Rs-macOS
+          path: desktop_app_rs/target/release/inferno-app
+          retention-days: 30
+
   build-windows:
     runs-on: windows-latest
     defaults:
@@ -80,7 +108,7 @@ jobs:
           retention-days: 30
 
   attach-to-release:
-    needs: [build-linux, build-windows]
+    needs: [build-linux, build-macos, build-windows]
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
     permissions:
@@ -92,6 +120,12 @@ jobs:
           name: InfernoAnalyzer-Rs-Linux
           path: dist/
 
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: InfernoAnalyzer-Rs-macOS
+          path: dist-mac/
+
       - name: Download Windows artifact
         uses: actions/download-artifact@v4
         with:
@@ -101,6 +135,7 @@ jobs:
       - name: Rename binaries
         run: |
           mv dist/inferno-app dist/InfernoAnalyzer-Rs-Linux
+          mv dist-mac/inferno-app dist/InfernoAnalyzer-Rs-macOS
           mv dist/inferno-app.exe dist/InfernoAnalyzer-Rs.exe
 
       - name: Attach to release
@@ -108,4 +143,5 @@ jobs:
         with:
           files: |
             dist/InfernoAnalyzer-Rs-Linux
+            dist/InfernoAnalyzer-Rs-macOS
             dist/InfernoAnalyzer-Rs.exe
