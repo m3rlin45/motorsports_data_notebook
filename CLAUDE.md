@@ -137,15 +137,34 @@ Run (displays via WSLg on WSL2):
 
 ## Rust Desktop App (desktop_app_rs/)
 
-Rust rewrite of the Inferno Analyzer using egui. Three workspace crates:
+Rust rewrite of the Inferno Analyzer using egui. Two tabs: Driver Consistency and Suspension Velocity. Three workspace crates:
 
 ```
 desktop_app_rs/
   crates/
     inferno-core/   # Data loading, analysis, profiles (no GUI)
+      src/analysis/
+        corners.rs              # Corner detection from GPS
+        zones.rs                # Braking/acceleration zone detection
+        driver_consistency.rs   # Driver consistency pipeline
+        suspension.rs           # Suspension velocity histogram analysis
+        throttle_acceptance.rs  # Throttle acceptance calculation
+        math.rs                 # Shared math utilities
     inferno-ui/     # egui widgets, charts, theme
+      src/charts/
+        summary.rs              # Box plot summary (driver consistency)
+        detail.rs               # Per-corner line plots
+        track_map.rs            # GPS track visualization
+        histogram.rs            # 2x2 velocity histograms (suspension)
+      src/widgets/
+        session_panel.rs        # File loading + lap selection (shared)
+        config_panel.rs         # Driver consistency config
+        suspension_config.rs    # Suspension config (motion ratios, velocity ranges)
+        corner_selector.rs      # View mode + corner list
+        stats_window.rs         # Driver consistency stats popup
+        suspension_stats.rs     # Suspension stats popup (balance analysis)
     inferno-app/    # eframe application (InfernoApp), main entry point
-      src/lib.rs    # InfernoApp struct + eframe::App impl
+      src/lib.rs    # InfernoApp struct + eframe::App impl + tab switching
       src/main.rs   # Thin entry point
       tests/
         snapshot_tests.rs       # Visual regression tests
