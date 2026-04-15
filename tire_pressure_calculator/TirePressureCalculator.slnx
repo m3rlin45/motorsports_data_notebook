@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/Android/">
+    <Project Path="Android/TirePressureCalculator.Android.csproj" />
+  </Folder>
+  <Folder Name="/Core/">
+    <Project Path="Core/TirePressureCalculator.Core.csproj" />
+  </Folder>
+  <Folder Name="/Desktop/">
+    <Project Path="Desktop/TirePressureCalculator.Desktop.csproj" />
+  </Folder>
+</Solution>

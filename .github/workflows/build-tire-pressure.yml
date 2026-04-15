@@ -27,13 +27,17 @@ jobs:
 
       - name: Publish
         working-directory: tire_pressure_calculator
-        run: dotnet publish -c Release -r win-x64 --self-contained
+        run: >
+          dotnet publish Desktop/TirePressureCalculator.Desktop.csproj
+          -c Release -r win-x64 --self-contained
+          -p:PublishAot=false -p:PublishTrimmed=true -p:TrimMode=full
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: TirePressureCalculator-Windows
-          path: tire_pressure_calculator/bin/Release/net10.0/win-x64/publish/TirePressureCalculator.exe
+          path: tire_pressure_calculator/Desktop/bin/Release/net10.0/win-x64/publish/TirePressureCalculator.Desktop.exe
           retention-days: 30
 
   build-linux:
@@ -53,17 +57,41 @@ jobs:
 
       - name: Publish
         working-directory: tire_pressure_calculator
-        run: dotnet publish -c Release -r linux-x64 --self-contained
+        run: dotnet publish Desktop/TirePressureCalculator.Desktop.csproj -c Release -r linux-x64 --self-contained
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: TirePressureCalculator-Linux
-          path: tire_pressure_calculator/bin/Release/net10.0/linux-x64/publish/TirePressureCalculator
+          path: tire_pressure_calculator/Desktop/bin/Release/net10.0/linux-x64/publish/TirePressureCalculator.Desktop
+          retention-days: 30
+
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install Android workload
+        run: dotnet workload install android
+
+      - name: Publish
+        working-directory: tire_pressure_calculator
+        run: dotnet publish Android/TirePressureCalculator.Android.csproj -c Release
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TirePressureCalculator-Android
+          path: tire_pressure_calculator/Android/bin/Release/net10.0-android/publish/com.inferno.tirepressurecalculator-Signed.apk
           retention-days: 30
 
   attach-to-release:
-    needs: [build-windows, build-linux]
+    needs: [build-windows, build-linux, build-android]
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
     permissions:
@@ -81,8 +109,17 @@ jobs:
           name: TirePressureCalculator-Linux
           path: dist/
 
-      - name: Rename Linux binary
-        run: mv dist/TirePressureCalculator dist/TirePressureCalculator-Linux
+      - name: Download Android artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: TirePressureCalculator-Android
+          path: dist/
+
+      - name: Rename binaries
+        run: |
+          mv dist/TirePressureCalculator.Desktop.exe dist/TirePressureCalculator.exe
+          mv dist/TirePressureCalculator.Desktop dist/TirePressureCalculator-Linux
+          mv dist/com.inferno.tirepressurecalculator-Signed.apk dist/TirePressureCalculator.apk
 
       - name: Attach to release
         uses: softprops/action-gh-release@v2
@@ -90,3 +127,4 @@ jobs:
           files: |
             dist/TirePressureCalculator.exe
             dist/TirePressureCalculator-Linux
+            dist/TirePressureCalculator.apk
