@@ -71,6 +71,21 @@ public class TireCornerViewModelTests
     }
 
     [Fact]
+    public void ResetToDefaults_RestoresInitialValues()
+    {
+        var vm = CreateDefault();
+        vm.CurrentTemp = 35.0;
+        vm.TargetHotTemp = 95.0;
+        vm.TargetHotPressure = 2.50;
+
+        vm.ResetToDefaults();
+
+        Assert.Equal(20.0, vm.CurrentTemp);
+        Assert.Equal(80.0, vm.TargetHotTemp);
+        Assert.Equal(1.80, vm.TargetHotPressure);
+    }
+
+    [Fact]
     public void PropertyChanged_Fires_WhenValuesChange()
     {
         var vm = CreateDefault();
