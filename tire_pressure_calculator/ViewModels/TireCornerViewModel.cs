@@ -48,6 +48,13 @@ public class TireCornerViewModel : INotifyPropertyChanged
         }
     }
 
+    public void ResetToDefaults()
+    {
+        CurrentTemp = 20.0;
+        TargetHotTemp = 80.0;
+        TargetHotPressure = 1.80;
+    }
+
     public event PropertyChangedEventHandler? PropertyChanged;
 
     private void OnPropertyChanged([CallerMemberName] string? name = null) =>

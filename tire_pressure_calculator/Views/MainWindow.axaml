@@ -67,7 +67,7 @@
     </DataTemplate>
   </Window.Resources>
 
-  <Grid RowDefinitions="Auto,*,*" ColumnDefinitions="*,*">
+  <Grid RowDefinitions="Auto,*,*,Auto" ColumnDefinitions="*,*">
 
     <!-- Front arrow (broad, flat) centered at top -->
     <Panel Grid.Row="0" Grid.ColumnSpan="2" Height="32" Margin="0,6,0,0">
@@ -100,5 +100,10 @@
     <ContentControl Grid.Row="2" Grid.Column="1"
                     Content="{Binding RearRight}"
                     ContentTemplate="{StaticResource CornerTemplate}" />
+    <!-- Reset button -->
+    <Button Grid.Row="3" Grid.ColumnSpan="2"
+            Content="Reset to Defaults"
+            Command="{Binding ResetCommand}"
+            HorizontalAlignment="Left" Margin="8,4,0,8" />
   </Grid>
 </Window>
