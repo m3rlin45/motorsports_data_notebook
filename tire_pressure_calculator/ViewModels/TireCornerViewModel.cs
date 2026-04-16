@@ -9,6 +9,7 @@ public class TireCornerViewModel : INotifyPropertyChanged
     private double _currentTemp = 20.0;
     private double _targetHotTemp = 80.0;
     private double _targetHotPressure = 1.80;
+    private double _tempAdjustPercent;
 
     public string Label
     {
@@ -25,7 +26,15 @@ public class TireCornerViewModel : INotifyPropertyChanged
     public double TargetHotTemp
     {
         get => _targetHotTemp;
-        set { if (SetField(ref _targetHotTemp, value)) OnPropertyChanged(nameof(ColdPressure)); }
+        set
+        {
+            if (SetField(ref _targetHotTemp, value))
+            {
+                OnPropertyChanged(nameof(AdjustedHotTemp));
+                OnPropertyChanged(nameof(TargetHotTempDisplay));
+                OnPropertyChanged(nameof(ColdPressure));
+            }
+        }
     }
 
     public double TargetHotPressure
@@ -34,12 +43,43 @@ public class TireCornerViewModel : INotifyPropertyChanged
         set { if (SetField(ref _targetHotPressure, value)) OnPropertyChanged(nameof(ColdPressure)); }
     }
 
+    public double TempAdjustPercent
+    {
+        get => _tempAdjustPercent;
+        set
+        {
+            if (SetField(ref _tempAdjustPercent, value))
+            {
+                OnPropertyChanged(nameof(AdjustedHotTemp));
+                OnPropertyChanged(nameof(IsAdjusted));
+                OnPropertyChanged(nameof(TargetHotTempDisplay));
+                OnPropertyChanged(nameof(ColdPressure));
+            }
+        }
+    }
+
+    public double AdjustedHotTemp
+    {
+        get
+        {
+            double baseK = _targetHotTemp + 273.15;
+            double adjustedK = baseK * (1.0 + _tempAdjustPercent / 100.0);
+            return Math.Round(adjustedK - 273.15, 1);
+        }
+    }
+
+    public bool IsAdjusted => _tempAdjustPercent != 0.0;
+
+    public string TargetHotTempDisplay => IsAdjusted
+        ? $"{_targetHotTemp:F1} ({AdjustedHotTemp:F1})"
+        : $"{_targetHotTemp:F1}";
+
     public double ColdPressure
     {
         get
         {
             double tColdK = _currentTemp + 273.15;
-            double tHotK = _targetHotTemp + 273.15;
+            double tHotK = AdjustedHotTemp + 273.15;
             if (tHotK <= 0) return 0;
             // Convert gauge pressure to absolute, apply Gay-Lussac's Law, convert back
             double pHotAbs = _targetHotPressure + 1.0;
