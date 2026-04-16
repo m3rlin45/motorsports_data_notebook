@@ -15,7 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\TirePressureCalculator.csproj" />
+    <ProjectReference Include="..\Core\TirePressureCalculator.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
