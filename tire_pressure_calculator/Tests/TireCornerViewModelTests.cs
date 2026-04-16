@@ -71,6 +71,81 @@ public class TireCornerViewModelTests
     }
 
     [Fact]
+    public void AdjustedHotTemp_NoAdjustment_EqualsTarget()
+    {
+        var vm = CreateDefault();
+        Assert.Equal(80.0, vm.AdjustedHotTemp);
+    }
+
+    [Fact]
+    public void AdjustedHotTemp_PositiveAdjust_IncreasesTemp()
+    {
+        var vm = CreateDefault();
+        vm.TempAdjustPercent = 5.0;
+
+        // 5% of (80 + 273.15)K = 5% of 353.15K
+        double expectedK = 353.15 * 1.05;
+        double expected = Math.Round(expectedK - 273.15, 1);
+        Assert.Equal(expected, vm.AdjustedHotTemp);
+    }
+
+    [Fact]
+    public void AdjustedHotTemp_NegativeAdjust_DecreasesTemp()
+    {
+        var vm = CreateDefault();
+        vm.TempAdjustPercent = -5.0;
+
+        double expectedK = 353.15 * 0.95;
+        double expected = Math.Round(expectedK - 273.15, 1);
+        Assert.Equal(expected, vm.AdjustedHotTemp);
+    }
+
+    [Fact]
+    public void ColdPressure_WithTempAdjust_UsesAdjustedTemp()
+    {
+        var vm = CreateDefault();
+        double pressureNoAdjust = vm.ColdPressure;
+
+        vm.TempAdjustPercent = 5.0;
+        double pressureWithAdjust = vm.ColdPressure;
+
+        // Higher hot temp -> lower cold pressure
+        Assert.True(pressureWithAdjust < pressureNoAdjust);
+    }
+
+    [Fact]
+    public void IsAdjusted_ZeroPercent_ReturnsFalse()
+    {
+        var vm = CreateDefault();
+        Assert.False(vm.IsAdjusted);
+    }
+
+    [Fact]
+    public void IsAdjusted_NonZeroPercent_ReturnsTrue()
+    {
+        var vm = CreateDefault();
+        vm.TempAdjustPercent = 3.0;
+        Assert.True(vm.IsAdjusted);
+    }
+
+    [Fact]
+    public void TargetHotTempDisplay_NoAdjust_ShowsBaseOnly()
+    {
+        var vm = CreateDefault();
+        Assert.Equal("80.0", vm.TargetHotTempDisplay);
+    }
+
+    [Fact]
+    public void TargetHotTempDisplay_WithAdjust_ShowsBothValues()
+    {
+        var vm = CreateDefault();
+        vm.TempAdjustPercent = 5.0;
+
+        Assert.Contains("80.0", vm.TargetHotTempDisplay);
+        Assert.Contains("(", vm.TargetHotTempDisplay);
+    }
+
+    [Fact]
     public void ResetToDefaults_RestoresInitialValues()
     {
         var vm = CreateDefault();
