@@ -25,6 +25,9 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Install Android workload
+        run: dotnet workload install android
+
       - name: Check formatting
         working-directory: tire_pressure_calculator
         run: dotnet format TirePressureCalculator.slnx --verify-no-changes
