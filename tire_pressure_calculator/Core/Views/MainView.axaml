@@ -59,7 +59,8 @@
             <TextBlock Text="Target bar"
                        FontSize="11" HorizontalAlignment="Center" Margin="0,2" />
             <Border BorderBrush="#40FF4040" BorderThickness="1.5" CornerRadius="4">
-              <NumericUpDown Value="{Binding TargetHotPressure}"
+              <NumericUpDown Classes="last"
+                             Value="{Binding TargetHotPressure}"
                              Minimum="0" Maximum="5"
                              FormatString="F3" Increment="0.01"
                              ShowButtonSpinner="False"
@@ -112,7 +113,8 @@
                      FontSize="11" HorizontalAlignment="Center" Margin="0,2" />
           <Border Grid.Row="1" Grid.Column="4"
                   BorderBrush="#40FF4040" BorderThickness="1.5" CornerRadius="4">
-            <NumericUpDown Value="{Binding TargetHotPressure}"
+            <NumericUpDown Classes="last"
+                           Value="{Binding TargetHotPressure}"
                            Minimum="0" Maximum="5"
                            FormatString="F3" Increment="0.01"
                            ShowButtonSpinner="False"
@@ -160,7 +162,8 @@
           <TextBlock Text="Target bar"
                      FontSize="11" HorizontalAlignment="Center" Margin="0,2" />
           <Border BorderBrush="#40FF4040" BorderThickness="1.5" CornerRadius="4">
-            <NumericUpDown Value="{Binding TargetHotPressure}"
+            <NumericUpDown Classes="last"
+                           Value="{Binding TargetHotPressure}"
                            Minimum="0" Maximum="5"
                            FormatString="F3" Increment="0.01"
                            ShowButtonSpinner="False"
@@ -183,54 +186,67 @@
     </DataTemplate>
   </UserControl.Resources>
 
-  <Grid RowDefinitions="Auto,*,*,Auto" ColumnDefinitions="*,*">
+  <ScrollViewer x:Name="RootScroll"
+                HorizontalScrollBarVisibility="Disabled"
+                VerticalScrollBarVisibility="Hidden">
+    <Grid x:Name="RootGrid"
+          RowDefinitions="Auto,*,*,Auto" ColumnDefinitions="*,*"
+          RenderTransform="scale(1)">
+      <Grid.Transitions>
+        <Transitions>
+          <TransformOperationsTransition Property="RenderTransform"
+                                         Duration="0:0:0.2"
+                                         Easing="CubicEaseOut" />
+        </Transitions>
+      </Grid.Transitions>
 
-    <!-- Front arrow (broad, flat) centered at top -->
-    <Panel Grid.Row="0" Grid.ColumnSpan="2" Height="32" Margin="0,6,0,0">
-      <Polygon Points="0,28 100,0 200,28"
-               Stroke="{DynamicResource SystemControlForegroundBaseMediumBrush}"
-               StrokeThickness="2"
-               HorizontalAlignment="Center" VerticalAlignment="Center" />
-    </Panel>
+      <!-- Front arrow (broad, flat) centered at top -->
+      <Panel Grid.Row="0" Grid.ColumnSpan="2" Height="32" Margin="0,6,0,0">
+        <Polygon Points="0,28 100,0 200,28"
+                 Stroke="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                 StrokeThickness="2"
+                 HorizontalAlignment="Center" VerticalAlignment="Center" />
+      </Panel>
 
-    <!-- Vertical divider line (overlaps arrow row by 1px to close gap) -->
-    <Border Grid.Row="0" Grid.RowSpan="3" Grid.ColumnSpan="2"
-            HorizontalAlignment="Center" Width="2" Margin="0,37,0,8"
-            Background="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+      <!-- Vertical divider line (overlaps arrow row by 1px to close gap) -->
+      <Border Grid.Row="0" Grid.RowSpan="3" Grid.ColumnSpan="2"
+              HorizontalAlignment="Center" Width="2" Margin="0,37,0,8"
+              Background="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
 
-    <!-- Horizontal divider line -->
-    <Border Grid.Row="1" Grid.RowSpan="2" Grid.ColumnSpan="2"
-            VerticalAlignment="Center" Height="2" Margin="8,0"
-            Background="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+      <!-- Horizontal divider line -->
+      <Border Grid.Row="1" Grid.RowSpan="2" Grid.ColumnSpan="2"
+              VerticalAlignment="Center" Height="2" Margin="8,0"
+              Background="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
 
-    <!-- Four quadrants -->
-    <ContentControl Grid.Row="1" Grid.Column="0"
-                    Content="{Binding FrontLeft}"
-                    ContentTemplate="{StaticResource CornerTemplate}" />
-    <ContentControl Grid.Row="1" Grid.Column="1"
-                    Content="{Binding FrontRight}"
-                    ContentTemplate="{StaticResource CornerTemplate}" />
-    <ContentControl Grid.Row="2" Grid.Column="0"
-                    Content="{Binding RearLeft}"
-                    ContentTemplate="{StaticResource CornerTemplate}" />
-    <ContentControl Grid.Row="2" Grid.Column="1"
-                    Content="{Binding RearRight}"
-                    ContentTemplate="{StaticResource CornerTemplate}" />
-    <!-- Bottom bar: reset + slider -->
-    <Button Grid.Row="3" Grid.Column="0"
-            Content="Reset to Defaults"
-            Command="{Binding ResetCommand}"
-            HorizontalAlignment="Left" VerticalAlignment="Center"
-            Margin="8,4,0,8" />
-    <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal"
-                HorizontalAlignment="Right" VerticalAlignment="Center"
-                Margin="0,4,8,8" Spacing="8">
-      <TextBlock Text="{Binding TempAdjustLabel}"
-                 VerticalAlignment="Center" FontSize="12" />
-      <Slider Value="{Binding TempAdjustPercent}"
-              Minimum="-15" Maximum="15"
-              TickFrequency="0.5" IsSnapToTickEnabled="True"
-              Width="150" VerticalAlignment="Center" />
-    </StackPanel>
-  </Grid>
+      <!-- Four quadrants -->
+      <ContentControl x:Name="FLCorner" Grid.Row="1" Grid.Column="0"
+                      Content="{Binding FrontLeft}"
+                      ContentTemplate="{StaticResource CornerTemplate}" />
+      <ContentControl x:Name="FRCorner" Grid.Row="1" Grid.Column="1"
+                      Content="{Binding FrontRight}"
+                      ContentTemplate="{StaticResource CornerTemplate}" />
+      <ContentControl x:Name="RLCorner" Grid.Row="2" Grid.Column="0"
+                      Content="{Binding RearLeft}"
+                      ContentTemplate="{StaticResource CornerTemplate}" />
+      <ContentControl x:Name="RRCorner" Grid.Row="2" Grid.Column="1"
+                      Content="{Binding RearRight}"
+                      ContentTemplate="{StaticResource CornerTemplate}" />
+      <!-- Bottom bar: reset + slider -->
+      <Button Grid.Row="3" Grid.Column="0"
+              Content="Reset to Defaults"
+              Command="{Binding ResetCommand}"
+              HorizontalAlignment="Left" VerticalAlignment="Center"
+              Margin="8,4,0,8" />
+      <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal"
+                  HorizontalAlignment="Right" VerticalAlignment="Center"
+                  Margin="0,4,8,8" Spacing="8">
+        <TextBlock Text="{Binding TempAdjustLabel}"
+                   VerticalAlignment="Center" FontSize="12" />
+        <Slider Value="{Binding TempAdjustPercent}"
+                Minimum="-15" Maximum="15"
+                TickFrequency="0.5" IsSnapToTickEnabled="True"
+                Width="150" VerticalAlignment="Center" />
+      </StackPanel>
+    </Grid>
+  </ScrollViewer>
 </UserControl>

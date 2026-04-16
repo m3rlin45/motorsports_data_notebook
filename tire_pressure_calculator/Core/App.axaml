@@ -1,8 +1,22 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ti="using:Avalonia.Input.TextInput"
              x:Class="TirePressureCalculator.App"
              RequestedThemeVariant="Default">
   <Application.Styles>
     <FluentTheme />
+    <!-- All NumericUpDown controls in this app accept decimal numbers
+         (temperatures, pressures), so request the Number IME on mobile. -->
+    <Style Selector="NumericUpDown /template/ TextBox#PART_TextBox">
+      <Setter Property="ti:TextInputOptions.ContentType" Value="Number" />
+    </Style>
+    <!-- Last field in each corner (Target bar) gets Done; others get Next
+         so the IME advances focus within the corner before dismissing. -->
+    <Style Selector="NumericUpDown.last /template/ TextBox#PART_TextBox">
+      <Setter Property="ti:TextInputOptions.ReturnKeyType" Value="Done" />
+    </Style>
+    <Style Selector="NumericUpDown:not(.last) /template/ TextBox#PART_TextBox">
+      <Setter Property="ti:TextInputOptions.ReturnKeyType" Value="Next" />
+    </Style>
   </Application.Styles>
 </Application>
