@@ -9,21 +9,15 @@
     <!-- NativeAOT -->
     <PublishAot>true</PublishAot>
     <InvariantGlobalization>true</InvariantGlobalization>
-
-    <!-- Avalonia compiled bindings (required for AOT) -->
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="Tests/**" />
-    <None Remove="Tests/**" />
-    <AvaloniaResource Remove="Tests/**" />
+    <ProjectReference Include="..\Core\TirePressureCalculator.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Avalonia" Version="11.3.*" />
-    <PackageReference Include="Avalonia.Desktop" Version="11.3.*" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.*" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.14" />
   </ItemGroup>
 
 </Project>
