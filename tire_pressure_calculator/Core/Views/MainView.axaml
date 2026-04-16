@@ -1,22 +1,78 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:TirePressureCalculator.ViewModels"
+             xmlns:views="using:TirePressureCalculator.Views"
              x:Class="TirePressureCalculator.Views.MainView"
              x:DataType="vm:MainViewModel">
 
   <UserControl.Resources>
     <DataTemplate x:Key="CornerTemplate" x:DataType="vm:TireCornerViewModel">
-      <StackPanel Spacing="4" Margin="16,8">
+      <StackPanel Spacing="4" Margin="8,6">
         <TextBlock Text="{Binding Label}"
                    FontSize="18" FontWeight="Bold"
                    HorizontalAlignment="Center" />
 
-        <!-- Cold temp and hot temp side by side -->
-        <Grid ColumnDefinitions="*,8,*" RowDefinitions="Auto,Auto">
-          <TextBlock Grid.Row="0" Grid.Column="0" Text="Current °C"
+        <!-- Wide layout: Current and Target °C side by side, Target bar below -->
+        <StackPanel Spacing="4"
+                    IsVisible="{Binding !IsNarrow, RelativeSource={RelativeSource AncestorType=views:MainView}}">
+          <Grid ColumnDefinitions="*,8,*" RowDefinitions="Auto,Auto">
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="Current °C"
+                       FontSize="11" HorizontalAlignment="Center" Margin="0,2" />
+            <Border Grid.Row="1" Grid.Column="0"
+                    BorderBrush="#406090FF" BorderThickness="1.5" CornerRadius="4">
+              <NumericUpDown Value="{Binding CurrentTemp}"
+                             Minimum="-40" Maximum="60"
+                             FormatString="F1" Increment="0.5"
+                             ShowButtonSpinner="False"
+                             HorizontalContentAlignment="Center" />
+            </Border>
+
+            <TextBlock Grid.Row="0" Grid.Column="2" Text="Target °C (Corr. °C)"
+                       FontSize="11" HorizontalAlignment="Center" Margin="0,2" />
+            <Border Grid.Row="1" Grid.Column="2"
+                    BorderBrush="#40FF4040" BorderThickness="1.5" CornerRadius="4">
+              <Panel>
+                <NumericUpDown Value="{Binding TargetHotTemp}"
+                               Minimum="0" Maximum="200"
+                               FormatString="F1" Increment="1"
+                               ShowButtonSpinner="False"
+                               HorizontalContentAlignment="Center" />
+                <TextBlock Text="{Binding TargetHotTempDisplay}"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           IsHitTestVisible="False" />
+                <Panel.Styles>
+                  <Style Selector="Panel:not(:focus-within) > NumericUpDown">
+                    <Setter Property="Foreground" Value="Transparent" />
+                  </Style>
+                  <Style Selector="Panel:focus-within > TextBlock">
+                    <Setter Property="IsVisible" Value="False" />
+                  </Style>
+                </Panel.Styles>
+              </Panel>
+            </Border>
+          </Grid>
+
+          <StackPanel HorizontalAlignment="Center" Margin="0,4,0,0">
+            <TextBlock Text="Target bar"
+                       FontSize="11" HorizontalAlignment="Center" Margin="0,2" />
+            <Border BorderBrush="#40FF4040" BorderThickness="1.5" CornerRadius="4">
+              <NumericUpDown Value="{Binding TargetHotPressure}"
+                             Minimum="0" Maximum="5"
+                             FormatString="F3" Increment="0.01"
+                             ShowButtonSpinner="False"
+                             HorizontalContentAlignment="Center"
+                             MinWidth="100" />
+            </Border>
+          </StackPanel>
+        </StackPanel>
+
+        <!-- Narrow layout: all three fields stacked vertically at full width -->
+        <StackPanel Spacing="4"
+                    IsVisible="{Binding IsNarrow, RelativeSource={RelativeSource AncestorType=views:MainView}}">
+          <TextBlock Text="Current °C"
                      FontSize="11" HorizontalAlignment="Center" Margin="0,2" />
-          <Border Grid.Row="1" Grid.Column="0"
-                  BorderBrush="#406090FF" BorderThickness="1.5" CornerRadius="4">
+          <Border BorderBrush="#406090FF" BorderThickness="1.5" CornerRadius="4">
             <NumericUpDown Value="{Binding CurrentTemp}"
                            Minimum="-40" Maximum="60"
                            FormatString="F1" Increment="0.5"
@@ -24,17 +80,15 @@
                            HorizontalContentAlignment="Center" />
           </Border>
 
-          <TextBlock Grid.Row="0" Grid.Column="2" Text="Target °C (Corr. °C)"
+          <TextBlock Text="Target °C (Corr. °C)"
                      FontSize="11" HorizontalAlignment="Center" Margin="0,2" />
-          <Border Grid.Row="1" Grid.Column="2"
-                  BorderBrush="#40FF4040" BorderThickness="1.5" CornerRadius="4">
+          <Border BorderBrush="#40FF4040" BorderThickness="1.5" CornerRadius="4">
             <Panel>
               <NumericUpDown Value="{Binding TargetHotTemp}"
                              Minimum="0" Maximum="200"
                              FormatString="F1" Increment="1"
                              ShowButtonSpinner="False"
                              HorizontalContentAlignment="Center" />
-              <!-- Overlay showing "80.0 (92.8)" when not editing -->
               <TextBlock Text="{Binding TargetHotTempDisplay}"
                          HorizontalAlignment="Center"
                          VerticalAlignment="Center"
@@ -49,10 +103,7 @@
               </Panel.Styles>
             </Panel>
           </Border>
-        </Grid>
 
-        <!-- Target pressure centered below -->
-        <StackPanel HorizontalAlignment="Center" Margin="0,4,0,0">
           <TextBlock Text="Target bar"
                      FontSize="11" HorizontalAlignment="Center" Margin="0,2" />
           <Border BorderBrush="#40FF4040" BorderThickness="1.5" CornerRadius="4">
@@ -60,8 +111,7 @@
                            Minimum="0" Maximum="5"
                            FormatString="F3" Increment="0.01"
                            ShowButtonSpinner="False"
-                           HorizontalContentAlignment="Center"
-                           MinWidth="100" />
+                           HorizontalContentAlignment="Center" />
           </Border>
         </StackPanel>
 
