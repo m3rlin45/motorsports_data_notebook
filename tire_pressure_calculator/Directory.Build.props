@@ -1,0 +1,25 @@
+<Project>
+
+  <!--
+    Inherit the project version from the root pyproject.toml so the .NET
+    builds (Desktop, Android) always ship with the same version number as
+    the Python package and notebooks. Updating pyproject.toml is enough —
+    no need to touch .csproj files at release time.
+  -->
+  <PropertyGroup>
+    <_PyprojectPath>$(MSBuildThisFileDirectory)../pyproject.toml</_PyprojectPath>
+    <_PyprojectText>$([System.IO.File]::ReadAllText('$(_PyprojectPath)'))</_PyprojectText>
+    <Version>$([System.Text.RegularExpressions.Regex]::Match($(_PyprojectText), 'version\s*=\s*"([0-9]+\.[0-9]+\.[0-9]+)"').Groups[1].Value)</Version>
+    <AssemblyVersion>$(Version).0</AssemblyVersion>
+    <FileVersion>$(Version).0</FileVersion>
+
+    <!-- Android-specific: user-visible version string; ApplicationVersion (build number)
+         must be a monotonically increasing integer, so we encode it from semver. -->
+    <ApplicationDisplayVersion>$(Version)</ApplicationDisplayVersion>
+    <_VersionMajor>$([System.Text.RegularExpressions.Regex]::Match($(Version), '^([0-9]+)').Groups[1].Value)</_VersionMajor>
+    <_VersionMinor>$([System.Text.RegularExpressions.Regex]::Match($(Version), '^[0-9]+\.([0-9]+)').Groups[1].Value)</_VersionMinor>
+    <_VersionPatch>$([System.Text.RegularExpressions.Regex]::Match($(Version), '^[0-9]+\.[0-9]+\.([0-9]+)').Groups[1].Value)</_VersionPatch>
+    <ApplicationVersion>$([MSBuild]::Add($([MSBuild]::Add($([MSBuild]::Multiply($(_VersionMajor), 10000)), $([MSBuild]::Multiply($(_VersionMinor), 100)))), $(_VersionPatch)))</ApplicationVersion>
+  </PropertyGroup>
+
+</Project>
