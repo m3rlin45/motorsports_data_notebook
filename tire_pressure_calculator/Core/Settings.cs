@@ -20,7 +20,7 @@ public class AppSettings
 
     private static string FilePath =>
         Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "TirePressureCalculator",
             "settings.json");
 
