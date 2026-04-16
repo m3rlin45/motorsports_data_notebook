@@ -25,4 +25,26 @@ public class MainViewModelTests
         Assert.Equal("RL", vm.RearLeft.Label);
         Assert.Equal("RR", vm.RearRight.Label);
     }
+
+    [Fact]
+    public void ResetCommand_ResetsAllCorners()
+    {
+        var vm = new MainViewModel();
+        vm.FrontLeft.CurrentTemp = 35.0;
+        vm.FrontLeft.TargetHotTemp = 100.0;
+        vm.RearRight.TargetHotPressure = 2.50;
+
+        vm.ResetCommand.Execute(null);
+
+        Assert.Equal(20.0, vm.FrontLeft.CurrentTemp);
+        Assert.Equal(80.0, vm.FrontLeft.TargetHotTemp);
+        Assert.Equal(1.80, vm.RearRight.TargetHotPressure);
+    }
+
+    [Fact]
+    public void ResetCommand_CanAlwaysExecute()
+    {
+        var vm = new MainViewModel();
+        Assert.True(vm.ResetCommand.CanExecute(null));
+    }
 }
