@@ -72,6 +72,8 @@ _ALIASES: dict[str, str] = {
     "sodegaura": "sodegaura",
     "fuji": "fuji",
     "fujispeedway": "fuji",
+    "fujigp": "fuji",  # AIM files encode the GP layout as "Fuji GP" in the filename
+    "fujishort": "fuji",
     "motegi": "motegi",
     "marutai": "marutai",
 }
