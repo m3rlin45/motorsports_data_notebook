@@ -12,4 +12,8 @@
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.14" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="TirePressureCalculator.Tests" />
+  </ItemGroup>
+
 </Project>
