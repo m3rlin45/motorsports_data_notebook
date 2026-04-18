@@ -7,7 +7,10 @@ from pathlib import Path
 
 import pyarrow as pa
 
-from motorsports_data_notebook.tire_etl.notes_match import match_notes_to_sessions
+from motorsports_data_notebook.tire_etl.notes_match import (
+    infer_date_track_from_filename,
+    match_notes_to_sessions,
+)
 from motorsports_data_notebook.tire_etl.notes_parser import (
     CornerStr,
     CornerValue,
@@ -87,6 +90,51 @@ def test_no_match_when_tracks_differ() -> None:
     parsed = [_make_parsed("2026-04-04", "Tsukuba", [ns])]
     matches = match_notes_to_sessions(sess, parsed)
     assert matches == []
+
+
+def test_infer_date_track_from_filename_standard() -> None:
+    d, t = infer_date_track_from_filename(Path("/tmp/2026-04-04 Tsukuba.txt"))
+    assert d == date(2026, 4, 4)
+    assert t == "tsukuba_2000"
+
+
+def test_infer_date_track_from_filename_with_car_token() -> None:
+    d, t = infer_date_track_from_filename(Path("/tmp/Tsukuba KKSII 2026-04-04.txt"))
+    assert d == date(2026, 4, 4)
+    assert t == "tsukuba_2000"
+
+
+def test_infer_date_track_from_filename_no_match() -> None:
+    d, t = infer_date_track_from_filename(Path("/tmp/random_notes.txt"))
+    assert d is None
+    assert t is None
+
+
+def test_filename_fallback_enables_match_when_body_has_null_metadata() -> None:
+    sess = _sessions(
+        [
+            {
+                "session_id": "s1",
+                "date": date(2026, 4, 4),
+                "track_canonical": "tsukuba_2000",
+                "session_start_utc": datetime(2026, 4, 4, 0, 30, tzinfo=timezone.utc),
+            }
+        ]
+    )
+    ns = NoteSession(session_index=1, track_condition="dry")
+    # Notes data has null file_date / track — forces fallback to filename.
+    data = NotesData(file_date=None, track=None, sessions=[ns])
+    pn = ParsedNotes(
+        source_file=Path("/tmp/Tsukuba KKSII 2026-04-04.txt"),
+        source_sha1="abc",
+        prompt_sha1="def",
+        model="claude-opus-4-7",
+        extracted_at="2026-04-04T00:00:00Z",
+        data=data,
+    )
+    matches = match_notes_to_sessions(sess, [pn])
+    assert len(matches) == 1
+    assert matches[0].session_id == "s1"
 
 
 def test_greedy_time_matching_with_multiple_sessions() -> None:
