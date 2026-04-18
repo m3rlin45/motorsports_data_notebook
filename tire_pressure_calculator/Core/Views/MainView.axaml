@@ -189,16 +189,9 @@
   <ScrollViewer x:Name="RootScroll"
                 HorizontalScrollBarVisibility="Disabled"
                 VerticalScrollBarVisibility="Hidden">
+    <LayoutTransformControl x:Name="RootLayoutTransform">
     <Grid x:Name="RootGrid"
-          RowDefinitions="Auto,*,*,Auto" ColumnDefinitions="*,*"
-          RenderTransform="scale(1)">
-      <Grid.Transitions>
-        <Transitions>
-          <TransformOperationsTransition Property="RenderTransform"
-                                         Duration="0:0:0.2"
-                                         Easing="CubicEaseOut" />
-        </Transitions>
-      </Grid.Transitions>
+          RowDefinitions="Auto,*,*,Auto" ColumnDefinitions="*,*">
 
       <!-- Front arrow (broad, flat) centered at top -->
       <Panel Grid.Row="0" Grid.ColumnSpan="2" Height="32" Margin="0,6,0,0">
@@ -248,5 +241,6 @@
                 Width="150" VerticalAlignment="Center" />
       </StackPanel>
     </Grid>
+    </LayoutTransformControl>
   </ScrollViewer>
 </UserControl>

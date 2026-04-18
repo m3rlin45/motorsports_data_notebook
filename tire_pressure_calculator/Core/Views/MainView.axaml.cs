@@ -3,11 +3,14 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Controls.Platform;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
+using Avalonia.Media;
 using Avalonia.Media.Transformation;
 using Avalonia.Threading;
+using TirePressureCalculator.Navigation;
 
 namespace TirePressureCalculator.Views;
 
@@ -52,9 +55,11 @@ public partial class MainView : UserControl
     // Drives the phone-only zoom-to-quadrant behavior.
     public bool IsPhoneSize { get; private set; } = true;
 
-    private ContentControl? _zoomedQuadrant;
     private Control? _lastFocusedInput;
-    private bool _tabletTranslated;
+    private readonly BackNavigationController _backNav = new();
+
+    private ContentControl? ZoomedQuadrant => _backNav.ZoomedQuadrant as ContentControl;
+    private bool IsTabletTranslated => _backNav.IsTabletTranslated;
 
     // Static reference so the Android Activity can ask us to handle Back.
     public static MainView? Instance { get; private set; }
@@ -63,6 +68,9 @@ public partial class MainView : UserControl
     {
         InitializeComponent();
         Instance = this;
+        _backNav.ResetZoomAction = ApplyZoomReset;
+        _backNav.UntranslateAction = ApplyTranslateReset;
+        _backNav.Defer = action => Dispatcher.UIThread.Post(action);
         AddHandler(GotFocusEvent, OnChildGotFocus);
         AddHandler(LostFocusEvent, OnChildLostFocus);
         AddHandler(KeyDownEvent, OnChildKeyDown, RoutingStrategies.Bubble, handledEventsToo: true);
@@ -101,18 +109,10 @@ public partial class MainView : UserControl
         }
 
         // Closed — keyboard dismissed (by Done, Back, or system).
-        // Always reset: ReturnKeyType="Next" on fields 1-2 keeps the
-        // keyboard open when advancing, so Closed only fires for the
-        // last field's Done or a Back press — both should unzoom.
-        if (_tabletTranslated)
-        {
-            RootGrid.RenderTransform = TransformOperations.Parse("scale(1)");
-            _tabletTranslated = false;
-        }
-        if (_zoomedQuadrant is not null)
-        {
-            ResetZoom();
-        }
+        // The controller defers side effects so a Back press following this
+        // event synchronously can still consume the zoom state via
+        // TryHandleBack instead of closing the activity.
+        _backNav.OnKeyboardClosed();
         Focus();
     }
 
@@ -159,7 +159,7 @@ public partial class MainView : UserControl
         var quadrant = FindQuadrant(source);
         if (quadrant is null) return;
 
-        if (IsPhoneSize && quadrant != _zoomedQuadrant)
+        if (IsPhoneSize && quadrant != ZoomedQuadrant)
         {
             ZoomTo(quadrant);
         }
@@ -172,10 +172,10 @@ public partial class MainView : UserControl
                 if (inputPane?.State == InputPaneState.Open)
                     TranslateForRear();
             }
-            else if (_tabletTranslated)
+            else if (IsTabletTranslated)
             {
-                RootGrid.RenderTransform = TransformOperations.Parse("scale(1)");
-                _tabletTranslated = false;
+                ApplyTranslateReset();
+                _backNav.NotifyTabletUntranslated();
             }
         }
     }
@@ -193,14 +193,18 @@ public partial class MainView : UserControl
             if (quadrant is null)
             {
                 // Focus left the quadrants entirely — reset.
-                if (_zoomedQuadrant is not null) ResetZoom();
-                if (_tabletTranslated)
+                if (ZoomedQuadrant is not null)
                 {
-                    RootGrid.RenderTransform = TransformOperations.Parse("scale(1)");
-                    _tabletTranslated = false;
+                    ApplyZoomReset();
+                    _backNav.NotifyUnzoomed();
+                }
+                if (IsTabletTranslated)
+                {
+                    ApplyTranslateReset();
+                    _backNav.NotifyTabletUntranslated();
                 }
             }
-            else if (IsPhoneSize && quadrant != _zoomedQuadrant)
+            else if (IsPhoneSize && quadrant != ZoomedQuadrant)
             {
                 ZoomTo(quadrant);
             }
@@ -212,10 +216,10 @@ public partial class MainView : UserControl
                     if (inputPane?.State == InputPaneState.Open)
                         TranslateForRear();
                 }
-                else if (_tabletTranslated)
+                else if (IsTabletTranslated)
                 {
-                    RootGrid.RenderTransform = TransformOperations.Parse("scale(1)");
-                    _tabletTranslated = false;
+                    ApplyTranslateReset();
+                    _backNav.NotifyTabletUntranslated();
                 }
             }
         });
@@ -257,32 +261,44 @@ public partial class MainView : UserControl
         return null;
     }
 
-    private void ZoomTo(ContentControl quadrant)
+    internal void ZoomTo(ContentControl quadrant)
     {
         var gridBounds = RootGrid.Bounds;
         if (gridBounds.Width <= 0 || gridBounds.Height <= 0) return;
 
         // Compute the quadrant's top-left position in grid coordinates.
+        // After layout re-runs at scaled size, scroll to this point so the
+        // selected quadrant sits at the viewport origin.
         var topLeft = quadrant.TranslatePoint(new Point(0, 0), RootGrid)
                       ?? new Point(0, 0);
 
-        // X origin: pin the quadrant's outer edge so it fills the viewport width.
-        //   Left quadrants (FL/RL): left edge stays at x=0  → originX = 0
-        //   Right quadrants (FR/RR): right edge stays at x=1 → originX = 1
-        bool isRight = quadrant == FRCorner || quadrant == RRCorner;
-        double originX = isRight ? 1.0 : 0.0;
+        // Pin the RootGrid to the current viewport dimensions so its natural
+        // measure is definite. The enclosing LayoutTransformControl will
+        // then scale that definite size to 2x.
+        RootGrid.Width = gridBounds.Width;
+        RootGrid.Height = gridBounds.Height;
 
-        // Y origin: pin the quadrant's top edge to the viewport top (y=0).
-        // With scale s from origin o, point p maps to: o + (p − o) × s.
-        // Setting the mapped quadrant-top to 0 and solving gives:
-        //   originY = s × quadTopRel / (s − 1)
-        double quadTopRel = topLeft.Y / gridBounds.Height;
-        double originY = PhoneZoomScale * quadTopRel / (PhoneZoomScale - 1);
+        // Enable horizontal scrolling so the ScrollViewer doesn't constrain
+        // the scaled-up content width back down to the viewport.
+        RootScroll.HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden;
 
-        RootGrid.RenderTransformOrigin = new RelativePoint(
-            originX, originY, RelativeUnit.Relative);
-        RootGrid.RenderTransform = TransformOperations.Parse($"scale({PhoneZoomScale})");
-        _zoomedQuadrant = quadrant;
+        // Use LayoutTransform (via LayoutTransformControl) rather than
+        // RenderTransform so the scale participates in Measure/Arrange.
+        // This ensures TextBox selection handles — which are drawn by
+        // adorners positioned via the normal layout coordinate system —
+        // follow the zoom instead of floating at pre-scale coordinates.
+        RootLayoutTransform.LayoutTransform = new ScaleTransform(
+            PhoneZoomScale, PhoneZoomScale);
+        _backNav.NotifyZoomed(quadrant);
+
+        // Wait for layout to apply the new extent, then scroll so the
+        // chosen quadrant is visible at the top of the viewport.
+        Dispatcher.UIThread.Post(() =>
+        {
+            RootScroll.Offset = new Vector(
+                topLeft.X * PhoneZoomScale,
+                topLeft.Y * PhoneZoomScale);
+        });
     }
 
     /// <summary>
@@ -292,26 +308,26 @@ public partial class MainView : UserControl
     /// </summary>
     public bool TryHandleBack()
     {
-        if (_zoomedQuadrant is not null)
+        if (_backNav.TryHandleBack())
         {
-            ResetZoom();
-            Focus();
-            return true;
-        }
-        if (_tabletTranslated)
-        {
-            RootGrid.RenderTransform = TransformOperations.Parse("scale(1)");
-            _tabletTranslated = false;
             Focus();
             return true;
         }
         return false;
     }
 
-    private void ResetZoom()
+    private void ApplyZoomReset()
+    {
+        RootLayoutTransform.LayoutTransform = null;
+        RootGrid.Width = double.NaN;
+        RootGrid.Height = double.NaN;
+        RootScroll.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
+        RootScroll.Offset = new Vector(0, 0);
+    }
+
+    private void ApplyTranslateReset()
     {
         RootGrid.RenderTransform = TransformOperations.Parse("scale(1)");
-        _zoomedQuadrant = null;
     }
 
     private void TranslateForRear()
@@ -335,7 +351,7 @@ public partial class MainView : UserControl
         {
             shift += 16; // padding above keyboard edge
             RootGrid.RenderTransform = TransformOperations.Parse($"translate(0px, -{shift}px)");
-            _tabletTranslated = true;
+            _backNav.NotifyTabletTranslated();
         }
     }
 }
