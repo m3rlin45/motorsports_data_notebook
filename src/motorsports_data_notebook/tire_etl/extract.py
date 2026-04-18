@@ -85,13 +85,35 @@ def _extract_session_datetime_utc(
     from .tracks import get_track
 
     meta = getattr(log, "metadata", {}) or {}
+
+    # AIM RaceStudio splits the start timestamp into two fields:
+    #   "Log Date": "MM/DD/YYYY" (US format, confirmed empirically)
+    #   "Log Time": "HH:MM:SS"   (track-local, 24-hour)
+    # Combine and parse in the track's local tz.
+    log_date = meta.get("Log Date")
+    log_time = meta.get("Log Time")
+    if log_date and log_time:
+        try:
+            dt_local = datetime.strptime(f"{log_date} {log_time}", "%m/%d/%Y %H:%M:%S")
+            tz_name = None
+            if track_canonical:
+                ti = get_track(track_canonical)
+                if ti:
+                    tz_name = ti.timezone
+            if tz_name:
+                from zoneinfo import ZoneInfo
+
+                return dt_local.replace(tzinfo=ZoneInfo(tz_name)).astimezone(timezone.utc)
+            return dt_local.replace(tzinfo=timezone.utc)
+        except ValueError:
+            pass
+
+    # Legacy / alternate metadata spellings we've seen on other loggers.
     raw = None
     for key in ("Session date", "session date", "Date", "date", "Start time", "start_time"):
         if key in meta and meta[key]:
             raw = str(meta[key])
             break
-
-    # Try several common AIM formats: "YYYY-MM-DD HH:MM:SS", ISO, etc.
     if raw:
         for fmt in (
             "%Y-%m-%d %H:%M:%S",
