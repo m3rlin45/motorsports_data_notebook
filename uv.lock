@@ -779,7 +779,7 @@ dev = [
 requires-dist = [
     { name = "customtkinter", specifier = ">=5.2.0" },
     { name = "libibt", specifier = ">=0.0.1" },
-    { name = "libxrk", specifier = ">=0.11.0" },
+    { name = "libxrk", specifier = ">=0.12.0" },
     { name = "matplotlib", specifier = ">=3.10.7,<4.0.0" },
     { name = "motorsports-data-notebook", editable = "." },
     { name = "numpy", specifier = ">=2.0.0,<3.0.0" },
@@ -799,7 +799,7 @@ dev = [
 
 [[package]]
 name = "inferno-driving-coach"
-version = "0.1.0"
+version = "0.14.0"
 source = { editable = "inferno-driving-coach" }
 dependencies = [
     { name = "ipywidgets" },
@@ -818,7 +818,7 @@ dependencies = [
 requires-dist = [
     { name = "ipywidgets", specifier = ">=8.0.0,<9.0.0" },
     { name = "libibt", specifier = ">=0.0.4" },
-    { name = "libxrk", specifier = ">=0.11.0" },
+    { name = "libxrk", specifier = ">=0.12.0" },
     { name = "matplotlib", specifier = ">=3.9.0" },
     { name = "mcp", specifier = ">=1.2.0" },
     { name = "numpy", specifier = ">=2.0.0,<3.0.0" },
@@ -1320,25 +1320,25 @@ wheels = [
 
 [[package]]
 name = "libxrk"
-version = "0.11.1"
+version = "0.12.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cython" },
     { name = "numpy" },
     { name = "pyarrow" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/cd/48/90f1f207732753a91aa67f7bb5161c21ebcb074954487d0adfbba5376064/libxrk-0.11.1.tar.gz", hash = "sha256:e267912cc27bb8146b14a9d9c909a2fe0fdb35a68882cdb7f9c0c3033101f9bc", size = 125452, upload-time = "2026-03-01T06:01:41.829Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/1a/e5/d0dec166a351fcd53f9d668e5b1eef2a4d2635312d66a489805a904e1b63/libxrk-0.12.0.tar.gz", hash = "sha256:cbf319455fbe6d1f199aefeecaee9e656704e93de403519b5ca47c5f21e1c606", size = 132398, upload-time = "2026-04-19T00:09:35.556Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/49/80/e81513f50f496ddff9142816850db96e62f553afdfd7a1bbef1847a579b9/libxrk-0.11.1-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:17fb8aebd01ab44ee732e1a0be1698cf846c0dc449b3f395dae91fabe44a26bd", size = 658345, upload-time = "2026-03-01T06:01:18.453Z" },
-    { url = "https://files.pythonhosted.org/packages/d2/6f/b52b288589ef8c353e1331d386bce83bb672f9d92dff6bee1db8c8475e25/libxrk-0.11.1-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:9539e07ffdc48da8bd5a61ebf0275cf410ed79842203fbf78b3caa9e52295fbc", size = 621084, upload-time = "2026-03-01T06:01:19.966Z" },
-    { url = "https://files.pythonhosted.org/packages/c6/db/2ca8269fd614719e5ff566004cd73486721fcf86833219766e81f842ba08/libxrk-0.11.1-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:31c4fa93ff7f32fc24548460fe405cbe7bf213c4b33b39199a982741ce6d2593", size = 2245105, upload-time = "2026-03-01T06:01:21.773Z" },
-    { url = "https://files.pythonhosted.org/packages/f2/61/7212efd483089bb68ec6111ea8f10e57b2f406547954d3f10aa3ca240db5/libxrk-0.11.1-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:1788b5a676c6b1892ede6eecfa167d03f3a7ffefe0ee38d5613b2b07e94030b1", size = 2352040, upload-time = "2026-03-01T06:01:23.141Z" },
-    { url = "https://files.pythonhosted.org/packages/43/a5/9753bfbaf0f80e78208871fc7210970454a438833396cdc7ac2a198d6d2a/libxrk-0.11.1-cp312-cp312-win_amd64.whl", hash = "sha256:467a6007c4e40d714e5b747abd4a524cd34a87c5b73ba0b9440795e828346c96", size = 551149, upload-time = "2026-03-01T06:01:24.756Z" },
-    { url = "https://files.pythonhosted.org/packages/7a/11/18eb7b72b4522f5be1a3eae9fb688e2bbdbfe81465ff23e02f6bd394ed8a/libxrk-0.11.1-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:ed3cfa10028b5c23d156797f45187daf8c4c4cca45dcfe91b8d4d8afad352ff4", size = 656873, upload-time = "2026-03-01T06:01:27.109Z" },
-    { url = "https://files.pythonhosted.org/packages/7f/ea/fbb779b1a4f2a80dbd5d02578601457ba27462254bab8d76972b424ae052/libxrk-0.11.1-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:e6dd9ae4338c9f1b9d0e24fbafe83cc13d6a6a3c00ce22454f3a501a36ac5239", size = 620057, upload-time = "2026-03-01T06:01:28.875Z" },
-    { url = "https://files.pythonhosted.org/packages/c9/96/94059dff49913edd3e21bde013ce8da464505f5c324c72bcc52d56912e77/libxrk-0.11.1-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:aefd6ea3b782cb60fb00af9639e7a2c9c9944e9c0e430eecaf467c0df6f5d229", size = 2226742, upload-time = "2026-03-01T06:01:30.258Z" },
-    { url = "https://files.pythonhosted.org/packages/a0/2a/a87b7d6fbe9af3e4a28a91720ff90b38c217551edfc63949422c575de0f9/libxrk-0.11.1-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:803f317ca2a1f5b272e9c5f8ca7d5bccc0a759e4a4170f062b15c5bb36257fd1", size = 2345675, upload-time = "2026-03-01T06:01:32.06Z" },
-    { url = "https://files.pythonhosted.org/packages/c5/f9/8a390e689b1fe083ce05f5aaf3d4753ae6fd87e8a3d77cbc0503190f04ed/libxrk-0.11.1-cp313-cp313-win_amd64.whl", hash = "sha256:95ff8027a7161ed5526e2f6394c6f26d11ad48bf1aa36063916c16c3def143de", size = 551038, upload-time = "2026-03-01T06:01:33.671Z" },
+    { url = "https://files.pythonhosted.org/packages/4a/61/052b72c0d3f00e45e969a314dc7ee1abdcc453f59077240c77f753e95005/libxrk-0.12.0-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:e5b5a593b35a85feea854df2e105d68a4e7ce4191c2a9eb19afce9a4c6910265", size = 695267, upload-time = "2026-04-19T00:09:12.192Z" },
+    { url = "https://files.pythonhosted.org/packages/10/cb/eb61d12c6e5532c3c56132bf7fb53cf7ce4cb7688505aeb99d57a58e49ea/libxrk-0.12.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:ecddaecfd32adc23537e742fc2a194a7d810be9ad8705d38e4228a86ae488ce6", size = 655894, upload-time = "2026-04-19T00:09:13.613Z" },
+    { url = "https://files.pythonhosted.org/packages/46/c0/a36d75908c4c5255edaceb1cfd2e4df37c6f0afb90ba01248c6f8d473e74/libxrk-0.12.0-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:d4bf0a6e5b4172304e301febc0495aacb863991a3dd9e2911ba9d68a291dd090", size = 2372920, upload-time = "2026-04-19T00:09:15.252Z" },
+    { url = "https://files.pythonhosted.org/packages/b6/2c/5b868eb1ccb586c927455c55c752a56f67e8916c4e49b5daa1d76f1090ae/libxrk-0.12.0-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:621d554b1aa9b8559a8aa3cd43c7e5faa16a936504470920703a8ca63e454b23", size = 2501139, upload-time = "2026-04-19T00:09:16.901Z" },
+    { url = "https://files.pythonhosted.org/packages/1b/7e/c15a9a5c351cea9d611d23548b9062729ee7a89621becea23a3668feffcb/libxrk-0.12.0-cp312-cp312-win_amd64.whl", hash = "sha256:55d5b63fd2cc1b58bfde3441a873c284493be255f09e817bcf2222d6c9a21275", size = 585265, upload-time = "2026-04-19T00:09:18.351Z" },
+    { url = "https://files.pythonhosted.org/packages/22/65/1ba1fb5a4481d732b432fc80ef98fb6565b6676147c2ce6cdf7e06fbb5b0/libxrk-0.12.0-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:ee2ed4822ac23a86434d68c27cc90db809ec3e11472e226246c8d4391bc60192", size = 694147, upload-time = "2026-04-19T00:09:20.185Z" },
+    { url = "https://files.pythonhosted.org/packages/19/29/050fbf56e25960c1f559958ea7a82d01c8879a8a48ad144c671824277be4/libxrk-0.12.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:2a62c38a1caeb51cc5a63794bc5f28d8c41e8941c6247ecdf6cf19550600c32e", size = 655099, upload-time = "2026-04-19T00:09:21.592Z" },
+    { url = "https://files.pythonhosted.org/packages/f4/4f/ebb4f4c0d129240bbeb0cd6c80500544848e3aa2d7db5a650fca062ffc00/libxrk-0.12.0-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:e4cf73fd3815bb3b8dcc3204993be58abdf5445942506d752b4399c527662334", size = 2358579, upload-time = "2026-04-19T00:09:23.326Z" },
+    { url = "https://files.pythonhosted.org/packages/bb/1d/93666d1b000b8fd2c72dfd69673fd138810be83fbb177eef634501b7b927/libxrk-0.12.0-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:0fabc2ab0a7ee3d1716e0ed652d228b99a0498fc118e826f0b5f3a6e266bff2e", size = 2493638, upload-time = "2026-04-19T00:09:24.862Z" },
+    { url = "https://files.pythonhosted.org/packages/0a/22/b47e30f891b7ef26c5f77328e56666a794cb3de679a61aae2f644e98be16/libxrk-0.12.0-cp313-cp313-win_amd64.whl", hash = "sha256:17d3c6bd8204b1ce23655cb57db7b77a5bf0e7afeb6ff806bde6cdc6a2617fed", size = 584981, upload-time = "2026-04-19T00:09:26.731Z" },
 ]
 
 [[package]]
@@ -1503,7 +1503,7 @@ wheels = [
 
 [[package]]
 name = "motorsports-data-notebook"
-version = "0.11.0"
+version = "0.14.0"
 source = { editable = "." }
 dependencies = [
     { name = "ipywidgets" },
@@ -1552,7 +1552,7 @@ requires-dist = [
     { name = "jupyterlite-core", marker = "extra == 'jupyterlite'", specifier = "==0.7.1" },
     { name = "jupyterlite-pyodide-kernel", marker = "extra == 'jupyterlite'", specifier = "==0.7.0" },
     { name = "libibt", specifier = ">=0.0.4" },
-    { name = "libxrk", specifier = ">=0.11.0" },
+    { name = "libxrk", specifier = ">=0.12.0" },
     { name = "matplotlib", marker = "extra == 'app'", specifier = ">=3.10.7,<4.0.0" },
     { name = "nbconvert", marker = "extra == 'jupyterlite'", specifier = ">=7.0.0" },
     { name = "notebook", marker = "extra == 'app'", specifier = ">=7.4.7,<8.0.0" },

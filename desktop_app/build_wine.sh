@@ -115,7 +115,7 @@ wine_python -m pip install \
     "pandas>=2,<3" \
     "numpy>=1.26,<2" \
     "pyarrow>=18,<23" \
-    "libxrk>=0.11.0" \
+    "libxrk>=0.12.0" \
     "libibt>=0.0.1" \
     "pyyaml>=6,<7" \
     pyinstaller
