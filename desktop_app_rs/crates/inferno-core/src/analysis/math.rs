@@ -148,6 +148,36 @@ pub fn searchsorted_right(data: &[f64], value: f64) -> usize {
     data.partition_point(|&x| x <= value)
 }
 
+/// Skewness (third standardized moment).
+/// Returns 0.0 for fewer than 2 elements or zero variance.
+pub fn skewness(data: &[f64]) -> f64 {
+    let n = data.len();
+    if n < 2 {
+        return 0.0;
+    }
+    let m = mean(data);
+    let s = std_dev(data);
+    if s == 0.0 {
+        return 0.0;
+    }
+    data.iter().map(|&x| ((x - m) / s).powi(3)).sum::<f64>() / n as f64
+}
+
+/// Excess kurtosis (fourth standardized moment minus 3).
+/// Returns 0.0 for fewer than 2 elements or zero variance.
+pub fn kurtosis(data: &[f64]) -> f64 {
+    let n = data.len();
+    if n < 2 {
+        return 0.0;
+    }
+    let m = mean(data);
+    let s = std_dev(data);
+    if s == 0.0 {
+        return 0.0;
+    }
+    data.iter().map(|&x| ((x - m) / s).powi(4)).sum::<f64>() / n as f64 - 3.0
+}
+
 /// Compute cumulative distance from XY coordinates.
 pub fn cumulative_distance(x: &[f64], y: &[f64]) -> Vec<f64> {
     let n = x.len();
@@ -233,5 +263,42 @@ mod tests {
         assert!((dist[0] - 0.0).abs() < 1e-10);
         assert!((dist[1] - 3.0).abs() < 1e-10);
         assert!((dist[2] - 7.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_skewness_symmetric() {
+        // Symmetric data → skew ≈ 0
+        let data = vec![-2.0, -1.0, 0.0, 1.0, 2.0];
+        assert!(skewness(&data).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_skewness_positive() {
+        // Right-skewed data
+        let data = vec![1.0, 1.0, 1.0, 1.0, 10.0];
+        assert!(skewness(&data) > 0.0);
+    }
+
+    #[test]
+    fn test_skewness_edge_cases() {
+        assert_eq!(skewness(&[]), 0.0);
+        assert_eq!(skewness(&[5.0]), 0.0);
+        assert_eq!(skewness(&[3.0, 3.0, 3.0]), 0.0); // zero variance
+    }
+
+    #[test]
+    fn test_kurtosis_normal_like() {
+        // For a uniform distribution, excess kurtosis is negative (-1.2)
+        let data: Vec<f64> = (0..100).map(|i| i as f64).collect();
+        let k = kurtosis(&data);
+        assert!(k < 0.0); // platykurtic
+        assert!((k - (-1.2)).abs() < 0.05);
+    }
+
+    #[test]
+    fn test_kurtosis_edge_cases() {
+        assert_eq!(kurtosis(&[]), 0.0);
+        assert_eq!(kurtosis(&[5.0]), 0.0);
+        assert_eq!(kurtosis(&[3.0, 3.0]), 0.0); // zero variance
     }
 }

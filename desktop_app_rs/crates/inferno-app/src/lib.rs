@@ -8,6 +8,7 @@ use eframe::egui;
 use inferno_core::analysis::driver_consistency::{
     analyze_driver_consistency, DriverConsistencyResult,
 };
+use inferno_core::analysis::suspension::{analyze_suspension_velocity, SuspensionResult};
 use inferno_core::channel;
 use inferno_core::error::Error;
 use inferno_core::lap::get_top_laps;
@@ -19,26 +20,44 @@ use inferno_ui::widgets::config_panel::ConfigPanel;
 use inferno_ui::widgets::corner_selector::{CornerSelector, ViewMode};
 use inferno_ui::widgets::session_panel::SessionPanel;
 use inferno_ui::widgets::stats_window::StatsWindow;
+use inferno_ui::widgets::suspension_config::SuspensionConfigPanel;
+use inferno_ui::widgets::suspension_stats::SuspensionStatsWindow;
 
 const DEBOUNCE_MS: u64 = 300;
 
-type AnalysisResult = Result<DriverConsistencyResult, Error>;
+type DriverAnalysisResult = Result<DriverConsistencyResult, Error>;
+type SuspensionAnalysisResult = Result<SuspensionResult, Error>;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ActiveTab {
+    DriverConsistency,
+    Suspension,
+}
 
 pub struct InfernoApp {
-    // Widgets
+    // Tab state
+    pub active_tab: ActiveTab,
+
+    // Shared widgets
     session_a: SessionPanel,
     session_b: SessionPanel,
+
+    // Driver consistency tab
     config: ConfigPanel,
     pub corner_selector: CornerSelector,
     stats_window: StatsWindow,
-
-    // Analysis results
     result_a: Option<DriverConsistencyResult>,
     result_b: Option<DriverConsistencyResult>,
+    rx_a: Option<mpsc::Receiver<DriverAnalysisResult>>,
+    rx_b: Option<mpsc::Receiver<DriverAnalysisResult>>,
 
-    // Background analysis receivers
-    rx_a: Option<mpsc::Receiver<AnalysisResult>>,
-    rx_b: Option<mpsc::Receiver<AnalysisResult>>,
+    // Suspension tab
+    susp_config: SuspensionConfigPanel,
+    susp_stats: SuspensionStatsWindow,
+    susp_result_a: Option<SuspensionResult>,
+    susp_result_b: Option<SuspensionResult>,
+    susp_rx_a: Option<mpsc::Receiver<SuspensionAnalysisResult>>,
+    susp_rx_b: Option<mpsc::Receiver<SuspensionAnalysisResult>>,
 
     // State
     status: String,
@@ -60,6 +79,7 @@ impl InfernoApp {
         cc.egui_ctx.set_visuals(visuals);
 
         Self {
+            active_tab: ActiveTab::DriverConsistency,
             session_a: SessionPanel::new("Session A"),
             session_b: SessionPanel::new("Session B"),
             config: ConfigPanel::new(),
@@ -69,6 +89,12 @@ impl InfernoApp {
             result_b: None,
             rx_a: None,
             rx_b: None,
+            susp_config: SuspensionConfigPanel::new(),
+            susp_stats: SuspensionStatsWindow::default(),
+            susp_result_a: None,
+            susp_result_b: None,
+            susp_rx_a: None,
+            susp_rx_b: None,
             status: "Load a telemetry file to begin".into(),
             analyzing: false,
             pending_a: false,
@@ -87,6 +113,7 @@ impl InfernoApp {
         let logger_id = profile::get_logger_id(&session);
         if let Some(prof) = profile::get_profile_for_logger(&logger_id) {
             self.config.set_from_profile(&prof);
+            self.susp_config.set_from_profile(&prof);
         }
 
         // Auto-detect throttle threshold: 95% of peak throttle value
@@ -123,12 +150,12 @@ impl InfernoApp {
         self.session_a.session = Some(session.clone());
         self.session_a.file_path = Some(path.to_path_buf());
 
-        // Run analysis synchronously
-        let config = self.config.to_channel_config();
+        // Run driver consistency analysis synchronously
+        let driver_config = self.config.to_channel_config();
         let result = analyze_driver_consistency(
             &session,
             &selected_laps,
-            &config,
+            &driver_config,
             self.config.corner_threshold,
             self.config.throttle_threshold,
             self.config.sustain_time_ms,
@@ -138,6 +165,13 @@ impl InfernoApp {
         self.corner_selector.update_corners(&result.corners);
         self.status = format!("{} corners detected", result.corner_data.len());
         self.result_a = Some(result);
+
+        // Run suspension analysis synchronously
+        let susp_config = self.susp_config.to_suspension_config();
+        if let Ok(susp_result) = analyze_suspension_velocity(&session, &selected_laps, &susp_config)
+        {
+            self.susp_result_a = Some(susp_result);
+        }
     }
 
     fn schedule_analysis(&mut self, target_b: bool) {
@@ -160,15 +194,17 @@ impl InfernoApp {
         self.last_change = None;
         if self.pending_a {
             self.pending_a = false;
-            self.fire_analysis(ctx, false);
+            self.fire_driver_analysis(ctx, false);
+            self.fire_suspension_analysis(ctx, false);
         }
         if self.pending_b {
             self.pending_b = false;
-            self.fire_analysis(ctx, true);
+            self.fire_driver_analysis(ctx, true);
+            self.fire_suspension_analysis(ctx, true);
         }
     }
 
-    fn fire_analysis(&mut self, ctx: &egui::Context, target_b: bool) {
+    fn fire_driver_analysis(&mut self, ctx: &egui::Context, target_b: bool) {
         let panel = if target_b {
             &self.session_b
         } else {
@@ -223,7 +259,52 @@ impl InfernoApp {
         });
     }
 
+    fn fire_suspension_analysis(&mut self, ctx: &egui::Context, target_b: bool) {
+        let panel = if target_b {
+            &self.session_b
+        } else {
+            &self.session_a
+        };
+        let session = match panel.session.clone() {
+            Some(s) => s,
+            None => return,
+        };
+        let laps = panel.selected_laps();
+        if laps.is_empty() {
+            return;
+        }
+
+        let config = self.susp_config.to_suspension_config();
+        let (tx, rx) = mpsc::channel();
+        if target_b {
+            self.susp_rx_b = Some(rx);
+        } else {
+            self.susp_rx_a = Some(rx);
+        }
+
+        let ctx_c = ctx.clone();
+        std::thread::spawn(move || {
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                analyze_suspension_velocity(&session, &laps, &config)
+            }));
+            let result = match result {
+                Ok(r) => r,
+                Err(panic) => {
+                    let msg = panic
+                        .downcast_ref::<String>()
+                        .map(|s| s.as_str())
+                        .or_else(|| panic.downcast_ref::<&str>().copied())
+                        .unwrap_or("unknown panic");
+                    Err(Error::Other(format!("Suspension analysis panicked: {msg}")))
+                }
+            };
+            let _ = tx.send(result);
+            ctx_c.request_repaint();
+        });
+    }
+
     fn poll_results(&mut self) {
+        // Driver consistency results
         if let Some(rx) = &self.rx_a {
             match rx.try_recv() {
                 Ok(result) => {
@@ -240,12 +321,12 @@ impl InfernoApp {
                             self.corner_selector.clear();
                         }
                     }
-                    self.analyzing = self.rx_b.is_some();
+                    self.update_analyzing();
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
                     self.rx_a = None;
                     self.status = "Analysis failed unexpectedly".into();
-                    self.analyzing = self.rx_b.is_some();
+                    self.update_analyzing();
                 }
                 Err(mpsc::TryRecvError::Empty) => {}
             }
@@ -259,15 +340,59 @@ impl InfernoApp {
                         Ok(dr) => self.result_b = Some(dr),
                         Err(_) => self.result_b = None,
                     }
-                    self.analyzing = self.rx_a.is_some();
+                    self.update_analyzing();
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
                     self.rx_b = None;
-                    self.analyzing = self.rx_a.is_some();
+                    self.update_analyzing();
                 }
                 Err(mpsc::TryRecvError::Empty) => {}
             }
         }
+
+        // Suspension results
+        if let Some(rx) = &self.susp_rx_a {
+            match rx.try_recv() {
+                Ok(result) => {
+                    self.susp_rx_a = None;
+                    match result {
+                        Ok(sr) => self.susp_result_a = Some(sr),
+                        Err(_) => self.susp_result_a = None,
+                    }
+                    self.update_analyzing();
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    self.susp_rx_a = None;
+                    self.update_analyzing();
+                }
+                Err(mpsc::TryRecvError::Empty) => {}
+            }
+        }
+
+        if let Some(rx) = &self.susp_rx_b {
+            match rx.try_recv() {
+                Ok(result) => {
+                    self.susp_rx_b = None;
+                    match result {
+                        Ok(sr) => self.susp_result_b = Some(sr),
+                        Err(_) => self.susp_result_b = None,
+                    }
+                    self.update_analyzing();
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    self.susp_rx_b = None;
+                    self.update_analyzing();
+                }
+                Err(mpsc::TryRecvError::Empty) => {}
+            }
+        }
+    }
+
+    fn update_analyzing(&mut self) {
+        self.analyzing = self.rx_a.is_some()
+            || self.rx_b.is_some()
+            || self.susp_rx_a.is_some()
+            || self.susp_rx_b.is_some();
     }
 }
 
@@ -283,9 +408,18 @@ impl eframe::App for InfernoApp {
         let mut save_profile = false;
         let mut new_session_a = false;
 
-        // Stats popup window
-        if let Some(result) = &self.result_a {
-            self.stats_window.show(ctx, result);
+        // Stats popup windows (show for whichever tab is active)
+        match self.active_tab {
+            ActiveTab::DriverConsistency => {
+                if let Some(result) = &self.result_a {
+                    self.stats_window.show(ctx, result);
+                }
+            }
+            ActiveTab::Suspension => {
+                if let Some(result) = &self.susp_result_a {
+                    self.susp_stats.show(ctx, result);
+                }
+            }
         }
 
         // Bottom status bar
@@ -299,8 +433,19 @@ impl eframe::App for InfernoApp {
                     ui.label(&self.status);
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if self.result_a.is_some() && ui.button("Statistics").clicked() {
-                            self.stats_window.open = !self.stats_window.open;
+                        let has_stats = match self.active_tab {
+                            ActiveTab::DriverConsistency => self.result_a.is_some(),
+                            ActiveTab::Suspension => self.susp_result_a.is_some(),
+                        };
+                        if has_stats && ui.button("Statistics").clicked() {
+                            match self.active_tab {
+                                ActiveTab::DriverConsistency => {
+                                    self.stats_window.open = !self.stats_window.open;
+                                }
+                                ActiveTab::Suspension => {
+                                    self.susp_stats.open = !self.susp_stats.open;
+                                }
+                            }
                         }
                         let label = if self.top_collapsed {
                             "\u{25bc} Show"
@@ -314,12 +459,27 @@ impl eframe::App for InfernoApp {
                 });
             });
 
-        // Top panel — session loading + config (collapsible)
+        // Top panel — tab selector + session loading + config (collapsible)
         if !self.top_collapsed {
             egui::TopBottomPanel::top("config")
                 .resizable(true)
                 .default_height(220.0)
                 .show(ctx, |ui| {
+                    // Tab selector bar
+                    ui.horizontal(|ui| {
+                        ui.selectable_value(
+                            &mut self.active_tab,
+                            ActiveTab::DriverConsistency,
+                            "Driver Consistency",
+                        );
+                        ui.selectable_value(
+                            &mut self.active_tab,
+                            ActiveTab::Suspension,
+                            "Suspension Velocity",
+                        );
+                    });
+                    ui.separator();
+
                     ui.columns(3, |cols| {
                         // Session A
                         let resp = self.session_a.show(&mut cols[0]);
@@ -340,9 +500,17 @@ impl eframe::App for InfernoApp {
                             trigger_b = true;
                         }
 
-                        // Config
-                        config_changed = self.config.show(&mut cols[2]);
-                        save_profile = self.config.save_requested;
+                        // Tab-specific config
+                        match self.active_tab {
+                            ActiveTab::DriverConsistency => {
+                                config_changed = self.config.show(&mut cols[2]);
+                                save_profile = self.config.save_requested;
+                            }
+                            ActiveTab::Suspension => {
+                                config_changed = self.susp_config.show(&mut cols[2]);
+                                save_profile = self.susp_config.save_requested;
+                            }
+                        }
                     });
                 });
         }
@@ -354,6 +522,7 @@ impl eframe::App for InfernoApp {
                 if let Some(prof) = profile::get_profile_for_logger(&logger_id) {
                     self.status = format!("Loaded — logger {} | profile: {}", logger_id, prof.name);
                     self.config.set_from_profile(&prof);
+                    self.susp_config.set_from_profile(&prof);
                 } else {
                     self.status =
                         format!("Loaded — logger {logger_id} | no profile found, using defaults");
@@ -392,7 +561,7 @@ impl eframe::App for InfernoApp {
                 let prof = inferno_core::profile::VehicleProfile {
                     name: lid.clone(),
                     channel_names: self.config.channel_names.clone(),
-                    motion_ratios: Default::default(),
+                    motion_ratios: self.susp_config.motion_ratios.clone(),
                 };
                 match profile::save_profile_for_logger(&lid, &lid, &prof) {
                     Ok(()) => self.status = "Profile saved".into(),
@@ -401,29 +570,40 @@ impl eframe::App for InfernoApp {
             }
         }
 
-        // Corner selector sidebar
-        egui::SidePanel::left("corners")
-            .default_width(150.0)
-            .show(ctx, |ui| {
-                self.corner_selector.show(ui);
+        // Left sidebar — only shown for Driver Consistency tab
+        if self.active_tab == ActiveTab::DriverConsistency {
+            egui::SidePanel::left("corners")
+                .default_width(150.0)
+                .show(ctx, |ui| {
+                    self.corner_selector.show(ui);
 
-                // Track map thumbnail at the bottom of the sidebar
-                if let Some(result) = &self.result_a {
-                    ui.add_space(8.0);
-                    ui.separator();
-                    ui.label(
-                        egui::RichText::new("Track Map")
-                            .strong()
-                            .color(inferno_ui::theme::STEELBLUE),
-                    );
-                    if charts::track_map::draw_track_map_thumbnail(ui, result) {
-                        self.corner_selector.view_mode = ViewMode::TrackMap;
+                    // Track map thumbnail at the bottom of the sidebar
+                    if let Some(result) = &self.result_a {
+                        ui.add_space(8.0);
+                        ui.separator();
+                        ui.label(
+                            egui::RichText::new("Track Map")
+                                .strong()
+                                .color(inferno_ui::theme::STEELBLUE),
+                        );
+                        if charts::track_map::draw_track_map_thumbnail(ui, result) {
+                            self.corner_selector.view_mode = ViewMode::TrackMap;
+                        }
                     }
-                }
-            });
+                });
+        }
 
         // Central chart area
-        egui::CentralPanel::default().show(ctx, |ui| match &self.corner_selector.view_mode {
+        egui::CentralPanel::default().show(ctx, |ui| match self.active_tab {
+            ActiveTab::DriverConsistency => self.draw_driver_tab(ui),
+            ActiveTab::Suspension => self.draw_suspension_tab(ui),
+        });
+    }
+}
+
+impl InfernoApp {
+    fn draw_driver_tab(&self, ui: &mut egui::Ui) {
+        match &self.corner_selector.view_mode {
             ViewMode::Summary => {
                 if let Some(result) = &self.result_a {
                     egui::ScrollArea::vertical().show(ui, |ui| {
@@ -465,6 +645,20 @@ impl eframe::App for InfernoApp {
                     });
                 }
             }
-        });
+        }
+    }
+
+    fn draw_suspension_tab(&self, ui: &mut egui::Ui) {
+        if let Some(result) = &self.susp_result_a {
+            if let Some(rb) = &self.susp_result_b {
+                charts::histogram::draw_histograms_comparison(ui, result, rb);
+            } else {
+                charts::histogram::draw_histograms(ui, result);
+            }
+        } else {
+            ui.centered_and_justified(|ui| {
+                ui.heading("Load a telemetry file to begin analysis");
+            });
+        }
     }
 }
