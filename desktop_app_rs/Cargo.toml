@@ -15,7 +15,7 @@ serde_yaml = "0.9"
 # GUI
 eframe = "0.33"
 egui = "0.33"
-egui_plot = "0.33"
+egui_plot = "0.34"
 rfd = "0.15"
 
 # Utilities
