@@ -143,13 +143,23 @@ pub fn draw_track_map(ui: &mut Ui, result: &DriverConsistencyResult) {
 }
 
 /// Draw a small clickable track map thumbnail. Returns true if clicked.
-pub fn draw_track_map_thumbnail(ui: &mut Ui, result: &DriverConsistencyResult) -> bool {
+/// If `hovered_corner` is Some, highlights that corner with a bright marker.
+pub fn draw_track_map_thumbnail(
+    ui: &mut Ui,
+    result: &DriverConsistencyResult,
+    hovered_corner: Option<usize>,
+) -> bool {
     if result.ref_lat.is_empty() || result.ref_lon.is_empty() {
         return false;
     }
 
     let (x, y) = gps_to_local_xy(&result.ref_lat, &result.ref_lon);
     let ref_dist = &result.ref_distance;
+
+    // Get the hovered corner's ID for segment matching
+    let hovered_corner_id = hovered_corner
+        .and_then(|idx| result.corner_data.get(idx))
+        .map(|cd| cd.corner.id);
 
     let resp = Plot::new("track_map_thumb")
         .data_aspect(1.0)
@@ -171,7 +181,7 @@ pub fn draw_track_map_thumbnail(ui: &mut Ui, result: &DriverConsistencyResult) -
                     .width(2.0),
             );
 
-            // Segment coloring (simplified — no legend names)
+            // Segment coloring
             for seg in &result.segments {
                 let si = searchsorted(ref_dist, seg.start_dist);
                 let ei = searchsorted(ref_dist, seg.end_dist).min(x.len());
@@ -182,16 +192,41 @@ pub fn draw_track_map_thumbnail(ui: &mut Ui, result: &DriverConsistencyResult) -
                 if seg_pts.is_empty() {
                     continue;
                 }
-                let color = match seg.segment_type {
-                    SegmentType::Braking => colors::segment::BRAKING,
-                    SegmentType::Corner => colors::segment::CORNER,
-                    SegmentType::Acceleration => colors::segment::ACCELERATION,
+
+                let is_highlighted = hovered_corner_id == Some(seg.corner_id);
+                let (color, width) = if is_highlighted {
+                    (egui::Color32::from_rgb(0x00, 0xBF, 0xFF), 6.0) // deep sky blue
+                } else {
+                    let c = match seg.segment_type {
+                        SegmentType::Braking => colors::segment::BRAKING,
+                        SegmentType::Corner => colors::segment::CORNER,
+                        SegmentType::Acceleration => colors::segment::ACCELERATION,
+                    };
+                    (c, 3.0)
                 };
                 plot_ui.line(
                     Line::new(&seg.name, PlotPoints::new(seg_pts))
                         .color(color)
-                        .width(3.0),
+                        .width(width),
                 );
+            }
+
+            // Highlight marker at hovered corner's apex
+            if let Some(idx) = hovered_corner {
+                if let Some(cd) = result.corner_data.get(idx) {
+                    let ai = cd.corner.apex_idx;
+                    if ai < x.len() {
+                        plot_ui.points(
+                            Points::new(
+                                format!("highlight_{}", cd.corner.name),
+                                PlotPoints::new(vec![[x[ai], y[ai]]]),
+                            )
+                            .color(egui::Color32::from_rgb(0x00, 0xBF, 0xFF))
+                            .radius(8.0)
+                            .shape(MarkerShape::Circle),
+                        );
+                    }
+                }
             }
         });
 
