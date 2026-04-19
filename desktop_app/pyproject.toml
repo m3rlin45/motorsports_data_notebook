@@ -13,7 +13,7 @@ dependencies = [
     "pandas>=2.0.0,<3.0.0",
     "numpy>=2.0.0,<3.0.0",
     "pyarrow>=18.0.0,<23.0.0",
-    "libxrk>=0.11.0",
+    "libxrk>=0.12.0",
     "libibt>=0.0.1",
     "pyyaml>=6.0,<7.0",
     "motorsports-data-notebook",
