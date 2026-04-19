@@ -17,10 +17,19 @@ pub fn default_channel_names() -> HashMap<String, String> {
         ("lateral_g", "LateralAcc"),
         ("inline_g", "InlineAcc"),
         ("steering", "SteerAngle"),
+        ("inline_g", "InlineAcc"),
         ("shock_fl", "LF_Shock_Pot"),
         ("shock_fr", "RF_Shock_Pot"),
         ("shock_rl", "LR_Shock_Pot"),
         ("shock_rr", "RR_Shock_Pot"),
+        ("tpms_press_fl", "TPMS_Press_LF"),
+        ("tpms_press_fr", "TPMS_Press_RF"),
+        ("tpms_press_rl", "TPMS_Press_LR"),
+        ("tpms_press_rr", "TPMS_Press_RR"),
+        ("tpms_temp_fl", "TPMS_Temp_LF"),
+        ("tpms_temp_fr", "TPMS_Temp_RF"),
+        ("tpms_temp_rl", "TPMS_Temp_LR"),
+        ("tpms_temp_rr", "TPMS_Temp_RR"),
     ]
     .iter()
     .map(|(k, v)| (k.to_string(), v.to_string()))
