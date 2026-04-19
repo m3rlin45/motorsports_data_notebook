@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use egui_kittest::Harness;
-use inferno_app::InfernoApp;
+use inferno_app::{ActiveTab, InfernoApp};
 use inferno_ui::widgets::corner_selector::ViewMode;
 
 const TEST_DATA: &str =
@@ -89,5 +89,27 @@ fn snapshot_track_map_light() {
     harness.run();
     harness
         .try_snapshot("track_map_light")
+        .expect("snapshot failed");
+}
+
+// === Suspension tab (dark) ===
+
+#[test]
+fn snapshot_suspension() {
+    let mut harness = create_app_with_data();
+    harness.state_mut().active_tab = ActiveTab::Suspension;
+    harness.run();
+    harness.try_snapshot("suspension").expect("snapshot failed");
+}
+
+// === Suspension tab (light) ===
+
+#[test]
+fn snapshot_suspension_light() {
+    let mut harness = create_app_light();
+    harness.state_mut().active_tab = ActiveTab::Suspension;
+    harness.run();
+    harness
+        .try_snapshot("suspension_light")
         .expect("snapshot failed");
 }
