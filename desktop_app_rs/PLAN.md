@@ -27,16 +27,18 @@ desktop_app_rs/
 - [x] **Phase 3: Widgets** — theme colors, session panel (file dialog + drag-drop + lap checkboxes), config panel (channel names + thresholds + profile save), corner selector (summary/detail radio + corner list), stats window (grid tables)
 - [x] **Phase 4: Charts** — viridis colormap + colors, summary box plots (BP/TA/exit speed + A/B comparison + opportunity bands), detail line plots (throttle/brake/lat_g + viridis per-lap + VLine markers + TA annotation), track map (segment coloring + apex markers + opportunity diamonds)
 - [x] **Phase 5: App integration** — InfernoApp state, background analysis (std::thread + mpsc + 300ms debounce + panic catch), layout (collapsible top panel + corner sidebar + chart area + status bar), widget/chart wiring, profile auto-load, auto-throttle threshold (95% of peak), save profile, Statistics popup, Show/Hide toggle
-- [x] **Phase 5.5: Integration tests** — 20 integration tests against real XRZ data (86 + SFJ), 4 tiers: regression (CAN channels, lap-relative distance), data integrity (monotonic distance, corner data completeness), invariants (corner distances, segment refs, TA bounds), edge cases (single lap, missing channels, high threshold)
+- [x] **Phase 5.5: Integration tests** — 20 integration tests against real XRZ data (86 only, tracked in repo), 4 tiers: regression (CAN channels, lap-relative distance), data integrity (monotonic distance, corner data completeness), invariants (corner distances, segment refs, TA bounds), edge cases (single lap, missing channels, high threshold)
+- [x] **Best/Top 103% lap selection** — quick-select buttons matching Python app behavior
+- [x] **Snapshot tests** — 6 egui_kittest visual regression tests (summary, detail, track map × dark/light themes)
+- [x] **CI/CD** — `ci-rust.yml` (clippy + fmt + unit/integration tests + snapshot tests), `build-desktop-rs.yml` (Linux + Windows release builds + release attachment), Python CI path-ignore for `desktop_app_rs/`
 
-**Test count:** 34 unit + 20 integration = 54 passing, clippy clean
+**Test count:** 34 unit + 20 integration + 6 snapshot = 60 passing, clippy clean
 
-### Future (not in this PR)
+### Future
 
 - [ ] Suspension Velocity tab
 - [ ] Tire Grip tab
 - [ ] `AnalysisTab` trait when adding second tab
-- [ ] **Headless screenshot mode** — `--screenshot <xrz_file> <output.png>` flag that loads a file, runs analysis, renders one frame to PNG, and exits. Enables Claude to self-test UI changes without a human in the loop. Approach: use `eframe`'s offscreen rendering or `egui`'s `Context::run()` with a software rasterizer (e.g. `tiny-skia` via `epaint`), capture the framebuffer, write PNG. Could also drive specific views (summary, detail for corner N, track map) via CLI args. Opens the door to snapshot regression tests comparing output PNGs against golden files.
 
 ## Key Design Decisions
 

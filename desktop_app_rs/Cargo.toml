@@ -18,6 +18,10 @@ egui = "0.33"
 egui_plot = "0.34"
 rfd = "0.15"
 
+# Testing
+egui_kittest = { version = "0.33", features = ["eframe", "wgpu", "snapshot"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
+
 # Utilities
 rayon = "1.10"
 thiserror = "2"

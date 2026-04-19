@@ -172,6 +172,56 @@ dotnet publish -c Release -r linux-x64 --self-contained
 
 Note: Cross-OS NativeAOT is not supported. Windows builds from Linux use trimmed single-file instead. NativeAOT works for linux-x64 when building on Linux.
 
+## Rust Desktop App (desktop_app_rs/)
+
+Rust rewrite of the Inferno Analyzer using egui. Three workspace crates:
+
+```
+desktop_app_rs/
+  crates/
+    inferno-core/   # Data loading, analysis, profiles (no GUI)
+    inferno-ui/     # egui widgets, charts, theme
+    inferno-app/    # eframe application (InfernoApp), main entry point
+      src/lib.rs    # InfernoApp struct + eframe::App impl
+      src/main.rs   # Thin entry point
+      tests/
+        snapshot_tests.rs       # Visual regression tests
+        snapshots/*.png         # Golden snapshot images
+```
+
+### Running and building
+
+```bash
+# Run locally
+cd /home/m3rlin45/code/motorsports_data_notebook/desktop_app_rs && cargo run
+
+# Run all tests (including snapshot tests)
+cd /home/m3rlin45/code/motorsports_data_notebook/desktop_app_rs && cargo test
+
+# Clippy
+cd /home/m3rlin45/code/motorsports_data_notebook/desktop_app_rs && cargo clippy
+```
+
+### Snapshot tests (egui_kittest)
+
+Visual regression tests render the app headlessly via `egui_kittest` and compare against golden PNG snapshots in `crates/inferno-app/tests/snapshots/`. Tests load real XRZ data, run analysis synchronously via `InfernoApp::load_and_analyze()`, then snapshot the summary, detail, and track map views in both dark mode (app default) and light mode.
+
+```bash
+# Run snapshot tests
+cd /home/m3rlin45/code/motorsports_data_notebook/desktop_app_rs && cargo test --test snapshot_tests
+
+# Update golden snapshots after intentional UI changes
+cd /home/m3rlin45/code/motorsports_data_notebook/desktop_app_rs && UPDATE_SNAPSHOTS=1 cargo test --test snapshot_tests
+```
+
+**When modifying UI code in inferno-ui or inferno-app:**
+1. Run `cargo test --test snapshot_tests` — if tests fail, the UI rendering changed
+2. If the change is intentional, regenerate snapshots with `UPDATE_SNAPSHOTS=1`
+3. Visually verify the new snapshots look correct (`wslview crates/inferno-app/tests/snapshots/*.png`)
+4. Commit the updated `.png` files alongside the code changes
+
+**Adding new snapshot tests:** Add test functions in `crates/inferno-app/tests/snapshot_tests.rs`. Set `corner_selector.view_mode` to control which view is rendered. Use `harness.try_snapshot("name")` — the golden file is saved to `tests/snapshots/{name}.png`. Use `create_app_with_data()` for dark mode and `create_app_light()` for light mode. Always add tests for both themes when adding a new view.
+
 ## Code Style & Conventions
 
 - **Formatter:** Black, 100-char line length, target py312
