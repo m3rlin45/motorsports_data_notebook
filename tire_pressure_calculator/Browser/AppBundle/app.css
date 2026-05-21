@@ -27,6 +27,14 @@ html, body {
   touch-action: none;
 }
 
+/* Avalonia's WASM uses a hidden HTML input for IME and virtual-keyboard
+   handling. iOS Safari auto-zooms on focus whenever an input is smaller
+   than 16px, so force the threshold and keep the keyboard from triggering
+   a stuck zoom. */
+input, textarea, [contenteditable] {
+  font-size: 16px !important;
+}
+
 #loading {
   position: absolute;
   inset: 0;

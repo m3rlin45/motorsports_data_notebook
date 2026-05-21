@@ -3,7 +3,8 @@
              xmlns:vm="using:TirePressureCalculator.ViewModels"
              xmlns:views="using:TirePressureCalculator.Views"
              x:Class="TirePressureCalculator.Views.MainView"
-             x:DataType="vm:MainViewModel">
+             x:DataType="vm:MainViewModel"
+             Background="Transparent">
 
   <UserControl.Resources>
     <DataTemplate x:Key="CornerTemplate" x:DataType="vm:TireCornerViewModel">

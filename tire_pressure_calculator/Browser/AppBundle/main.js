@@ -16,6 +16,25 @@ if (out && loading) {
     observer.observe(out, { childList: true, subtree: true });
 }
 
+// Avalonia uses a hidden HTML input for IME / virtual-keyboard handling.
+// Every value in this app is numeric, so hint a decimal keypad so phones
+// don't open a full QWERTY layout.
+const hintDecimalKeypad = (root) => {
+    if (!(root instanceof Element)) return;
+    if (root.matches?.("input, textarea") && !root.inputMode) {
+        root.inputMode = "decimal";
+    }
+    for (const el of root.querySelectorAll?.("input, textarea") ?? []) {
+        if (!el.inputMode) el.inputMode = "decimal";
+    }
+};
+const inputObserver = new MutationObserver((mutations) => {
+    for (const m of mutations) {
+        for (const node of m.addedNodes) hintDecimalKeypad(node);
+    }
+});
+inputObserver.observe(document.body, { childList: true, subtree: true });
+
 const dotnetRuntime = await dotnet
     .withDiagnosticTracing(false)
     .withApplicationArgumentsFromQuery()
