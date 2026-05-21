@@ -211,14 +211,17 @@ def run_holdout_validation(
 
     # Build per-(track, car) lookups from the held-out model
     g2_lookup = {
-        (d["track_canonical"], d["car"]): d["g2_typ"] for d in model["g2_typ_by_track_car"]
+        (d["track_canonical"], d["car"], d["condition"]): d["g2_typ"]
+        for d in model["g2_typ_by_track_car_cond"]
     }
     c_track_lookup = {d["track_canonical"]: d["value"] for d in model["c_track_by_track"]}
     k_lookup = {
-        (d["key"]["car"], d["key"]["corner"]): d["value_kelvin_per_g2"] for d in model["K_buckets"]
+        (d["key"]["car"], d["key"]["corner"], d["key"]["condition"]): d["value_kelvin_per_g2"]
+        for d in model["K_buckets"]
     }
     tau_lookup = {
-        (d["car"], d["corner"]): d["value_seconds"] for d in model["tau_sec_by_car_corner"]
+        (d["car"], d["corner"], d["condition"]): d["value_seconds"]
+        for d in model["tau_sec_by_car_corner_cond"]
     }
 
     # Build (session_id → ambient_temp_c) from weather attached during training prep.
@@ -255,17 +258,20 @@ def run_holdout_validation(
     for _, lap in all_laps.iterrows():
         track = lap["track_canonical"]
         car = lap["car"]
+        cond = lap.get("condition", "dry")
+        if cond == "unknown":
+            cond = "dry"  # held-out evaluation defaults to dry when condition unknown
         t_cum_s = float(lap["t_cum_s"])
         t_eff = float(lap["t_eff_c"]) if pd.notna(lap["t_eff_c"]) else None
         if t_eff is None:
             continue
-        g2 = g2_lookup.get((track, car))
+        g2 = g2_lookup.get((track, car, cond)) or g2_lookup.get((track, car, "dry"))
         if g2 is None:
             continue
         c_track = c_track_lookup.get(track, 1.0)
         for c in CORNERS:
-            K = k_lookup.get((car, c))
-            tau = tau_lookup.get((car, c))
+            K = k_lookup.get((car, c, cond)) or k_lookup.get((car, c, "dry"))
+            tau = tau_lookup.get((car, c, cond)) or tau_lookup.get((car, c, "dry"))
             if K is None or tau is None:
                 continue
             obs = lap.get(f"tpms_temp_{c}_end")
@@ -284,6 +290,7 @@ def run_holdout_validation(
                     "session_id": lap["session_id"],
                     "track": track,
                     "car": car,
+                    "condition": cond,
                     "lap_num": int(lap["lap_num"]),
                     "stint_id": int(lap["stint_id"]),
                     "lap_within_stint": int(lap["lap_within_stint"]),
@@ -319,6 +326,8 @@ def run_holdout_validation(
     _print_corner_table("Held-out per-corner T_hot residuals — POOLED", df)
     for car_name, car_frame in df.groupby("car"):
         _print_corner_table(f"Held-out — {car_name}", car_frame)
+    for cond_name, cond_frame in df.groupby("condition"):
+        _print_corner_table(f"Held-out — condition={cond_name}", cond_frame)
 
     # Per-(session, lap) table
     print("\n=== Per-(session, lap) breakdown ===")
