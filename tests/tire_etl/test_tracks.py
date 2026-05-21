@@ -19,6 +19,16 @@ def test_unknown_track_returns_none() -> None:
     assert normalize_track_name("Atlanta") is None
 
 
+def test_fuji_layout_variants_all_collapse_to_fuji() -> None:
+    """AIM filenames can carry "Fuji GP" (main grand-prix layout) or
+    "Fuji Short" (shortened layout); both are the same physical venue for
+    weather purposes."""
+    assert normalize_track_name("Fuji") == "fuji"
+    assert normalize_track_name("Fuji GP") == "fuji"
+    assert normalize_track_name("Fuji Short") == "fuji"
+    assert normalize_track_name("Fuji Speedway") == "fuji"
+
+
 def test_get_track_returns_info() -> None:
     ti = get_track("fuji")
     assert ti is not None
