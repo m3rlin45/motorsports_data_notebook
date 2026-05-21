@@ -1,0 +1,338 @@
+{
+  "schema_version": 1,
+  "fit_at_utc": "2026-05-21T14:41:21+00:00",
+  "model_form": "T_hot - T_eff = K * c_track * g2_typ * (1 - exp(-t / tau_sec))   where T_eff = (1-w_road)*T_air + w_road*T_road, t = N * lap_time_typ_s",
+  "gay_lussac": {
+    "p_atm_bar": 1.0,
+    "t_zero_c_to_k": 273.15,
+    "t_cold_uses": "T_air"
+  },
+  "energy_balance": {
+    "w_road": 0.2,
+    "w_road_fitted": false,
+    "t_road_proxy": {
+      "formula": "T_air + delta_sun_max_c * (1 - cloud_cover/100) * sun_factor",
+      "delta_sun_max_c": 10.0,
+      "sun_factor_default": 1.0
+    }
+  },
+  "corners": [
+    "fl",
+    "fr",
+    "rl",
+    "rr"
+  ],
+  "min_samples_per_bucket": 5,
+  "priors_when_no_fit": {
+    "tau_sec_seconds": 240.0,
+    "K_kelvin_per_g2": 60.0,
+    "c_track": 1.0
+  },
+  "tau_sec_by_car_corner": [
+    {
+      "car": "Inferno 86",
+      "corner": "fl",
+      "value_seconds": 249.47675249233234,
+      "stderr_seconds": 13.8388685414543,
+      "n_samples_used": 462,
+      "from_prior": false
+    },
+    {
+      "car": "Inferno 86",
+      "corner": "fr",
+      "value_seconds": 228.8378400727428,
+      "stderr_seconds": 11.736309135715652,
+      "n_samples_used": 462,
+      "from_prior": false
+    },
+    {
+      "car": "Inferno 86",
+      "corner": "rl",
+      "value_seconds": 299.77255576550556,
+      "stderr_seconds": 19.437199219445645,
+      "n_samples_used": 454,
+      "from_prior": false
+    },
+    {
+      "car": "Inferno 86",
+      "corner": "rr",
+      "value_seconds": 275.47524056130754,
+      "stderr_seconds": 16.035405500721087,
+      "n_samples_used": 462,
+      "from_prior": false
+    },
+    {
+      "car": "KK-SII",
+      "corner": "fl",
+      "value_seconds": 211.33127146958108,
+      "stderr_seconds": 14.397159142433392,
+      "n_samples_used": 355,
+      "from_prior": false
+    },
+    {
+      "car": "KK-SII",
+      "corner": "fr",
+      "value_seconds": 187.0476242052418,
+      "stderr_seconds": 13.800605331511354,
+      "n_samples_used": 355,
+      "from_prior": false
+    },
+    {
+      "car": "KK-SII",
+      "corner": "rl",
+      "value_seconds": 220.4937401147097,
+      "stderr_seconds": 19.8989963437735,
+      "n_samples_used": 323,
+      "from_prior": false
+    },
+    {
+      "car": "KK-SII",
+      "corner": "rr",
+      "value_seconds": 231.48531061135884,
+      "stderr_seconds": 16.396381957273416,
+      "n_samples_used": 293,
+      "from_prior": false
+    }
+  ],
+  "K_buckets": [
+    {
+      "key": {
+        "car": "Inferno 86",
+        "corner": "fl"
+      },
+      "value_kelvin_per_g2": 70.39471630250593,
+      "stderr_kelvin_per_g2": 2.8512698556274323,
+      "n_samples": 462,
+      "from_prior": false,
+      "from_single_track": false
+    },
+    {
+      "key": {
+        "car": "Inferno 86",
+        "corner": "fr"
+      },
+      "value_kelvin_per_g2": 61.748041979608914,
+      "stderr_kelvin_per_g2": 1.0997321545382166,
+      "n_samples": 462,
+      "from_prior": false,
+      "from_single_track": false
+    },
+    {
+      "key": {
+        "car": "Inferno 86",
+        "corner": "rl"
+      },
+      "value_kelvin_per_g2": 64.3159464424659,
+      "stderr_kelvin_per_g2": 1.7084091914743176,
+      "n_samples": 454,
+      "from_prior": false,
+      "from_single_track": false
+    },
+    {
+      "key": {
+        "car": "Inferno 86",
+        "corner": "rr"
+      },
+      "value_kelvin_per_g2": 58.45873015654547,
+      "stderr_kelvin_per_g2": 1.6019226160230753,
+      "n_samples": 462,
+      "from_prior": false,
+      "from_single_track": false
+    },
+    {
+      "key": {
+        "car": "KK-SII",
+        "corner": "fl"
+      },
+      "value_kelvin_per_g2": 29.245251672054835,
+      "stderr_kelvin_per_g2": 0.0448141922759351,
+      "n_samples": 355,
+      "from_prior": false,
+      "from_single_track": false
+    },
+    {
+      "key": {
+        "car": "KK-SII",
+        "corner": "fr"
+      },
+      "value_kelvin_per_g2": 23.019859054158616,
+      "stderr_kelvin_per_g2": 1.1123335596572315,
+      "n_samples": 355,
+      "from_prior": false,
+      "from_single_track": false
+    },
+    {
+      "key": {
+        "car": "KK-SII",
+        "corner": "rl"
+      },
+      "value_kelvin_per_g2": 24.943572434803116,
+      "stderr_kelvin_per_g2": 0.07866235170033174,
+      "n_samples": 323,
+      "from_prior": false,
+      "from_single_track": false
+    },
+    {
+      "key": {
+        "car": "KK-SII",
+        "corner": "rr"
+      },
+      "value_kelvin_per_g2": 25.607681746136223,
+      "stderr_kelvin_per_g2": 0.0,
+      "n_samples": 293,
+      "from_prior": false,
+      "from_single_track": true
+    }
+  ],
+  "c_track_by_track": [
+    {
+      "track_canonical": "fuji",
+      "value": 1.273056928523265,
+      "stderr": 0.037032551370708454,
+      "n_buckets_used": 7,
+      "anchor": false
+    },
+    {
+      "track_canonical": "sodegaura",
+      "value": 0.9681020546350824,
+      "stderr": 0.019147745224131908,
+      "n_buckets_used": 4,
+      "anchor": false
+    },
+    {
+      "track_canonical": "tsukuba_2000",
+      "value": 1.0,
+      "stderr": 0.0,
+      "n_buckets_used": 8,
+      "anchor": true
+    }
+  ],
+  "g2_typ_by_track_car": [
+    {
+      "track_canonical": "fuji",
+      "car": "Inferno 86",
+      "g2_typ": 0.5765891671180725,
+      "n_laps_used": 131
+    },
+    {
+      "track_canonical": "fuji",
+      "car": "KK-SII",
+      "g2_typ": 0.7960900664329529,
+      "n_laps_used": 71
+    },
+    {
+      "track_canonical": "motegi",
+      "car": "Inferno 86",
+      "g2_typ": 0.5507593154907227,
+      "n_laps_used": 18
+    },
+    {
+      "track_canonical": "sodegaura",
+      "car": "Inferno 86",
+      "g2_typ": 0.6496452689170837,
+      "n_laps_used": 232
+    },
+    {
+      "track_canonical": "tsukuba_2000",
+      "car": "Inferno 86",
+      "g2_typ": 0.4931156039237976,
+      "n_laps_used": 146
+    },
+    {
+      "track_canonical": "tsukuba_2000",
+      "car": "KK-SII",
+      "g2_typ": 1.055615782737732,
+      "n_laps_used": 326
+    }
+  ],
+  "lap_time_typ_by_track_car": [
+    {
+      "track_canonical": "fuji",
+      "car": "Inferno 86",
+      "lap_time_typ_s": 129.79600524902344,
+      "n_laps_used": 131
+    },
+    {
+      "track_canonical": "fuji",
+      "car": "KK-SII",
+      "lap_time_typ_s": 122.99099731445312,
+      "n_laps_used": 71
+    },
+    {
+      "track_canonical": "motegi",
+      "car": "Inferno 86",
+      "lap_time_typ_s": 143.29299926757812,
+      "n_laps_used": 18
+    },
+    {
+      "track_canonical": "sodegaura",
+      "car": "Inferno 86",
+      "lap_time_typ_s": 79.99250793457031,
+      "n_laps_used": 232
+    },
+    {
+      "track_canonical": "tsukuba_2000",
+      "car": "Inferno 86",
+      "lap_time_typ_s": 73.79449462890625,
+      "n_laps_used": 146
+    },
+    {
+      "track_canonical": "tsukuba_2000",
+      "car": "KK-SII",
+      "lap_time_typ_s": 62.19499969482422,
+      "n_laps_used": 326
+    }
+  ],
+  "fallback_order_for_K": [
+    [
+      "car",
+      "corner"
+    ],
+    [
+      "car"
+    ],
+    []
+  ],
+  "sensor_blacklist_applied": [
+    {
+      "session_id": "01811fbc44ee4dcb",
+      "corner": "rl",
+      "n_laps_masked": 9
+    },
+    {
+      "session_id": "034b6b78a440fe3a",
+      "corner": "rr",
+      "n_laps_masked": 13
+    },
+    {
+      "session_id": "1cd906c9ecf27b24",
+      "corner": "rr",
+      "n_laps_masked": 11
+    },
+    {
+      "session_id": "1efdf17c42265ba9",
+      "corner": "rr",
+      "n_laps_masked": 4
+    },
+    {
+      "session_id": "42a95638e6bd528b",
+      "corner": "rl",
+      "n_laps_masked": 18
+    },
+    {
+      "session_id": "bbe7b51bd428f5a0",
+      "corner": "rr",
+      "n_laps_masked": 13
+    },
+    {
+      "session_id": "cd9aaae0b59ff389",
+      "corner": "rl",
+      "n_laps_masked": 16
+    },
+    {
+      "session_id": "d3bf612415fb31ba",
+      "corner": "rr",
+      "n_laps_masked": 13
+    }
+  ]
+}
