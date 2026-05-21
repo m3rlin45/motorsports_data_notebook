@@ -1,6 +1,8 @@
 [project]
 name = "inferno-driving-coach"
-version = "0.14.0"
+# Placeholder only — CI's publish-mcp.yml rewrites this to the version from
+# the root pyproject.toml so all build artifacts share one source of truth.
+version = "0.0.0"
 description = "MCP server for motorsports telemetry coaching — session analysis, day reviews, and driving KPIs"
 authors = [
     {name = "Christopher Dewan", email = "chris.dewan@m3rlin.net"}
