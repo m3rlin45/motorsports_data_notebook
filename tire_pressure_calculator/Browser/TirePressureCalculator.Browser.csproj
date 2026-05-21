@@ -8,6 +8,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
 
+    <!-- Required by [JSImport] code generator for marshalling shims. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
     <WasmMainJSPath>AppBundle\main.js</WasmMainJSPath>
     <InvariantGlobalization>true</InvariantGlobalization>
 
