@@ -74,6 +74,7 @@ public partial class MainView : UserControl
         AddHandler(GotFocusEvent, OnChildGotFocus);
         AddHandler(LostFocusEvent, OnChildLostFocus);
         AddHandler(KeyDownEvent, OnChildKeyDown, RoutingStrategies.Bubble, handledEventsToo: true);
+        AddHandler(PointerPressedEvent, OnBackgroundPointerPressed, RoutingStrategies.Bubble, handledEventsToo: true);
     }
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
@@ -225,14 +226,35 @@ public partial class MainView : UserControl
         });
     }
 
+    private void OnBackgroundPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        // Tap outside any text input dismisses focus, which chains into
+        // OnChildLostFocus and reverses the zoom/translate.
+        if (FindAncestorOfType<TextBox>(e.Source as Control) is null)
+        {
+            TopLevel.GetTopLevel(this)?.FocusManager?.ClearFocus();
+        }
+    }
+
     private void OnChildKeyDown(object? sender, KeyEventArgs e)
     {
-        // Enter on the soft keyboard should dismiss focus, which chains into
-        // OnChildLostFocus and reverses the zoom/scroll.
-        if (e.Key == Key.Enter || e.Key == Key.Return)
+        if (e.Key != Key.Enter && e.Key != Key.Return) return;
+
+        // Advance focus to the next field on Enter — what every form on every
+        // platform does. Falls back to dismissing focus (which chains into
+        // OnChildLostFocus and reverses zoom/translate) when there's no next.
+        var focused = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement();
+        if (focused is InputElement el)
         {
-            Focus();
+            var next = KeyboardNavigationHandler.GetNext(el, NavigationDirection.Next);
+            if (next is not null && !ReferenceEquals(next, el))
+            {
+                next.Focus(NavigationMethod.Tab);
+                e.Handled = true;
+                return;
+            }
         }
+        TopLevel.GetTopLevel(this)?.FocusManager?.ClearFocus();
     }
 
     private ContentControl? FindQuadrant(Control? control)
