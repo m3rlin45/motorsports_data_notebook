@@ -10,6 +10,14 @@ public class CornerSettings
     public double TargetHotPressure { get; set; } = 1.80;
 }
 
+// Platform-pluggable persistence: Desktop/Android use the on-disk default,
+// the Browser head swaps in a localStorage-backed implementation.
+public interface ISettingsStorage
+{
+    string? Read();
+    void Write(string contents);
+}
+
 public class AppSettings
 {
     public CornerSettings FrontLeft { get; set; } = new();
@@ -18,19 +26,15 @@ public class AppSettings
     public CornerSettings RearRight { get; set; } = new();
     public double TempAdjustPercent { get; set; }
 
-    private static string FilePath =>
-        Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "TirePressureCalculator",
-            "settings.json");
+    public static ISettingsStorage Storage { get; set; } = new FileSettingsStorage();
 
     public static AppSettings Load()
     {
         try
         {
-            if (File.Exists(FilePath))
+            var json = Storage.Read();
+            if (!string.IsNullOrEmpty(json))
             {
-                var json = File.ReadAllText(FilePath);
                 return JsonSerializer.Deserialize(json, SettingsContext.Default.AppSettings) ?? new();
             }
         }
@@ -42,12 +46,28 @@ public class AppSettings
     {
         try
         {
-            var dir = Path.GetDirectoryName(FilePath)!;
-            Directory.CreateDirectory(dir);
             var json = JsonSerializer.Serialize(this, SettingsContext.Default.AppSettings);
-            File.WriteAllText(FilePath, json);
+            Storage.Write(json);
         }
         catch { }
+    }
+}
+
+public class FileSettingsStorage : ISettingsStorage
+{
+    private static string FilePath =>
+        Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "TirePressureCalculator",
+            "settings.json");
+
+    public string? Read() => File.Exists(FilePath) ? File.ReadAllText(FilePath) : null;
+
+    public void Write(string contents)
+    {
+        var dir = Path.GetDirectoryName(FilePath)!;
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(FilePath, contents);
     }
 }
 
