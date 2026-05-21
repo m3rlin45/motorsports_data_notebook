@@ -1,6 +1,9 @@
 [project]
 name = "inferno-analyzer"
-version = "0.1.0"
+# Version is read from the root pyproject.toml at build time via
+# tool.setuptools.dynamic below, so every release artifact ships at the
+# same version with no per-file bump.
+dynamic = ["version"]
 description = "Standalone desktop app for motorsports telemetry analysis (suspension + driver consistency)"
 authors = [
     {name = "Christopher Dewan", email = "chris.dewan@m3rlin.net"}
@@ -34,8 +37,14 @@ dev = [
 requires = ["setuptools>=75.0.0"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools.dynamic]
+version = {attr = "_root_version.VERSION"}
+
 [tool.setuptools.packages.find]
 where = ["src"]
+# _root_version.py is a build-time helper; setuptools only needs it on
+# sys.path during version resolution, not in the published wheel.
+exclude = ["_root_version*"]
 
 [tool.uv.sources]
 motorsports-data-notebook = { workspace = true }

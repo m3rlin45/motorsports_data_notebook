@@ -21,7 +21,10 @@ jobs:
         working-directory: inferno-driving-coach
         run: |
           cp -r ../src/motorsports_data_notebook src/
-          uv build --out-dir dist
+          # --wheel only: dynamic version (via tool.setuptools.dynamic) reads the
+          # root pyproject.toml at build time, which isn't available inside the
+          # sdist-then-wheel temp dir. Direct wheel build sees the real source tree.
+          uv build --wheel --out-dir dist
           rm -rf src/motorsports_data_notebook
 
       - name: Upload artifact
