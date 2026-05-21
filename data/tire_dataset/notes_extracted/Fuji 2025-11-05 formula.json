@@ -1,0 +1,37 @@
+{
+  "_cache_key": "bea1593b5026f6ce75647fac55a2fee0c0333394|48e2dd24ce10840e0ffb8c4742f42b2b34734ab2|claude-opus-4-7",
+  "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/Fuji 2025-11-05 formula.txt",
+  "_source_sha1": "bea1593b5026f6ce75647fac55a2fee0c0333394",
+  "_prompt_sha1": "48e2dd24ce10840e0ffb8c4742f42b2b34734ab2",
+  "_model": "claude-opus-4-7",
+  "_extracted_at": "2026-04-18T14:10:03+00:00",
+  "data": {
+    "file_date": null,
+    "track": null,
+    "car": "FS-4A",
+    "sessions": [
+      {
+        "session_index": 1,
+        "start_time_local": null,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "setup_changes": [],
+        "incidents": [],
+        "notes": "課題；　異音チェック、振動チェック、回転数チェック\nバランス\nブレーキングポイント"
+      }
+    ]
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "_cache_key": "c9fba742a7fa779a089c2d395d13dbda0fdd1aaa|48e2dd24ce10840e0ffb8c4742f42b2b34734ab2|claude-opus-4-7",
+  "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/Tsukuba KKSII 2026-04-04.txt",
+  "_source_sha1": "c9fba742a7fa779a089c2d395d13dbda0fdd1aaa",
+  "_prompt_sha1": "48e2dd24ce10840e0ffb8c4742f42b2b34734ab2",
+  "_model": "claude-opus-4-7",
+  "_extracted_at": "2026-04-18T14:11:17+00:00",
+  "data": {
+    "file_date": null,
+    "track": null,
+    "car": null,
+    "sessions": [
+      {
+        "session_index": 1,
+        "start_time_local": "12:45",
+        "weather_text": "Rain",
+        "ambient_temp_c": null,
+        "track_condition": "wet",
+        "cold_pressure_bar": {
+          "fl": 1.25,
+          "fr": 1.28,
+          "rl": 1.35,
+          "rr": 1.35
+        },
+        "tire_compound": {
+          "fl": "14c",
+          "fr": "14c",
+          "rl": "13c",
+          "rr": "13c"
+        },
+        "setup_changes": [],
+        "incidents": [],
+        "notes": ""
+      }
+    ]
+  }
+}
