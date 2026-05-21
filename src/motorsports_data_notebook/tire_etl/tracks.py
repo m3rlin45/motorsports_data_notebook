@@ -62,6 +62,22 @@ _TRACKS: dict[str, TrackInfo] = {
         lon=140.140,
         timezone="Asia/Tokyo",
     ),
+    "suzuka": TrackInfo(
+        canonical="suzuka",
+        display="Suzuka Circuit",
+        lat=34.844,
+        lon=136.537,
+        timezone="Asia/Tokyo",
+    ),
+    "minami": TrackInfo(
+        # "MINAMI" in AIM filenames — appears to be a Japanese regional course.
+        # Coordinates approximate; correct later if weather joins look off.
+        canonical="minami",
+        display="Minami (TBD)",
+        lat=36.170,
+        lon=140.218,
+        timezone="Asia/Tokyo",
+    ),
 }
 
 # Map arbitrary filename tokens (after lowercasing + stripping) to canonical IDs.
@@ -74,8 +90,13 @@ _ALIASES: dict[str, str] = {
     "fujispeedway": "fuji",
     "fujigp": "fuji",  # AIM files encode the GP layout as "Fuji GP" in the filename
     "fujishort": "fuji",
+    "fujigpsh": "fuji",  # "Fuji GP Sh" (short/shortened GP layout variant)
     "motegi": "motegi",
+    "motegieast": "motegi",
     "marutai": "marutai",
+    "suzuka": "suzuka",
+    "suzukacar": "suzuka",
+    "minami": "minami",
 }
 
 
