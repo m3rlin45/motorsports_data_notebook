@@ -1,0 +1,65 @@
+{
+  "_cache_key": "c53c068b7670fb29f93ceec2b47497732f33574f|48e2dd24ce10840e0ffb8c4742f42b2b34734ab2|claude-opus-4-7",
+  "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2024-09-21 Nakajima sodegaura.txt",
+  "_source_sha1": "c53c068b7670fb29f93ceec2b47497732f33574f",
+  "_prompt_sha1": "48e2dd24ce10840e0ffb8c4742f42b2b34734ab2",
+  "_model": "claude-opus-4-7",
+  "_extracted_at": "2026-04-18T14:03:28+00:00",
+  "data": {
+    "file_date": null,
+    "track": null,
+    "car": "Motorsoft RX8",
+    "sessions": [
+      {
+        "session_index": 1,
+        "start_time_local": "10:30",
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": 2.0,
+          "fr": 2.0,
+          "rl": 2.0,
+          "rr": 2.0
+        },
+        "tire_compound": {
+          "fl": "Nankang NS-2R Used",
+          "fr": "Nankang NS-2R Used",
+          "rl": "Nankang NS-2R Used",
+          "rr": "Nankang NS-2R Used"
+        },
+        "setup_changes": [
+          "Dropped pressures to 2.0 front / 1.8 rear after 3 laps due to slippery feeling",
+          "After 2 more laps measured hot: front 2.05, rear 1.85"
+        ],
+        "incidents": [],
+        "notes": "Cold 2.0 all round. After 3 laps all tires at 2.3 hot. Driver reports car is super slippery and scary. Dropped to 2.0 front / 1.8 rear. After 2 more laps: front 2.05, rear 1.85."
+      },
+      {
+        "session_index": 2,
+        "start_time_local": "11:30",
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": "Nankang NS-2R Used",
+          "fr": "Nankang NS-2R Used",
+          "rl": "Nankang NS-2R Used",
+          "rr": "Nankang NS-2R Used"
+        },
+        "setup_changes": [
+          "Front 2.1 -> 2.0",
+          "Rear 1.9 -> 1.8"
+        ],
+        "incidents": [],
+        "notes": "After 4 laps driver reports feeling is good, car is slow. Front 2.1 -> 2.0, Rear 1.9 -> 1.8."
+      }
+    ]
+  }
+}
