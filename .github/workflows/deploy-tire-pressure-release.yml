@@ -1,0 +1,58 @@
+name: Build and Deploy Tire Pressure Calculator Release
+
+on:
+  release:
+    types: [published]
+
+concurrency:
+  group: pages-tire-pressure-release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    uses: ./.github/workflows/build-tire-pressure-wasm.yml
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tire-pressure-wasm
+          path: site/
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.TIRE_PRESSURE_RELEASE_DEPLOY_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+      - name: Push to releases repo
+        env:
+          GIT_SSH_COMMAND: ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no
+        run: |
+          git clone --depth 1 git@github.com:m3rlin45/tire-pressure-calculator-releases.git releases
+          cd releases
+
+          # Remove old content (except git files and .github)
+          find . -mindepth 1 -maxdepth 1 ! -name '.git' ! -name '.gitattributes' ! -name '.github' -exec rm -rf {} +
+
+          # Copy new content
+          cp -r ../site/* .
+
+          # Custom-domain + Jekyll suppression markers
+          echo "tires.inferno.racing" > CNAME
+          touch .nojekyll
+
+          # Commit and push
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to deploy"
+          else
+            git commit -m "Release ${{ github.event.release.tag_name }}"
+            git push origin main
+          fi

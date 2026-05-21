@@ -2,6 +2,9 @@
   <Folder Name="/Android/">
     <Project Path="Android/TirePressureCalculator.Android.csproj" />
   </Folder>
+  <Folder Name="/Browser/">
+    <Project Path="Browser/TirePressureCalculator.Browser.csproj" />
+  </Folder>
   <Folder Name="/Core/">
     <Project Path="Core/TirePressureCalculator.Core.csproj" />
   </Folder>
