@@ -20,6 +20,13 @@ jobs:
       - name: Build wheel (bundles motorsports_data_notebook)
         working-directory: inferno-driving-coach
         run: |
+          # Single source of truth: pull the version from the root pyproject.toml,
+          # which is what bumps when we cut a release. Mirrors what
+          # Directory.Build.props does for the .NET builds.
+          VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('../pyproject.toml','rb'))['project']['version'])")
+          echo "Building inferno-driving-coach $VERSION"
+          sed -i "s/^version = .*/version = \"$VERSION\"/" pyproject.toml
+
           cp -r ../src/motorsports_data_notebook src/
           uv build --out-dir dist
           rm -rf src/motorsports_data_notebook
