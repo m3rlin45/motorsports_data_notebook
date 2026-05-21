@@ -14,9 +14,13 @@
     <!-- WASM threads need COOP/COEP response headers, which GitHub Pages can't set. -->
     <WasmEnableThreads>false</WasmEnableThreads>
 
-    <!-- Release publish: AOT cuts cold-start latency; skip for Debug to keep iteration fast. -->
-    <RunAOTCompilation Condition="'$(Configuration)' == 'Release'">true</RunAOTCompilation>
-    <WasmStripILAfterAOT Condition="'$(Configuration)' == 'Release'">true</WasmStripILAfterAOT>
+    <!-- AOT bloats the bundle by ~17 MB with no user-perceptible perf gain for a
+         UI-bound calculator that's idle 99% of the time; interpreter is fine. -->
+    <RunAOTCompilation>false</RunAOTCompilation>
+
+    <!-- Strip debug payloads from Release bundles. -->
+    <WasmEmitSymbolMap Condition="'$(Configuration)' == 'Release'">false</WasmEmitSymbolMap>
+    <DebuggerSupport Condition="'$(Configuration)' == 'Release'">false</DebuggerSupport>
 
     <!-- Overridden by CI for the preview build (subfolder deploy). -->
     <StaticWebAssetBasePath Condition="'$(StaticWebAssetBasePath)' == ''">/</StaticWebAssetBasePath>
@@ -33,5 +37,16 @@
   <ItemGroup>
     <WasmExtraFilesToDeploy Include="AppBundle\**" />
   </ItemGroup>
+
+  <!-- Source maps for JS files in the runtime are only useful for debugging the WASM
+       host itself; they ship as ~500 KB of dead weight in production. -->
+  <Target Name="StripJsSourceMapsFromAppBundle"
+          AfterTargets="WasmGenerateAppBundle"
+          Condition="'$(Configuration)' == 'Release'">
+    <ItemGroup>
+      <_TpcStripMaps Include="$(WasmAppDir)**\*.js.map" />
+    </ItemGroup>
+    <Delete Files="@(_TpcStripMaps)" />
+  </Target>
 
 </Project>
