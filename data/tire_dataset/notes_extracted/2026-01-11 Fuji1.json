@@ -1,0 +1,37 @@
+{
+  "_cache_key": "1fd96e32d1ac57e55943e334b62b1a4ed369c547|48e2dd24ce10840e0ffb8c4742f42b2b34734ab2|claude-opus-4-7",
+  "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2026-01-11 Fuji1.txt",
+  "_source_sha1": "1fd96e32d1ac57e55943e334b62b1a4ed369c547",
+  "_prompt_sha1": "48e2dd24ce10840e0ffb8c4742f42b2b34734ab2",
+  "_model": "claude-opus-4-7",
+  "_extracted_at": "2026-04-18T14:08:41+00:00",
+  "data": {
+    "file_date": null,
+    "track": null,
+    "car": null,
+    "sessions": [
+      {
+        "session_index": 1,
+        "start_time_local": null,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": 1.59,
+          "fr": 1.59,
+          "rl": 1.59,
+          "rr": 1.59
+        },
+        "tire_compound": {
+          "fl": "20",
+          "fr": "20",
+          "rl": "20",
+          "rr": "20"
+        },
+        "setup_changes": [],
+        "incidents": [],
+        "notes": "Car felt great, but I was slow"
+      }
+    ]
+  }
+}

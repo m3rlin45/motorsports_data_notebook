@@ -55,6 +55,8 @@ workspace/
 # Data files
 *.csv
 *.parquet
+# ...except the committed tire dataset
+!data/tire_dataset/**/*.parquet
 
 # JupyterLite build output
 dist/

@@ -1,0 +1,37 @@
+{
+  "_cache_key": "a3ee0c8746a6990547f4c5c82cdc9bc12dabbd74|48e2dd24ce10840e0ffb8c4742f42b2b34734ab2|claude-opus-4-7",
+  "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2026-01-05 Fuji.txt",
+  "_source_sha1": "a3ee0c8746a6990547f4c5c82cdc9bc12dabbd74",
+  "_prompt_sha1": "48e2dd24ce10840e0ffb8c4742f42b2b34734ab2",
+  "_model": "claude-opus-4-7",
+  "_extracted_at": "2026-04-18T14:08:27+00:00",
+  "data": {
+    "file_date": null,
+    "track": null,
+    "car": null,
+    "sessions": [
+      {
+        "session_index": 1,
+        "start_time_local": "09:00",
+        "weather_text": "road in shade -2c",
+        "ambient_temp_c": 2.0,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": 1.67,
+          "fr": 1.67,
+          "rl": 1.67,
+          "rr": 1.67
+        },
+        "tire_compound": {
+          "fl": "20",
+          "fr": "20",
+          "rl": "25",
+          "rr": "25"
+        },
+        "setup_changes": [],
+        "incidents": [],
+        "notes": "NS-4A. Front: 20 2/2. Rear: 25 1/1. Cold 2.13 at 11c. Hot target temp 45c, hot target press 2.0. Formula: p1/t1 * t2 = p2."
+      }
+    ]
+  }
+}

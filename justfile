@@ -39,6 +39,45 @@ run:
 
 run-clean: clean run
 
+# Tire ETL pipeline — extract per-sample telemetry into data/tire_dataset/
+tire-etl *ARGS:
+    uv run python -m motorsports_data_notebook.tire_etl.cli extract {{ARGS}}
+
+# Parse run-notes into structured JSON via `claude -p`
+tire-notes *ARGS:
+    uv run python -m motorsports_data_notebook.tire_etl.cli enrich-notes {{ARGS}}
+
+# Fetch historical weather for sessions
+tire-weather *ARGS:
+    uv run python -m motorsports_data_notebook.tire_etl.cli enrich-weather {{ARGS}}
+
+# Ad-hoc SQL query over the dataset via DuckDB
+tire-query SQL:
+    uv run python -m motorsports_data_notebook.tire_etl.cli query "{{SQL}}"
+
+# Run all three phases in order (full refresh)
+tire-refresh: tire-etl tire-notes tire-weather
+
+# Detect candidate broken TPMS sensors (low-variance channels) for human review
+tire-sensor-audit *ARGS:
+    uv run python -m motorsports_data_notebook.tire_model.cli audit-sensors {{ARGS}}
+
+# Fit the energy-balance tire warmup model from the committed dataset
+tire-build-warmup-table *ARGS:
+    uv run python -m motorsports_data_notebook.tire_model.cli build-warmup-table {{ARGS}}
+
+# Predict per-corner cold pressures (see `tire-predict --help`)
+tire-predict *ARGS:
+    uv run python -m motorsports_data_notebook.tire_model.cli predict {{ARGS}}
+
+# Per-corner MAE report vs. notes-recorded cold pressures (uses production model)
+tire-predict-validate *ARGS:
+    uv run python -m motorsports_data_notebook.tire_model.cli validate {{ARGS}}
+
+# Held-out validation: train without N sessions, predict per-lap T_hot, report residuals
+tire-predict-holdout *ARGS:
+    uv run python -m motorsports_data_notebook.tire_model.cli holdout {{ARGS}}
+
 # Emscripten SDK setup (one-time, needed for building libxrk Pyodide wheel)
 setup-emsdk:
     #!/usr/bin/env bash

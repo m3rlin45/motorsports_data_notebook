@@ -1,0 +1,93 @@
+{
+  "_cache_key": "ff1324edff6068f3f69eb99f1d09628e4bdecd06|48e2dd24ce10840e0ffb8c4742f42b2b34734ab2|claude-opus-4-7",
+  "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2025-05-05 Sodegaura.txt",
+  "_source_sha1": "ff1324edff6068f3f69eb99f1d09628e4bdecd06",
+  "_prompt_sha1": "48e2dd24ce10840e0ffb8c4742f42b2b34734ab2",
+  "_model": "claude-opus-4-7",
+  "_extracted_at": "2026-04-18T14:03:47+00:00",
+  "data": {
+    "file_date": null,
+    "track": null,
+    "car": null,
+    "sessions": [
+      {
+        "session_index": 1,
+        "start_time_local": "09:30",
+        "weather_text": "20.3c 41%",
+        "ambient_temp_c": 20.3,
+        "track_condition": "dry",
+        "cold_pressure_bar": {
+          "fl": 1.75,
+          "fr": 1.75,
+          "rl": 1.75,
+          "rr": 1.75
+        },
+        "tire_compound": {
+          "fl": "silver",
+          "fr": "silver",
+          "rl": "black",
+          "rr": "black"
+        },
+        "setup_changes": [
+          "Front Dampers: 27",
+          "Rear Dampers: 25",
+          "No TC this run"
+        ],
+        "incidents": [],
+        "notes": "Front tires silver, most worn. Rear tires black, less worn than front. Hot pressures: all 2.2. Tires overheated and got too much over and understeer part way through. Later braking for T1 is super powerful, but it also risks spins."
+      },
+      {
+        "session_index": 2,
+        "start_time_local": "10:30",
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "dry",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "setup_changes": [
+          "TC on"
+        ],
+        "incidents": [],
+        "notes": "Hot pressures: 2.1. Tons of TC interventions, especially on corner exit. Maybe I should be more careful there."
+      },
+      {
+        "session_index": 3,
+        "start_time_local": "11:30",
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "dry",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "setup_changes": [
+          "Front Dampers 27",
+          "Rear Dampers 23",
+          "TC track"
+        ],
+        "incidents": [
+          "Lots of sliding, lots of judder from front under braking"
+        ],
+        "notes": "Tires same. Lots of sliding, lots of judder from front under braking."
+      }
+    ]
+  }
+}
