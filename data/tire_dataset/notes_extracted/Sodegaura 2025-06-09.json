@@ -1,0 +1,90 @@
+{
+  "_cache_key": "63c0a02104d3342f19cd58f418091f87f88bc5fc|48e2dd24ce10840e0ffb8c4742f42b2b34734ab2|claude-opus-4-7",
+  "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/Sodegaura 2025-06-09.txt",
+  "_source_sha1": "63c0a02104d3342f19cd58f418091f87f88bc5fc",
+  "_prompt_sha1": "48e2dd24ce10840e0ffb8c4742f42b2b34734ab2",
+  "_model": "claude-opus-4-7",
+  "_extracted_at": "2026-04-18T14:10:38+00:00",
+  "data": {
+    "file_date": null,
+    "track": null,
+    "car": null,
+    "sessions": [
+      {
+        "session_index": 1,
+        "start_time_local": "09:30",
+        "weather_text": "23.7c 62%",
+        "ambient_temp_c": 23.7,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": 1.65,
+          "fr": 1.65,
+          "rl": 1.75,
+          "rr": 1.75
+        },
+        "tire_compound": {
+          "fl": "RE-71 RS",
+          "fr": "RE-71 RS",
+          "rl": "RE-71 RS",
+          "rr": "RE-71 RS"
+        },
+        "setup_changes": [
+          "Dampers F27 R25"
+        ],
+        "incidents": [
+          "Spin during session"
+        ],
+        "notes": "Front tires lightly used, rear nearly new. Cold pressures set at 27c tire temp. After a few laps hot pressures: FR 1.9, FL 2.0, RR/RL 2.0. Front camber temps look good with 5c spread. Rear camber temps extreme, +10c on inside. After spin: RL 2.2 and 80c, RR 2.1 57c. FR 2.0 (60/64/66 OMI), FL 2.1 (70/64/63 OMI)."
+      },
+      {
+        "session_index": 2,
+        "start_time_local": "10:30",
+        "weather_text": "23.5c 68%",
+        "ambient_temp_c": 23.5,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": 1.75,
+          "fr": 1.75,
+          "rl": 1.78,
+          "rr": 1.8
+        },
+        "tire_compound": {
+          "fl": "A052",
+          "fr": "A052",
+          "rl": "A052",
+          "rr": "A052"
+        },
+        "setup_changes": [
+          "Dampers F27 R25",
+          "A052 Sticker tires all around"
+        ],
+        "incidents": [],
+        "notes": "Hot pressure bleed-downs: FL 2.2->2.0 (78 outside, 63 inside), FR 2.15->2.0 (72 outside, 65 inside), RR 2.1->2.0 (too much camber), RL 2.2->2.0 (too much camber)."
+      },
+      {
+        "session_index": 3,
+        "start_time_local": "11:30",
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": 1.85,
+          "fr": 1.85,
+          "rl": 1.9,
+          "rr": 1.85
+        },
+        "tire_compound": {
+          "fl": "A052",
+          "fr": "A052",
+          "rl": "A052",
+          "rr": "A052"
+        },
+        "setup_changes": [
+          "VSC cut"
+        ],
+        "incidents": [],
+        "notes": "Same as previous run but with VSC cut. Reference cold temps on RE-71RS: rear 1.75, front 1.65/1.68. A052 cold pressures set at 33c tire temp: FR 1.85, FL 1.85, RR 1.85, RL 1.9."
+      }
+    ]
+  }
+}

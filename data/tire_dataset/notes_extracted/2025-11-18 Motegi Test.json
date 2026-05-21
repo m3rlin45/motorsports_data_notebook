@@ -1,0 +1,37 @@
+{
+  "_cache_key": "3fbdaab354c1d35801bd6bb769f90677558a9ba7|48e2dd24ce10840e0ffb8c4742f42b2b34734ab2|claude-opus-4-7",
+  "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2025-11-18 Motegi Test.txt",
+  "_source_sha1": "3fbdaab354c1d35801bd6bb769f90677558a9ba7",
+  "_prompt_sha1": "48e2dd24ce10840e0ffb8c4742f42b2b34734ab2",
+  "_model": "claude-opus-4-7",
+  "_extracted_at": "2026-04-18T14:06:58+00:00",
+  "data": {
+    "file_date": null,
+    "track": null,
+    "car": null,
+    "sessions": [
+      {
+        "session_index": 1,
+        "start_time_local": null,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": 1.034214,
+          "fr": 1.034214,
+          "rl": 1.378952,
+          "rr": 1.378952
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "setup_changes": [],
+        "incidents": [],
+        "notes": "Rear 20, 1/1. Front 15, 2/2. Balance was ok, but a little tail happy, seems like too much camber on rear. Maybe try 2/2 next time. Front camber was awesome, this seems like a good start."
+      }
+    ]
+  }
+}
