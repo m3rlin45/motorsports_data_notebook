@@ -135,6 +135,16 @@ def main(argv: list[str] | None = None) -> int:
         default=10,
         help="Only hold out from buckets with at least this many sessions.",
     )
+    p_holdout.add_argument(
+        "--n-folds",
+        type=int,
+        default=1,
+        help=(
+            "K-fold CV: sweep disjoint n-per-bucket slices through every "
+            "bucket and aggregate residuals across all folds. Default 1 "
+            "(single deterministic holdout, legacy behavior)."
+        ),
+    )
 
     args = parser.parse_args(argv)
 
@@ -275,6 +285,7 @@ def _cmd_holdout(args: argparse.Namespace) -> int:
         dataset_root=args.dataset_root,
         n_per_bucket=args.n_per_bucket,
         min_bucket_size=args.min_bucket_size,
+        n_folds=args.n_folds,
     )
 
 
