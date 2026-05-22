@@ -1,0 +1,85 @@
+{
+  "_cache_key": "0b0065fcf84a303f34f5df6e2de356bcf4ae1a57|48e2dd24ce10840e0ffb8c4742f42b2b34734ab2|claude-opus-4-7",
+  "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2025-10-25-Tsukuba.txt",
+  "_source_sha1": "0b0065fcf84a303f34f5df6e2de356bcf4ae1a57",
+  "_prompt_sha1": "48e2dd24ce10840e0ffb8c4742f42b2b34734ab2",
+  "_model": "claude-opus-4-7",
+  "_extracted_at": "2026-04-18T14:06:09+00:00",
+  "data": {
+    "file_date": null,
+    "track": null,
+    "car": null,
+    "sessions": [
+      {
+        "session_index": 1,
+        "start_time_local": "08:00",
+        "weather_text": "cold, active rain (30%)",
+        "ambient_temp_c": 16.0,
+        "track_condition": "wet",
+        "cold_pressure_bar": {
+          "fl": 1.85,
+          "fr": 1.85,
+          "rl": 1.85,
+          "rr": 1.85
+        },
+        "tire_compound": {
+          "fl": "22",
+          "fr": "22",
+          "rl": "34",
+          "rr": "34"
+        },
+        "setup_changes": [],
+        "incidents": [],
+        "notes": "Tires A052 Good. All 5. Lots of oversteer on corner exit. Good braking, good turn in."
+      },
+      {
+        "session_index": 2,
+        "start_time_local": "10:10",
+        "weather_text": "cold, drying",
+        "ambient_temp_c": 16.0,
+        "track_condition": "damp",
+        "cold_pressure_bar": {
+          "fl": 2.2,
+          "fr": 2.2,
+          "rl": 2.2,
+          "rr": 2.2
+        },
+        "tire_compound": {
+          "fl": "22",
+          "fr": "22",
+          "rl": "33",
+          "rr": "33"
+        },
+        "setup_changes": [],
+        "incidents": [
+          "spun at 2nd hairpin"
+        ],
+        "notes": "Tires A052 mediocre. All 5. Really good balance, spun at 2nd hairpin, that's sketchy. Histograms say more rear damper."
+      },
+      {
+        "session_index": 3,
+        "start_time_local": "11:00",
+        "weather_text": "drying",
+        "ambient_temp_c": null,
+        "track_condition": "damp",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": "15",
+          "fr": "15",
+          "rl": "20",
+          "rr": "20"
+        },
+        "setup_changes": [
+          "Drop FL by 0.2, all else by 0.1"
+        ],
+        "incidents": [],
+        "notes": "Nothing else changed. This felt awesome, this is the best setup for damp so far."
+      }
+    ]
+  }
+}
