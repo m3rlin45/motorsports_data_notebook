@@ -16,4 +16,14 @@
     <InternalsVisibleTo Include="TirePressureCalculator.Tests" />
   </ItemGroup>
 
+  <!--
+    Bundle the fitted tire model artifact directly from the repo dataset.
+    Refit (`just tire-build-warmup-table`) + rebuild (`dotnet build`) =
+    updated app. The LogicalName fixes the resource key regardless of the
+    source path, so loader code just asks for "tire_model.json".
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\data\tire_dataset\tire_model.json" LogicalName="tire_model.json" />
+  </ItemGroup>
+
 </Project>
