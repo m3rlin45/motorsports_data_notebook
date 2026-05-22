@@ -1,0 +1,14 @@
+# Per-(session_id, corner) TPMS channels to exclude from tire-model training.
+#
+# Run `just tire-sensor-audit` to surface candidates. Each entry is a
+# (session, corner) pair where the TPMS channel was stuck/broken so the
+# warmup-curve fit shouldn't see it. Only the listed corner is masked —
+# the rest of the session's corners still contribute to training.
+#
+# Format:
+#   entries:
+#     - session_id: <full-session-id>
+#       corner: fl | fr | rl | rr
+#       reason: "<short human-readable explanation>"
+
+entries: []
