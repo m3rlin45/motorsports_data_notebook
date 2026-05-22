@@ -43,4 +43,22 @@ def test_known_canonicals_covers_expected() -> None:
         "fuji",
         "motegi",
         "marutai",
+        "suzuka",
+        "minami",
     }
+
+
+def test_suzuka_and_layout_aliases() -> None:
+    assert normalize_track_name("Suzuka") == "suzuka"
+    assert normalize_track_name("Suzuka Car") == "suzuka"
+
+
+def test_motegi_east_collapses_to_motegi() -> None:
+    """Motegi East is a layout of the same venue as Motegi; lat/lon identical."""
+    assert normalize_track_name("Motegi East") == "motegi"
+    assert normalize_track_name("Motegi") == "motegi"
+
+
+def test_fuji_gp_sh_alias() -> None:
+    """Fuji GP Sh is the shortened GP layout; same venue as fuji."""
+    assert normalize_track_name("Fuji GP Sh") == "fuji"
