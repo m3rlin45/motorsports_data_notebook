@@ -7,14 +7,49 @@ sessions for one telemetry session) receive a lower ``match_confidence``.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
-from datetime import date as _date, datetime, timedelta, timezone
+from datetime import date as _date, datetime, timezone
 from pathlib import Path
 
 import pyarrow as pa
 
 from .notes_parser import NoteSession, ParsedNotes
-from .tracks import get_track, normalize_track_name
+from .tracks import get_track, known_canonicals, normalize_track_name
+
+_FILENAME_DATE_RE = re.compile(r"(?P<y>\d{4})-(?P<m>\d{1,2})-(?P<d>\d{1,2})")
+
+
+def infer_date_track_from_filename(path: Path) -> tuple[_date | None, str | None]:
+    """Best-effort recovery of (date, track_canonical) from a notes filename.
+
+    The LLM can't always find a date in the body of a notes file when it's
+    only present in the filename (e.g. ``2026-04-04 Tsukuba.txt``). This
+    helper fills that gap so matching still works.
+    """
+    stem = path.stem
+    d: _date | None = None
+    m = _FILENAME_DATE_RE.search(stem)
+    if m:
+        try:
+            d = _date(int(m.group("y")), int(m.group("m")), int(m.group("d")))
+        except ValueError:
+            d = None
+    lower = stem.lower()
+    track: str | None = None
+    for canonical in known_canonicals():
+        # Strip the suffix ("_2000" etc.) and match the leading token.
+        head = canonical.split("_")[0]
+        if head in lower:
+            track = canonical
+            break
+    # Alias check (e.g. "kksii" doesn't map to a track token directly).
+    if track is None:
+        for tok in ("tsukuba", "sodegaura", "fuji", "motegi", "marutai"):
+            if tok in lower:
+                track = normalize_track_name(tok)
+                break
+    return d, track
 
 
 @dataclass(frozen=True)
@@ -75,13 +110,19 @@ def match_notes_to_sessions(
     note_entries: list[tuple[_date, str | None, ParsedNotes, NoteSession]] = []
     for pn in parsed_notes:
         file_date = pn.data.file_date
-        # Fall back to filename date embedded by the source (not available here);
-        # we rely on file_date being filled by the LLM.
         try:
             d = datetime.strptime(file_date, "%Y-%m-%d").date() if file_date else None
         except ValueError:
             d = None
         note_track_can = normalize_track_name(pn.data.track or "")
+        # Fall back to the notes filename for date/track when the LLM didn't
+        # extract them from the body.
+        if d is None or note_track_can is None:
+            fb_date, fb_track = infer_date_track_from_filename(pn.source_file)
+            if d is None:
+                d = fb_date
+            if note_track_can is None:
+                note_track_can = fb_track
         if d is None:
             continue
         for ns in pn.data.sessions:
