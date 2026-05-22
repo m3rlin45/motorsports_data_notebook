@@ -795,7 +795,6 @@ wheels = [
 
 [[package]]
 name = "inferno-analyzer"
-version = "0.1.0"
 source = { editable = "desktop_app" }
 dependencies = [
     { name = "customtkinter" },
@@ -845,7 +844,6 @@ dev = [
 
 [[package]]
 name = "inferno-driving-coach"
-version = "0.14.0"
 source = { editable = "inferno-driving-coach" }
 dependencies = [
     { name = "ipywidgets" },
@@ -1560,7 +1558,7 @@ wheels = [
 
 [[package]]
 name = "motorsports-data-notebook"
-version = "0.14.0"
+version = "0.15.0"
 source = { editable = "." }
 dependencies = [
     { name = "ipywidgets" },
