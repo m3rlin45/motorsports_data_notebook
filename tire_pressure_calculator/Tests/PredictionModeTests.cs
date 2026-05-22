@@ -116,9 +116,9 @@ public class PredictionModeTests
         Assert.True(vm.TireModelAvailable);
         Assert.Contains("tsukuba_2000", vm.AvailableTracks);
         Assert.Contains("KK-SII", vm.AvailableCars);
-        Assert.Contains("dry", vm.AvailableConditions);
-        Assert.Contains("damp", vm.AvailableConditions);
-        Assert.Contains("wet", vm.AvailableConditions);
+        Assert.Contains(vm.AvailableConditions, o => o.Value == "dry");
+        Assert.Contains(vm.AvailableConditions, o => o.Value == "damp");
+        Assert.Contains(vm.AvailableConditions, o => o.Value == "wet");
     }
 
     [Fact]
