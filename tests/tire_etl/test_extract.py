@@ -11,7 +11,17 @@ import numpy as np
 import pyarrow as pa
 import pytest
 
-from motorsports_data_notebook.tire_etl.extract import _rename_to_canonical
+from datetime import datetime, timezone
+
+from motorsports_data_notebook.tire_etl.extract import (
+    _extract_session_datetime_utc,
+    _rename_to_canonical,
+)
+
+
+class _FakeLog:
+    def __init__(self, metadata: dict) -> None:
+        self.metadata = metadata
 
 
 def test_rename_converts_aim_names_to_canonical() -> None:
@@ -86,3 +96,29 @@ def test_rename_noop_when_profile_has_no_matches() -> None:
     ts = pa.table({"something_else": pa.array([1.0, 2.0])})
     out = _rename_to_canonical(ts, profile_names=profile)
     assert out.schema.names == ["something_else"]
+
+
+def test_session_time_from_aim_log_date_and_log_time() -> None:
+    """AIM's `Log Date` (MM/DD/YYYY) + `Log Time` must be parsed and converted
+    from track-local tz to UTC. Real AIM fleet data uses these keys; the old
+    fallback (midnight local) was dropping within-day resolution and causing
+    weather joins to land on the wrong hour (e.g. missing rain)."""
+    log = _FakeLog({"Log Date": "04/04/2026", "Log Time": "12:57:49"})
+    dt = _extract_session_datetime_utc(log, "2026-04-04", "tsukuba_2000")
+    # 12:57:49 JST = 03:57:49 UTC
+    assert dt == datetime(2026, 4, 4, 3, 57, 49, tzinfo=timezone.utc)
+
+
+def test_session_time_from_aim_log_date_unambiguous_month_day() -> None:
+    """MM/DD vs DD/MM was resolved empirically against a 04/17 file — 04/17 is
+    only valid as MM/DD, so we must parse that format."""
+    log = _FakeLog({"Log Date": "04/17/2026", "Log Time": "12:23:55"})
+    dt = _extract_session_datetime_utc(log, "2026-04-17", "tsukuba_2000")
+    assert dt == datetime(2026, 4, 17, 3, 23, 55, tzinfo=timezone.utc)
+
+
+def test_session_time_falls_back_to_midnight_local_when_metadata_missing() -> None:
+    log = _FakeLog({})
+    dt = _extract_session_datetime_utc(log, "2026-04-04", "tsukuba_2000")
+    # Midnight JST = 15:00 UTC previous day
+    assert dt == datetime(2026, 4, 3, 15, 0, 0, tzinfo=timezone.utc)
