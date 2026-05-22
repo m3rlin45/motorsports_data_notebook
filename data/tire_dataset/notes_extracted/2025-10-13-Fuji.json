@@ -1,0 +1,111 @@
+{
+  "_cache_key": "7083888e29a7ef882960724ad8726b5b0abdac19|48e2dd24ce10840e0ffb8c4742f42b2b34734ab2|claude-opus-4-7",
+  "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2025-10-13-Fuji.txt",
+  "_source_sha1": "7083888e29a7ef882960724ad8726b5b0abdac19",
+  "_prompt_sha1": "48e2dd24ce10840e0ffb8c4742f42b2b34734ab2",
+  "_model": "claude-opus-4-7",
+  "_extracted_at": "2026-04-18T14:05:17+00:00",
+  "data": {
+    "file_date": null,
+    "track": null,
+    "car": null,
+    "sessions": [
+      {
+        "session_index": 1,
+        "start_time_local": "08:50",
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": 1.75,
+          "fr": 1.75,
+          "rl": 1.75,
+          "rr": 1.75
+        },
+        "tire_compound": {
+          "fl": "15",
+          "fr": "15",
+          "rl": "20",
+          "rr": "20"
+        },
+        "setup_changes": [
+          "Front 2/2",
+          "Rear 3/4"
+        ],
+        "incidents": [],
+        "notes": "NS-4 A. Tires: 71RS 30% used (center rib is screwed though)."
+      },
+      {
+        "session_index": 2,
+        "start_time_local": "10:10",
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": 1.95,
+          "fr": 1.95,
+          "rl": 1.95,
+          "rr": 1.95
+        },
+        "tire_compound": {
+          "fl": "15",
+          "fr": "15",
+          "rl": "20",
+          "rr": "20"
+        },
+        "setup_changes": [
+          "Tires dropped all: 2.1 -> 1.95",
+          "no other changes"
+        ],
+        "incidents": [],
+        "notes": "NS-4 B. Analysis: Rear drops on straight, front rises more rake?"
+      },
+      {
+        "session_index": 3,
+        "start_time_local": "11:00",
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": 1.95,
+          "fr": 1.95,
+          "rl": 1.95,
+          "rr": 1.95
+        },
+        "tire_compound": {
+          "fl": "15",
+          "fr": "15",
+          "rl": "20",
+          "rr": "20"
+        },
+        "setup_changes": [],
+        "incidents": [],
+        "notes": "S-4. No changes."
+      },
+      {
+        "session_index": 4,
+        "start_time_local": "11:40",
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": 1.95,
+          "fr": 1.95,
+          "rl": 1.95,
+          "rr": 1.95
+        },
+        "tire_compound": {
+          "fl": "15",
+          "fr": "15",
+          "rl": "20",
+          "rr": "20"
+        },
+        "setup_changes": [
+          "Front 2/2 (was it 3/3 the whole time?)"
+        ],
+        "incidents": [],
+        "notes": "NS-4. Better turn-in!"
+      }
+    ]
+  }
+}

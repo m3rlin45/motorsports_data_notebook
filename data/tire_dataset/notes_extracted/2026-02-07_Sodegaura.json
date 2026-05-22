@@ -1,0 +1,85 @@
+{
+  "_cache_key": "2d36860b78dc837bb9393917f2bc35b31bbe29df|48e2dd24ce10840e0ffb8c4742f42b2b34734ab2|claude-opus-4-7",
+  "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2026-02-07_Sodegaura.txt",
+  "_source_sha1": "2d36860b78dc837bb9393917f2bc35b31bbe29df",
+  "_prompt_sha1": "48e2dd24ce10840e0ffb8c4742f42b2b34734ab2",
+  "_model": "claude-opus-4-7",
+  "_extracted_at": "2026-04-18T14:09:14+00:00",
+  "data": {
+    "file_date": null,
+    "track": null,
+    "car": null,
+    "sessions": [
+      {
+        "session_index": 1,
+        "start_time_local": "09:30",
+        "weather_text": "snow flurry 4c",
+        "ambient_temp_c": 4.0,
+        "track_condition": "snow",
+        "cold_pressure_bar": {
+          "fl": 1.75,
+          "fr": 1.75,
+          "rl": 1.75,
+          "rr": 1.75
+        },
+        "tire_compound": {
+          "fl": "22",
+          "fr": "22",
+          "rl": "21",
+          "rr": "21"
+        },
+        "setup_changes": [
+          "brakes brand new, need to bed in"
+        ],
+        "incidents": [],
+        "notes": "A bit slippery, but not terrible Balance was ok"
+      },
+      {
+        "session_index": 2,
+        "start_time_local": "10:30",
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": 1.6547,
+          "fr": 1.5858,
+          "rl": 1.4479,
+          "rr": 1.379
+        },
+        "tire_compound": {
+          "fl": "22",
+          "fr": "22",
+          "rl": "21",
+          "rr": "21"
+        },
+        "setup_changes": [],
+        "incidents": [],
+        "notes": "Keep tires as is"
+      },
+      {
+        "session_index": 3,
+        "start_time_local": "11:30",
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": 1.7,
+          "fr": 1.7,
+          "rl": 1.7,
+          "rr": 1.7
+        },
+        "tire_compound": {
+          "fl": "Silver-blue",
+          "fr": "Silver-blue",
+          "rl": "Silver-blue",
+          "rr": "Silver-blue"
+        },
+        "setup_changes": [],
+        "incidents": [
+          "Crashed on out lap"
+        ],
+        "notes": ""
+      }
+    ]
+  }
+}
