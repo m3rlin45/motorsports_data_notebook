@@ -1,0 +1,298 @@
+[
+  {
+    "label": "tsukuba_KKSII_dry_lap5",
+    "inputs": {
+      "track": "tsukuba_2000",
+      "car": "KK-SII",
+      "lap_within_stint": 5,
+      "track_condition": "dry",
+      "ambient_temp_c": 18.0,
+      "target_hot_pressure_bar": 1.7
+    },
+    "corners": {
+      "fl": {
+        "cold_pressure_bar": 1.4970642148503628,
+        "predicted_hot_temp_c": 41.661687791179894,
+        "K_source_bucket": [
+          "KK-SII",
+          "fl",
+          "dry"
+        ]
+      },
+      "fr": {
+        "cold_pressure_bar": 1.5293622025672535,
+        "predicted_hot_temp_c": 37.64178743246765,
+        "K_source_bucket": [
+          "KK-SII",
+          "fr",
+          "dry"
+        ]
+      },
+      "rl": {
+        "cold_pressure_bar": 1.5219536431724743,
+        "predicted_hot_temp_c": 38.55477781309439,
+        "K_source_bucket": [
+          "KK-SII",
+          "rl",
+          "dry"
+        ]
+      },
+      "rr": {
+        "cold_pressure_bar": 1.518356544613408,
+        "predicted_hot_temp_c": 39.00000182616114,
+        "K_source_bucket": [
+          "KK-SII",
+          "rr",
+          "dry"
+        ]
+      }
+    }
+  },
+  {
+    "label": "tsukuba_KKSII_dry_lap10_cold15",
+    "inputs": {
+      "track": "tsukuba_2000",
+      "car": "KK-SII",
+      "lap_within_stint": 10,
+      "track_condition": "dry",
+      "ambient_temp_c": 15.0,
+      "cloud_cover_pct": 100.0,
+      "target_hot_pressure_bar": 1.7
+    },
+    "corners": {
+      "fl": {
+        "cold_pressure_bar": 1.4529259249261464,
+        "predicted_hot_temp_c": 44.02427423880505,
+        "K_source_bucket": [
+          "KK-SII",
+          "fl",
+          "dry"
+        ]
+      },
+      "fr": {
+        "cold_pressure_bar": 1.4975935151829258,
+        "predicted_hot_temp_c": 38.35184978880298,
+        "K_source_bucket": [
+          "KK-SII",
+          "fr",
+          "dry"
+        ]
+      },
+      "rl": {
+        "cold_pressure_bar": 1.4814735874133604,
+        "predicted_hot_temp_c": 40.375400369454375,
+        "K_source_bucket": [
+          "KK-SII",
+          "rl",
+          "dry"
+        ]
+      },
+      "rr": {
+        "cold_pressure_bar": 1.4721539002328958,
+        "predicted_hot_temp_c": 41.55734889389615,
+        "K_source_bucket": [
+          "KK-SII",
+          "rr",
+          "dry"
+        ]
+      }
+    }
+  },
+  {
+    "label": "tsukuba_KKSII_damp_lap10",
+    "inputs": {
+      "track": "tsukuba_2000",
+      "car": "KK-SII",
+      "lap_within_stint": 10,
+      "track_condition": "damp",
+      "ambient_temp_c": 15.0,
+      "target_hot_pressure_bar": 1.7
+    },
+    "corners": {
+      "fl": {
+        "cold_pressure_bar": 1.5142319003376237,
+        "predicted_hot_temp_c": 36.29042985673898,
+        "K_source_bucket": [
+          "KK-SII",
+          "fl",
+          "damp"
+        ]
+      },
+      "fr": {
+        "cold_pressure_bar": 1.5557861037831082,
+        "predicted_hot_temp_c": 31.259276992463032,
+        "K_source_bucket": [
+          "KK-SII",
+          "fr",
+          "damp"
+        ]
+      },
+      "rl": {
+        "cold_pressure_bar": 1.5661713557506167,
+        "predicted_hot_temp_c": 30.02733780970762,
+        "K_source_bucket": [
+          "KK-SII",
+          "rl",
+          "damp"
+        ]
+      },
+      "rr": {
+        "cold_pressure_bar": 1.55594567674096,
+        "predicted_hot_temp_c": 31.240272093740295,
+        "K_source_bucket": [
+          "KK-SII",
+          "rr",
+          "damp"
+        ]
+      }
+    }
+  },
+  {
+    "label": "tsukuba_KKSII_wet_falls_back",
+    "inputs": {
+      "track": "tsukuba_2000",
+      "car": "KK-SII",
+      "lap_within_stint": 10,
+      "track_condition": "wet",
+      "ambient_temp_c": 15.0,
+      "target_hot_pressure_bar": 1.7
+    },
+    "corners": {
+      "fl": {
+        "cold_pressure_bar": 1.5142319003376237,
+        "predicted_hot_temp_c": 36.29042985673898,
+        "K_source_bucket": [
+          "KK-SII",
+          "fl",
+          "damp"
+        ]
+      },
+      "fr": {
+        "cold_pressure_bar": 1.5557861037831082,
+        "predicted_hot_temp_c": 31.259276992463032,
+        "K_source_bucket": [
+          "KK-SII",
+          "fr",
+          "damp"
+        ]
+      },
+      "rl": {
+        "cold_pressure_bar": 1.5661713557506167,
+        "predicted_hot_temp_c": 30.02733780970762,
+        "K_source_bucket": [
+          "KK-SII",
+          "rl",
+          "damp"
+        ]
+      },
+      "rr": {
+        "cold_pressure_bar": 1.55594567674096,
+        "predicted_hot_temp_c": 31.240272093740295,
+        "K_source_bucket": [
+          "KK-SII",
+          "rr",
+          "damp"
+        ]
+      }
+    }
+  },
+  {
+    "label": "sodegaura_Inferno_dry_lap5",
+    "inputs": {
+      "track": "sodegaura",
+      "car": "Inferno 86",
+      "lap_within_stint": 5,
+      "track_condition": "dry",
+      "ambient_temp_c": 22.0,
+      "target_hot_pressure_bar": 1.7
+    },
+    "corners": {
+      "fl": {
+        "cold_pressure_bar": 1.4263693850389512,
+        "predicted_hot_temp_c": 55.28515291354006,
+        "K_source_bucket": [
+          "Inferno 86",
+          "fl",
+          "dry"
+        ]
+      },
+      "fr": {
+        "cold_pressure_bar": 1.4500953054700179,
+        "predicted_hot_temp_c": 52.104694468762496,
+        "K_source_bucket": [
+          "Inferno 86",
+          "fr",
+          "dry"
+        ]
+      },
+      "rl": {
+        "cold_pressure_bar": 1.4798957136777493,
+        "predicted_hot_temp_c": 48.19617419785339,
+        "K_source_bucket": [
+          "Inferno 86",
+          "rl",
+          "dry"
+        ]
+      },
+      "rr": {
+        "cold_pressure_bar": 1.492408328025241,
+        "predicted_hot_temp_c": 46.58292298834337,
+        "K_source_bucket": [
+          "Inferno 86",
+          "rr",
+          "dry"
+        ]
+      }
+    }
+  },
+  {
+    "label": "tsukuba_KKSII_warmtire",
+    "inputs": {
+      "track": "tsukuba_2000",
+      "car": "KK-SII",
+      "lap_within_stint": 10,
+      "track_condition": "dry",
+      "ambient_temp_c": 15.0,
+      "cold_tire_temp_c": 22.0,
+      "target_hot_pressure_bar": 1.7
+    },
+    "corners": {
+      "fl": {
+        "cold_pressure_bar": 1.5125146164912442,
+        "predicted_hot_temp_c": 44.02427423880505,
+        "K_source_bucket": [
+          "KK-SII",
+          "fl",
+          "dry"
+        ]
+      },
+      "fr": {
+        "cold_pressure_bar": 1.5582673121854609,
+        "predicted_hot_temp_c": 38.35184978880298,
+        "K_source_bucket": [
+          "KK-SII",
+          "fr",
+          "dry"
+        ]
+      },
+      "rl": {
+        "cold_pressure_bar": 1.5417557845741916,
+        "predicted_hot_temp_c": 40.375400369454375,
+        "K_source_bucket": [
+          "KK-SII",
+          "rl",
+          "dry"
+        ]
+      },
+      "rr": {
+        "cold_pressure_bar": 1.5322096951370443,
+        "predicted_hot_temp_c": 41.55734889389615,
+        "K_source_bucket": [
+          "KK-SII",
+          "rr",
+          "dry"
+        ]
+      }
+    }
+  }
+]
