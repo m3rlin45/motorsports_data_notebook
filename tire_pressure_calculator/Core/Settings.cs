@@ -18,6 +18,23 @@ public interface ISettingsStorage
     void Write(string contents);
 }
 
+public enum AppMode
+{
+    Manual = 0,
+    CircuitPrediction = 1,
+}
+
+public class PredictionSettings
+{
+    public string? Track { get; set; }
+    public string? Car { get; set; }
+    public string Condition { get; set; } = "dry";
+    public int LapWithinStint { get; set; } = 5;
+    public double AmbientTempC { get; set; } = 20.0;
+    public double? TrackTempC { get; set; }
+    public double? CloudCoverPct { get; set; }
+}
+
 public class AppSettings
 {
     public CornerSettings FrontLeft { get; set; } = new();
@@ -25,6 +42,8 @@ public class AppSettings
     public CornerSettings RearLeft { get; set; } = new();
     public CornerSettings RearRight { get; set; } = new();
     public double TempAdjustPercent { get; set; }
+    public AppMode Mode { get; set; } = AppMode.Manual;
+    public PredictionSettings Prediction { get; set; } = new();
 
     public static ISettingsStorage Storage { get; set; } = new FileSettingsStorage();
 
