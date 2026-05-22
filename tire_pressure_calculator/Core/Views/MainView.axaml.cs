@@ -51,6 +51,33 @@ public partial class MainView : UserControl
     public static readonly DirectProperty<MainView, bool> IsMediumProperty =
         AvaloniaProperty.RegisterDirect<MainView, bool>(nameof(IsMedium), o => o.IsMedium);
 
+    // Mode proxy properties — let the compiled CornerTemplate bindings reach the
+    // VM via the existing `AncestorType=views:MainView` pattern that
+    // IsMedium/IsWide/IsNarrow already use. Kept in sync with DataContext.Mode
+    // through DataContextChanged + the VM's PropertyChanged.
+    public static readonly DirectProperty<MainView, bool> IsManualModeProperty =
+        AvaloniaProperty.RegisterDirect<MainView, bool>(
+            nameof(IsManualMode), o => o.IsManualMode);
+
+    public static readonly DirectProperty<MainView, bool> IsPredictionModeProperty =
+        AvaloniaProperty.RegisterDirect<MainView, bool>(
+            nameof(IsPredictionMode), o => o.IsPredictionMode);
+
+    private bool _isManualMode = true;
+    private bool _isPredictionMode;
+
+    public bool IsManualMode
+    {
+        get => _isManualMode;
+        private set => SetAndRaise(IsManualModeProperty, ref _isManualMode, value);
+    }
+
+    public bool IsPredictionMode
+    {
+        get => _isPredictionMode;
+        private set => SetAndRaise(IsPredictionModeProperty, ref _isPredictionMode, value);
+    }
+
     // True when the smallest screen dimension is below the tablet threshold.
     // Drives the phone-only zoom-to-quadrant behavior.
     public bool IsPhoneSize { get; private set; } = true;
@@ -75,6 +102,77 @@ public partial class MainView : UserControl
         AddHandler(LostFocusEvent, OnChildLostFocus);
         AddHandler(KeyDownEvent, OnChildKeyDown, RoutingStrategies.Bubble, handledEventsToo: true);
         AddHandler(PointerPressedEvent, OnBackgroundPointerPressed, RoutingStrategies.Bubble, handledEventsToo: true);
+        DataContextChanged += OnDataContextChanged;
+    }
+
+    private TirePressureCalculator.ViewModels.MainViewModel? _boundVm;
+
+    private void OnDataContextChanged(object? sender, System.EventArgs e)
+    {
+        if (_boundVm is not null)
+        {
+            _boundVm.PropertyChanged -= OnVmPropertyChanged;
+            _boundVm = null;
+        }
+        if (DataContext is TirePressureCalculator.ViewModels.MainViewModel vm)
+        {
+            _boundVm = vm;
+            vm.PropertyChanged += OnVmPropertyChanged;
+            SyncModeFromVm(vm);
+        }
+        else
+        {
+            IsManualMode = true;
+            IsPredictionMode = false;
+        }
+    }
+
+    private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(TirePressureCalculator.ViewModels.MainViewModel.Mode)
+            && sender is TirePressureCalculator.ViewModels.MainViewModel vm)
+        {
+            SyncModeFromVm(vm);
+        }
+    }
+
+    private void SyncModeFromVm(TirePressureCalculator.ViewModels.MainViewModel vm)
+    {
+        IsManualMode = vm.IsManualMode;
+        IsPredictionMode = vm.IsPredictionMode;
+    }
+
+    /// <summary>
+    /// Event-driven IsChecked → VM.Mode commit. We bypass the converter-based
+    /// binding because in WASM the ToggleSwitch's click-to-toggle path didn't
+    /// reliably commit through compiled bindings, while drag-to-toggle did.
+    /// Wiring this event ensures both gestures push the new value to the VM.
+    /// </summary>
+    private void OnModeToggleCheckedChanged(object? sender, RoutedEventArgs e)
+    {
+        if (sender is ToggleSwitch t
+            && DataContext is TirePressureCalculator.ViewModels.MainViewModel vm
+            && vm.TireModelAvailable)
+        {
+            var desired = t.IsChecked == true ? AppMode.CircuitPrediction : AppMode.Manual;
+            if (vm.Mode != desired) vm.Mode = desired;
+        }
+    }
+
+    // Avalonia 11.3's ToggleSwitch flips IsChecked on drag but the click/tap
+    // path doesn't reliably reach the IsChecked property in the WASM head —
+    // PointerPressed/Released get intercepted by the template's drag detector
+    // and never propagate to a useful update. The gesture-level `Tapped`
+    // event fires AFTER the ToggleSwitch's drag tracker has decided "this
+    // wasn't a drag", so it's the right hook for the no-drag tap case.
+    // (On drag, Tapped does not fire — only the native drag-toggle path runs,
+    // which we already commit via IsCheckedChanged above.)
+    private void OnModeToggleTapped(object? sender, Avalonia.Input.TappedEventArgs e)
+    {
+        if (sender is ToggleSwitch t && t.IsEnabled)
+        {
+            t.IsChecked = !(t.IsChecked == true);
+        }
     }
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)

@@ -11,6 +11,38 @@ public class TireCornerViewModel : INotifyPropertyChanged
     private double _targetHotTemp = 80.0;
     private double _targetHotPressure = 1.80;
     private double _tempAdjustPercent;
+    private double? _predictedHotTempC;
+
+    /// <summary>
+    /// When non-null, <see cref="ColdPressure"/> uses this value as T_hot
+    /// instead of <see cref="AdjustedHotTemp"/>. Set by MainViewModel when
+    /// in Circuit Prediction mode; null in Manual mode (preserves existing
+    /// behavior).
+    /// </summary>
+    public double? PredictedHotTempC
+    {
+        get => _predictedHotTempC;
+        set
+        {
+            if (_predictedHotTempC == value) return;
+            _predictedHotTempC = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(EffectiveHotTempC));
+            OnPropertyChanged(nameof(PredictedHotTempDisplay));
+            OnPropertyChanged(nameof(HasPrediction));
+            OnPropertyChanged(nameof(ColdPressure));
+        }
+    }
+
+    public bool HasPrediction => _predictedHotTempC is not null;
+
+    /// <summary>Hot temperature used by the Gay-Lussac inversion. Equals
+    /// <see cref="PredictedHotTempC"/> when set; otherwise <see cref="AdjustedHotTemp"/>.</summary>
+    public double EffectiveHotTempC => _predictedHotTempC ?? AdjustedHotTemp;
+
+    public string PredictedHotTempDisplay => _predictedHotTempC is double t
+        ? $"Predicted hot: {t:F1} °C"
+        : "";
 
     public string Label
     {
@@ -79,7 +111,7 @@ public class TireCornerViewModel : INotifyPropertyChanged
     {
         get
         {
-            double tHotC = AdjustedHotTemp;
+            double tHotC = EffectiveHotTempC;
             if (tHotC + EnergyBalance.TZeroCToK <= 0) return 0;
             return Math.Round(
                 EnergyBalance.GayLussacColdPressureBar(

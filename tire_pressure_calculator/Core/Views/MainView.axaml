@@ -30,10 +30,13 @@
                              HorizontalContentAlignment="Center" />
             </Border>
 
+            <!-- Manual mode: Target °C input -->
             <TextBlock Grid.Row="0" Grid.Column="2" Text="Target °C (Corr. °C)"
-                       FontSize="11" HorizontalAlignment="Center" Margin="0,2" />
+                       FontSize="11" HorizontalAlignment="Center" Margin="0,2"
+                       IsVisible="{Binding IsManualMode, RelativeSource={RelativeSource AncestorType=views:MainView}}" />
             <Border Grid.Row="1" Grid.Column="2"
-                    BorderBrush="#40FF4040" BorderThickness="1.5" CornerRadius="4">
+                    BorderBrush="#40FF4040" BorderThickness="1.5" CornerRadius="4"
+                    IsVisible="{Binding IsManualMode, RelativeSource={RelativeSource AncestorType=views:MainView}}">
               <Panel>
                 <NumericUpDown Value="{Binding TargetHotTemp}"
                                Minimum="0" Maximum="200"
@@ -54,6 +57,18 @@
                 </Panel.Styles>
               </Panel>
             </Border>
+
+            <!-- Prediction mode: read-only predicted hot temp -->
+            <TextBlock Grid.Row="0" Grid.Column="2" Text="Predicted hot °C"
+                       FontSize="11" HorizontalAlignment="Center" Margin="0,2"
+                       IsVisible="{Binding IsPredictionMode, RelativeSource={RelativeSource AncestorType=views:MainView}}" />
+            <Border Grid.Row="1" Grid.Column="2"
+                    BorderBrush="#4090C090" BorderThickness="1.5" CornerRadius="4"
+                    IsVisible="{Binding IsPredictionMode, RelativeSource={RelativeSource AncestorType=views:MainView}}">
+              <TextBlock Text="{Binding PredictedHotTempC, StringFormat='{}{0:F1}', FallbackValue='—'}"
+                         HorizontalAlignment="Center" VerticalAlignment="Center"
+                         Padding="6,2" />
+            </Border>
           </Grid>
 
           <StackPanel HorizontalAlignment="Center" Margin="0,4,0,0">
@@ -71,7 +86,7 @@
           </StackPanel>
         </StackPanel>
 
-        <!-- Wide layout: all three fields in a single row -->
+        <!-- Wide layout: all fields in a single row -->
         <Grid ColumnDefinitions="*,8,*,8,*" RowDefinitions="Auto,Auto"
               IsVisible="{Binding IsWide, RelativeSource={RelativeSource AncestorType=views:MainView}}">
           <TextBlock Grid.Row="0" Grid.Column="0" Text="Current °C"
@@ -85,10 +100,13 @@
                            HorizontalContentAlignment="Center" />
           </Border>
 
+          <!-- Manual mode: Target °C input -->
           <TextBlock Grid.Row="0" Grid.Column="2" Text="Target °C (Corr. °C)"
-                     FontSize="11" HorizontalAlignment="Center" Margin="0,2" />
+                     FontSize="11" HorizontalAlignment="Center" Margin="0,2"
+                     IsVisible="{Binding IsManualMode, RelativeSource={RelativeSource AncestorType=views:MainView}}" />
           <Border Grid.Row="1" Grid.Column="2"
-                  BorderBrush="#40FF4040" BorderThickness="1.5" CornerRadius="4">
+                  BorderBrush="#40FF4040" BorderThickness="1.5" CornerRadius="4"
+                  IsVisible="{Binding IsManualMode, RelativeSource={RelativeSource AncestorType=views:MainView}}">
             <Panel>
               <NumericUpDown Value="{Binding TargetHotTemp}"
                              Minimum="0" Maximum="200"
@@ -108,6 +126,18 @@
                 </Style>
               </Panel.Styles>
             </Panel>
+          </Border>
+
+          <!-- Prediction mode: read-only predicted hot temp -->
+          <TextBlock Grid.Row="0" Grid.Column="2" Text="Predicted hot °C"
+                     FontSize="11" HorizontalAlignment="Center" Margin="0,2"
+                     IsVisible="{Binding IsPredictionMode, RelativeSource={RelativeSource AncestorType=views:MainView}}" />
+          <Border Grid.Row="1" Grid.Column="2"
+                  BorderBrush="#4090C090" BorderThickness="1.5" CornerRadius="4"
+                  IsVisible="{Binding IsPredictionMode, RelativeSource={RelativeSource AncestorType=views:MainView}}">
+            <TextBlock Text="{Binding PredictedHotTempC, StringFormat='{}{0:F1}', FallbackValue='—'}"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       Padding="6,2" />
           </Border>
 
           <TextBlock Grid.Row="0" Grid.Column="4" Text="Target bar"
@@ -123,7 +153,7 @@
           </Border>
         </Grid>
 
-        <!-- Narrow layout: all three fields stacked vertically at full width -->
+        <!-- Narrow layout: all fields stacked vertically at full width -->
         <StackPanel Spacing="4"
                     IsVisible="{Binding IsNarrow, RelativeSource={RelativeSource AncestorType=views:MainView}}">
           <TextBlock Text="Current °C"
@@ -136,29 +166,43 @@
                            HorizontalContentAlignment="Center" />
           </Border>
 
-          <TextBlock Text="Target °C (Corr. °C)"
-                     FontSize="11" HorizontalAlignment="Center" Margin="0,2" />
-          <Border BorderBrush="#40FF4040" BorderThickness="1.5" CornerRadius="4">
-            <Panel>
-              <NumericUpDown Value="{Binding TargetHotTemp}"
-                             Minimum="0" Maximum="200"
-                             FormatString="F1" Increment="1"
-                             ShowButtonSpinner="False"
-                             HorizontalContentAlignment="Center" />
-              <TextBlock Text="{Binding TargetHotTempDisplay}"
-                         HorizontalAlignment="Center"
-                         VerticalAlignment="Center"
-                         IsHitTestVisible="False" />
-              <Panel.Styles>
-                <Style Selector="Panel:not(:focus-within) > NumericUpDown">
-                  <Setter Property="Foreground" Value="Transparent" />
-                </Style>
-                <Style Selector="Panel:focus-within > TextBlock">
-                  <Setter Property="IsVisible" Value="False" />
-                </Style>
-              </Panel.Styles>
-            </Panel>
-          </Border>
+          <!-- Manual mode: Target °C input -->
+          <StackPanel IsVisible="{Binding IsManualMode, RelativeSource={RelativeSource AncestorType=views:MainView}}">
+            <TextBlock Text="Target °C (Corr. °C)"
+                       FontSize="11" HorizontalAlignment="Center" Margin="0,2" />
+            <Border BorderBrush="#40FF4040" BorderThickness="1.5" CornerRadius="4">
+              <Panel>
+                <NumericUpDown Value="{Binding TargetHotTemp}"
+                               Minimum="0" Maximum="200"
+                               FormatString="F1" Increment="1"
+                               ShowButtonSpinner="False"
+                               HorizontalContentAlignment="Center" />
+                <TextBlock Text="{Binding TargetHotTempDisplay}"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           IsHitTestVisible="False" />
+                <Panel.Styles>
+                  <Style Selector="Panel:not(:focus-within) > NumericUpDown">
+                    <Setter Property="Foreground" Value="Transparent" />
+                  </Style>
+                  <Style Selector="Panel:focus-within > TextBlock">
+                    <Setter Property="IsVisible" Value="False" />
+                  </Style>
+                </Panel.Styles>
+              </Panel>
+            </Border>
+          </StackPanel>
+
+          <!-- Prediction mode: read-only predicted hot temp -->
+          <StackPanel IsVisible="{Binding IsPredictionMode, RelativeSource={RelativeSource AncestorType=views:MainView}}">
+            <TextBlock Text="Predicted hot °C"
+                       FontSize="11" HorizontalAlignment="Center" Margin="0,2" />
+            <Border BorderBrush="#4090C090" BorderThickness="1.5" CornerRadius="4">
+              <TextBlock Text="{Binding PredictedHotTempC, StringFormat='{}{0:F1}', FallbackValue='—'}"
+                         HorizontalAlignment="Center" VerticalAlignment="Center"
+                         Padding="6,2" />
+            </Border>
+          </StackPanel>
 
           <TextBlock Text="Target bar"
                      FontSize="11" HorizontalAlignment="Center" Margin="0,2" />
@@ -192,48 +236,70 @@
                 VerticalScrollBarVisibility="Hidden">
     <LayoutTransformControl x:Name="RootLayoutTransform">
     <Grid x:Name="RootGrid"
-          RowDefinitions="Auto,*,*,Auto" ColumnDefinitions="*,*">
+          RowDefinitions="Auto,Auto,*,*,Auto,Auto" ColumnDefinitions="*,*">
 
-      <!-- Front arrow (broad, flat) centered at top -->
-      <Panel Grid.Row="0" Grid.ColumnSpan="2" Height="32" Margin="0,6,0,0">
+      <!-- ROW 0: Mode toggle (always visible) -->
+      <Border Grid.Row="0" Grid.ColumnSpan="2"
+              Padding="12,6"
+              Background="{DynamicResource SystemControlBackgroundChromeMediumBrush}">
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
+                    VerticalAlignment="Center" Spacing="12">
+          <TextBlock Text="Mode:" VerticalAlignment="Center" FontWeight="SemiBold" />
+          <ToggleSwitch x:Name="ModeToggle"
+                        OffContent="Manual"
+                        OnContent="Circuit Prediction"
+                        IsChecked="{Binding IsPredictionMode, Mode=OneWay}"
+                        IsCheckedChanged="OnModeToggleCheckedChanged"
+                        Tapped="OnModeToggleTapped"
+                        IsEnabled="{Binding TireModelAvailable}" />
+          <TextBlock Text=" (tire model unavailable on this build)"
+                     IsVisible="{Binding !TireModelAvailable}"
+                     Foreground="OrangeRed" FontSize="11" VerticalAlignment="Center" />
+        </StackPanel>
+      </Border>
+
+      <!-- ROW 1: Front arrow (broad, flat) centered at top of corners -->
+      <Panel Grid.Row="1" Grid.ColumnSpan="2" Height="32" Margin="0,6,0,0">
         <Polygon Points="0,28 100,0 200,28"
                  Stroke="{DynamicResource SystemControlForegroundBaseMediumBrush}"
                  StrokeThickness="2"
                  HorizontalAlignment="Center" VerticalAlignment="Center" />
       </Panel>
 
-      <!-- Vertical divider line (overlaps arrow row by 1px to close gap) -->
-      <Border Grid.Row="0" Grid.RowSpan="3" Grid.ColumnSpan="2"
+      <!-- Vertical divider line through the corner grid -->
+      <Border Grid.Row="1" Grid.RowSpan="3" Grid.ColumnSpan="2"
               HorizontalAlignment="Center" Width="2" Margin="0,37,0,8"
               Background="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
 
-      <!-- Horizontal divider line -->
-      <Border Grid.Row="1" Grid.RowSpan="2" Grid.ColumnSpan="2"
+      <!-- Horizontal divider line between front and rear rows -->
+      <Border Grid.Row="2" Grid.RowSpan="2" Grid.ColumnSpan="2"
               VerticalAlignment="Center" Height="2" Margin="8,0"
               Background="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
 
       <!-- Four quadrants -->
-      <ContentControl x:Name="FLCorner" Grid.Row="1" Grid.Column="0"
+      <ContentControl x:Name="FLCorner" Grid.Row="2" Grid.Column="0"
                       Content="{Binding FrontLeft}"
                       ContentTemplate="{StaticResource CornerTemplate}" />
-      <ContentControl x:Name="FRCorner" Grid.Row="1" Grid.Column="1"
+      <ContentControl x:Name="FRCorner" Grid.Row="2" Grid.Column="1"
                       Content="{Binding FrontRight}"
                       ContentTemplate="{StaticResource CornerTemplate}" />
-      <ContentControl x:Name="RLCorner" Grid.Row="2" Grid.Column="0"
+      <ContentControl x:Name="RLCorner" Grid.Row="3" Grid.Column="0"
                       Content="{Binding RearLeft}"
                       ContentTemplate="{StaticResource CornerTemplate}" />
-      <ContentControl x:Name="RRCorner" Grid.Row="2" Grid.Column="1"
+      <ContentControl x:Name="RRCorner" Grid.Row="3" Grid.Column="1"
                       Content="{Binding RearRight}"
                       ContentTemplate="{StaticResource CornerTemplate}" />
-      <!-- Bottom bar: reset + slider -->
-      <Button Grid.Row="3" Grid.Column="0"
+
+      <!-- ROW 4: Bottom bar — reset (always) + correction slider (manual only) -->
+      <Button Grid.Row="4" Grid.Column="0"
               Content="Reset to Defaults"
               Command="{Binding ResetCommand}"
               HorizontalAlignment="Left" VerticalAlignment="Center"
               Margin="8,4,0,8" />
-      <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal"
+      <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal"
                   HorizontalAlignment="Right" VerticalAlignment="Center"
-                  Margin="0,4,8,8" Spacing="8">
+                  Margin="0,4,8,8" Spacing="8"
+                  IsVisible="{Binding IsManualMode}">
         <TextBlock Text="{Binding TempAdjustLabel}"
                    VerticalAlignment="Center" FontSize="12" />
         <Slider Value="{Binding TempAdjustPercent}"
@@ -241,6 +307,57 @@
                 TickFrequency="0.5" IsSnapToTickEnabled="True"
                 Width="150" VerticalAlignment="Center" />
       </StackPanel>
+
+      <!-- ROW 5: Prediction inputs panel at the BOTTOM (visible only in prediction mode) -->
+      <Border Grid.Row="5" Grid.ColumnSpan="2"
+              IsVisible="{Binding IsPredictionMode}"
+              Padding="12,8"
+              Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}">
+        <!-- WrapPanel without ItemHeight/ItemWidth so each row sizes to its
+             tallest item; that prevents label/input overlap when items reflow
+             to a second row on narrow screens. -->
+        <WrapPanel Orientation="Horizontal" HorizontalAlignment="Center">
+          <StackPanel Margin="6,4" MinWidth="150">
+            <TextBlock Text="Track" FontSize="11" />
+            <ComboBox ItemsSource="{Binding AvailableTracks}"
+                      SelectedItem="{Binding SelectedTrack}"
+                      HorizontalAlignment="Stretch" />
+          </StackPanel>
+          <StackPanel Margin="6,4" MinWidth="150">
+            <TextBlock Text="Car" FontSize="11" />
+            <ComboBox ItemsSource="{Binding AvailableCars}"
+                      SelectedItem="{Binding SelectedCar}"
+                      HorizontalAlignment="Stretch" />
+          </StackPanel>
+          <StackPanel Margin="6,4" MinWidth="120">
+            <TextBlock Text="Condition" FontSize="11" />
+            <ComboBox ItemsSource="{Binding AvailableConditions}"
+                      SelectedItem="{Binding SelectedCondition}"
+                      HorizontalAlignment="Stretch" />
+          </StackPanel>
+          <StackPanel Margin="6,4" MinWidth="120">
+            <TextBlock Text="Lap within stint" FontSize="11" />
+            <NumericUpDown Value="{Binding LapWithinStint}"
+                           Minimum="1" Maximum="60" Increment="1"
+                           FormatString="F0"
+                           ShowButtonSpinner="True" />
+          </StackPanel>
+          <StackPanel Margin="6,4" MinWidth="120">
+            <TextBlock Text="Ambient °C" FontSize="11" />
+            <NumericUpDown Value="{Binding AmbientTempC}"
+                           Minimum="-20" Maximum="50" Increment="0.5"
+                           FormatString="F1"
+                           ShowButtonSpinner="True" />
+          </StackPanel>
+          <StackPanel Margin="6,4" MinWidth="120">
+            <TextBlock Text="Cloud cover %" FontSize="11" />
+            <NumericUpDown Value="{Binding CloudCoverPct}"
+                           Minimum="0" Maximum="100" Increment="10"
+                           FormatString="F0"
+                           ShowButtonSpinner="True" />
+          </StackPanel>
+        </WrapPanel>
+      </Border>
     </Grid>
     </LayoutTransformControl>
   </ScrollViewer>
