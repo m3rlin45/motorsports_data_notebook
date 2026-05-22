@@ -1,0 +1,65 @@
+{
+  "_cache_key": "958d5dcd32855e15da02c2ab35f6292d7cbba155|48e2dd24ce10840e0ffb8c4742f42b2b34734ab2|claude-opus-4-7",
+  "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2025-10-04-motegi.txt",
+  "_source_sha1": "958d5dcd32855e15da02c2ab35f6292d7cbba155",
+  "_prompt_sha1": "48e2dd24ce10840e0ffb8c4742f42b2b34734ab2",
+  "_model": "claude-opus-4-7",
+  "_extracted_at": "2026-04-18T14:04:01+00:00",
+  "data": {
+    "file_date": null,
+    "track": null,
+    "car": null,
+    "sessions": [
+      {
+        "session_index": 1,
+        "start_time_local": "10:45",
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": 1.8,
+          "fr": 1.8,
+          "rl": 1.8,
+          "rr": 1.8
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "setup_changes": [
+          "Front 2/2 bar, 10 dampers",
+          "Rear 5/5 bar, 10 dampers"
+        ],
+        "incidents": [],
+        "notes": "feeling: way too assy, can't step on accelerator on exit\nBraking is very grabby\nTurn in is awesome (probably too awesome)"
+      },
+      {
+        "session_index": 2,
+        "start_time_local": "13:30",
+        "weather_text": "61%",
+        "ambient_temp_c": 23.8,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": 1.7,
+          "fr": 1.7,
+          "rl": 1.7,
+          "rr": 1.7
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "setup_changes": [
+          "Front 2/2 bar, 15 dampers",
+          "Rear 4/4 bar, 15 dampers"
+        ],
+        "incidents": [],
+        "notes": "Oversteer fixed, a bit lacking on turn-in though"
+      }
+    ]
+  }
+}
