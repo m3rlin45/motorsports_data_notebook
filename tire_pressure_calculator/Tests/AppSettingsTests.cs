@@ -26,6 +26,45 @@ public class AppSettingsTests
     }
 
     [Fact]
+    public void AppSettings_Defaults_ModeIsManual()
+    {
+        var s = new AppSettings();
+        Assert.Equal(AppMode.Manual, s.Mode);
+        Assert.NotNull(s.Prediction);
+        Assert.Equal("dry", s.Prediction.Condition);
+    }
+
+    [Fact]
+    public void AppSettings_PredictionFields_RoundTrip()
+    {
+        var original = new AppSettings
+        {
+            Mode = AppMode.CircuitPrediction,
+            Prediction = new PredictionSettings
+            {
+                Track = "tsukuba_2000",
+                Car = "KK-SII",
+                Condition = "damp",
+                LapWithinStint = 7,
+                AmbientTempC = 18.5,
+                TrackTempC = 22.0,
+                CloudCoverPct = 60.0,
+            },
+        };
+        var json = JsonSerializer.Serialize(original);
+        var deserialized = JsonSerializer.Deserialize<AppSettings>(json)!;
+
+        Assert.Equal(AppMode.CircuitPrediction, deserialized.Mode);
+        Assert.Equal("tsukuba_2000", deserialized.Prediction.Track);
+        Assert.Equal("KK-SII", deserialized.Prediction.Car);
+        Assert.Equal("damp", deserialized.Prediction.Condition);
+        Assert.Equal(7, deserialized.Prediction.LapWithinStint);
+        Assert.Equal(18.5, deserialized.Prediction.AmbientTempC);
+        Assert.Equal(22.0, deserialized.Prediction.TrackTempC);
+        Assert.Equal(60.0, deserialized.Prediction.CloudCoverPct);
+    }
+
+    [Fact]
     public void AppSettings_RoundTrip_PreservesValues()
     {
         var original = new AppSettings
