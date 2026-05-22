@@ -44,6 +44,7 @@ class Prediction:
     t_eff_c: float
     t_air_c: float
     t_road_c: float
+    t_cold_c: float  # temperature the tire is at when you measure/set cold pressure
     K_source_bucket: tuple[str, ...]
     K_from_prior: bool
     K_n_samples: int
@@ -215,6 +216,7 @@ def predict_cold_pressure(
     lap_within_stint: int,
     target_hot_pressure_bar: dict[str, float],
     ambient_temp_c: float,
+    cold_tire_temp_c: float | None = None,
     track_condition: str = "dry",
     track_temp_c: float | None = None,
     cloud_cover_pct: float | None = None,
@@ -227,6 +229,15 @@ def predict_cold_pressure(
 
     Parameters
     ----------
+    ambient_temp_c
+        Air temperature for the upcoming session. Drives the T_road sun-proxy
+        and the T_eff baseline used in the warmup curve.
+    cold_tire_temp_c
+        Optional temperature the tire is at right *now* when you'll measure
+        or set cold pressure. Defaults to ``ambient_temp_c`` when omitted.
+        Use this when the tire isn't at air temperature — e.g., sitting in
+        a sun-warmed garage, set the night before in cooler air, or pre-heated.
+        Affects the Gay-Lussac inversion only, not the warmup-curve target.
     track_condition
         One of ``"dry"`` (default), ``"damp"`` (light drizzle, 0.1–1 mm/hr),
         or ``"wet"`` (≥ 1 mm/hr). Picks the condition-specific K, τ_sec,
@@ -263,6 +274,11 @@ def predict_cold_pressure(
         )
     t_eff_c = t_effective_c(t_air_c=ambient_temp_c, t_road_c=t_road_c, w_road=w_road)
 
+    # Cold-side temperature for the Gay-Lussac inversion: defaults to T_air
+    # but lets the caller pin a different "what's the tire currently at?"
+    # value (e.g., garage temp ≠ track ambient).
+    t_cold_c = float(cold_tire_temp_c) if cold_tire_temp_c is not None else ambient_temp_c
+
     # Time at end of lap N
     t_at_lap_n_s = float(lap_within_stint) * lap_time_typ_s
 
@@ -287,7 +303,7 @@ def predict_cold_pressure(
         cold = gay_lussac_cold_pressure_bar(
             target_hot_pressure_bar=target_hot,
             t_hot_c=t_hot_c,
-            t_cold_c=ambient_temp_c,  # cold uses T_air only
+            t_cold_c=t_cold_c,  # tire's actual current temp (default: T_air)
             p_atm_bar=P_ATM_BAR,
         )
 
@@ -307,6 +323,7 @@ def predict_cold_pressure(
             t_eff_c=t_eff_c,
             t_air_c=ambient_temp_c,
             t_road_c=t_road_c,
+            t_cold_c=t_cold_c,
             K_source_bucket=K_src,
             K_from_prior=K_from_prior,
             K_n_samples=K_n,
