@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using TirePressureCalculator.Localization;
 using TirePressureCalculator.Services.Modeling;
 
 namespace TirePressureCalculator.ViewModels;
@@ -12,6 +13,30 @@ public class TireCornerViewModel : INotifyPropertyChanged
     private double _targetHotPressure = 1.80;
     private double _tempAdjustPercent;
     private double? _predictedHotTempC;
+
+    public TireCornerViewModel()
+    {
+        // The per-corner labels live inside a DataTemplate where bindings
+        // on Localizer's indexer don't refresh live. Re-expose each label
+        // as a T_* property and re-fire on language change instead.
+        Localizer.Instance.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName != "Item[]" && e.PropertyName != nameof(Localizer.Language))
+                return;
+            OnPropertyChanged(nameof(T_CurrentTemp));
+            OnPropertyChanged(nameof(T_TargetTempCorr));
+            OnPropertyChanged(nameof(T_PredictedHotTemp));
+            OnPropertyChanged(nameof(T_TargetBar));
+            OnPropertyChanged(nameof(T_SetCold));
+            OnPropertyChanged(nameof(PredictedHotTempDisplay));
+        };
+    }
+
+    public string T_CurrentTemp => Localizer.Instance["CurrentTemp"];
+    public string T_TargetTempCorr => Localizer.Instance["TargetTempCorr"];
+    public string T_PredictedHotTemp => Localizer.Instance["PredictedHotTemp"];
+    public string T_TargetBar => Localizer.Instance["TargetBar"];
+    public string T_SetCold => Localizer.Instance["SetCold"];
 
     /// <summary>
     /// When non-null, <see cref="ColdPressure"/> uses this value as T_hot
@@ -41,7 +66,7 @@ public class TireCornerViewModel : INotifyPropertyChanged
     public double EffectiveHotTempC => _predictedHotTempC ?? AdjustedHotTemp;
 
     public string PredictedHotTempDisplay => _predictedHotTempC is double t
-        ? $"Predicted hot: {t:F1} °C"
+        ? $"{Localizer.Instance["PredictedHotPrefix"]}: {t:F1} °C"
         : "";
 
     public string Label
