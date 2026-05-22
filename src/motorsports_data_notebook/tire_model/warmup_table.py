@@ -54,6 +54,18 @@ PRIOR_TAU_SEC = 240.0
 PRIOR_K_KELVIN_PER_G2 = 60.0
 PRIOR_C_TRACK = 1.0
 
+# Percentile (0–100) of per-lap heat_proxy/on_track_s used as the bucket's
+# representative ⟨g²⟩. The median underweights fast on-pace laps because
+# `tire_usable` already drops out-laps + in-laps + slow laps (> 1.40×
+# session-best), but still keeps mid-pace and recovery laps that pull the
+# centre of mass down vs. the asymptote a hot lap actually reaches. CV
+# diagnostic on the 5-fold residuals shows per-lap g² (relative to bucket
+# median) is the single biggest univariate signal in unexplained residual
+# variance (R² ≈ 0.065, β ≈ −44 K/(g²·s)/s), so shifting the
+# representative up reduces under-prediction on fast laps without
+# changing the structural model.
+G2_TYP_PERCENTILE = 75.0
+
 # Bucket-size thresholds
 MIN_LAPS_FOR_TAU_FIT = 30  # per (car, track, corner) bucket to participate in Pass 1
 MIN_LAPS_FOR_K_BUCKET = 5  # per (car, track, corner) bucket to factor in Pass 2
@@ -553,10 +565,19 @@ def _build_lap_time_typ(
 
 def _build_g2_typ(
     laps: pd.DataFrame,
+    *,
+    percentile: float = G2_TYP_PERCENTILE,
 ) -> dict[tuple[str, str, str], tuple[float, int]]:
-    """Median heat_proxy/on_track_s per (track, car, condition). Drops `unknown` condition.
+    """Representative total ``heat_proxy/on_track_s`` per (track, car, condition).
 
-    Returns ``{(track, car, condition): (g2, n)}``.
+    Total (un-decomposed) ⟨g²⟩ kept here as a production-prediction fallback
+    when the per-corner statistic (see :func:`_build_g2_typ_per_corner`)
+    isn't available. ``percentile=50`` recovers the legacy median; the
+    default :data:`G2_TYP_PERCENTILE` shifts toward the hot-lap end of the
+    distribution so the warmup asymptote reflects what tires actually see
+    on pace.
+
+    Drops `unknown` condition. Returns ``{(track, car, condition): (g2, n)}``.
     """
     out: dict[tuple[str, str, str], tuple[float, int]] = {}
     for (track, car, cond), grp in laps.groupby(["track_canonical", "car", "condition"]):
@@ -567,9 +588,37 @@ def _build_g2_typ(
         if g2_per_lap.empty:
             continue
         out[(str(track), str(car), str(cond))] = (
-            float(g2_per_lap.median()),
+            float(np.percentile(g2_per_lap, percentile)),
             int(len(g2_per_lap)),
         )
+    return out
+
+
+def _build_g2_typ_per_corner(
+    laps: pd.DataFrame,
+    *,
+    percentile: float = G2_TYP_PERCENTILE,
+) -> dict[tuple[str, str, str, str], tuple[float, int]]:
+    """Per-corner percentile of ``heat_proxy_{corner}/on_track_s``.
+
+    Falls back to the total ``heat_proxy`` when a corner column is missing
+    (older extracts). Returns ``{(track, car, condition, corner): (g2, n)}``.
+    """
+    out: dict[tuple[str, str, str, str], tuple[float, int]] = {}
+    for (track, car, cond), grp in laps.groupby(["track_canonical", "car", "condition"]):
+        if cond == "unknown":
+            continue
+        for c in CORNERS:
+            col = f"heat_proxy_{c}"
+            src = grp[col] if col in grp.columns else grp["heat_proxy"]
+            g2_per_lap = src / grp["on_track_s"]
+            g2_per_lap = g2_per_lap.replace([np.inf, -np.inf], np.nan).dropna()
+            if g2_per_lap.empty:
+                continue
+            out[(str(track), str(car), str(cond), c)] = (
+                float(np.percentile(g2_per_lap, percentile)),
+                int(len(g2_per_lap)),
+            )
     return out
 
 
@@ -620,6 +669,15 @@ def _pass1_fit_tau_and_gains(
     """Fit τ_sec[car, corner, condition] jointly across that car's (track) buckets
     in the given condition.
 
+    The closed-form warmup model uses **per-lap g²** as a known feature:
+    ``ΔT_i = (K · c_track) · g²_i · (1 - exp(-t_i / τ))``, where g²_i is
+    ``heat_proxy_i / on_track_s_i`` for lap i. The fitted "gain" per bucket
+    is therefore ``K · c_track`` (no ⟨g²⟩ factor); Pass 2 decomposes it
+    into the per-car K and per-track c_track without the prior division
+    by a bucket statistic. Laps with higher actual g² get a higher
+    asymptote, which matches the field observation that on-pace laps run
+    hotter than the bucket median.
+
     Returns (tau_FitParam, {track: gain_FitParam}). Buckets with fewer than
     ``MIN_LAPS_FOR_TAU_FIT`` lap samples are excluded from this pass; they get
     a gain in Pass 2 only if they meet ``MIN_LAPS_FOR_K_BUCKET``.
@@ -629,16 +687,32 @@ def _pass1_fit_tau_and_gains(
         (laps_for_fit["car"] == car)
         & (laps_for_fit["condition"] == condition)
         & laps_for_fit[delta_col].notna()
-    ]
+    ].copy()
+    if car_df.empty:
+        return (FitParam(PRIOR_TAU_SEC, 0.0, 0, from_prior=True), {})
+
+    # Use total per-lap g² (heat_proxy / on_track_s); a per-corner
+    # signed-G decomposition was tried but the crude sign-splitting hurt
+    # FR / FL MAE more than it helped RL / RR, so leave it as future work
+    # gated on a chassis-aware load-transfer model.
+    car_df["g2_lap"] = car_df["heat_proxy"] / car_df["on_track_s"]
+    car_df = car_df[car_df["g2_lap"].notna() & (car_df["g2_lap"] > 0)]
     if car_df.empty:
         return (FitParam(PRIOR_TAU_SEC, 0.0, 0, from_prior=True), {})
 
     # Build per-bucket arrays
-    buckets: list[tuple[str, np.ndarray, np.ndarray]] = []
+    buckets: list[tuple[str, np.ndarray, np.ndarray, np.ndarray]] = []
     for track, grp in car_df.groupby("track_canonical"):
         if len(grp) < MIN_LAPS_FOR_TAU_FIT:
             continue
-        buckets.append((str(track), grp["t_cum_s"].to_numpy(), grp[delta_col].to_numpy()))
+        buckets.append(
+            (
+                str(track),
+                grp["t_cum_s"].to_numpy(),
+                grp[delta_col].to_numpy(),
+                grp["g2_lap"].to_numpy(),
+            )
+        )
 
     if not buckets:
         return (FitParam(PRIOR_TAU_SEC, 0.0, 0, from_prior=True), {})
@@ -647,18 +721,21 @@ def _pass1_fit_tau_and_gains(
     # Concatenate all samples; remember which bucket each belongs to
     all_t = np.concatenate([b[1] for b in buckets])
     all_y = np.concatenate([b[2] for b in buckets])
+    all_g2 = np.concatenate([b[3] for b in buckets])
     bucket_idx = np.concatenate([np.full(len(b[1]), i, dtype=int) for i, b in enumerate(buckets)])
 
     def model(_x: np.ndarray, *params: float) -> np.ndarray:
-        # params: tau_sec, gain_0, gain_1, ..., gain_{n_buckets-1}
+        # params: tau_sec, Kc_0, Kc_1, ..., Kc_{n_buckets-1}
+        # where Kc_b = K[car, corner, cond] · c_track[track of bucket b]
         tau = params[0]
-        gains = np.array(params[1:])
-        out: np.ndarray = gains[bucket_idx] * (1.0 - np.exp(-all_t / tau))
+        Kc = np.array(params[1:])
+        out: np.ndarray = Kc[bucket_idx] * all_g2 * (1.0 - np.exp(-all_t / tau))
         return out
 
-    p0 = [PRIOR_TAU_SEC] + [40.0] * n_buckets  # gain ≈ ΔT_∞ ≈ 40 K
+    # Initial Kc guess: ΔT_∞ / typical g² ≈ 40 / 0.5 ≈ 80 K/G²
+    p0 = [PRIOR_TAU_SEC] + [PRIOR_K_KELVIN_PER_G2] * n_buckets
     bounds_lower = [60.0] + [0.0] * n_buckets
-    bounds_upper = [1200.0] + [200.0] * n_buckets
+    bounds_upper = [1200.0] + [500.0] * n_buckets
 
     try:
         popt, pcov = scipy.optimize.curve_fit(
@@ -674,7 +751,7 @@ def _pass1_fit_tau_and_gains(
     tau_fit = FitParam(float(popt[0]), float(perr[0]), int(len(all_t)))
 
     per_bucket: dict[str, FitParam] = {}
-    for i, (track, _t, _y) in enumerate(buckets):
+    for i, (track, _t, _y, _g2) in enumerate(buckets):
         per_bucket[track] = FitParam(
             value=float(popt[1 + i]),
             stderr=float(perr[1 + i]),
@@ -692,24 +769,28 @@ def _pass2_factor_gains(
     g2_lookup: dict[tuple[str, str, str], tuple[float, int]],
     anchor_track: str,
 ) -> tuple[dict[tuple[str, str, str], FitParam], dict[str, FitParam]]:
-    """Decompose ``gain_b = K[car, corner, condition] · c_track[track] ·
-    ⟨g²⟩[track, car, condition]``.
+    """Decompose ``gain_b = K[car, corner, condition] · c_track[track]``.
 
-    ``c_track`` is shared across conditions (the asphalt's surface character
-    is a property of the venue; condition's effect lives in ``K`` and ⟨g²⟩).
-    Returns (k_by_car_corner_condition, c_track_by_track).
+    Pass 1 now fits the warmup curve with per-lap g² as a known feature,
+    so the bucket ``gain`` it returns is already ``K · c_track`` (no ⟨g²⟩
+    factor). Pass 2 just factors that product into the per (car, corner,
+    condition) K and the per-track c_track. ``g2_lookup`` is no longer
+    used in the decomposition but is kept in the signature so callers
+    don't have to change.
+
+    ``c_track`` is shared across conditions (the asphalt's surface
+    character is a property of the venue; condition's effect lives in
+    ``K`` and ⟨g²⟩). Returns (k_by_car_corner_condition, c_track_by_track).
     """
+    del g2_lookup  # unused; retained in signature for API stability
     if not bucket_gains:
         return {}, {}
 
-    # effective_gain = gain / g2_typ  =  K · c_track
     log_eff: dict[tuple[str, str, str, str], float] = {}
     for (car, track, corner, cond), gain in bucket_gains.items():
-        g2 = g2_lookup.get((track, car, cond), (np.nan, 0))[0]
-        if not np.isfinite(g2) or g2 <= 0 or gain.value <= 0:
+        if gain.value <= 0:
             continue
-        eff = gain.value / g2
-        log_eff[(car, track, corner, cond)] = math.log(eff)
+        log_eff[(car, track, corner, cond)] = math.log(gain.value)
 
     tracks = sorted({t for (_, t, _, _) in log_eff})
     # Condition-aware "K cell" = (car, corner, condition); c_track is per-track only.

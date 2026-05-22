@@ -129,8 +129,11 @@ def test_pass1_recovers_tau_sec_per_car_corner() -> None:
 
 
 def test_pass2_recovers_k_and_c_track_with_anchor() -> None:
-    """Pass 2 alternating LS should recover K and c_track with track_x anchored at 1.0."""
-    # Fake per-bucket gains: gain = K · c_track · g²
+    """Pass 2 alternating LS should recover K and c_track with track_x anchored at 1.0.
+
+    Pass 1 now folds per-lap g² into the curve fit, so the bucket gains it
+    feeds to Pass 2 are already ``K · c_track`` (no ⟨g²⟩ factor).
+    """
     K_true = {
         ("CarA", "fl"): 60.0,
         ("CarA", "fr"): 65.0,
@@ -138,24 +141,22 @@ def test_pass2_recovers_k_and_c_track_with_anchor() -> None:
         ("CarA", "rr"): 72.0,
     }
     c_track_true = {"track_x": 1.0, "track_y": 0.85}
-    g2_typ = {("track_x", "CarA"): 0.9, ("track_y", "CarA"): 0.7}
 
     bucket_gains: dict[tuple[str, str, str, str], wt.FitParam] = {}
     for (car, corner), K in K_true.items():
         for track, c_t in c_track_true.items():
-            gain = K * c_t * g2_typ[(track, car)]
-            # All-dry synthetic data
+            gain = K * c_t  # gain = K · c_track (no g² factor)
             bucket_gains[(car, track, corner, "dry")] = wt.FitParam(
                 value=gain, stderr=gain * 0.01, n_samples=120
             )
-    g2_lookup = {(t, c, "dry"): (v, 100) for (t, c), v in g2_typ.items()}
+    # g2_lookup is still passed (kept in signature) but unused by Pass 2.
+    g2_lookup: dict[tuple[str, str, str], tuple[float, int]] = {}
 
     K_fit, c_track_fit = wt._pass2_factor_gains(
         bucket_gains=bucket_gains,
         g2_lookup=g2_lookup,
         anchor_track="track_x",
     )
-    # K should be recovered within tight tolerance (noise-free synthesis)
     for (car, corner), K_expected in K_true.items():
         assert K_fit[(car, corner, "dry")].value == pytest.approx(K_expected, rel=0.001)
     assert c_track_fit["track_x"].value == pytest.approx(1.0, abs=1e-9)
@@ -165,13 +166,13 @@ def test_pass2_recovers_k_and_c_track_with_anchor() -> None:
 def test_pass2_handles_single_track_bucket_gracefully() -> None:
     """If a (car, corner, cond) has data only at one track, K · c_track is
     unidentifiable on its own; the alternating-LS should still produce some
-    K value rather than crashing."""
+    K value rather than crashing.
+    """
     bucket_gains = {
-        ("CarA", "track_x", "fl", "dry"): wt.FitParam(54.0, 1.0, 100),  # = 60 * 1.0 * 0.9
+        ("CarA", "track_x", "fl", "dry"): wt.FitParam(60.0, 1.0, 100),  # K · c_track = 60 · 1.0
     }
-    g2_lookup = {("track_x", "CarA", "dry"): (0.9, 100)}
     K_fit, c_track_fit = wt._pass2_factor_gains(
-        bucket_gains=bucket_gains, g2_lookup=g2_lookup, anchor_track="track_x"
+        bucket_gains=bucket_gains, g2_lookup={}, anchor_track="track_x"
     )
     assert K_fit[("CarA", "fl", "dry")].value == pytest.approx(60.0, rel=0.001)
     assert c_track_fit["track_x"].value == pytest.approx(1.0, abs=1e-9)
