@@ -46,6 +46,35 @@ def _safe_stats(arr: np.ndarray) -> tuple[float, float, float, float, float]:
     return (first, last, float(np.min(finite)), float(np.max(finite)), float(np.mean(finite)))
 
 
+def _trim_stale_prefix(arr: np.ndarray) -> np.ndarray:
+    """Drop a leading run of stale (sleeping-sensor) samples, if any.
+
+    Before a wheel starts rotating, the TPMS sensor reports its last
+    pre-sleep value bit-for-bit identical sample to sample. The signature
+    is a *sustained* prefix of strictly-equal values — once the sensor
+    wakes up, even pure sensor noise gives sample-to-sample variation.
+    So: find the first sample that differs from its immediate predecessor.
+    If that gap is ≤ 1 sample (the very next reading already moved), the
+    series is alive from the start and we return it unchanged. Otherwise,
+    treat everything before that change as stale and drop it.
+    """
+    if arr.size <= 1:
+        return arr
+    finite_mask = ~np.isnan(arr)
+    if not finite_mask.any():
+        return arr
+    first_idx = int(np.argmax(finite_mask))
+    baseline = arr[first_idx]
+    for i in range(first_idx + 1, arr.size):
+        if np.isnan(arr[i]):
+            continue
+        if arr[i] != baseline:
+            if i - first_idx <= 1:
+                return arr  # alive immediately, no stale prefix
+            return arr[i:]
+    return arr[arr.size:]  # entirely flat → all-stale → empty
+
+
 def _rise_rate_per_min(t_s: np.ndarray, values: np.ndarray) -> float:
     """Linear-fit slope of ``values`` over ``t_s`` seconds; returns units/min."""
     mask = ~np.isnan(values) & ~np.isnan(t_s)
@@ -72,18 +101,29 @@ def compute_corner_aggregates(lap_ts: pa.Table, corner: str) -> CornerTireAggreg
     ``lap_ts`` is a wide timeseries table with columns like
     ``tpms_press_fl_kpa``, ``tpms_temp_fl_c``, ``surf_temp_fl_mean_c``, and
     ``t_lap_s``.
+
+    Leading stale TPMS samples (sensor still asleep, reporting last-known
+    value bit-for-bit) are trimmed per-corner before stats are computed
+    so ``temp_start``/``press_start`` reflect the first *live* sample
+    rather than whatever the sensor last wrote before going to sleep.
     """
     n = len(lap_ts)
     t = _col_or_nan(lap_ts, "t_lap_s", n)
-    press = _col_or_nan(lap_ts, f"tpms_press_{corner}_bar", n)
+    press_raw = _col_or_nan(lap_ts, f"tpms_press_{corner}_bar", n)
     # Note: rise rate is in bar/min (not kPa/min)
-    temp = _col_or_nan(lap_ts, f"tpms_temp_{corner}_c", n)
+    temp_raw = _col_or_nan(lap_ts, f"tpms_temp_{corner}_c", n)
     surf = _col_or_nan(lap_ts, f"surf_temp_{corner}_mean_c", n)
+
+    press = _trim_stale_prefix(press_raw)
+    temp = _trim_stale_prefix(temp_raw)
 
     p_start, p_end, p_min, p_max, p_mean = _safe_stats(press)
     tt_start, tt_end, tt_min, tt_max, tt_mean = _safe_stats(temp)
     s_start, s_end, s_min, s_max, s_mean = _safe_stats(surf)  # noqa: F841
-    rise = _rise_rate_per_min(t, press)
+    # Rise rate uses the trimmed pressure series too, so the early stale-
+    # constant run doesn't flatten the slope estimate.
+    trimmed_offset = press_raw.size - press.size
+    rise = _rise_rate_per_min(t[trimmed_offset:], press)
 
     return CornerTireAggregates(
         press_start=p_start,

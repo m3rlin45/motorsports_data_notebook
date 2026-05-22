@@ -44,6 +44,41 @@ def test_corner_aggregates_missing_channel() -> None:
     assert np.isnan(a.press_rise_bar_per_min)
 
 
+def test_corner_aggregates_trims_stale_tpms_prefix() -> None:
+    # Sensor asleep for first 3 samples (bit-exact identical values), then
+    # wakes up. The aggregator should anchor start/min to the first *live*
+    # sample (2.45 / 32.0), not the stale value (2.40 / 30.0).
+    ts = _ts(
+        {
+            "t_lap_s": [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6],
+            "tpms_press_fl_bar": [2.40, 2.40, 2.40, 2.45, 2.50, 2.55, 2.60],
+            "tpms_temp_fl_c": [30.0, 30.0, 30.0, 32.0, 34.0, 36.0, 38.0],
+        }
+    )
+    a = compute_corner_aggregates(ts, "fl")
+    assert a.press_start == pytest.approx(2.45)
+    assert a.press_min == pytest.approx(2.45)
+    assert a.press_end == pytest.approx(2.60)
+    assert a.temp_start == pytest.approx(32.0)
+    assert a.temp_min == pytest.approx(32.0)
+
+
+def test_corner_aggregates_no_trim_when_data_starts_alive() -> None:
+    # First sample already differs from the second → no stale prefix → keep
+    # everything (the test_corner_aggregates_basic case is also a regression
+    # guard for this, but explicit is nice).
+    ts = _ts(
+        {
+            "t_lap_s": [0.0, 1.0],
+            "tpms_press_fl_bar": [2.00, 2.01],
+            "tpms_temp_fl_c": [30.0, 30.5],
+        }
+    )
+    a = compute_corner_aggregates(ts, "fl")
+    assert a.press_start == pytest.approx(2.00)
+    assert a.temp_start == pytest.approx(30.0)
+
+
 def test_corner_aggregates_too_short_for_rise_rate() -> None:
     ts = _ts(
         {
