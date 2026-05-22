@@ -24,6 +24,7 @@
   -->
   <ItemGroup>
     <EmbeddedResource Include="..\..\data\tire_dataset\tire_model.json" LogicalName="tire_model.json" />
+    <EmbeddedResource Include="Localization\strings.json" LogicalName="strings.json" />
   </ItemGroup>
 
 </Project>

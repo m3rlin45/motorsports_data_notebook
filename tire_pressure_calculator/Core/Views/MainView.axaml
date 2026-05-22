@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:TirePressureCalculator.ViewModels"
              xmlns:views="using:TirePressureCalculator.Views"
+             xmlns:l="using:TirePressureCalculator.Localization"
              x:Class="TirePressureCalculator.Views.MainView"
              x:DataType="vm:MainViewModel"
              Background="Transparent">
@@ -19,7 +20,7 @@
         <StackPanel Spacing="4"
                     IsVisible="{Binding IsMedium, RelativeSource={RelativeSource AncestorType=views:MainView}}">
           <Grid ColumnDefinitions="*,8,*" RowDefinitions="Auto,Auto">
-            <TextBlock Grid.Row="0" Grid.Column="0" Text="Current °C"
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="{l:Localize CurrentTemp}"
                        FontSize="11" HorizontalAlignment="Center" Margin="0,2" />
             <Border Grid.Row="1" Grid.Column="0"
                     BorderBrush="#406090FF" BorderThickness="1.5" CornerRadius="4">
@@ -31,7 +32,7 @@
             </Border>
 
             <!-- Manual mode: Target °C input -->
-            <TextBlock Grid.Row="0" Grid.Column="2" Text="Target °C (Corr. °C)"
+            <TextBlock Grid.Row="0" Grid.Column="2" Text="{l:Localize TargetTempCorr}"
                        FontSize="11" HorizontalAlignment="Center" Margin="0,2"
                        IsVisible="{Binding IsManualMode, RelativeSource={RelativeSource AncestorType=views:MainView}}" />
             <Border Grid.Row="1" Grid.Column="2"
@@ -59,7 +60,7 @@
             </Border>
 
             <!-- Prediction mode: read-only predicted hot temp -->
-            <TextBlock Grid.Row="0" Grid.Column="2" Text="Predicted hot °C"
+            <TextBlock Grid.Row="0" Grid.Column="2" Text="{l:Localize PredictedHotTemp}"
                        FontSize="11" HorizontalAlignment="Center" Margin="0,2"
                        IsVisible="{Binding IsPredictionMode, RelativeSource={RelativeSource AncestorType=views:MainView}}" />
             <Border Grid.Row="1" Grid.Column="2"
@@ -72,7 +73,7 @@
           </Grid>
 
           <StackPanel HorizontalAlignment="Center" Margin="0,4,0,0">
-            <TextBlock Text="Target bar"
+            <TextBlock Text="{l:Localize TargetBar}"
                        FontSize="11" HorizontalAlignment="Center" Margin="0,2" />
             <Border BorderBrush="#40FF4040" BorderThickness="1.5" CornerRadius="4">
               <NumericUpDown Classes="last"
@@ -89,7 +90,7 @@
         <!-- Wide layout: all fields in a single row -->
         <Grid ColumnDefinitions="*,8,*,8,*" RowDefinitions="Auto,Auto"
               IsVisible="{Binding IsWide, RelativeSource={RelativeSource AncestorType=views:MainView}}">
-          <TextBlock Grid.Row="0" Grid.Column="0" Text="Current °C"
+          <TextBlock Grid.Row="0" Grid.Column="0" Text="{l:Localize CurrentTemp}"
                      FontSize="11" HorizontalAlignment="Center" Margin="0,2" />
           <Border Grid.Row="1" Grid.Column="0"
                   BorderBrush="#406090FF" BorderThickness="1.5" CornerRadius="4">
@@ -101,7 +102,7 @@
           </Border>
 
           <!-- Manual mode: Target °C input -->
-          <TextBlock Grid.Row="0" Grid.Column="2" Text="Target °C (Corr. °C)"
+          <TextBlock Grid.Row="0" Grid.Column="2" Text="{l:Localize TargetTempCorr}"
                      FontSize="11" HorizontalAlignment="Center" Margin="0,2"
                      IsVisible="{Binding IsManualMode, RelativeSource={RelativeSource AncestorType=views:MainView}}" />
           <Border Grid.Row="1" Grid.Column="2"
@@ -129,7 +130,7 @@
           </Border>
 
           <!-- Prediction mode: read-only predicted hot temp -->
-          <TextBlock Grid.Row="0" Grid.Column="2" Text="Predicted hot °C"
+          <TextBlock Grid.Row="0" Grid.Column="2" Text="{l:Localize PredictedHotTemp}"
                      FontSize="11" HorizontalAlignment="Center" Margin="0,2"
                      IsVisible="{Binding IsPredictionMode, RelativeSource={RelativeSource AncestorType=views:MainView}}" />
           <Border Grid.Row="1" Grid.Column="2"
@@ -140,7 +141,7 @@
                        Padding="6,2" />
           </Border>
 
-          <TextBlock Grid.Row="0" Grid.Column="4" Text="Target bar"
+          <TextBlock Grid.Row="0" Grid.Column="4" Text="{l:Localize TargetBar}"
                      FontSize="11" HorizontalAlignment="Center" Margin="0,2" />
           <Border Grid.Row="1" Grid.Column="4"
                   BorderBrush="#40FF4040" BorderThickness="1.5" CornerRadius="4">
@@ -156,7 +157,7 @@
         <!-- Narrow layout: all fields stacked vertically at full width -->
         <StackPanel Spacing="4"
                     IsVisible="{Binding IsNarrow, RelativeSource={RelativeSource AncestorType=views:MainView}}">
-          <TextBlock Text="Current °C"
+          <TextBlock Text="{l:Localize CurrentTemp}"
                      FontSize="11" HorizontalAlignment="Center" Margin="0,2" />
           <Border BorderBrush="#406090FF" BorderThickness="1.5" CornerRadius="4">
             <NumericUpDown Value="{Binding CurrentTemp}"
@@ -168,7 +169,7 @@
 
           <!-- Manual mode: Target °C input -->
           <StackPanel IsVisible="{Binding IsManualMode, RelativeSource={RelativeSource AncestorType=views:MainView}}">
-            <TextBlock Text="Target °C (Corr. °C)"
+            <TextBlock Text="{l:Localize TargetTempCorr}"
                        FontSize="11" HorizontalAlignment="Center" Margin="0,2" />
             <Border BorderBrush="#40FF4040" BorderThickness="1.5" CornerRadius="4">
               <Panel>
@@ -195,7 +196,7 @@
 
           <!-- Prediction mode: read-only predicted hot temp -->
           <StackPanel IsVisible="{Binding IsPredictionMode, RelativeSource={RelativeSource AncestorType=views:MainView}}">
-            <TextBlock Text="Predicted hot °C"
+            <TextBlock Text="{l:Localize PredictedHotTemp}"
                        FontSize="11" HorizontalAlignment="Center" Margin="0,2" />
             <Border BorderBrush="#4090C090" BorderThickness="1.5" CornerRadius="4">
               <TextBlock Text="{Binding PredictedHotTempC, StringFormat='{}{0:F1}', FallbackValue='—'}"
@@ -204,7 +205,7 @@
             </Border>
           </StackPanel>
 
-          <TextBlock Text="Target bar"
+          <TextBlock Text="{l:Localize TargetBar}"
                      FontSize="11" HorizontalAlignment="Center" Margin="0,2" />
           <Border BorderBrush="#40FF4040" BorderThickness="1.5" CornerRadius="4">
             <NumericUpDown Classes="last"
@@ -219,7 +220,7 @@
         <Separator Margin="0,4" />
 
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
-          <TextBlock Text="Set Cold:" FontWeight="SemiBold" FontSize="16"
+          <TextBlock Text="{l:Localize SetCold}" FontWeight="SemiBold" FontSize="16"
                      VerticalAlignment="Center" />
           <TextBlock Text="{Binding ColdPressure, StringFormat='{}{0:F3} bar'}"
                      FontSize="20" FontWeight="Bold"
@@ -238,24 +239,39 @@
     <Grid x:Name="RootGrid"
           RowDefinitions="Auto,Auto,*,*,Auto,Auto" ColumnDefinitions="*,*">
 
-      <!-- ROW 0: Mode toggle (always visible) -->
+      <!-- ROW 0: Mode toggle + language picker (always visible) -->
       <Border Grid.Row="0" Grid.ColumnSpan="2"
               Padding="12,6"
               Background="{DynamicResource SystemControlBackgroundChromeMediumBrush}">
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
-                    VerticalAlignment="Center" Spacing="12">
-          <TextBlock Text="Mode:" VerticalAlignment="Center" FontWeight="SemiBold" />
-          <ToggleSwitch x:Name="ModeToggle"
-                        OffContent="Manual"
-                        OnContent="Circuit Prediction"
-                        IsChecked="{Binding IsPredictionMode, Mode=OneWay}"
-                        IsCheckedChanged="OnModeToggleCheckedChanged"
-                        Tapped="OnModeToggleTapped"
-                        IsEnabled="{Binding TireModelAvailable}" />
-          <TextBlock Text=" (tire model unavailable on this build)"
-                     IsVisible="{Binding !TireModelAvailable}"
-                     Foreground="OrangeRed" FontSize="11" VerticalAlignment="Center" />
-        </StackPanel>
+        <Grid ColumnDefinitions="*,Auto">
+          <StackPanel Grid.Column="0" Orientation="Horizontal"
+                      HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
+            <TextBlock Text="{l:Localize ModeLabel}" VerticalAlignment="Center" FontWeight="SemiBold" />
+            <ToggleSwitch x:Name="ModeToggle"
+                          OffContent="{l:Localize ModeManual}"
+                          OnContent="{l:Localize ModePrediction}"
+                          IsChecked="{Binding IsPredictionMode, Mode=OneWay}"
+                          IsCheckedChanged="OnModeToggleCheckedChanged"
+                          Tapped="OnModeToggleTapped"
+                          IsEnabled="{Binding TireModelAvailable}" />
+            <TextBlock Text="{l:Localize ModelUnavailable}"
+                       IsVisible="{Binding !TireModelAvailable}"
+                       Foreground="OrangeRed" FontSize="11" VerticalAlignment="Center" />
+          </StackPanel>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+                      VerticalAlignment="Center">
+            <TextBlock Text="{l:Localize LanguageLabel}" VerticalAlignment="Center" FontSize="11" />
+            <ComboBox ItemsSource="{Binding AvailableLanguages}"
+                      SelectedItem="{Binding SelectedLanguage}"
+                      MinWidth="100" FontSize="12">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:LanguageOption">
+                  <TextBlock Text="{Binding Display}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+          </StackPanel>
+        </Grid>
       </Border>
 
       <!-- ROW 1: Front arrow (broad, flat) centered at top of corners -->
@@ -292,7 +308,7 @@
 
       <!-- ROW 4: Bottom bar — reset (always) + correction slider (manual only) -->
       <Button Grid.Row="4" Grid.Column="0"
-              Content="Reset to Defaults"
+              Content="{l:Localize ResetButton}"
               Command="{Binding ResetCommand}"
               HorizontalAlignment="Left" VerticalAlignment="Center"
               Margin="8,4,0,8" />
@@ -318,39 +334,46 @@
              to a second row on narrow screens. -->
         <WrapPanel Orientation="Horizontal" HorizontalAlignment="Center">
           <StackPanel Margin="6,4" MinWidth="150">
-            <TextBlock Text="Track" FontSize="11" />
+            <TextBlock Text="{l:Localize Track}" FontSize="11" />
             <ComboBox ItemsSource="{Binding AvailableTracks}"
                       SelectedItem="{Binding SelectedTrack}"
                       HorizontalAlignment="Stretch" />
           </StackPanel>
           <StackPanel Margin="6,4" MinWidth="150">
-            <TextBlock Text="Car" FontSize="11" />
+            <TextBlock Text="{l:Localize Car}" FontSize="11" />
             <ComboBox ItemsSource="{Binding AvailableCars}"
                       SelectedItem="{Binding SelectedCar}"
                       HorizontalAlignment="Stretch" />
           </StackPanel>
           <StackPanel Margin="6,4" MinWidth="120">
-            <TextBlock Text="Condition" FontSize="11" />
+            <TextBlock Text="{l:Localize Condition}" FontSize="11" />
             <ComboBox ItemsSource="{Binding AvailableConditions}"
-                      SelectedItem="{Binding SelectedCondition}"
-                      HorizontalAlignment="Stretch" />
+                      SelectedValue="{Binding SelectedCondition}"
+                      SelectedValueBinding="{Binding Value}"
+                      HorizontalAlignment="Stretch">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:ConditionOption">
+                  <TextBlock Text="{Binding Display}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
           </StackPanel>
           <StackPanel Margin="6,4" MinWidth="120">
-            <TextBlock Text="Lap within stint" FontSize="11" />
+            <TextBlock Text="{l:Localize LapWithinStint}" FontSize="11" />
             <NumericUpDown Value="{Binding LapWithinStint}"
                            Minimum="1" Maximum="60" Increment="1"
                            FormatString="F0"
                            ShowButtonSpinner="True" />
           </StackPanel>
           <StackPanel Margin="6,4" MinWidth="120">
-            <TextBlock Text="Ambient °C" FontSize="11" />
+            <TextBlock Text="{l:Localize Ambient}" FontSize="11" />
             <NumericUpDown Value="{Binding AmbientTempC}"
                            Minimum="-20" Maximum="50" Increment="0.5"
                            FormatString="F1"
                            ShowButtonSpinner="True" />
           </StackPanel>
           <StackPanel Margin="6,4" MinWidth="120">
-            <TextBlock Text="Cloud cover %" FontSize="11" />
+            <TextBlock Text="{l:Localize CloudCover}" FontSize="11" />
             <NumericUpDown Value="{Binding CloudCoverPct}"
                            Minimum="0" Maximum="100" Increment="10"
                            FormatString="F0"
