@@ -127,3 +127,27 @@ def test_picker_skips_sessions_with_missing_track_or_car() -> None:
     out = _pick_holdout_sessions(sessions, laps, n_per_bucket=2, min_bucket_size=10)
     assert "s_bad_track" not in out
     assert "s_bad_car" not in out
+
+
+def test_picker_fold_index_returns_disjoint_slices() -> None:
+    # A bucket of 10 sessions, n_per_bucket=2 → 5 disjoint folds of size 2.
+    sessions = pd.DataFrame(
+        [
+            {"session_id": f"s_{i:02d}", "track_canonical": "tsukuba_2000", "car": "CarA"}
+            for i in range(10)
+        ]
+    ).assign(status="ok", has_tpms=True)
+    laps = _make_laps_with_usable_per_session({sid: 8 for sid in sessions["session_id"].tolist()})
+
+    seen: list[list[str]] = []
+    for fold in range(5):
+        out = _pick_holdout_sessions(sessions, laps, n_per_bucket=2, min_bucket_size=10, fold=fold)
+        assert len(out) == 2
+        seen.append(out)
+
+    # Every session is held out exactly once across all folds.
+    flat = [sid for fold_sids in seen for sid in fold_sids]
+    assert sorted(flat) == [f"s_{i:02d}" for i in range(10)]
+
+    # Asking for fold 5 (past the end) returns nothing — bucket exhausted.
+    assert _pick_holdout_sessions(sessions, laps, n_per_bucket=2, min_bucket_size=10, fold=5) == []

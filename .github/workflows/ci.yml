@@ -19,7 +19,9 @@ jobs:
         uses: extractions/setup-just@v2
 
       - name: Install dependencies
-        run: uv sync --extra app
+        # tire-etl + tire-model extras carry runtime deps (pydantic, duckdb,
+        # scipy) that mypy needs to resolve imports in src/.
+        run: uv sync --extra app --extra tire-etl --extra tire-model
 
       - name: Run checks
         run: just check
