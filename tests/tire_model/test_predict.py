@@ -15,15 +15,17 @@ from motorsports_data_notebook.tire_model.predict import (
 
 
 def _minimal_model() -> dict:
-    """Build a synthetic in-memory model that exercises the fallback chain.
+    """Synthetic schema-v2 (condition-aware) model exercising the fallback chain.
 
     - Cars: "ToyCar" and "OtherCar"
     - Tracks: "track_a" (anchor), "track_b"
-    - K_buckets cover every (ToyCar, corner) but only RR for OtherCar
-    - τ covers all 8 (ToyCar) + (OtherCar) entries
+    - Conditions: dry (covered for ToyCar + OtherCar) + damp (covered for ToyCar only)
+    - K_buckets cover every (ToyCar, corner, dry) and (ToyCar, corner, damp);
+      only (OtherCar, rr, dry) is present so the OtherCar (car) fallback is
+      exercised on other corners.
     """
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "model_form": "T_hot - T_eff = K * c_track * g2_typ * (1 - exp(-t/tau_sec))",
         "gay_lussac": {"p_atm_bar": 1.0, "t_zero_c_to_k": 273.15, "t_cold_uses": "T_air"},
         "energy_balance": {
@@ -35,6 +37,15 @@ def _minimal_model() -> dict:
                 "sun_factor_default": 1.0,
             },
         },
+        "conditions": {
+            "values": ["dry", "damp", "wet"],
+            "default": "dry",
+            "classification": {
+                "from_field": "precipitation_mm_hr",
+                "thresholds": {"dry_max": 0.1, "damp_max": 1.0},
+                "rule": "test",
+            },
+        },
         "corners": list(CORNERS),
         "min_samples_per_bucket": 5,
         "priors_when_no_fit": {
@@ -42,49 +53,78 @@ def _minimal_model() -> dict:
             "K_kelvin_per_g2": 60.0,
             "c_track": 1.0,
         },
-        "tau_sec_by_car_corner": [
-            {
-                "car": "ToyCar",
-                "corner": c,
-                "value_seconds": 200.0 + 10.0 * i,
-                "stderr_seconds": 5.0,
-                "n_samples_used": 100,
-                "from_prior": False,
-            }
-            for i, c in enumerate(CORNERS)
-        ]
-        + [
-            {
-                "car": "OtherCar",
-                "corner": c,
-                "value_seconds": 250.0,
-                "stderr_seconds": 8.0,
-                "n_samples_used": 50,
-                "from_prior": False,
-            }
-            for c in CORNERS
-        ],
-        "K_buckets": [
-            {
-                "key": {"car": "ToyCar", "corner": c},
-                "value_kelvin_per_g2": 50.0 + 5.0 * i,
-                "stderr_kelvin_per_g2": 2.0,
-                "n_samples": 100,
-                "from_prior": False,
-                "from_single_track": False,
-            }
-            for i, c in enumerate(CORNERS)
-        ]
-        + [
-            {
-                "key": {"car": "OtherCar", "corner": "rr"},
-                "value_kelvin_per_g2": 45.0,
-                "stderr_kelvin_per_g2": 3.0,
-                "n_samples": 50,
-                "from_prior": False,
-                "from_single_track": True,
-            },
-        ],
+        "tau_sec_by_car_corner_cond": (
+            [
+                {
+                    "car": "ToyCar",
+                    "corner": c,
+                    "condition": "dry",
+                    "value_seconds": 200.0 + 10.0 * i,
+                    "stderr_seconds": 5.0,
+                    "n_samples_used": 100,
+                    "from_prior": False,
+                }
+                for i, c in enumerate(CORNERS)
+            ]
+            + [
+                {
+                    "car": "ToyCar",
+                    "corner": c,
+                    "condition": "damp",
+                    "value_seconds": 150.0 + 10.0 * i,  # lower τ in damp
+                    "stderr_seconds": 10.0,
+                    "n_samples_used": 30,
+                    "from_prior": False,
+                }
+                for i, c in enumerate(CORNERS)
+            ]
+            + [
+                {
+                    "car": "OtherCar",
+                    "corner": c,
+                    "condition": "dry",
+                    "value_seconds": 250.0,
+                    "stderr_seconds": 8.0,
+                    "n_samples_used": 50,
+                    "from_prior": False,
+                }
+                for c in CORNERS
+            ]
+        ),
+        "K_buckets": (
+            [
+                {
+                    "key": {"car": "ToyCar", "corner": c, "condition": "dry"},
+                    "value_kelvin_per_g2": 50.0 + 5.0 * i,
+                    "stderr_kelvin_per_g2": 2.0,
+                    "n_samples": 100,
+                    "from_prior": False,
+                    "from_single_track": False,
+                }
+                for i, c in enumerate(CORNERS)
+            ]
+            + [
+                {
+                    "key": {"car": "ToyCar", "corner": c, "condition": "damp"},
+                    "value_kelvin_per_g2": 20.0 + 2.0 * i,  # lower K in damp
+                    "stderr_kelvin_per_g2": 3.0,
+                    "n_samples": 30,
+                    "from_prior": False,
+                    "from_single_track": False,
+                }
+                for i, c in enumerate(CORNERS)
+            ]
+            + [
+                {
+                    "key": {"car": "OtherCar", "corner": "rr", "condition": "dry"},
+                    "value_kelvin_per_g2": 45.0,
+                    "stderr_kelvin_per_g2": 3.0,
+                    "n_samples": 50,
+                    "from_prior": False,
+                    "from_single_track": True,
+                },
+            ]
+        ),
         "c_track_by_track": [
             {
                 "track_canonical": "track_a",
@@ -101,32 +141,72 @@ def _minimal_model() -> dict:
                 "anchor": False,
             },
         ],
-        "g2_typ_by_track_car": [
-            {"track_canonical": "track_a", "car": "ToyCar", "g2_typ": 0.9, "n_laps_used": 100},
-            {"track_canonical": "track_b", "car": "ToyCar", "g2_typ": 0.7, "n_laps_used": 50},
-            {"track_canonical": "track_a", "car": "OtherCar", "g2_typ": 0.8, "n_laps_used": 30},
-        ],
-        "lap_time_typ_by_track_car": [
+        "g2_typ_by_track_car_cond": [
             {
                 "track_canonical": "track_a",
                 "car": "ToyCar",
-                "lap_time_typ_s": 60.0,
+                "condition": "dry",
+                "g2_typ": 0.9,
                 "n_laps_used": 100,
+            },
+            {
+                "track_canonical": "track_a",
+                "car": "ToyCar",
+                "condition": "damp",
+                "g2_typ": 0.6,  # drivers go slower in damp
+                "n_laps_used": 30,
             },
             {
                 "track_canonical": "track_b",
                 "car": "ToyCar",
+                "condition": "dry",
+                "g2_typ": 0.7,
+                "n_laps_used": 50,
+            },
+            {
+                "track_canonical": "track_a",
+                "car": "OtherCar",
+                "condition": "dry",
+                "g2_typ": 0.8,
+                "n_laps_used": 30,
+            },
+        ],
+        "lap_time_typ_by_track_car_cond": [
+            {
+                "track_canonical": "track_a",
+                "car": "ToyCar",
+                "condition": "dry",
+                "lap_time_typ_s": 60.0,
+                "n_laps_used": 100,
+            },
+            {
+                "track_canonical": "track_a",
+                "car": "ToyCar",
+                "condition": "damp",
+                "lap_time_typ_s": 65.0,
+                "n_laps_used": 30,
+            },
+            {
+                "track_canonical": "track_b",
+                "car": "ToyCar",
+                "condition": "dry",
                 "lap_time_typ_s": 100.0,
                 "n_laps_used": 50,
             },
             {
                 "track_canonical": "track_a",
                 "car": "OtherCar",
+                "condition": "dry",
                 "lap_time_typ_s": 80.0,
                 "n_laps_used": 30,
             },
         ],
-        "fallback_order_for_K": [["car", "corner"], ["car"], []],
+        "fallback_order_for_K": [
+            ["car", "corner", "condition"],
+            ["car", "corner"],
+            ["car"],
+            [],
+        ],
     }
 
 
@@ -142,15 +222,90 @@ def test_predict_exact_bucket_match() -> None:
     )
     fl = result["fl"]
     assert isinstance(fl, Prediction)
-    assert fl.K_source_bucket == ("ToyCar", "fl")
+    assert fl.K_source_bucket == ("ToyCar", "fl", "dry")
     assert not fl.K_from_prior
-    assert fl.c_track == pytest.approx(1.0)  # anchor track
+    assert fl.c_track == pytest.approx(1.0)
     assert fl.g2_typ == pytest.approx(0.9)
-    assert fl.predicted_hot_temp_c > 20.0  # warming up
+    assert fl.predicted_hot_temp_c > 20.0
+
+
+def test_predict_damp_uses_damp_K() -> None:
+    """The damp K (20-26 K/G²) is much lower than dry (50-65), so the predicted
+    hot temp must drop and the resulting cold pressure must rise."""
+    model = _minimal_model()
+    dry = predict_cold_pressure(
+        track="track_a",
+        car="ToyCar",
+        lap_within_stint=5,
+        target_hot_pressure_bar={c: 1.95 for c in CORNERS},
+        ambient_temp_c=20.0,
+        track_condition="dry",
+        _model=model,
+    )
+    damp = predict_cold_pressure(
+        track="track_a",
+        car="ToyCar",
+        lap_within_stint=5,
+        target_hot_pressure_bar={c: 1.95 for c in CORNERS},
+        ambient_temp_c=20.0,
+        track_condition="damp",
+        _model=model,
+    )
+    assert damp["fl"].K_kelvin_per_g2 < dry["fl"].K_kelvin_per_g2
+    assert damp["fl"].predicted_hot_temp_c < dry["fl"].predicted_hot_temp_c
+    # Cold pressure higher in damp because the tire heats less
+    assert damp["fl"].cold_pressure_bar > dry["fl"].cold_pressure_bar
+    assert damp["fl"].K_source_bucket == ("ToyCar", "fl", "damp")
+
+
+def test_predict_wet_with_no_wet_data_falls_back_to_damp_K() -> None:
+    """The synthetic model has no `wet` entries but does have `damp`;
+    requesting wet should prefer damp over dry (physically closer)."""
+    model = _minimal_model()
+    result = predict_cold_pressure(
+        track="track_a",
+        car="ToyCar",
+        lap_within_stint=5,
+        target_hot_pressure_bar={c: 1.95 for c in CORNERS},
+        ambient_temp_c=20.0,
+        track_condition="wet",
+        _model=model,
+    )
+    # wet → damp (closest neighbor) → dry. Synthetic model has damp data.
+    assert result["fl"].K_source_bucket == ("ToyCar", "fl", "damp")
+
+
+def test_predict_wet_with_no_rain_data_falls_back_to_dry_K() -> None:
+    """If neither wet nor damp has data, fall back all the way to dry."""
+    model = _minimal_model()
+    # Strip out damp buckets so the chain has to walk through to dry
+    model = {
+        **model,
+        "K_buckets": [r for r in model["K_buckets"] if r["key"]["condition"] != "damp"],
+        "tau_sec_by_car_corner_cond": [
+            r for r in model["tau_sec_by_car_corner_cond"] if r["condition"] != "damp"
+        ],
+        "g2_typ_by_track_car_cond": [
+            r for r in model["g2_typ_by_track_car_cond"] if r["condition"] != "damp"
+        ],
+        "lap_time_typ_by_track_car_cond": [
+            r for r in model["lap_time_typ_by_track_car_cond"] if r["condition"] != "damp"
+        ],
+    }
+    result = predict_cold_pressure(
+        track="track_a",
+        car="ToyCar",
+        lap_within_stint=5,
+        target_hot_pressure_bar={c: 1.95 for c in CORNERS},
+        ambient_temp_c=20.0,
+        track_condition="wet",
+        _model=model,
+    )
+    assert result["fl"].K_source_bucket == ("ToyCar", "fl", "dry")
 
 
 def test_predict_falls_back_to_car_level_when_corner_missing() -> None:
-    """OtherCar has only RR in K_buckets — FL/FR/RL should fall back to (car) mean."""
+    """OtherCar only has K[rr, dry]; FL/FR/RL fall back to (car, corner) or (car)."""
     model = _minimal_model()
     result = predict_cold_pressure(
         track="track_a",
@@ -160,9 +315,10 @@ def test_predict_falls_back_to_car_level_when_corner_missing() -> None:
         ambient_temp_c=20.0,
         _model=model,
     )
+    # No (OtherCar, fl, *) in the table → falls back to (OtherCar) mean
     fl = result["fl"]
     assert fl.K_source_bucket == ("OtherCar",)
-    assert fl.K_kelvin_per_g2 == pytest.approx(45.0)  # only RR exists → mean is RR
+    assert fl.K_kelvin_per_g2 == pytest.approx(45.0)
 
 
 def test_predict_falls_back_to_global_when_car_unknown() -> None:
@@ -173,15 +329,11 @@ def test_predict_falls_back_to_global_when_car_unknown() -> None:
         lap_within_stint=5,
         target_hot_pressure_bar={c: 1.95 for c in CORNERS},
         ambient_temp_c=20.0,
-        # No (car) data → falls back to prior K
-        # Also no (car, corner) τ_sec → prior τ
-        # ⟨g²⟩ fallback to (track) mean
-        # lap_time_typ fallback to (track) mean
         _model=model,
     )
     fl = result["fl"]
     assert fl.K_from_prior is True
-    assert fl.K_source_bucket == ()  # global fallback
+    assert fl.K_source_bucket == ()
 
 
 def test_predict_falls_back_to_c_track_one_when_track_unknown() -> None:
@@ -194,8 +346,7 @@ def test_predict_falls_back_to_c_track_one_when_track_unknown() -> None:
         ambient_temp_c=20.0,
         _model=model,
     )
-    fl = result["fl"]
-    assert fl.c_track == pytest.approx(1.0)  # prior
+    assert result["fl"].c_track == pytest.approx(1.0)
 
 
 def test_predict_g2_override_bypasses_lookup() -> None:
@@ -214,7 +365,6 @@ def test_predict_g2_override_bypasses_lookup() -> None:
 
 def test_predict_uses_user_provided_track_temp_when_given() -> None:
     model = _minimal_model()
-    # Without track_temp: T_road defaults to T_air (no cloud cover provided)
     r_default = predict_cold_pressure(
         track="track_a",
         car="ToyCar",
@@ -223,7 +373,6 @@ def test_predict_uses_user_provided_track_temp_when_given() -> None:
         ambient_temp_c=20.0,
         _model=model,
     )
-    # With track_temp = 40 °C: T_eff blends up
     r_with = predict_cold_pressure(
         track="track_a",
         car="ToyCar",
@@ -233,16 +382,12 @@ def test_predict_uses_user_provided_track_temp_when_given() -> None:
         track_temp_c=40.0,
         _model=model,
     )
-    assert r_default["fl"].t_eff_c == pytest.approx(20.0)  # T_road == T_air → T_eff == T_air
-    # T_eff = 0.8·20 + 0.2·40 = 24
+    assert r_default["fl"].t_eff_c == pytest.approx(20.0)
     assert r_with["fl"].t_eff_c == pytest.approx(24.0)
-    # T_hot prediction is higher with the hotter T_eff baseline
     assert r_with["fl"].predicted_hot_temp_c > r_default["fl"].predicted_hot_temp_c
 
 
 def test_predict_cold_uses_t_air_not_t_eff_for_gay_lussac() -> None:
-    """Even when T_eff blends in road heat, the cold side of Gay-Lussac uses
-    T_air — cold tires equilibrate to pit air, not hot asphalt."""
     model = _minimal_model()
     r = predict_cold_pressure(
         track="track_a",
@@ -253,8 +398,6 @@ def test_predict_cold_uses_t_air_not_t_eff_for_gay_lussac() -> None:
         track_temp_c=50.0,
         _model=model,
     )
-    # T_cold for the Gay-Lussac inversion should be 15 °C, even though T_eff is higher
-    # We can verify by recomputing with the closed-form
     p = r["fl"]
     from motorsports_data_notebook.tire_model.energy_balance import (
         gay_lussac_cold_pressure_bar,
@@ -263,7 +406,7 @@ def test_predict_cold_uses_t_air_not_t_eff_for_gay_lussac() -> None:
     expected_cold = gay_lussac_cold_pressure_bar(
         target_hot_pressure_bar=1.95,
         t_hot_c=p.predicted_hot_temp_c,
-        t_cold_c=15.0,  # T_air, not T_eff
+        t_cold_c=15.0,
     )
     assert p.cold_pressure_bar == pytest.approx(expected_cold)
 
@@ -275,14 +418,13 @@ def test_predict_missing_corner_in_target_raises_keyerror() -> None:
             track="track_a",
             car="ToyCar",
             lap_within_stint=5,
-            target_hot_pressure_bar={"fl": 1.95, "fr": 1.95, "rl": 1.95},  # missing rr
+            target_hot_pressure_bar={"fl": 1.95, "fr": 1.95, "rl": 1.95},
             ambient_temp_c=20.0,
             _model=model,
         )
 
 
 def test_predict_cross_track_uses_same_k_different_c_track() -> None:
-    """Whole point of the energy-balance design: track shouldn't change K."""
     model = _minimal_model()
     r_a = predict_cold_pressure(
         track="track_a",
@@ -300,15 +442,26 @@ def test_predict_cross_track_uses_same_k_different_c_track() -> None:
         ambient_temp_c=20.0,
         _model=model,
     )
-    # Same K, same τ
     assert r_a["fl"].K_kelvin_per_g2 == r_b["fl"].K_kelvin_per_g2
     assert r_a["fl"].tau_sec == r_b["fl"].tau_sec
-    # Different c_track
     assert r_a["fl"].c_track != r_b["fl"].c_track
 
 
+def test_predict_rejects_unknown_condition() -> None:
+    model = _minimal_model()
+    with pytest.raises(ValueError):
+        predict_cold_pressure(
+            track="track_a",
+            car="ToyCar",
+            lap_within_stint=5,
+            target_hot_pressure_bar={c: 1.95 for c in CORNERS},
+            ambient_temp_c=20.0,
+            track_condition="monsoon",
+            _model=model,
+        )
+
+
 def test_predict_loads_from_disk_when_no_model_kwarg(tmp_path: Path) -> None:
-    """End-to-end: predict_cold_pressure reads tire_model.json from dataset_root."""
     model = _minimal_model()
     (tmp_path / "tire_model.json").write_text(json.dumps(model))
     result = predict_cold_pressure(
