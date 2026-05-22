@@ -23,4 +23,11 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <!-- Copy Python-parity fixture next to the test DLL for runtime lookup. -->
+  <ItemGroup>
+    <None Include="Fixtures\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>
