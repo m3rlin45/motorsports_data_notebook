@@ -64,7 +64,9 @@ def _synth_laps(
                             "tire_usable": True,
                             "t_air_c": t_air_c,
                             "cloud_cover": 50.0,
-                            "t_road_c": t_air_c,  # simplify: T_road = T_air in synthesis
+                            "precipitation": 0.0,  # synthetic data is all-dry
+                            "condition": "dry",
+                            "t_road_c": t_air_c,
                             "t_eff_c": t_air_c,
                             "session_start_utc": "2026-01-01T00:00:00Z",
                             "date": "2026-01-01",
@@ -120,8 +122,7 @@ def test_pass1_recovers_tau_sec_per_car_corner() -> None:
     ]
 
     for corner in ("fl", "fr", "rl", "rr"):
-        tau_fit, _ = wt._pass1_fit_tau_and_gains(laps_for_fit, "CarA", corner)
-        # Tolerance is loose because τ + per-bucket gain is a 5+ param NLS with noise
+        tau_fit, _ = wt._pass1_fit_tau_and_gains(laps_for_fit, "CarA", corner, "dry")
         assert tau_fit.value == pytest.approx(
             tau_true[("CarA", corner)], rel=0.10
         ), f"τ for CarA/{corner}: got {tau_fit.value:.1f}, expected {tau_true[('CarA', corner)]:.1f}"
@@ -139,14 +140,15 @@ def test_pass2_recovers_k_and_c_track_with_anchor() -> None:
     c_track_true = {"track_x": 1.0, "track_y": 0.85}
     g2_typ = {("track_x", "CarA"): 0.9, ("track_y", "CarA"): 0.7}
 
-    bucket_gains: dict[tuple[str, str, str], wt.FitParam] = {}
+    bucket_gains: dict[tuple[str, str, str, str], wt.FitParam] = {}
     for (car, corner), K in K_true.items():
         for track, c_t in c_track_true.items():
             gain = K * c_t * g2_typ[(track, car)]
-            bucket_gains[(car, track, corner)] = wt.FitParam(
+            # All-dry synthetic data
+            bucket_gains[(car, track, corner, "dry")] = wt.FitParam(
                 value=gain, stderr=gain * 0.01, n_samples=120
             )
-    g2_lookup = {k: (v, 100) for k, v in g2_typ.items()}
+    g2_lookup = {(t, c, "dry"): (v, 100) for (t, c), v in g2_typ.items()}
 
     K_fit, c_track_fit = wt._pass2_factor_gains(
         bucket_gains=bucket_gains,
@@ -155,27 +157,37 @@ def test_pass2_recovers_k_and_c_track_with_anchor() -> None:
     )
     # K should be recovered within tight tolerance (noise-free synthesis)
     for (car, corner), K_expected in K_true.items():
-        assert K_fit[(car, corner)].value == pytest.approx(K_expected, rel=0.001)
-    # c_track[track_x] is the anchor → exactly 1.0
+        assert K_fit[(car, corner, "dry")].value == pytest.approx(K_expected, rel=0.001)
     assert c_track_fit["track_x"].value == pytest.approx(1.0, abs=1e-9)
-    # c_track[track_y] should recover 0.85
     assert c_track_fit["track_y"].value == pytest.approx(0.85, rel=0.001)
 
 
 def test_pass2_handles_single_track_bucket_gracefully() -> None:
-    """If a (car, corner) has data only at one track, K · c_track is unidentifiable
-    on its own; the alternating-LS should still produce some K value rather than
-    crashing."""
+    """If a (car, corner, cond) has data only at one track, K · c_track is
+    unidentifiable on its own; the alternating-LS should still produce some
+    K value rather than crashing."""
     bucket_gains = {
-        ("CarA", "track_x", "fl"): wt.FitParam(54.0, 1.0, 100),  # = 60 * 1.0 * 0.9
+        ("CarA", "track_x", "fl", "dry"): wt.FitParam(54.0, 1.0, 100),  # = 60 * 1.0 * 0.9
     }
-    g2_lookup = {("track_x", "CarA"): (0.9, 100)}
+    g2_lookup = {("track_x", "CarA", "dry"): (0.9, 100)}
     K_fit, c_track_fit = wt._pass2_factor_gains(
         bucket_gains=bucket_gains, g2_lookup=g2_lookup, anchor_track="track_x"
     )
-    # K is fully determined by the single bucket once c_track[anchor] = 1.0
-    assert K_fit[("CarA", "fl")].value == pytest.approx(60.0, rel=0.001)
+    assert K_fit[("CarA", "fl", "dry")].value == pytest.approx(60.0, rel=0.001)
     assert c_track_fit["track_x"].value == pytest.approx(1.0, abs=1e-9)
+
+
+def test_classify_condition_thresholds() -> None:
+    """Three-level classification from precipitation in mm/hr."""
+    assert wt.classify_condition(0.0) == "dry"
+    assert wt.classify_condition(0.05) == "dry"
+    assert wt.classify_condition(0.1) == "damp"
+    assert wt.classify_condition(0.5) == "damp"
+    assert wt.classify_condition(0.99) == "damp"
+    assert wt.classify_condition(1.0) == "wet"
+    assert wt.classify_condition(4.4) == "wet"
+    assert wt.classify_condition(None) == "unknown"
+    assert wt.classify_condition(float("nan")) == "unknown"
 
 
 def test_pass1_returns_prior_when_no_dense_bucket() -> None:
@@ -198,7 +210,7 @@ def test_pass1_returns_prior_when_no_dense_bucket() -> None:
     laps_for_fit = laps[laps["lap_within_stint"] > 0].copy()
     laps_for_fit["g2_typ"] = 0.9
 
-    tau_fit, per_bucket = wt._pass1_fit_tau_and_gains(laps_for_fit, "CarA", "fl")
+    tau_fit, per_bucket = wt._pass1_fit_tau_and_gains(laps_for_fit, "CarA", "fl", "dry")
     assert tau_fit.from_prior is True
     assert tau_fit.value == pytest.approx(wt.PRIOR_TAU_SEC)
     assert per_bucket == {}
