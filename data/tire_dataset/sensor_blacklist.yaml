@@ -11,4 +11,34 @@
 #       corner: fl | fr | rl | rr
 #       reason: "<short human-readable explanation>"
 
-entries: []
+entries:
+  - session_id: 01811fbc44ee4dcb
+    corner: rl
+    reason: "Stuck at 28.0 °C across 9 laps (Inferno 86, Fuji 2025-07-07)"
+
+  # KK-SII RR sensor failure: same bad sensor across 4 sessions on Fuji 2026-02-26
+  - session_id: 034b6b78a440fe3a
+    corner: rr
+    reason: "Stuck at 13.0 °C across 13 laps (KK-SII, Fuji 2026-02-26)"
+  - session_id: 1efdf17c42265ba9
+    corner: rr
+    reason: "Stuck at 13.0 °C across 4 laps (KK-SII, Fuji 2026-02-26)"
+  - session_id: bbe7b51bd428f5a0
+    corner: rr
+    reason: "Stuck at 13.0 °C across 13 laps (KK-SII, Fuji 2026-02-26)"
+  - session_id: d3bf612415fb31ba
+    corner: rr
+    reason: "Stuck at 14.0 °C across 13 laps (KK-SII, Fuji 2026-02-26)"
+
+  # KK-SII RR also stuck the day before
+  - session_id: 1cd906c9ecf27b24
+    corner: rr
+    reason: "Stuck at 12.0 °C across 11 laps (KK-SII, Fuji 2026-02-25)"
+
+  # KK-SII RL sensor failure: same bad sensor across 2 sessions on Tsukuba 2026-03-22
+  - session_id: 42a95638e6bd528b
+    corner: rl
+    reason: "Stuck at 41.0 °C across 18 laps (KK-SII, Tsukuba 2026-03-22)"
+  - session_id: cd9aaae0b59ff389
+    corner: rl
+    reason: "Stuck at 41.0 °C across 16 laps (KK-SII, Tsukuba 2026-03-22)"
