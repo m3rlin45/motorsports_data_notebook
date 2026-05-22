@@ -13,7 +13,7 @@ Public API
 
 from __future__ import annotations
 
-EXTRACTOR_VERSION = "0.3.0"
+EXTRACTOR_VERSION = "0.4.0"
 
 from .extract import extract_session, run_extract  # noqa: E402
 from .notes_parser import run_enrich_notes  # noqa: E402

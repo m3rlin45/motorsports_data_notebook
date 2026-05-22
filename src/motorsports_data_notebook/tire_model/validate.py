@@ -147,14 +147,22 @@ def run_validation(dataset_root: Path | None = None) -> int:
 
 
 def _pick_holdout_sessions(
-    sessions: pd.DataFrame, laps: pd.DataFrame, n_per_bucket: int = 2, min_bucket_size: int = 10
+    sessions: pd.DataFrame,
+    laps: pd.DataFrame,
+    n_per_bucket: int = 2,
+    min_bucket_size: int = 10,
+    fold: int = 0,
 ) -> list[str]:
     """Pick deterministic held-out session_ids from each (track, car) bucket
     that has enough sessions to afford excluding ``n_per_bucket`` without
     breaking the fit.
 
-    Sorted by session_id for stability; takes the first ``n_per_bucket`` from
-    each eligible bucket.
+    Sessions are sorted by session_id (stable hash) within each bucket and
+    ``fold`` selects which contiguous slice of size ``n_per_bucket`` to hold
+    out. Different folds produce disjoint slices, so a k-fold CV sweeps
+    every session through the held-out set exactly once (until the bucket
+    runs out, at which point that bucket is silently skipped for later
+    folds).
     """
     ok = sessions[(sessions["status"] == "ok") & sessions["has_tpms"]]
     ok = ok[ok["track_canonical"].notna() & ok["car"].notna()]
@@ -166,47 +174,21 @@ def _pick_holdout_sessions(
     ok = ok[ok["n_usable_laps"].fillna(0) >= 3]
 
     held_out: list[str] = []
+    start = fold * n_per_bucket
+    stop = start + n_per_bucket
     for (track, car), grp in ok.groupby(["track_canonical", "car"]):
         if len(grp) < min_bucket_size:
             continue
-        chosen = sorted(grp["session_id"].tolist())[:n_per_bucket]
-        held_out.extend(chosen)
+        ordered = sorted(grp["session_id"].tolist())
+        if start >= len(ordered):
+            continue  # this bucket has been exhausted by earlier folds
+        held_out.extend(ordered[start:stop])
     return held_out
 
 
-def run_holdout_validation(
-    dataset_root: Path | None = None,
-    *,
-    n_per_bucket: int = 2,
-    min_bucket_size: int = 10,
-) -> int:
-    """Train on all-minus-held-out, predict per-lap T_hot for held-out sessions.
-
-    Reports per-corner MAE / RMSE per session and a pooled summary.
-    """
-    root = Path(dataset_root) if dataset_root else default_dataset_root()
-    sessions = pd.concat(
-        [pq.read_table(f).to_pandas() for f in sorted(sessions_dir(root).glob("*.parquet"))],
-        ignore_index=True,
-    )
-    laps = pd.concat(
-        [pq.read_table(f).to_pandas() for f in sorted(laps_dir(root).glob("*.parquet"))],
-        ignore_index=True,
-    )
-
-    holdout_ids = _pick_holdout_sessions(
-        sessions, laps, n_per_bucket=n_per_bucket, min_bucket_size=min_bucket_size
-    )
-    if not holdout_ids:
-        print("No (track, car) bucket has enough sessions to hold out cleanly.")
-        return 1
-
-    print(
-        f"Holding out {len(holdout_ids)} sessions "
-        f"({n_per_bucket} per bucket, min bucket size = {min_bucket_size})"
-    )
-
-    # Train a model with the holdouts excluded
+def _evaluate_fold(root: Path, holdout_ids: list[str]) -> pd.DataFrame:
+    """Train a model excluding ``holdout_ids`` and return per-(lap, corner)
+    residual rows for the held-out sessions."""
     model = build_warmup_table(root, exclude_session_ids=set(holdout_ids), write_artifacts=False)
 
     # Build per-(track, car) lookups from the held-out model
@@ -239,8 +221,7 @@ def run_holdout_validation(
     all_laps = _load_filtered_laps(root)
     all_laps = all_laps[all_laps["session_id"].isin(holdout_ids)].copy()
     if all_laps.empty:
-        print("Held-out sessions have no laps passing filters — nothing to evaluate.")
-        return 0
+        return pd.DataFrame()
     weather = _load_weather(root)
     all_laps = _attach_weather(all_laps, weather)
     all_laps = _compute_stint_clock(all_laps)
@@ -301,48 +282,119 @@ def run_holdout_validation(
                     "resid_c": t_hot_pred - float(obs),
                 }
             )
+    return pd.DataFrame(rows)
 
-    if not rows:
-        print("No predictable laps in held-out set.")
-        return 0
-    df = pd.DataFrame(rows)
 
-    def _print_corner_table(label: str, frame: pd.DataFrame) -> None:
-        if frame.empty:
-            return
-        print(f"\n=== {label} ({len(frame)} (lap × corner) points) ===")
-        for c in CORNERS:
-            sub = frame[frame["corner"] == c]
-            if sub.empty:
-                continue
-            mae = float(sub["resid_c"].abs().mean())
-            rmse = float(np.sqrt((sub["resid_c"] ** 2).mean()))
-            bias = float(sub["resid_c"].mean())
-            print(
-                f"  {c.upper():>3}   MAE = {mae:>5.2f} °C   RMSE = {rmse:>5.2f} °C   "
-                f"mean bias = {bias:+.2f} °C    n = {len(sub)}"
-            )
-
-    _print_corner_table("Held-out per-corner T_hot residuals — POOLED", df)
-    for car_name, car_frame in df.groupby("car"):
-        _print_corner_table(f"Held-out — {car_name}", car_frame)
-    for cond_name, cond_frame in df.groupby("condition"):
-        _print_corner_table(f"Held-out — condition={cond_name}", cond_frame)
-
-    # Per-(session, lap) table
-    print("\n=== Per-(session, lap) breakdown ===")
-    pivot = df.pivot_table(
-        index=["session_id", "track", "car", "lap_num", "lap_within_stint", "t_cum_s"],
-        columns="corner",
-        values=["T_hot_pred_c", "T_hot_obs_c", "resid_c"],
-    )
-    pivot.columns = [f"{tup[0]}_{tup[1]}" for tup in pivot.columns]
-    pivot = pivot.reset_index().sort_values(["session_id", "lap_num"])
-    pd.set_option("display.width", 240)
-    pd.set_option("display.max_columns", 30)
-    pd.set_option("display.float_format", lambda x: f"{x:.1f}")
-    cols = ["session_id", "track", "car", "lap_num", "lap_within_stint", "t_cum_s"]
+def _print_corner_table(label: str, frame: pd.DataFrame) -> None:
+    if frame.empty:
+        return
+    print(f"\n=== {label} ({len(frame)} (lap × corner) points) ===")
     for c in CORNERS:
-        cols += [f"T_hot_obs_c_{c}", f"T_hot_pred_c_{c}", f"resid_c_{c}"]
-    print(pivot[cols].to_string(index=False))
+        sub = frame[frame["corner"] == c]
+        if sub.empty:
+            continue
+        mae = float(sub["resid_c"].abs().mean())
+        rmse = float(np.sqrt((sub["resid_c"] ** 2).mean()))
+        bias = float(sub["resid_c"].mean())
+        print(
+            f"  {c.upper():>3}   MAE = {mae:>5.2f} °C   RMSE = {rmse:>5.2f} °C   "
+            f"mean bias = {bias:+.2f} °C    n = {len(sub)}"
+        )
+
+
+def _print_summary(df: pd.DataFrame, *, summary_label: str = "Held-out") -> None:
+    _print_corner_table(f"{summary_label} per-corner T_hot residuals — POOLED", df)
+    for car_name, car_frame in df.groupby("car"):
+        _print_corner_table(f"{summary_label} — {car_name}", car_frame)
+    for cond_name, cond_frame in df.groupby("condition"):
+        _print_corner_table(f"{summary_label} — condition={cond_name}", cond_frame)
+
+
+def run_holdout_validation(
+    dataset_root: Path | None = None,
+    *,
+    n_per_bucket: int = 2,
+    min_bucket_size: int = 10,
+    n_folds: int = 1,
+) -> int:
+    """Train on all-minus-held-out, predict per-lap T_hot for held-out sessions.
+
+    With ``n_folds == 1`` (default) this is a single deterministic holdout
+    — the legacy behavior. With ``n_folds > 1`` it sweeps disjoint
+    n_per_bucket-sized slices through every bucket as k-fold CV: refits k
+    times, predicts on each fold's held-out set, then aggregates residuals
+    across all folds so every session appears in the held-out set roughly
+    once. Useful when a single fold's MAE is too noisy to compare model
+    revisions (e.g. tiny per-bucket holdouts).
+    """
+    root = Path(dataset_root) if dataset_root else default_dataset_root()
+    sessions = pd.concat(
+        [pq.read_table(f).to_pandas() for f in sorted(sessions_dir(root).glob("*.parquet"))],
+        ignore_index=True,
+    )
+    laps = pd.concat(
+        [pq.read_table(f).to_pandas() for f in sorted(laps_dir(root).glob("*.parquet"))],
+        ignore_index=True,
+    )
+
+    fold_frames: list[pd.DataFrame] = []
+    total_holdouts = 0
+    for fold in range(max(1, n_folds)):
+        holdout_ids = _pick_holdout_sessions(
+            sessions,
+            laps,
+            n_per_bucket=n_per_bucket,
+            min_bucket_size=min_bucket_size,
+            fold=fold,
+        )
+        if not holdout_ids:
+            if fold == 0:
+                print("No (track, car) bucket has enough sessions to hold out cleanly.")
+                return 1
+            # No more buckets have unused sessions for this fold; stop.
+            break
+        print(
+            f"Fold {fold + 1}/{n_folds}: holding out {len(holdout_ids)} sessions"
+            if n_folds > 1
+            else f"Holding out {len(holdout_ids)} sessions "
+            f"({n_per_bucket} per bucket, min bucket size = {min_bucket_size})"
+        )
+        fold_df = _evaluate_fold(root, holdout_ids)
+        if not fold_df.empty:
+            fold_df["fold"] = fold
+            fold_frames.append(fold_df)
+        total_holdouts += len(holdout_ids)
+
+    if not fold_frames:
+        print("No predictable laps in any held-out fold.")
+        return 0
+    df = pd.concat(fold_frames, ignore_index=True)
+
+    label = "Held-out" if n_folds <= 1 else f"{n_folds}-fold CV"
+    if n_folds > 1:
+        unique_sessions = df["session_id"].nunique()
+        print(
+            f"\n{n_folds}-fold CV: {total_holdouts} (session × fold) holdouts → "
+            f"{unique_sessions} unique sessions evaluated"
+        )
+    _print_summary(df, summary_label=label)
+
+    # Per-(session, lap) table — only useful for a single fold; CV mode skips
+    # it because dumping residuals for every session in every fold is noise.
+    if n_folds <= 1:
+        print("\n=== Per-(session, lap) breakdown ===")
+        pivot = df.pivot_table(
+            index=["session_id", "track", "car", "lap_num", "lap_within_stint", "t_cum_s"],
+            columns="corner",
+            values=["T_hot_pred_c", "T_hot_obs_c", "resid_c"],
+        )
+        pivot.columns = [f"{tup[0]}_{tup[1]}" for tup in pivot.columns]
+        pivot = pivot.reset_index().sort_values(["session_id", "lap_num"])
+        pd.set_option("display.width", 240)
+        pd.set_option("display.max_columns", 30)
+        pd.set_option("display.float_format", lambda x: f"{x:.1f}")
+        cols = ["session_id", "track", "car", "lap_num", "lap_within_stint", "t_cum_s"]
+        for c in CORNERS:
+            cols += [f"T_hot_obs_c_{c}", f"T_hot_pred_c_{c}", f"resid_c_{c}"]
+        print(pivot[cols].to_string(index=False))
     return 0
