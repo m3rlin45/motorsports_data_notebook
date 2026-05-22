@@ -1,0 +1,37 @@
+{
+  "_cache_key": "86361605fa56f1271747117feaf9ada5bc237ae1|48e2dd24ce10840e0ffb8c4742f42b2b34734ab2|claude-opus-4-7",
+  "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/Fuji 2025-05-19.txt",
+  "_source_sha1": "86361605fa56f1271747117feaf9ada5bc237ae1",
+  "_prompt_sha1": "48e2dd24ce10840e0ffb8c4742f42b2b34734ab2",
+  "_model": "claude-opus-4-7",
+  "_extracted_at": "2026-04-18T14:09:58+00:00",
+  "data": {
+    "file_date": null,
+    "track": null,
+    "car": null,
+    "sessions": [
+      {
+        "session_index": 1,
+        "start_time_local": "16:40",
+        "weather_text": "Overcast, 56% humidity",
+        "ambient_temp_c": 19.0,
+        "track_condition": "dry",
+        "cold_pressure_bar": {
+          "fl": 1.8,
+          "fr": 1.8,
+          "rl": 1.8,
+          "rr": 1.8
+        },
+        "tire_compound": {
+          "fl": "27",
+          "fr": "27",
+          "rl": "25",
+          "rr": "25"
+        },
+        "setup_changes": [],
+        "incidents": [],
+        "notes": "T-4 run. Tires all pretty heavily worn."
+      }
+    ]
+  }
+}

@@ -1,0 +1,88 @@
+{
+  "_cache_key": "6a144fb86448460646888160c36f70e9937f28d5|48e2dd24ce10840e0ffb8c4742f42b2b34734ab2|claude-opus-4-7",
+  "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2025-05-02 Sodegaura.txt",
+  "_source_sha1": "6a144fb86448460646888160c36f70e9937f28d5",
+  "_prompt_sha1": "48e2dd24ce10840e0ffb8c4742f42b2b34734ab2",
+  "_model": "claude-opus-4-7",
+  "_extracted_at": "2026-04-18T14:03:38+00:00",
+  "data": {
+    "file_date": null,
+    "track": null,
+    "car": null,
+    "sessions": [
+      {
+        "session_index": 1,
+        "start_time_local": "13:00",
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": 2.1,
+          "fr": 2.1,
+          "rl": 2.1,
+          "rr": 2.1
+        },
+        "tire_compound": {
+          "fl": "silver worn",
+          "fr": "silver worn",
+          "rl": "black worn",
+          "rr": "black worn"
+        },
+        "setup_changes": [
+          "Dampers rear: 10",
+          "Dampers front: 15"
+        ],
+        "incidents": [],
+        "notes": "Tires: Front silver worn, Rear black worn. All pressures 2.1."
+      },
+      {
+        "session_index": 2,
+        "start_time_local": "14:00",
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": 2.1,
+          "fr": 2.1,
+          "rl": 2.1,
+          "rr": 2.1
+        },
+        "tire_compound": {
+          "fl": "silver new-ish",
+          "fr": "silver new-ish",
+          "rl": "black new",
+          "rr": "black new"
+        },
+        "setup_changes": [
+          "Dampers: same as previous run"
+        ],
+        "incidents": [],
+        "notes": "Tires: Front silver new-ish, Rear black new. All pressures 2.1."
+      },
+      {
+        "session_index": 3,
+        "start_time_local": "15:00",
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": "silver new-ish",
+          "fr": "silver new-ish",
+          "rl": "black new",
+          "rr": "black new"
+        },
+        "setup_changes": [
+          "Dampers: all 10"
+        ],
+        "incidents": [],
+        "notes": "Tires same as previous run."
+      }
+    ]
+  }
+}
