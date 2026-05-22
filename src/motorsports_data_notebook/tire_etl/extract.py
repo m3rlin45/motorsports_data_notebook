@@ -687,6 +687,10 @@ def _build_laps_table(
         "lat_g_peak": [],
         "long_g_peak_brake": [],
         "heat_proxy": [],
+        "heat_proxy_fl": [],
+        "heat_proxy_fr": [],
+        "heat_proxy_rl": [],
+        "heat_proxy_rr": [],
         "on_track_s": [],
         "distance_m": [],
     }
@@ -743,6 +747,10 @@ def _build_laps_table(
             "lat_g_peak",
             "long_g_peak_brake",
             "heat_proxy",
+            "heat_proxy_fl",
+            "heat_proxy_fr",
+            "heat_proxy_rl",
+            "heat_proxy_rr",
             "on_track_s",
             "distance_m",
         ):
@@ -782,6 +790,10 @@ def _build_laps_table(
         pa.field("lat_g_peak", pa.float32()),
         pa.field("long_g_peak_brake", pa.float32()),
         pa.field("heat_proxy", pa.float32()),
+        pa.field("heat_proxy_fl", pa.float32()),
+        pa.field("heat_proxy_fr", pa.float32()),
+        pa.field("heat_proxy_rl", pa.float32()),
+        pa.field("heat_proxy_rr", pa.float32()),
         pa.field("on_track_s", pa.float32()),
         pa.field("distance_m", pa.float32()),
     ]

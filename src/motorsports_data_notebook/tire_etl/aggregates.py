@@ -120,12 +120,28 @@ def compute_lap_dynamics(lap_ts: pa.Table) -> dict[str, float]:
     thr_valid = throttle[~np.isnan(throttle)]
 
     heat_proxy = float("nan")
+    heat_proxy_corner: dict[str, float] = {c: float("nan") for c in CORNERS}
     if n >= 2 and not np.all(np.isnan(lat_g)) and not np.all(np.isnan(long_g)):
         lg = np.nan_to_num(lat_g, nan=0.0)
         lng = np.nan_to_num(long_g, nan=0.0)
         dt = np.diff(t, prepend=t[0] if t.size else 0.0)
         dt = np.where(np.isnan(dt), 0.0, dt)
         heat_proxy = float(np.sum((lg * lg + lng * lng) * dt))
+        # Per-corner decomposition: positive lat_g ⇒ right turn ⇒ load on
+        # LEFT corners; positive long_g ⇒ accel ⇒ rear; negative long_g ⇒
+        # brake ⇒ front. Each corner sums only the G components that load
+        # it, so a hard-braking lap inflates FL/FR but not RL/RR.
+        lat_pos = np.where(lg > 0, lg, 0.0)
+        lat_neg = np.where(lg < 0, -lg, 0.0)
+        long_pos = np.where(lng > 0, lng, 0.0)
+        long_neg = np.where(lng < 0, -lng, 0.0)
+        per_corner = {
+            "fl": lat_pos * lat_pos + long_neg * long_neg,  # right turn + brake
+            "fr": lat_neg * lat_neg + long_neg * long_neg,  # left turn + brake
+            "rl": lat_pos * lat_pos + long_pos * long_pos,  # right turn + accel
+            "rr": lat_neg * lat_neg + long_pos * long_pos,  # left turn + accel
+        }
+        heat_proxy_corner = {c: float(np.sum(v * dt)) for c, v in per_corner.items()}
 
     long_g_min = (
         float(np.nanmin(long_g)) if long_g.size and not np.all(np.isnan(long_g)) else float("nan")
@@ -156,6 +172,10 @@ def compute_lap_dynamics(lap_ts: pa.Table) -> dict[str, float]:
         "lat_g_peak": lat_g_abs_max,
         "long_g_peak_brake": long_g_min,  # negative value; more negative = harder braking
         "heat_proxy": heat_proxy,
+        "heat_proxy_fl": heat_proxy_corner["fl"],
+        "heat_proxy_fr": heat_proxy_corner["fr"],
+        "heat_proxy_rl": heat_proxy_corner["rl"],
+        "heat_proxy_rr": heat_proxy_corner["rr"],
         "on_track_s": on_track_s,
         "distance_m": dist_val,
     }
