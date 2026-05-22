@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using TirePressureCalculator.Localization;
 using TirePressureCalculator.Services.Modeling;
 
 namespace TirePressureCalculator.ViewModels;
@@ -41,7 +42,7 @@ public class TireCornerViewModel : INotifyPropertyChanged
     public double EffectiveHotTempC => _predictedHotTempC ?? AdjustedHotTemp;
 
     public string PredictedHotTempDisplay => _predictedHotTempC is double t
-        ? $"Predicted hot: {t:F1} °C"
+        ? $"{Localizer.Instance["PredictedHotPrefix"]}: {t:F1} °C"
         : "";
 
     public string Label
