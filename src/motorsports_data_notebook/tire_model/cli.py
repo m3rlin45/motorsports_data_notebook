@@ -61,6 +61,14 @@ def main(argv: list[str] | None = None) -> int:
         help="Optional measured track-surface temperature in °C.",
     )
     p_predict.add_argument(
+        "--cold-tire-temp",
+        type=float,
+        default=None,
+        help="Temperature the tire is at right now when you measure/set cold "
+        "pressure in °C. Defaults to --ambient. Use when the tire isn't at "
+        "current air temperature (sun-warmed garage, set the night before, etc.).",
+    )
+    p_predict.add_argument(
         "--cloud-cover",
         type=float,
         default=None,
@@ -192,6 +200,7 @@ def _cmd_predict(args: argparse.Namespace) -> int:
         lap_within_stint=args.lap,
         target_hot_pressure_bar=targets,
         ambient_temp_c=args.ambient,
+        cold_tire_temp_c=args.cold_tire_temp,
         track_condition=args.condition,
         track_temp_c=args.track_temp,
         cloud_cover_pct=args.cloud_cover,
@@ -219,6 +228,11 @@ def _print_prediction(result: dict[str, Prediction], args: argparse.Namespace) -
         f"T_air = {any_p.t_air_c:.1f} °C    T_road = {any_p.t_road_c:.1f} °C    "
         f"T_eff = {any_p.t_eff_c:.1f} °C (w_road=0.20)"
     )
+    if abs(any_p.t_cold_c - any_p.t_air_c) > 1e-6:
+        print(
+            f"T_cold (Gay-Lussac cold side) = {any_p.t_cold_c:.1f} °C  "
+            f"[override — tire temp at pressure-set time differs from T_air]"
+        )
     print()
     header = (
         f"{'Corner':6} {'K(K/G²)':>9} {'τ_sec(s)':>9} {'warmup':>7} {'ΔT∞(K)':>8} "
