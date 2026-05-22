@@ -144,12 +144,20 @@ def _sort_laps(table: pa.Table) -> pa.Table:
     return table.take(indices)
 
 
-def upsert_session(dataset_root: Path, result: "ExtractResult") -> None:
+def upsert_session(
+    dataset_root: Path,
+    result: "ExtractResult",
+    *,
+    all_xrk_paths: list[Path] | None = None,
+) -> None:
     """Write one session's tables into the dataset, replacing prior rows.
 
     The timeseries table gets its own file; sessions and laps partitions are
     rewritten from the union of their prior contents (minus this session) and
-    the new rows.
+    the new rows. When ``all_xrk_paths`` is given (a merged multi-file
+    session), one manifest entry is written per constituent file — they all
+    point at the same ``session_id`` so any file changing invalidates the
+    whole group's cache on the next run.
     """
     if len(result.session_row) != 1:
         raise ValueError("ExtractResult.session_row must have exactly one row")
@@ -179,17 +187,30 @@ def upsert_session(dataset_root: Path, result: "ExtractResult") -> None:
         merged_laps = _sort_laps(merged_laps)
         _atomic_write_parquet(merged_laps, laps_path)
 
-    xrk_path = result.session_row.column("xrk_path")[0].as_py()
-    entry = {
-        "session_id": session_id,
-        "xrk_path": xrk_path,
-        "xrk_mtime_ns": result.session_row.column("xrk_mtime_ns")[0].as_py(),
-        "file_size": result.session_row.column("file_size")[0].as_py(),
-        "extractor_version": result.session_row.column("extractor_version")[0].as_py(),
-        "status": result.status,
-        "n_laps": result.session_row.column("n_laps")[0].as_py(),
-        "n_samples": len(result.timeseries),
-        "date": date_str,
-        "extracted_at": extracted_at,
-    }
-    _update_manifest(dataset_root, entry)
+    extractor_version = result.session_row.column("extractor_version")[0].as_py()
+    n_laps = result.session_row.column("n_laps")[0].as_py()
+    # Manifest: one row per constituent file pointing at the merged session_id.
+    if all_xrk_paths is None:
+        all_xrk_paths = [Path(result.session_row.column("xrk_path")[0].as_py())]
+    for p in all_xrk_paths:
+        try:
+            stat = p.stat()
+            mtime_ns = stat.st_mtime_ns
+            size = stat.st_size
+        except OSError:
+            # Best-effort: fall back to whatever the session row carries.
+            mtime_ns = result.session_row.column("xrk_mtime_ns")[0].as_py()
+            size = result.session_row.column("file_size")[0].as_py()
+        entry = {
+            "session_id": session_id,
+            "xrk_path": str(p),
+            "xrk_mtime_ns": mtime_ns,
+            "file_size": size,
+            "extractor_version": extractor_version,
+            "status": result.status,
+            "n_laps": n_laps,
+            "n_samples": len(result.timeseries),
+            "date": date_str,
+            "extracted_at": extracted_at,
+        }
+        _update_manifest(dataset_root, entry)
