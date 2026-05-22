@@ -175,6 +175,19 @@ public partial class MainView : UserControl
         }
     }
 
+    // Same WASM mitigation as the ToggleSwitch above: the Button's bound
+    // Command doesn't always fire from a tap in the browser host, so route
+    // through the gesture-level Tapped event too. On desktop the Command
+    // path fires as well; the command body is idempotent so the double-fire
+    // is harmless.
+    private void OnResetButtonTapped(object? sender, Avalonia.Input.TappedEventArgs e)
+    {
+        if (DataContext is TirePressureCalculator.ViewModels.MainViewModel vm)
+        {
+            vm.ResetCommand.Execute(null);
+        }
+    }
+
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);

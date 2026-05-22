@@ -1,3 +1,4 @@
+using System.Linq;
 using TirePressureCalculator.ViewModels;
 
 namespace TirePressureCalculator.Tests;
@@ -182,6 +183,12 @@ public class TireCornerViewModelTests
 
         vm.CurrentTemp = 20.0;
 
-        Assert.Empty(changedProperties);
+        // Filter out PropertyChanged(string.Empty) — the corner VM uses that
+        // signal to refresh all bindings when the Localizer's Language flips,
+        // and other tests in this assembly run in parallel and may flip it
+        // mid-test. The contract under test is "setting CurrentTemp to its
+        // current value fires no value-specific PropertyChanged", so only
+        // non-empty property names matter here.
+        Assert.Empty(changedProperties.Where(p => !string.IsNullOrEmpty(p)));
     }
 }
