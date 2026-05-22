@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using TirePressureCalculator.Localization;
 using TirePressureCalculator.Services.Modeling;
 
 namespace TirePressureCalculator.ViewModels;
@@ -12,6 +13,23 @@ public class TireCornerViewModel : INotifyPropertyChanged
     private double _targetHotPressure = 1.80;
     private double _tempAdjustPercent;
     private double? _predictedHotTempC;
+
+    public TireCornerViewModel()
+    {
+        // INPC convention: PropertyChanged(string.Empty) means "every
+        // binding on this object should re-evaluate".
+        Localizer.Instance.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(Localizer.Language))
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(string.Empty));
+        };
+    }
+
+    public string T_CurrentTemp => Localizer.Instance["CurrentTemp"];
+    public string T_TargetTempCorr => Localizer.Instance["TargetTempCorr"];
+    public string T_PredictedHotTemp => Localizer.Instance["PredictedHotTemp"];
+    public string T_TargetBar => Localizer.Instance["TargetBar"];
+    public string T_SetCold => Localizer.Instance["SetCold"];
 
     /// <summary>
     /// When non-null, <see cref="ColdPressure"/> uses this value as T_hot
@@ -41,7 +59,7 @@ public class TireCornerViewModel : INotifyPropertyChanged
     public double EffectiveHotTempC => _predictedHotTempC ?? AdjustedHotTemp;
 
     public string PredictedHotTempDisplay => _predictedHotTempC is double t
-        ? $"Predicted hot: {t:F1} °C"
+        ? $"{Localizer.Instance["PredictedHotPrefix"]}: {t:F1} °C"
         : "";
 
     public string Label

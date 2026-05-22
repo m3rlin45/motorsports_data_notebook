@@ -28,6 +28,11 @@ jobs:
       - name: Install Android + wasm-tools workloads
         run: dotnet workload install android wasm-tools
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: latest
+
       - name: Check formatting
         working-directory: tire_pressure_calculator
         run: dotnet format TirePressureCalculator.slnx --verify-no-changes
@@ -46,6 +51,11 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: latest
 
       - name: Publish
         working-directory: tire_pressure_calculator
@@ -78,6 +88,11 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: latest
+
       - name: Publish
         working-directory: tire_pressure_calculator
         run: dotnet publish Desktop/TirePressureCalculator.Desktop.csproj -c Release -r linux-x64 --self-contained
@@ -103,6 +118,11 @@ jobs:
       - name: Install Android workload
         run: dotnet workload install android
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: latest
+
       - name: Publish
         working-directory: tire_pressure_calculator
         run: dotnet publish Android/TirePressureCalculator.Android.csproj -c Release
@@ -127,6 +147,11 @@ jobs:
 
       - name: Install wasm-tools workload
         run: dotnet workload install wasm-tools
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: latest
 
       - name: Build (Debug)
         working-directory: tire_pressure_calculator
