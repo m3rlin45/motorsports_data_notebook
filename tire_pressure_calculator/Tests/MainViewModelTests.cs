@@ -73,6 +73,11 @@ public class MainViewModelTests
         vm.FrontLeft.TargetHotTemp = 100.0;
         vm.RearRight.TargetHotPressure = 2.50;
         vm.TempAdjustPercent = 10.0;
+        vm.SelectedCondition = "wet";
+        vm.LapWithinStint = 12;
+        vm.AmbientTempC = 35.0;
+        vm.TrackTempC = 42.0;
+        vm.CloudCoverPct = 80.0;
 
         vm.ResetCommand.Execute(null);
 
@@ -80,6 +85,11 @@ public class MainViewModelTests
         Assert.Equal(20.0, vm.FrontLeft.CurrentTemp);
         Assert.Equal(80.0, vm.FrontLeft.TargetHotTemp);
         Assert.Equal(1.80, vm.RearRight.TargetHotPressure);
+        Assert.Equal("dry", vm.SelectedCondition);
+        Assert.Equal(5, vm.LapWithinStint);
+        Assert.Equal(20.0, vm.AmbientTempC);
+        Assert.Null(vm.TrackTempC);
+        Assert.Null(vm.CloudCoverPct);
     }
 
     [Fact]
