@@ -67,6 +67,14 @@ def main(argv: list[str] | None = None) -> int:
         help="0..100; used only if --track-temp is omitted.",
     )
     p_predict.add_argument(
+        "--condition",
+        choices=("dry", "damp", "wet"),
+        default="dry",
+        help="Track condition (default: dry). Picks condition-specific K, τ_sec, "
+        "⟨g²⟩, and lap_time_typ. Damp = light drizzle (~0.1–1 mm/hr); "
+        "wet = light rain or heavier (≥ 1 mm/hr).",
+    )
+    p_predict.add_argument(
         "--g2-typ",
         type=float,
         default=None,
@@ -146,13 +154,15 @@ def _cmd_build(args: argparse.Namespace) -> int:
     logger.info("Building tire model artifacts at %s", root)
     model = build_warmup_table(root, rebuild=args.rebuild)
     n_k = len(model["K_buckets"])
-    n_tau = len(model["tau_sec_by_car_corner"])
+    n_tau = len(model["tau_sec_by_car_corner_cond"])
     n_c = len(model["c_track_by_track"])
+    n_g2 = len(model["g2_typ_by_track_car_cond"])
     logger.info(
-        "Wrote tire_model.json + warmup_table.parquet: %d K, %d τ, %d c_track entries",
+        "Wrote tire_model.json + warmup_table.parquet: " "%d K, %d τ, %d c_track, %d ⟨g²⟩ entries",
         n_k,
         n_tau,
         n_c,
+        n_g2,
     )
     return 0
 
@@ -182,6 +192,7 @@ def _cmd_predict(args: argparse.Namespace) -> int:
         lap_within_stint=args.lap,
         target_hot_pressure_bar=targets,
         ambient_temp_c=args.ambient,
+        track_condition=args.condition,
         track_temp_c=args.track_temp,
         cloud_cover_pct=args.cloud_cover,
         g2_typ_override=args.g2_typ,
@@ -199,7 +210,10 @@ def _print_prediction(result: dict[str, Prediction], args: argparse.Namespace) -
         f"Track:        {args.track:<20} c_track = {any_p.c_track:.2f}"
         f" ± {any_p.c_track_stderr:.3f}     ⟨g²⟩ = {any_p.g2_typ:.2f} G²"
     )
-    print(f"Car:          {args.car:<20} lap_time_typ = {any_p.lap_time_typ_s:.1f} s")
+    print(
+        f"Car:          {args.car:<20} condition = {args.condition:<5}"
+        f" lap_time_typ = {any_p.lap_time_typ_s:.1f} s"
+    )
     print(f"                                  t at lap {args.lap} = {any_p.t_at_lap_n_s:.1f} s")
     print(
         f"T_air = {any_p.t_air_c:.1f} °C    T_road = {any_p.t_road_c:.1f} °C    "
