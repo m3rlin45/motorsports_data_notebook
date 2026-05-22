@@ -14,9 +14,14 @@ import pytest
 from datetime import datetime, timezone
 
 from motorsports_data_notebook.tire_etl.extract import (
+    _build_empty_session_row,
     _extract_session_datetime_utc,
     _rename_to_canonical,
 )
+from motorsports_data_notebook.tire_etl.discovery import SessionCandidate
+
+from datetime import date as _date
+from pathlib import Path
 
 
 class _FakeLog:
@@ -122,3 +127,30 @@ def test_session_time_falls_back_to_midnight_local_when_metadata_missing() -> No
     dt = _extract_session_datetime_utc(log, "2026-04-04", "tsukuba_2000")
     # Midnight JST = 15:00 UTC previous day
     assert dt == datetime(2026, 4, 3, 15, 0, 0, tzinfo=timezone.utc)
+
+
+def test_session_row_error_msg_is_always_string_typed() -> None:
+    """Regression: error_msg must be pa.string() even when value is None.
+
+    Otherwise PyArrow infers pa.null() for all-None monthly partitions, and
+    cross-month concat/DuckDB reads fail with a schema-mismatch error.
+    """
+    cand = SessionCandidate(
+        path=Path("/tmp/foo.xrk"),
+        date=_date(2026, 4, 1),
+        driver="CMD",
+        car="Inferno 86",
+        track_raw="Tsukuba",
+        track_canonical="tsukuba_2000",
+        session_type="testing",
+        run_num=1,
+    )
+    row = _build_empty_session_row(
+        session_id="abc123",
+        path=Path("/tmp/foo.xrk"),
+        mtime_ns=0,
+        file_size=0,
+        cand=cand,
+        extractor_version="0.3.0",
+    )
+    assert row.schema.field("error_msg").type == pa.string()
