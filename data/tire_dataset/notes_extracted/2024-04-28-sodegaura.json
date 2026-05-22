@@ -1,0 +1,158 @@
+{
+  "_cache_key": "04a20cc137e4c83f6f37e3f711461e9448e6af8f|48e2dd24ce10840e0ffb8c4742f42b2b34734ab2|claude-opus-4-7",
+  "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2024-04-28-sodegaura.txt",
+  "_source_sha1": "04a20cc137e4c83f6f37e3f711461e9448e6af8f",
+  "_prompt_sha1": "48e2dd24ce10840e0ffb8c4742f42b2b34734ab2",
+  "_model": "claude-opus-4-7",
+  "_extracted_at": "2026-04-18T14:03:19+00:00",
+  "data": {
+    "file_date": null,
+    "track": null,
+    "car": null,
+    "sessions": [
+      {
+        "session_index": 1,
+        "start_time_local": "09:30",
+        "weather_text": "Cloudy, 55% humidity",
+        "ambient_temp_c": 20.0,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": 1.8,
+          "fr": 1.8,
+          "rl": 1.8,
+          "rr": 1.8
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "setup_changes": [
+          "Hot bleed after 5 laps: FR/FL/RL 2.1→2.0 bar, RR 2.05→2.0 bar"
+        ],
+        "incidents": [],
+        "notes": "Front tires most worn; rear middle worn. 5 laps. Handling: understeer on 5-6, under/over on 8, understeer on 9."
+      },
+      {
+        "session_index": 2,
+        "start_time_local": "10:30",
+        "weather_text": "cloudy, 48% humidity",
+        "ambient_temp_c": 22.0,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": 1.8,
+          "fr": 1.8,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "setup_changes": [
+          "Drop fronts 0.1 bar"
+        ],
+        "incidents": [],
+        "notes": "Front new at 1.8 bar; rear middle worn, pressures continued from last session. Hot pressures measured: FL 2.25, FR 2.20, RL 2.15, RR 2.10. Oversteer on 9; understeer on 5-6 as tire overheated; not pushing hard enough on 3-4 to evaluate; understeer on 8 after tire up to temp."
+      },
+      {
+        "session_index": 3,
+        "start_time_local": "11:30",
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "setup_changes": [
+          "Bleed all corners to 2.1 bar (hot)",
+          "Loosen rear sway/damper from 25 to 22"
+        ],
+        "incidents": [],
+        "notes": "Hot pressures after: FL 2.20, FR 2.15, RL 2.15, RR 2.10. Oversteer in slow corners due to not slowing enough; oversteer in high-speed corners, can't put the power down."
+      },
+      {
+        "session_index": 4,
+        "start_time_local": "14:00",
+        "weather_text": "cloudy, 58% humidity",
+        "ambient_temp_c": 20.0,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": 1.65,
+          "fr": 1.7,
+          "rl": 1.8,
+          "rr": 1.8
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "setup_changes": [
+          "Loosen rear from 22 to 20"
+        ],
+        "incidents": [],
+        "notes": "Front: best tires (formerly new). Rear: worst/most-worn tires. Suspension front 25, rear 22. Oversteer everywhere, rear tires had little grip, no understeer anywhere."
+      },
+      {
+        "session_index": 5,
+        "start_time_local": "15:00",
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": 1.65,
+          "fr": 1.7,
+          "rl": 1.8,
+          "rr": 1.8
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "setup_changes": [],
+        "incidents": [],
+        "notes": "Everything carried over from 14:00. Rear at 20. Lots of oversteer, no understeer. Felt more stable than 14:00 but slower."
+      },
+      {
+        "session_index": 6,
+        "start_time_local": "16:00",
+        "weather_text": "cloudy, 60% humidity",
+        "ambient_temp_c": 18.0,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": 1.65,
+          "fr": 1.7,
+          "rl": 1.8,
+          "rr": 1.8
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "setup_changes": [
+          "Suspension front 25, rear 25"
+        ],
+        "incidents": [],
+        "notes": "Front: worst tires, pressures carried over. Rear: middle tires at 1.8 bar."
+      }
+    ]
+  }
+}
