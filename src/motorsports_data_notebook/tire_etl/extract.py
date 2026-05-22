@@ -62,6 +62,75 @@ def _session_id_for(path: Path, mtime_ns: int) -> str:
     return h[:16]
 
 
+def _session_id_for_paths(paths_and_mtimes: list[tuple[Path, int]]) -> str:
+    """Stable hash of all constituent files in a merged session.
+
+    Order-independent (sorted by absolute path) so re-running discovery
+    can't reshuffle the id, and includes mtime so any file change forces
+    a re-extract of the whole group.
+    """
+    h = hashlib.sha1()
+    for p, m in sorted(paths_and_mtimes, key=lambda pm: str(pm[0].resolve())):
+        h.update(f"{p.resolve()}|{m}|".encode())
+    return h.hexdigest()[:16]
+
+
+def _stale_prefix_len(arr: np.ndarray) -> int:
+    """Return the count of leading stale-sensor samples in ``arr``.
+
+    A TPMS module that's still asleep reports its last pre-sleep ADC value
+    bit-for-bit identical sample to sample; once it wakes up, ±1-LSB
+    sensor noise gives every sample a different float value. So the
+    sleeping signature is a *sustained* run of strictly-equal values at
+    the head of the series.
+
+    Walk forward from the first finite sample to the first one whose
+    value differs bit-exactly. If that gap is 0 or 1 sample, the sensor
+    was awake from the start — return 0. Otherwise return the length of
+    the constant prefix. An entirely flat array returns its full length
+    (sensor never woke up for the whole session).
+    """
+    if arr.size <= 1:
+        return 0
+    finite_mask = ~np.isnan(arr)
+    if not finite_mask.any():
+        return 0
+    first_idx = int(np.argmax(finite_mask))
+    baseline = arr[first_idx]
+    for i in range(first_idx + 1, arr.size):
+        if np.isnan(arr[i]):
+            continue
+        if arr[i] != baseline:
+            return i if i - first_idx >= 2 else 0
+    return arr.size  # flat from first_idx to end → all-stale
+
+
+def mask_stale_session_prefix(ts: pa.Table) -> pa.Table:
+    """Mask the leading stale-sensor samples in each TPMS channel as NaN.
+
+    Operates session-wide (across every lap in this timeseries), because
+    the sensor wake-up only happens once per physical run, not on every
+    lap. Each of the eight TPMS channels (4 corners × press/temp) wakes
+    up independently and is masked independently — different corners
+    can have different stale-prefix lengths and that's OK.
+    """
+    new_table = ts
+    for c in CORNERS:
+        for chan_name in (f"tpms_press_{c}_bar", f"tpms_temp_{c}_c"):
+            if chan_name not in new_table.schema.names:
+                continue
+            idx = new_table.schema.get_field_index(chan_name)
+            field = new_table.schema.field(idx)
+            arr = new_table.column(idx).to_numpy(zero_copy_only=False).astype(np.float64)
+            stale_len = _stale_prefix_len(arr)
+            if stale_len == 0:
+                continue
+            arr[:stale_len] = np.nan
+            new_col = pa.array(arr.astype(field.type.to_pandas_dtype()), type=field.type)
+            new_table = new_table.set_column(idx, chan_name, new_col)
+    return new_table
+
+
 def _resolve_channels(profile_channel_names: dict[str, str], keys: list[str]) -> dict[str, str]:
     """Return {canonical_key: actual_aim_name} for keys present in the profile."""
     out: dict[str, str] = {}
@@ -256,18 +325,26 @@ def _rename_to_canonical(
 
 
 def extract_session(
-    path: Path,
+    paths: Path | list[Path],
     *,
     fallback_date_str: str | None = None,
     extractor_version: str | None = None,
 ) -> ExtractResult:
     """Extract one AIM session into session/laps/timeseries tables.
 
+    Accepts either a single path or a list of paths. When given multiple
+    paths, they're loaded and stitched together with
+    :class:`~motorsports_data_notebook._util.MergedLogFile` so the AIM
+    logger's "new file per restart" splits become one logical session
+    with sequentially-renumbered laps and one continuous timeseries.
+    Boundary partial laps (truncated mid-spin) are dropped automatically
+    by ``MergedLogFile``.
+
     On failure returns an ExtractResult with ``status="error"`` and empty
     data tables — callers still record the attempt in the manifest so we
     don't retry forever.
     """
-    from .._util import load_session
+    from .._util import MergedLogFile, load_session
     from ..profiles import (
         DEFAULT_CHANNEL_NAMES,
         get_logger_id,
@@ -275,30 +352,37 @@ def extract_session(
     )
     from . import EXTRACTOR_VERSION
 
+    if isinstance(paths, Path):
+        paths = [paths]
+    if not paths:
+        raise ValueError("extract_session requires at least one path")
+
     ev = extractor_version or EXTRACTOR_VERSION
-    stat = path.stat()
-    mtime_ns = stat.st_mtime_ns
-    file_size = stat.st_size
-    session_id = _session_id_for(path, mtime_ns)
+    primary_path = paths[0]
+    stats = [(p, p.stat().st_mtime_ns, p.stat().st_size) for p in paths]
+    primary_mtime_ns = stats[0][1]
+    total_file_size = sum(s for _, _, s in stats)
+    session_id = _session_id_for_paths([(p, m) for p, m, _ in stats])
     # Use filename date if parent is YYYY-MM-DD
-    cand = parse_filename(path)
+    cand = parse_filename(primary_path)
     date_str = f"{cand.date.year:04d}-{cand.date.month:02d}-{cand.date.day:02d}"
     if fallback_date_str is None:
         fallback_date_str = date_str
 
     empty_session = _build_empty_session_row(
         session_id=session_id,
-        path=path,
-        mtime_ns=mtime_ns,
-        file_size=file_size,
+        path=primary_path,
+        mtime_ns=primary_mtime_ns,
+        file_size=total_file_size,
         cand=cand,
         extractor_version=ev,
+        xrk_paths=[str(p) for p in paths],
     )
 
     try:
-        log = load_session(str(path))
+        logs = [load_session(str(p)) for p in paths]
     except Exception as e:
-        logger.exception("load_session failed for %s", path)
+        logger.exception("load_session failed for %s", primary_path)
         row = empty_session.set_column(
             empty_session.schema.get_field_index("status"),
             "status",
@@ -315,6 +399,7 @@ def extract_session(
             status="error",
             error_msg=str(e),
         )
+    log = logs[0] if len(logs) == 1 else MergedLogFile(logs)
 
     # Resolve profile + channel names.
     logger_id = get_logger_id(log) or ""
@@ -411,6 +496,13 @@ def extract_session(
     # Rename AIM channel names to canonical snake_case (and derive surf means).
     timeseries = _rename_to_canonical(timeseries, profile_names=channel_names)
 
+    # Mask the leading stale-sensor prefix on each TPMS channel before any
+    # per-lap stats are computed. This is a *session*-level operation: the
+    # sensor only wakes up once per physical run, so we don't want to
+    # re-detect "staleness" per lap (mid-session bit-exact runs are coincidence,
+    # not sleep).
+    timeseries = mask_stale_session_prefix(timeseries)
+
     # Prepend session_id column.
     session_id_col = pa.array([session_id] * len(timeseries))
     timeseries = timeseries.add_column(0, "session_id", session_id_col)
@@ -435,9 +527,9 @@ def extract_session(
 
     session_row = _build_session_row(
         session_id=session_id,
-        path=path,
-        mtime_ns=mtime_ns,
-        file_size=file_size,
+        path=primary_path,
+        mtime_ns=primary_mtime_ns,
+        file_size=total_file_size,
         cand=cand,
         extractor_version=ev,
         logger_id=logger_id,
@@ -452,6 +544,7 @@ def extract_session(
         session_start_utc=_extract_session_datetime_utc(log, date_str, cand.track_canonical),
         status=status,
         error_msg=err,
+        xrk_paths=[str(p) for p in paths],
     )
 
     return ExtractResult(
@@ -486,6 +579,7 @@ def _build_empty_session_row(
     file_size: int,
     cand: SessionCandidate,
     extractor_version: str,
+    xrk_paths: list[str] | None = None,
 ) -> pa.Table:
     return _build_session_row(
         session_id=session_id,
@@ -508,6 +602,7 @@ def _build_empty_session_row(
         ),
         status="pending",
         error_msg=None,
+        xrk_paths=xrk_paths,
     )
 
 
@@ -531,11 +626,14 @@ def _build_session_row(
     session_start_utc: datetime,
     status: str = "ok",
     error_msg: str | None = None,
+    xrk_paths: list[str] | None = None,
 ) -> pa.Table:
+    paths_list = xrk_paths if xrk_paths is not None else [str(path)]
     return pa.table(
         {
             "session_id": [session_id],
             "xrk_path": [str(path)],
+            "xrk_paths": pa.array([paths_list], type=pa.list_(pa.string())),
             "xrk_mtime_ns": pa.array([mtime_ns], type=pa.int64()),
             "file_size": pa.array([file_size], type=pa.int64()),
             "date": pa.array([cand.date], type=pa.date32()),
@@ -710,51 +808,81 @@ def run_extract(
     force: bool = False,
     retry_errors: bool = False,
 ) -> dict[str, int]:
-    """Extract all new sessions and upsert them into the dataset."""
+    """Extract all new sessions and upsert them into the dataset.
+
+    Files that the AIM logger split across a single physical run (matching
+    ``date / driver / car / track / session_type`` and with consecutive
+    ``run_num`` values) are grouped via
+    :func:`~motorsports_data_notebook.tire_etl.discovery.group_split_sessions`
+    and extracted together. Each constituent file still gets its own
+    manifest row (so re-runs detect when any file changed) but they all
+    point at the same merged session_id.
+    """
     from .dataset import load_manifest, upsert_session
+    from .discovery import group_split_sessions
 
     existing = load_manifest(dataset_root)
     counts = {"scanned": 0, "skipped": 0, "extracted": 0, "errors": 0}
 
-    for cand in scan_aim_tree(aim_root, since=since, only_car=only_car):
-        counts["scanned"] += 1
-        stat = cand.path.stat()
-        mtime_ns = stat.st_mtime_ns
-        size = stat.st_size
-        from . import EXTRACTOR_VERSION
+    candidates = scan_aim_tree(aim_root, since=since, only_car=only_car)
+    groups = group_split_sessions(candidates)
+    from . import EXTRACTOR_VERSION
 
-        key = (str(cand.path), mtime_ns, size, EXTRACTOR_VERSION)
-        prior = existing.get(str(cand.path))
-        if (
-            prior is not None
-            and not force
-            and prior.get("xrk_mtime_ns") == mtime_ns
-            and prior.get("file_size") == size
-            and prior.get("extractor_version") == EXTRACTOR_VERSION
-            and (prior.get("status") != "error" or not retry_errors)
-        ):
-            counts["skipped"] += 1
+    for group in groups:
+        counts["scanned"] += len(group)
+        stats = [(c.path, c.path.stat()) for c in group]
+        mtimes = [s.st_mtime_ns for _, s in stats]
+        sizes = [s.st_size for _, s in stats]
+
+        # Skip only if EVERY constituent file is cache-clean — any change
+        # to any file in the group invalidates the merged session.
+        all_clean = True
+        for cand, mtime_ns, size in zip(group, mtimes, sizes):
+            prior = existing.get(str(cand.path))
+            if (
+                prior is None
+                or prior.get("xrk_mtime_ns") != mtime_ns
+                or prior.get("file_size") != size
+                or prior.get("extractor_version") != EXTRACTOR_VERSION
+                or (prior.get("status") == "error" and retry_errors)
+            ):
+                all_clean = False
+                break
+        if all_clean and not force:
+            counts["skipped"] += len(group)
             continue
 
+        paths = [c.path for c in group]
         t0 = time.perf_counter()
-        result = extract_session(cand.path)
+        result = extract_session(paths)
         elapsed = time.perf_counter() - t0
-        logger.info(
-            "extracted %s status=%s elapsed=%.2fs",
-            cand.path.name,
-            result.status,
-            elapsed,
-        )
-
-        upsert_session(dataset_root, result)
-        if result.status == "error":
-            counts["errors"] += 1
+        if len(paths) == 1:
+            logger.info(
+                "extracted %s status=%s elapsed=%.2fs",
+                paths[0].name,
+                result.status,
+                elapsed,
+            )
         else:
-            counts["extracted"] += 1
-        existing[str(cand.path)] = {
-            "xrk_mtime_ns": mtime_ns,
-            "file_size": size,
-            "extractor_version": EXTRACTOR_VERSION,
-            "status": result.status,
-        }
+            logger.info(
+                "extracted %d-file merged session %s (primary=%s) status=%s elapsed=%.2fs",
+                len(paths),
+                result.session_row.column("session_id")[0].as_py(),
+                paths[0].name,
+                result.status,
+                elapsed,
+            )
+
+        upsert_session(dataset_root, result, all_xrk_paths=paths)
+        if result.status == "error":
+            counts["errors"] += len(paths)
+        else:
+            counts["extracted"] += len(paths)
+        for cand, mtime_ns, size in zip(group, mtimes, sizes):
+            existing[str(cand.path)] = {
+                "xrk_mtime_ns": mtime_ns,
+                "file_size": size,
+                "extractor_version": EXTRACTOR_VERSION,
+                "status": result.status,
+            }
     return counts
