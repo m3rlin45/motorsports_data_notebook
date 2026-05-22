@@ -44,6 +44,8 @@ public class AppSettings
     public double TempAdjustPercent { get; set; }
     public AppMode Mode { get; set; } = AppMode.Manual;
     public PredictionSettings Prediction { get; set; } = new();
+    /// <summary>UI language preference: "auto", "en", or "ja".</summary>
+    public string UiLanguage { get; set; } = "auto";
 
     public static ISettingsStorage Storage { get; set; } = new FileSettingsStorage();
 

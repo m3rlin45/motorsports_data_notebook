@@ -6,6 +6,7 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
+using TirePressureCalculator.Localization;
 using TirePressureCalculator.Services;
 using TirePressureCalculator.Services.Modeling;
 
@@ -56,8 +57,53 @@ public class MainViewModel : INotifyPropertyChanged
 
     public ObservableCollection<string> AvailableTracks { get; } = new();
     public ObservableCollection<string> AvailableCars { get; } = new();
-    public IReadOnlyList<string> AvailableConditions { get; } =
-        new[] { "dry", "damp", "wet" };
+    public IReadOnlyList<ConditionOption> AvailableConditions { get; } = new[]
+    {
+        new ConditionOption("dry", "ConditionDry"),
+        new ConditionOption("damp", "ConditionDamp"),
+        new ConditionOption("wet", "ConditionWet"),
+    };
+
+    // Localized strings for direct-content XAML bindings. Each is a plain
+    // CLR property — compiled bindings handle these cleanly, unlike
+    // indexer paths on a non-DataContext source.
+    public string T_ModeLabel => Localizer.Instance["ModeLabel"];
+    public string T_ModeManual => Localizer.Instance["ModeManual"];
+    public string T_ModePrediction => Localizer.Instance["ModePrediction"];
+    public string T_ModelUnavailable => Localizer.Instance["ModelUnavailable"];
+    public string T_LanguageLabel => Localizer.Instance["LanguageLabel"];
+    public string T_Track => Localizer.Instance["Track"];
+    public string T_Car => Localizer.Instance["Car"];
+    public string T_Condition => Localizer.Instance["Condition"];
+    public string T_LapWithinStint => Localizer.Instance["LapWithinStint"];
+    public string T_Ambient => Localizer.Instance["Ambient"];
+    public string T_CloudCover => Localizer.Instance["CloudCover"];
+    public string T_ResetButton => Localizer.Instance["ResetButton"];
+
+    // ---- Language picker ----
+
+    public IReadOnlyList<LanguageOption> AvailableLanguages { get; } = new[]
+    {
+        new LanguageOption("auto", "LanguageAuto"),
+        new LanguageOption("en", "LanguageEnglish"),
+        new LanguageOption("ja", "LanguageJapanese"),
+    };
+
+    private LanguageOption _selectedLanguage = null!;
+    public LanguageOption SelectedLanguage
+    {
+        get => _selectedLanguage;
+        set
+        {
+            if (ReferenceEquals(_selectedLanguage, value) || value is null) return;
+            _selectedLanguage = value;
+            OnPropertyChanged();
+            Localizer.Instance.SetPreference(value.Code);
+            _settings.UiLanguage = value.Code;
+            _settings.Save();
+            OnPropertyChanged(nameof(TempAdjustLabel));
+        }
+    }
 
     public string? SelectedTrack
     {
@@ -92,7 +138,7 @@ public class MainViewModel : INotifyPropertyChanged
         get => _selectedCondition;
         set
         {
-            if (_selectedCondition == value) return;
+            if (_selectedCondition == value || value is null) return;
             _selectedCondition = value;
             OnPropertyChanged();
             _settings.Prediction.Condition = value;
@@ -180,8 +226,8 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     public string TempAdjustLabel => _tempAdjustPercent == 0
-        ? "Temp adjust: 0%"
-        : $"Temp adjust: {_tempAdjustPercent:+0.0;-0.0}%";
+        ? Localizer.Instance["TempAdjustZero"]
+        : Localizer.Instance.Format("TempAdjustFormat", _tempAdjustPercent.ToString("+0.0;-0.0"));
 
     // ---- Construction ----
 
@@ -199,6 +245,18 @@ public class MainViewModel : INotifyPropertyChanged
         _tempAdjustPercent = _settings.TempAdjustPercent;
         _tireModel = tireModel;
         _predictor = tireModel is not null ? new CircuitPredictor(tireModel) : null;
+
+        // Apply the persisted language preference before any view binds.
+        Localizer.Instance.SetPreference(_settings.UiLanguage);
+        _selectedLanguage = AvailableLanguages.FirstOrDefault(l => l.Code == _settings.UiLanguage)
+            ?? AvailableLanguages[0];
+        // Fire PropertyChanged(string.Empty) on language switch — INPC
+        // convention for "every binding on this object should re-evaluate".
+        Localizer.Instance.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(Localizer.Language))
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(string.Empty));
+        };
 
         FrontLeft = CreateCorner("FL", _settings.FrontLeft);
         FrontRight = CreateCorner("FR", _settings.FrontRight);
@@ -335,4 +393,46 @@ public class RelayCommand(Action execute) : ICommand
 #pragma warning restore CS0067
     public bool CanExecute(object? parameter) => true;
     public void Execute(object? parameter) => execute();
+}
+
+/// <summary>
+/// Picker item that pairs a string value (the data key — "dry"/"damp"/"wet")
+/// with a localization key for the display label.
+/// </summary>
+public sealed class ConditionOption : INotifyPropertyChanged
+{
+    public string Value { get; }
+    public string LocalizationKey { get; }
+    public string Display => Localizer.Instance[LocalizationKey];
+
+    public ConditionOption(string value, string localizationKey)
+    {
+        Value = value;
+        LocalizationKey = localizationKey;
+        Localizer.Instance.PropertyChanged += (_, _) =>
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Display)));
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+}
+
+/// <summary>
+/// Picker item for the language menu: a stable code ("auto"/"en"/"ja") plus a
+/// localization key for the human-readable name.
+/// </summary>
+public sealed class LanguageOption : INotifyPropertyChanged
+{
+    public string Code { get; }
+    public string LocalizationKey { get; }
+    public string Display => Localizer.Instance[LocalizationKey];
+
+    public LanguageOption(string code, string localizationKey)
+    {
+        Code = code;
+        LocalizationKey = localizationKey;
+        Localizer.Instance.PropertyChanged += (_, _) =>
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Display)));
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
 }

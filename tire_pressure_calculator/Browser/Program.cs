@@ -12,5 +12,6 @@ internal sealed class Program
     }
 
     public static AppBuilder BuildAvaloniaApp() =>
-        AppBuilder.Configure<App>();
+        AppBuilder.Configure<App>()
+            .WithJapaneseFontFallback();
 }

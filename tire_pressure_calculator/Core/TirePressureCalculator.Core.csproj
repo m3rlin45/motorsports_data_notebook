@@ -24,6 +24,45 @@
   -->
   <ItemGroup>
     <EmbeddedResource Include="..\..\data\tire_dataset\tire_model.json" LogicalName="tire_model.json" />
+    <EmbeddedResource Include="Localization\strings.json" LogicalName="strings.json" />
+  </ItemGroup>
+
+  <!--
+    The Japanese-glyph font is regenerated from strings.json on every build
+    via Assets/Fonts/regen_subset.py (a PEP 723 uv-script). It produces an
+    ~100 KB subset containing only the characters the UI actually uses,
+    instead of the ~3.4 MB full Noto Sans JP.
+
+    The Inputs/Outputs metadata makes this incremental: MSBuild skips it
+    unless strings.json changes. Both the committed and regenerated paths
+    point at the same file, so a developer without uv installed still
+    builds against the last-committed font.
+  -->
+  <PropertyGroup>
+    <_FontSubsetScript>$(MSBuildThisFileDirectory)Assets\Fonts\regen_subset.py</_FontSubsetScript>
+    <_FontSubsetOutput>$(MSBuildThisFileDirectory)Assets\Fonts\NotoSansJP-Subset.ttf</_FontSubsetOutput>
+    <_FontSubsetStrings>$(MSBuildThisFileDirectory)Localization\strings.json</_FontSubsetStrings>
+    <_FontSubsetCache>$(MSBuildThisFileDirectory)obj\font-cache</_FontSubsetCache>
+  </PropertyGroup>
+
+  <Target Name="RegenJapaneseFontSubset"
+          BeforeTargets="BeforeBuild"
+          Inputs="$(_FontSubsetStrings);$(_FontSubsetScript)"
+          Outputs="$(_FontSubsetOutput)">
+    <!-- Skip silently if uv isn't on the build machine; the committed
+         font is still picked up by the AvaloniaResource below. -->
+    <Exec Command="uv --version" ConsoleToMSBuild="true" IgnoreExitCode="true">
+      <Output TaskParameter="ExitCode" PropertyName="_UvExitCode" />
+    </Exec>
+    <Message Condition="'$(_UvExitCode)' != '0'"
+             Text="uv not found on PATH; using committed NotoSansJP-Subset.ttf as-is."
+             Importance="high" />
+    <Exec Condition="'$(_UvExitCode)' == '0'"
+          Command="uv run --quiet --script &quot;$(_FontSubsetScript)&quot; --strings &quot;$(_FontSubsetStrings)&quot; --cache-dir &quot;$(_FontSubsetCache)&quot; --output &quot;$(_FontSubsetOutput)&quot;" />
+  </Target>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\Fonts\NotoSansJP-Subset.ttf" />
   </ItemGroup>
 
 </Project>
