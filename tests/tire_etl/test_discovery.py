@@ -7,7 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from motorsports_data_notebook.tire_etl.discovery import parse_filename, scan_aim_tree
+from motorsports_data_notebook.tire_etl.discovery import (
+    SessionCandidate,
+    group_split_sessions,
+    parse_filename,
+    scan_aim_tree,
+)
 
 
 def _mk(tmp_path: Path, name: str, date_str: str) -> Path:
@@ -91,3 +96,48 @@ def test_parse_filename_missing_suffix(tmp_path: Path) -> None:
     assert c.date == date(2026, 1, 1)
     assert c.run_num is None
     assert c.track_canonical == "tsukuba_2000"
+
+
+def _make_cand(run_num: int, *, date_v=date(2026, 5, 22), car="KK-SII", session_type="Qualifying testing") -> SessionCandidate:
+    return SessionCandidate(
+        path=Path(f"/fake/{date_v}/CMD_{car}_Tsukuba_Car_{session_type}_a_{run_num:04d}.xrk"),
+        date=date_v,
+        driver="CMD",
+        car=car,
+        track_raw="Tsukuba",
+        track_canonical="tsukuba_2000",
+        session_type=session_type,
+        run_num=run_num,
+    )
+
+
+def test_group_split_sessions_merges_consecutive_run_nums() -> None:
+    # Three files in a row with run_num 139, 140, 141 → one merged group.
+    groups = group_split_sessions([_make_cand(139), _make_cand(140), _make_cand(141)])
+    assert len(groups) == 1
+    assert [c.run_num for c in groups[0]] == [139, 140, 141]
+
+
+def test_group_split_sessions_splits_on_run_num_gap() -> None:
+    # 139, 140 are contiguous; 143 has a gap of 3 from 140, so it's its own group.
+    groups = group_split_sessions([_make_cand(139), _make_cand(140), _make_cand(143)])
+    assert [[c.run_num for c in g] for g in groups] == [[139, 140], [143]]
+
+
+def test_group_split_sessions_splits_on_session_type_change() -> None:
+    # Same date / car but different session_type → never merged even if run_nums are consecutive.
+    a = _make_cand(139, session_type="Qualifying testing")
+    b = _make_cand(140, session_type="Generic testing")
+    groups = group_split_sessions([a, b])
+    # Two singleton groups; order depends on the sort key — only the partitioning matters.
+    assert sorted([tuple(c.run_num for c in g) for g in groups]) == [(139,), (140,)]
+
+
+def test_group_split_sessions_singleton_groups() -> None:
+    groups = group_split_sessions([_make_cand(139)])
+    assert len(groups) == 1
+    assert len(groups[0]) == 1
+
+
+def test_group_split_sessions_empty_input() -> None:
+    assert group_split_sessions([]) == []
