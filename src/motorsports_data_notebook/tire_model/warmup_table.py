@@ -58,10 +58,137 @@ PRIOR_C_TRACK = 1.0
 MIN_LAPS_FOR_TAU_FIT = 30  # per (car, track, corner) bucket to participate in Pass 1
 MIN_LAPS_FOR_K_BUCKET = 5  # per (car, track, corner) bucket to factor in Pass 2
 
+# Damp/wet τ should physically be ≤ the dry τ (faster cooling in rain). When a
+# rain bucket fits a τ_sec much larger than the same (car, corner)'s dry τ,
+# the fit is almost certainly picking up warmup-interrupted short stints
+# rather than real thermal physics. Cap to this multiple of dry τ and flag.
+MAX_WET_TAU_VS_DRY_RATIO = 1.5
+
+# Damp/wet K should physically be ≤ dry K (less friction, less heat). Cap to
+# this multiple of the same (car, corner)'s dry K when the fit comes back
+# higher. 1.2 gives a small upside band — empirical sweet spot in v0.3
+# held-out validation. A hard 1.0 cap under-predicts; uncapped over-predicts.
+MAX_WET_K_VS_DRY_RATIO = 1.2
+
 # Per-(session, corner) sensor sanity check: flag stuck/broken TPMS channels so
 # the fit doesn't learn from them. Pure heuristic — easy to tune later.
 BROKEN_CORNER_STD_THRESHOLD_C = 1.0  # std(temp) across session's tire-usable laps
 BROKEN_CORNER_MIN_LAPS = 4  # need at least this many laps to call it "stuck"
+
+# Precipitation thresholds for condition classification (mm/hr).
+# Lower bound for "damp" follows Open-Meteo's "trace precipitation" magnitude.
+# Upper bound for "damp" is the start of light rain.
+CONDITION_DRY_MAX_PRECIP_MM_HR = 0.1
+CONDITION_DAMP_MAX_PRECIP_MM_HR = 1.0
+CONDITIONS = ("dry", "damp", "wet")
+DEFAULT_CONDITION = "dry"  # used at inference when caller doesn't supply one
+
+
+def _clip_wet_tau_to_dry_ratio(
+    tau_by_car_corner_cond: dict[tuple[str, str, str], "FitParam"],
+) -> dict[tuple[str, str, str], "FitParam"]:
+    """Cap damp/wet τ_sec at MAX_WET_TAU_VS_DRY_RATIO × the same (car, corner)'s
+    dry τ. Marks any clipped entry with ``from_prior=True``.
+
+    Physically, rain ⇒ more cooling ⇒ smaller τ; a damp/wet τ that's much
+    larger than dry is the fit's way of saying "the stint was too short to
+    actually see warmup complete, so I extrapolate that τ is huge". Clipping
+    keeps such buckets from blowing up predictions at long stints.
+    """
+    out = dict(tau_by_car_corner_cond)
+    for (car, corner, cond), fp in tau_by_car_corner_cond.items():
+        if cond == "dry":
+            continue
+        dry_fp = tau_by_car_corner_cond.get((car, corner, "dry"))
+        if dry_fp is None:
+            continue
+        cap = MAX_WET_TAU_VS_DRY_RATIO * dry_fp.value
+        if fp.value > cap and not fp.from_prior:
+            logger.warning(
+                "Clipping τ_sec[%s, %s, %s] = %.0f s → %.0f s "
+                "(dry τ = %.0f s, ratio cap = %.1f×). Likely warmup-incomplete "
+                "buckets — investigate data quality.",
+                car,
+                corner,
+                cond,
+                fp.value,
+                cap,
+                dry_fp.value,
+                MAX_WET_TAU_VS_DRY_RATIO,
+            )
+            out[(car, corner, cond)] = FitParam(
+                value=cap,
+                stderr=fp.stderr,
+                n_samples=fp.n_samples,
+                from_prior=True,
+            )
+    return out
+
+
+def _clip_wet_k_to_dry_ratio(
+    k_by_car_corner_cond: dict[tuple[str, str, str], "FitParam"],
+) -> dict[tuple[str, str, str], "FitParam"]:
+    """Cap damp/wet K at MAX_WET_K_VS_DRY_RATIO × same (car, corner)'s dry K.
+
+    Physically, rain ⇒ lower μ ⇒ less heat per G² ⇒ K should drop. A fitted
+    K[damp] > K[dry] is the optimizer compensating for some unmodeled effect
+    (often a too-large fitted τ that drives a low warmup_frac, which then
+    needs a big K to match the observed temps). Clipping prevents that
+    chain from blowing up rain predictions.
+    """
+    out = dict(k_by_car_corner_cond)
+    for (car, corner, cond), fp in k_by_car_corner_cond.items():
+        if cond == "dry":
+            continue
+        dry_fp = k_by_car_corner_cond.get((car, corner, "dry"))
+        if dry_fp is None:
+            continue
+        cap = MAX_WET_K_VS_DRY_RATIO * dry_fp.value
+        if fp.value > cap and not fp.from_prior:
+            logger.warning(
+                "Clipping K[%s, %s, %s] = %.1f K/G² → %.1f K/G² "
+                "(dry K = %.1f, ratio cap = %.1f×).",
+                car,
+                corner,
+                cond,
+                fp.value,
+                cap,
+                dry_fp.value,
+                MAX_WET_K_VS_DRY_RATIO,
+            )
+            out[(car, corner, cond)] = FitParam(
+                value=cap,
+                stderr=fp.stderr,
+                n_samples=fp.n_samples,
+                from_prior=True,
+            )
+    return out
+
+
+def classify_condition(precipitation_mm_hr: float | None) -> str:
+    """Map precipitation rate to a categorical condition.
+
+    - dry    : precipitation < 0.1 mm/hr  (effectively no rain)
+    - damp   : 0.1 ≤ precipitation < 1.0  (trace to light drizzle)
+    - wet    : precipitation ≥ 1.0        (light rain or heavier)
+    - unknown: precipitation is None / NaN (no weather data for this session)
+
+    Sessions with `unknown` condition are excluded from training so we don't
+    leak ambiguity into the fit; at inference the user supplies a category
+    directly via `--condition`.
+    """
+    if precipitation_mm_hr is None:
+        return "unknown"
+    try:
+        if not math.isfinite(precipitation_mm_hr):
+            return "unknown"
+    except TypeError:
+        return "unknown"
+    if precipitation_mm_hr < CONDITION_DRY_MAX_PRECIP_MM_HR:
+        return "dry"
+    if precipitation_mm_hr < CONDITION_DAMP_MAX_PRECIP_MM_HR:
+        return "damp"
+    return "wet"
 
 
 # ---------- Public entry point ----------
@@ -113,29 +240,44 @@ def build_warmup_table(
 
     laps_for_fit = _laps_for_fit(laps, g2_lookup)
 
-    tau_by_car_corner: dict[tuple[str, str], FitParam] = {}
-    bucket_gains: dict[tuple[str, str, str], FitParam] = {}  # (car, track, corner) -> gain
-    bucket_n_samples: dict[tuple[str, str, str], int] = {}
+    # τ and per-bucket gains are now per (car, corner, condition).
+    tau_by_car_corner_cond: dict[tuple[str, str, str], FitParam] = {}
+    bucket_gains: dict[tuple[str, str, str, str], FitParam] = {}
+    bucket_n_samples: dict[tuple[str, str, str, str], int] = {}
 
+    seen_conditions = sorted(set(laps_for_fit["condition"]))
     for car in sorted(set(laps_for_fit["car"])):
         for corner in CORNERS:
-            tau, per_bucket_gain = _pass1_fit_tau_and_gains(laps_for_fit, car, corner)
-            tau_by_car_corner[(car, corner)] = tau
-            for track, gain in per_bucket_gain.items():
-                bucket_gains[(car, track, corner)] = gain
-                bucket_n_samples[(car, track, corner)] = _bucket_sample_count(
-                    laps_for_fit, car, track, corner
-                )
+            for cond in seen_conditions:
+                tau, per_bucket_gain = _pass1_fit_tau_and_gains(laps_for_fit, car, corner, cond)
+                if tau.n_samples == 0 and not per_bucket_gain:
+                    # Skip empty (car, corner, condition) combos — no data at all
+                    continue
+                tau_by_car_corner_cond[(car, corner, cond)] = tau
+                for track, gain in per_bucket_gain.items():
+                    bucket_gains[(car, track, corner, cond)] = gain
+                    bucket_n_samples[(car, track, corner, cond)] = _bucket_sample_count(
+                        laps_for_fit, car, track, corner, cond
+                    )
 
-    k_by_car_corner, c_track_by_track = _pass2_factor_gains(
+    # Sanity-clip rain-condition τ to a sane multiple of dry τ. Sparse wet/damp
+    # buckets can fit pathologically large τ when stints are short and the
+    # warmup-curve fit is undersampled; this cap prevents that from silently
+    # producing wildly wrong predictions. Clipped entries keep their stderr
+    # and get `from_prior=True` so the user sees the override.
+    tau_by_car_corner_cond = _clip_wet_tau_to_dry_ratio(tau_by_car_corner_cond)
+
+    k_by_car_corner_cond, c_track_by_track = _pass2_factor_gains(
         bucket_gains=bucket_gains,
         g2_lookup=g2_lookup,
         anchor_track=ANCHOR_TRACK,
     )
+    # Same physical-prior clip on K (rain ⇒ less heat ⇒ K ≤ dry K).
+    k_by_car_corner_cond = _clip_wet_k_to_dry_ratio(k_by_car_corner_cond)
 
     model = _assemble_model(
-        tau_by_car_corner=tau_by_car_corner,
-        k_by_car_corner=k_by_car_corner,
+        tau_by_car_corner_cond=tau_by_car_corner_cond,
+        k_by_car_corner_cond=k_by_car_corner_cond,
         c_track_by_track=c_track_by_track,
         g2_lookup=g2_lookup,
         lap_time_lookup=lap_time_lookup,
@@ -176,35 +318,43 @@ def _load_filtered_laps(root: Path) -> pd.DataFrame:
 
 def _load_weather(root: Path) -> pd.DataFrame:
     """Load all weather parquets into a single DataFrame keyed by (track, ts_utc)."""
+    cols = ["track_canonical", "ts_utc", "temperature_2m", "cloud_cover", "precipitation"]
     rows: list[pd.DataFrame] = []
     wx_root = weather_dir(root)
     if not wx_root.exists():
         logger.warning("No weather directory at %s — predictions will use T_air fallback", wx_root)
-        return pd.DataFrame(columns=["track_canonical", "ts_utc", "temperature_2m", "cloud_cover"])
+        return pd.DataFrame(columns=cols)
     for track_dir in sorted(wx_root.iterdir()):
         if not track_dir.is_dir():
             continue
         for f in sorted(track_dir.glob("*.parquet")):
             wx = pq.read_table(f).to_pandas()
             wx["track_canonical"] = track_dir.name
-            rows.append(wx[["track_canonical", "ts_utc", "temperature_2m", "cloud_cover"]])
+            rows.append(wx[cols])
     if not rows:
-        return pd.DataFrame(columns=["track_canonical", "ts_utc", "temperature_2m", "cloud_cover"])
+        return pd.DataFrame(columns=cols)
     return pd.concat(rows, ignore_index=True)
 
 
 def _attach_weather(laps: pd.DataFrame, weather: pd.DataFrame) -> pd.DataFrame:
-    """Join hourly weather onto laps via floor-to-hour on session_start_utc."""
+    """Join hourly weather onto laps via floor-to-hour on session_start_utc.
+
+    Adds three columns: ``t_air_c``, ``cloud_cover``, ``precipitation``
+    (mm/hr). Also derives ``condition`` from precipitation via
+    :func:`classify_condition` — used as a model dimension.
+    """
     if weather.empty:
         laps["t_air_c"] = np.nan
         laps["cloud_cover"] = np.nan
+        laps["precipitation"] = np.nan
+        laps["condition"] = "unknown"
         return laps
     laps = laps.copy()
     starts = pd.to_datetime(laps["session_start_utc"], utc=True)
     laps["_hour_key"] = starts.dt.strftime("%Y-%m-%dT%H:00")
     out = laps.merge(
         weather.rename(columns={"temperature_2m": "t_air_c", "ts_utc": "_hour_key"})[
-            ["track_canonical", "_hour_key", "t_air_c", "cloud_cover"]
+            ["track_canonical", "_hour_key", "t_air_c", "cloud_cover", "precipitation"]
         ],
         on=["track_canonical", "_hour_key"],
         how="left",
@@ -213,6 +363,7 @@ def _attach_weather(laps: pd.DataFrame, weather: pd.DataFrame) -> pd.DataFrame:
     # Fill T_air with historical-median by track when weather is missing.
     median_t_air = out.groupby("track_canonical")["t_air_c"].transform("median")
     out["t_air_c"] = out["t_air_c"].fillna(median_t_air)
+    out["condition"] = out["precipitation"].apply(classify_condition)
     return out
 
 
@@ -382,36 +533,59 @@ def _compute_delta_t(laps: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def _build_lap_time_typ(laps: pd.DataFrame) -> dict[tuple[str, str], tuple[float, int]]:
-    """Median on_track_s per (track, car). Returns {(track, car): (median_s, n)}."""
-    out: dict[tuple[str, str], tuple[float, int]] = {}
-    for (track, car), grp in laps.groupby(["track_canonical", "car"]):
-        out[(str(track), str(car))] = (float(grp["on_track_s"].median()), int(len(grp)))
+def _build_lap_time_typ(
+    laps: pd.DataFrame,
+) -> dict[tuple[str, str, str], tuple[float, int]]:
+    """Median on_track_s per (track, car, condition). Drops `unknown` condition.
+
+    Returns ``{(track, car, condition): (median_s, n)}``.
+    """
+    out: dict[tuple[str, str, str], tuple[float, int]] = {}
+    for (track, car, cond), grp in laps.groupby(["track_canonical", "car", "condition"]):
+        if cond == "unknown":
+            continue
+        out[(str(track), str(car), str(cond))] = (
+            float(grp["on_track_s"].median()),
+            int(len(grp)),
+        )
     return out
 
 
-def _build_g2_typ(laps: pd.DataFrame) -> dict[tuple[str, str], tuple[float, int]]:
-    """Median heat_proxy/on_track_s per (track, car). Returns {(track, car): (g2, n)}."""
-    out: dict[tuple[str, str], tuple[float, int]] = {}
-    for (track, car), grp in laps.groupby(["track_canonical", "car"]):
+def _build_g2_typ(
+    laps: pd.DataFrame,
+) -> dict[tuple[str, str, str], tuple[float, int]]:
+    """Median heat_proxy/on_track_s per (track, car, condition). Drops `unknown` condition.
+
+    Returns ``{(track, car, condition): (g2, n)}``.
+    """
+    out: dict[tuple[str, str, str], tuple[float, int]] = {}
+    for (track, car, cond), grp in laps.groupby(["track_canonical", "car", "condition"]):
+        if cond == "unknown":
+            continue
         g2_per_lap = grp["heat_proxy"] / grp["on_track_s"]
         g2_per_lap = g2_per_lap.replace([np.inf, -np.inf], np.nan).dropna()
         if g2_per_lap.empty:
             continue
-        out[(str(track), str(car))] = (float(g2_per_lap.median()), int(len(g2_per_lap)))
+        out[(str(track), str(car), str(cond))] = (
+            float(g2_per_lap.median()),
+            int(len(g2_per_lap)),
+        )
     return out
 
 
 def _laps_for_fit(
-    laps: pd.DataFrame, g2_lookup: dict[tuple[str, str], tuple[float, int]]
+    laps: pd.DataFrame,
+    g2_lookup: dict[tuple[str, str, str], tuple[float, int]],
 ) -> pd.DataFrame:
-    """Drop out-laps and rows without a valid t_eff or g²."""
+    """Drop out-laps and rows without a valid t_eff, g², or known condition."""
     df = laps[laps["lap_within_stint"] > 0].copy()
     df = df[df["t_eff_c"].notna()]
     df = df[df["t_cum_s"] > 0]
-    # Attach the bucket's g2_typ (used in Pass 2)
+    df = df[df["condition"] != "unknown"]
+    # Attach the bucket's condition-specific g2_typ (used in Pass 2)
     df["g2_typ"] = [
-        g2_lookup.get((t, c), (np.nan, 0))[0] for t, c in zip(df["track_canonical"], df["car"])
+        g2_lookup.get((t, c, cond), (np.nan, 0))[0]
+        for t, c, cond in zip(df["track_canonical"], df["car"], df["condition"])
     ]
     df = df[df["g2_typ"].notna()]
     return df.reset_index(drop=True)
@@ -428,23 +602,34 @@ class FitParam:
     from_prior: bool = False
 
 
-def _bucket_sample_count(laps_for_fit: pd.DataFrame, car: str, track: str, corner: str) -> int:
+def _bucket_sample_count(
+    laps_for_fit: pd.DataFrame, car: str, track: str, corner: str, condition: str
+) -> int:
     col = f"delta_t_{corner}"
-    mask = (laps_for_fit["car"] == car) & (laps_for_fit["track_canonical"] == track)
+    mask = (
+        (laps_for_fit["car"] == car)
+        & (laps_for_fit["track_canonical"] == track)
+        & (laps_for_fit["condition"] == condition)
+    )
     return int(laps_for_fit.loc[mask, col].notna().sum())
 
 
 def _pass1_fit_tau_and_gains(
-    laps_for_fit: pd.DataFrame, car: str, corner: str
+    laps_for_fit: pd.DataFrame, car: str, corner: str, condition: str
 ) -> tuple[FitParam, dict[str, FitParam]]:
-    """Fit τ_sec[car, corner] jointly across that car's (track) buckets.
+    """Fit τ_sec[car, corner, condition] jointly across that car's (track) buckets
+    in the given condition.
 
     Returns (tau_FitParam, {track: gain_FitParam}). Buckets with fewer than
     ``MIN_LAPS_FOR_TAU_FIT`` lap samples are excluded from this pass; they get
     a gain in Pass 2 only if they meet ``MIN_LAPS_FOR_K_BUCKET``.
     """
     delta_col = f"delta_t_{corner}"
-    car_df = laps_for_fit[(laps_for_fit["car"] == car) & laps_for_fit[delta_col].notna()]
+    car_df = laps_for_fit[
+        (laps_for_fit["car"] == car)
+        & (laps_for_fit["condition"] == condition)
+        & laps_for_fit[delta_col].notna()
+    ]
     if car_df.empty:
         return (FitParam(PRIOR_TAU_SEC, 0.0, 0, from_prior=True), {})
 
@@ -480,7 +665,9 @@ def _pass1_fit_tau_and_gains(
             model, all_t, all_y, p0=p0, bounds=(bounds_lower, bounds_upper), maxfev=10000
         )
     except Exception as e:  # noqa: BLE001 — convert any optimizer failure to a prior
-        logger.warning("Pass-1 fit failed for (%s, %s): %s — using prior", car, corner, e)
+        logger.warning(
+            "Pass-1 fit failed for (%s, %s, %s): %s — using prior", car, corner, condition, e
+        )
         return (FitParam(PRIOR_TAU_SEC, 0.0, int(len(all_t)), from_prior=True), {})
 
     perr = np.sqrt(np.diag(pcov))
@@ -501,47 +688,47 @@ def _pass1_fit_tau_and_gains(
 
 def _pass2_factor_gains(
     *,
-    bucket_gains: dict[tuple[str, str, str], FitParam],
-    g2_lookup: dict[tuple[str, str], tuple[float, int]],
+    bucket_gains: dict[tuple[str, str, str, str], FitParam],
+    g2_lookup: dict[tuple[str, str, str], tuple[float, int]],
     anchor_track: str,
-) -> tuple[dict[tuple[str, str], FitParam], dict[str, FitParam]]:
-    """Decompose ``gain_b = K[car, corner] · c_track[track] · ⟨g²⟩[track, car]``.
+) -> tuple[dict[tuple[str, str, str], FitParam], dict[str, FitParam]]:
+    """Decompose ``gain_b = K[car, corner, condition] · c_track[track] ·
+    ⟨g²⟩[track, car, condition]``.
 
-    Uses alternating least squares in log space with ``c_track[anchor] ≡ 1.0``.
-    Returns (k_by_car_corner, c_track_by_track).
+    ``c_track`` is shared across conditions (the asphalt's surface character
+    is a property of the venue; condition's effect lives in ``K`` and ⟨g²⟩).
+    Returns (k_by_car_corner_condition, c_track_by_track).
     """
     if not bucket_gains:
         return {}, {}
 
     # effective_gain = gain / g2_typ  =  K · c_track
-    log_eff: dict[tuple[str, str, str], float] = {}
-    stderr_eff: dict[tuple[str, str, str], float] = {}
-    for (car, track, corner), gain in bucket_gains.items():
-        g2 = g2_lookup.get((track, car), (np.nan, 0))[0]
+    log_eff: dict[tuple[str, str, str, str], float] = {}
+    for (car, track, corner, cond), gain in bucket_gains.items():
+        g2 = g2_lookup.get((track, car, cond), (np.nan, 0))[0]
         if not np.isfinite(g2) or g2 <= 0 or gain.value <= 0:
             continue
         eff = gain.value / g2
-        log_eff[(car, track, corner)] = math.log(eff)
-        # δ(log eff) ≈ (δ gain)/gain  (g2 is treated as exact)
-        stderr_eff[(car, track, corner)] = gain.stderr / gain.value if gain.value > 0 else 1.0
+        log_eff[(car, track, corner, cond)] = math.log(eff)
 
-    tracks = sorted({t for (_, t, _) in log_eff})
-    cc_pairs = sorted({(c, k) for (c, _, k) in log_eff})
+    tracks = sorted({t for (_, t, _, _) in log_eff})
+    # Condition-aware "K cell" = (car, corner, condition); c_track is per-track only.
+    cc_cond_keys = sorted({(c, k, cond) for (c, _, k, cond) in log_eff})
 
     log_c_track: dict[str, float] = {t: 0.0 for t in tracks}  # log(c_track[anchor]) = 0
-    log_k: dict[tuple[str, str], float] = {p: 0.0 for p in cc_pairs}
+    log_k: dict[tuple[str, str, str], float] = {p: 0.0 for p in cc_cond_keys}
 
     # Alternating LS (anchor c_track[ANCHOR_TRACK] = 1.0 ⇒ log = 0)
     for _ in range(20):
-        # Solve for log_k holding log_c_track fixed: log_k[c,k] = mean over tracks (log_eff − log_c_track)
-        for car, corner in cc_pairs:
+        # Solve for log_k holding log_c_track fixed
+        for car, corner, cond in cc_cond_keys:
             vals: list[float] = []
             for track in tracks:
-                key = (car, track, corner)
+                key = (car, track, corner, cond)
                 if key in log_eff:
                     vals.append(log_eff[key] - log_c_track[track])
             if vals:
-                log_k[(car, corner)] = float(np.mean(vals))
+                log_k[(car, corner, cond)] = float(np.mean(vals))
 
         # Solve for log_c_track holding log_k fixed; anchor stays at 0
         for track in tracks:
@@ -549,71 +736,52 @@ def _pass2_factor_gains(
                 log_c_track[track] = 0.0
                 continue
             vals = []
-            for car, corner in cc_pairs:
-                key = (car, track, corner)
+            for car, corner, cond in cc_cond_keys:
+                key = (car, track, corner, cond)
                 if key in log_eff:
-                    vals.append(log_eff[key] - log_k[(car, corner)])
+                    vals.append(log_eff[key] - log_k[(car, corner, cond)])
             if vals:
                 log_c_track[track] = float(np.mean(vals))
 
     # Convert back from log space; collect stderr from residuals
-    k_by_car_corner: dict[tuple[str, str], FitParam] = {}
-    for car, corner in cc_pairs:
+    k_by_car_corner_cond: dict[tuple[str, str, str], FitParam] = {}
+    for car, corner, cond in cc_cond_keys:
         residuals: list[float] = []
         n_total = 0
-        from_single_track = True
-        seen_tracks = set()
+        seen_tracks: set[str] = set()
         for track in tracks:
-            key = (car, track, corner)
+            key = (car, track, corner, cond)
             if key in log_eff:
-                residuals.append(log_eff[key] - log_k[(car, corner)] - log_c_track[track])
+                residuals.append(log_eff[key] - log_k[(car, corner, cond)] - log_c_track[track])
                 n_total += bucket_gains[key].n_samples
                 seen_tracks.add(track)
-        if len(seen_tracks) >= 2:
-            from_single_track = False
         rmse_log = float(np.std(residuals, ddof=0)) if residuals else 0.0
-        k_val = math.exp(log_k[(car, corner)])
+        k_val = math.exp(log_k[(car, corner, cond)])
         k_stderr = k_val * rmse_log  # propagate via δ(K) = K · δ(log K)
-        # Use bucket size as the n_samples count (most informative single number)
         n_max = max(
-            (bucket_gains[(car, t, corner)].n_samples for t in seen_tracks),
+            (bucket_gains[(car, t, corner, cond)].n_samples for t in seen_tracks),
             default=0,
         )
-        k_by_car_corner[(car, corner)] = FitParam(
+        k_by_car_corner_cond[(car, corner, cond)] = FitParam(
             value=k_val,
             stderr=k_stderr,
             n_samples=max(n_total, n_max),
         )
-        # Stash side-info via metadata-free trick: encode "from_single_track" in
-        # the from_prior field's nuance — keep it explicit instead.
-        # (Handled below when serializing K_buckets.)
 
     c_track_by_track: dict[str, FitParam] = {}
     for track in tracks:
         residuals = []
-        for car, corner in cc_pairs:
-            key = (car, track, corner)
+        for car, corner, cond in cc_cond_keys:
+            key = (car, track, corner, cond)
             if key in log_eff:
-                residuals.append(log_eff[key] - log_k[(car, corner)] - log_c_track[track])
+                residuals.append(log_eff[key] - log_k[(car, corner, cond)] - log_c_track[track])
         rmse_log = float(np.std(residuals, ddof=0)) if residuals else 0.0
         val = math.exp(log_c_track[track])
         stderr = 0.0 if track == anchor_track else val * rmse_log
-        n_buckets = sum(1 for cc in cc_pairs if (cc[0], track, cc[1]) in log_eff)
+        n_buckets = sum(1 for (c, k, cond) in cc_cond_keys if (c, track, k, cond) in log_eff)
         c_track_by_track[track] = FitParam(value=val, stderr=stderr, n_samples=n_buckets)
 
-    # Re-flag K params whose data came from a single track
-    for car, corner in list(k_by_car_corner.keys()):
-        seen = {t for t in tracks if (car, t, corner) in log_eff}
-        if len(seen) < 2:
-            # store flag in a sibling dict — we'll thread it through assemble_model
-            k_by_car_corner[(car, corner)] = FitParam(
-                value=k_by_car_corner[(car, corner)].value,
-                stderr=k_by_car_corner[(car, corner)].stderr,
-                n_samples=k_by_car_corner[(car, corner)].n_samples,
-                from_prior=False,
-            )
-
-    return k_by_car_corner, c_track_by_track
+    return k_by_car_corner_cond, c_track_by_track
 
 
 # ---------- Assemble + write artifacts ----------
@@ -621,28 +789,33 @@ def _pass2_factor_gains(
 
 def _assemble_model(
     *,
-    tau_by_car_corner: dict[tuple[str, str], FitParam],
-    k_by_car_corner: dict[tuple[str, str], FitParam],
+    tau_by_car_corner_cond: dict[tuple[str, str, str], FitParam],
+    k_by_car_corner_cond: dict[tuple[str, str, str], FitParam],
     c_track_by_track: dict[str, FitParam],
-    g2_lookup: dict[tuple[str, str], tuple[float, int]],
-    lap_time_lookup: dict[tuple[str, str], tuple[float, int]],
-    bucket_n_samples: dict[tuple[str, str, str], int],
+    g2_lookup: dict[tuple[str, str, str], tuple[float, int]],
+    lap_time_lookup: dict[tuple[str, str, str], tuple[float, int]],
+    bucket_n_samples: dict[tuple[str, str, str, str], int],
     blacklist_applied: list[dict] | None = None,
 ) -> dict[str, Any]:
-    """Build the in-memory model dict that matches the JSON artifact schema."""
+    """Build the in-memory model dict that matches the JSON artifact schema.
+
+    Schema version 2: K and τ_sec are now keyed by (car, corner, condition),
+    and the ⟨g²⟩ + lap_time_typ lookups by (track, car, condition).
+    """
     fit_at = datetime.now(tz=timezone.utc).isoformat(timespec="seconds")
 
-    # tracks where K-bucket data was seen for a (car, corner)
-    seen_tracks_per_cc: dict[tuple[str, str], set[str]] = {}
-    for car, track, corner in bucket_n_samples:
-        seen_tracks_per_cc.setdefault((car, corner), set()).add(track)
+    # tracks where K-bucket data was seen for a (car, corner, condition)
+    seen_tracks_per_kcell: dict[tuple[str, str, str], set[str]] = {}
+    for car, track, corner, cond in bucket_n_samples:
+        seen_tracks_per_kcell.setdefault((car, corner, cond), set()).add(track)
 
     return {
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": 2,
         "fit_at_utc": fit_at,
         "model_form": (
-            "T_hot - T_eff = K * c_track * g2_typ * (1 - exp(-t / tau_sec))   "
-            "where T_eff = (1-w_road)*T_air + w_road*T_road, t = N * lap_time_typ_s"
+            "T_hot - T_eff = K[car,corner,cond] * c_track[track] * g2_typ[track,car,cond] "
+            "* (1 - exp(-t / tau_sec[car,corner,cond]))   "
+            "where T_eff = (1-w_road)*T_air + w_road*T_road, t = N * lap_time_typ_s[track,car,cond]"
         ),
         "gay_lussac": {
             "p_atm_bar": 1.0,
@@ -658,6 +831,21 @@ def _assemble_model(
                 "sun_factor_default": SUN_FACTOR_DEFAULT,
             },
         },
+        "conditions": {
+            "values": list(CONDITIONS),
+            "default": DEFAULT_CONDITION,
+            "classification": {
+                "from_field": "precipitation_mm_hr",
+                "thresholds": {
+                    "dry_max": CONDITION_DRY_MAX_PRECIP_MM_HR,
+                    "damp_max": CONDITION_DAMP_MAX_PRECIP_MM_HR,
+                },
+                "rule": (
+                    "p < dry_max → dry; dry_max ≤ p < damp_max → damp; "
+                    "p ≥ damp_max → wet; missing → unknown (excluded from training)"
+                ),
+            },
+        },
         "corners": list(CORNERS),
         "min_samples_per_bucket": MIN_LAPS_FOR_K_BUCKET,
         "priors_when_no_fit": {
@@ -665,27 +853,30 @@ def _assemble_model(
             "K_kelvin_per_g2": PRIOR_K_KELVIN_PER_G2,
             "c_track": PRIOR_C_TRACK,
         },
-        "tau_sec_by_car_corner": [
+        "tau_sec_by_car_corner_cond": [
             {
                 "car": car,
                 "corner": corner,
+                "condition": cond,
                 "value_seconds": fp.value,
                 "stderr_seconds": fp.stderr,
                 "n_samples_used": fp.n_samples,
                 "from_prior": fp.from_prior,
             }
-            for (car, corner), fp in sorted(tau_by_car_corner.items())
+            for (car, corner, cond), fp in sorted(tau_by_car_corner_cond.items())
         ],
         "K_buckets": [
             {
-                "key": {"car": car, "corner": corner},
+                "key": {"car": car, "corner": corner, "condition": cond},
                 "value_kelvin_per_g2": fp.value,
                 "stderr_kelvin_per_g2": fp.stderr,
                 "n_samples": fp.n_samples,
                 "from_prior": fp.from_prior,
-                "from_single_track": len(seen_tracks_per_cc.get((car, corner), set())) < 2,
+                "from_single_track": (
+                    len(seen_tracks_per_kcell.get((car, corner, cond), set())) < 2
+                ),
             }
-            for (car, corner), fp in sorted(k_by_car_corner.items())
+            for (car, corner, cond), fp in sorted(k_by_car_corner_cond.items())
         ],
         "c_track_by_track": [
             {
@@ -697,28 +888,37 @@ def _assemble_model(
             }
             for track, fp in sorted(c_track_by_track.items())
         ],
-        "g2_typ_by_track_car": [
+        "g2_typ_by_track_car_cond": [
             {
                 "track_canonical": track,
                 "car": car,
+                "condition": cond,
                 "g2_typ": value,
                 "n_laps_used": n,
             }
-            for (track, car), (value, n) in sorted(g2_lookup.items())
+            for (track, car, cond), (value, n) in sorted(g2_lookup.items())
         ],
-        "lap_time_typ_by_track_car": [
+        "lap_time_typ_by_track_car_cond": [
             {
                 "track_canonical": track,
                 "car": car,
+                "condition": cond,
                 "lap_time_typ_s": value,
                 "n_laps_used": n,
             }
-            for (track, car), (value, n) in sorted(lap_time_lookup.items())
+            for (track, car, cond), (value, n) in sorted(lap_time_lookup.items())
         ],
         "fallback_order_for_K": [
+            ["car", "corner", "condition"],
             ["car", "corner"],
             ["car"],
             [],
+        ],
+        "fallback_order_for_condition_lookups": [
+            ["track", "car", "condition"],
+            ["track", "car", "dry"],
+            ["track", "car"],
+            ["track"],
         ],
         "sensor_blacklist_applied": sorted(
             blacklist_applied or [], key=lambda r: (r["session_id"], r["corner"])
@@ -727,20 +927,33 @@ def _assemble_model(
 
 
 def _write_warmup_table_parquet(root: Path, model: dict[str, Any]) -> None:
-    """Flatten the model into a single per-bucket table for Python fast-load."""
+    """Flatten the model into a single per-bucket table for Python fast-load.
+
+    Rows are the cross-product (K bucket × c_track entry), filtered to those
+    with matching ⟨g²⟩ and lap_time_typ entries for the same (track, car,
+    condition).
+    """
     rows: list[dict[str, Any]] = []
-    tau_idx = {(d["car"], d["corner"]): d for d in model["tau_sec_by_car_corner"]}
+    tau_idx = {
+        (d["car"], d["corner"], d["condition"]): d for d in model["tau_sec_by_car_corner_cond"]
+    }
     c_track_idx = {d["track_canonical"]: d for d in model["c_track_by_track"]}
-    g2_idx = {(d["track_canonical"], d["car"]): d for d in model["g2_typ_by_track_car"]}
-    lt_idx = {(d["track_canonical"], d["car"]): d for d in model["lap_time_typ_by_track_car"]}
+    g2_idx = {
+        (d["track_canonical"], d["car"], d["condition"]): d
+        for d in model["g2_typ_by_track_car_cond"]
+    }
+    lt_idx = {
+        (d["track_canonical"], d["car"], d["condition"]): d
+        for d in model["lap_time_typ_by_track_car_cond"]
+    }
     for kb in model["K_buckets"]:
         car = kb["key"]["car"]
         corner = kb["key"]["corner"]
-        tau = tau_idx.get((car, corner), {})
-        # Cross-product over tracks where this (car, corner) appears
+        cond = kb["key"]["condition"]
+        tau = tau_idx.get((car, corner, cond), {})
         for track, ct in c_track_idx.items():
-            g2 = g2_idx.get((track, car), {})
-            lt = lt_idx.get((track, car), {})
+            g2 = g2_idx.get((track, car, cond), {})
+            lt = lt_idx.get((track, car, cond), {})
             if not g2:
                 continue
             rows.append(
@@ -748,6 +961,7 @@ def _write_warmup_table_parquet(root: Path, model: dict[str, Any]) -> None:
                     "track_canonical": track,
                     "car": car,
                     "corner": corner,
+                    "condition": cond,
                     "K_kelvin_per_g2": kb["value_kelvin_per_g2"],
                     "K_stderr": kb["stderr_kelvin_per_g2"],
                     "tau_sec": tau.get("value_seconds", np.nan),

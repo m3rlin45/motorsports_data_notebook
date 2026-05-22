@@ -1,4 +1,4 @@
-# Cold tire pressure model — v0
+# Cold tire pressure model — v0.3 (rain-aware)
 
 A physically-based predictor that takes
 **(track, car, target lap within stint, target hot pressure per corner, expected ambient temp)**
@@ -24,6 +24,10 @@ model. The constraints we adopted:
   142 ok sessions (34%) and strings are messy. Including it as a model
   dimension makes K + c_track + compound mutually unidentifiable in the
   current data. Deferred until coverage improves.
+- **Rain awareness via the weather data, not the run-notes.** v0.3 adds
+  `condition ∈ {dry, damp, wet}` as a model dimension, classified from
+  Open-Meteo's `precipitation` field (mm/hr). 75% of sessions have weather
+  coverage vs only ~25% with notes-derived condition. See §2.9.
 
 ## 2. Modeling approach
 
@@ -180,6 +184,57 @@ Typical file size: 6–12 KB. Diff-friendly — when new sessions land, the
 artifact updates in lockstep and the JSON diff shows reviewers exactly which
 buckets gained samples or changed coefficients. The C# calculator (future
 plan) reads the same file.
+
+### 2.9 Track condition (rain)
+
+v0.3 adds a `condition` dimension to K, τ_sec, ⟨g²⟩, and lap_time_typ. The
+condition is **derived from weather data**, not from run-notes:
+
+- `dry`: precipitation < 0.1 mm/hr
+- `damp`: 0.1 ≤ precipitation < 1.0 mm/hr
+- `wet`: precipitation ≥ 1.0 mm/hr
+- `unknown`: no weather data (excluded from training)
+
+Physically, more cooling (rain on the tire) means **larger `h_air + h_road`**,
+so both `K = α/(h_air+h_road)` and `τ = m·c/(h_air+h_road)` should **drop**
+in damp/wet — the tire reaches equilibrium faster *and* at a lower steady
+state. ⟨g²⟩ also drops naturally because drivers go slower in rain (it's a
+data lookup, not a fitted param).
+
+`c_track` stays per-track (no condition dimension) — surface character is a
+property of the venue. The condition's effect lives in K and ⟨g²⟩.
+
+**Inference-time fallback chain** (when the requested condition has no fit):
+
+```
+wet  → damp → dry      (physically closest neighbors)
+damp → dry
+dry  → dry
+```
+
+**Fit dataset breakdown** (with the v0.3 weather classification):
+
+| Condition | Sessions | Usable laps | Notes |
+|---|---|---|---|
+| dry | 69 | ~677 | both cars, all 4 tracks |
+| damp | 30 | ~212 | both cars, all 4 tracks |
+| wet | 8 | ~34 | mostly KK-SII at Fuji 2026-02-25 |
+| unknown | 46 | excluded | no weather data |
+
+**Physical-prior clips** to guard against pathological sparse-data fits:
+
+- `τ_sec[damp/wet]` is clipped to ≤ 1.5 × `τ_sec[dry]` (faster cooling)
+- `K[damp/wet]` is clipped to ≤ 1.2 × `K[dry]` (less heat per G²)
+
+Clipped parameters are flagged with `from_prior=True` in the artifact.
+Without these clips, Inferno 86 damp K and τ were 1.5-3× the dry values —
+the optimizer compensating for warmup-incomplete short stints rather than
+real thermal physics. The 1.2× / 1.5× ratios are physical priors; the
+exact thresholds are empirical and easy to tune.
+
+**Known limitation**: KK-SII wet predictions are conservative (the model
+under-predicts hot temp slightly, so cold pressure recommendations skew
+higher than strictly needed). The safer error direction.
 
 ### 2.8 Sensor blacklist (human-curated)
 
@@ -429,6 +484,10 @@ just tire-build-warmup-table
 just tire-predict --track tsukuba_2000 --car KK-SII --lap 5 --ambient 18 --hot-all 1.95
 # (per-corner: --hot-fl 1.95 --hot-fr 1.95 --hot-rl 1.90 --hot-rr 1.90)
 # (optional: --track-temp 35 --cloud-cover 30 --g2-typ 0.85 --lap-time-s 70)
+
+# Predict per-corner cold pressures, with rain condition
+just tire-predict --track tsukuba_2000 --car KK-SII --lap 5 --ambient 15 \
+                  --condition damp --hot-all 1.5
 
 # Held-out validation (train without N sessions per bucket, report per-corner T_hot residuals)
 just tire-predict-holdout
