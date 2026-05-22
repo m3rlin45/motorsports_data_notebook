@@ -115,3 +115,61 @@ def scan_aim_tree(
             candidates[p] = cand
 
     return list(candidates.values())
+
+
+def group_split_sessions(
+    candidates: list[SessionCandidate],
+    *,
+    max_run_num_gap: int = 1,
+) -> list[list[SessionCandidate]]:
+    """Group candidates that belong to the same physical on-track session.
+
+    The AIM logger creates a new file whenever the car restarts (e.g. after
+    a spin or shutdown). Candidates that share the same
+    ``(date, driver, car, track_canonical, session_type)`` and have
+    consecutive ``run_num`` values within ``max_run_num_gap`` are treated as
+    one logical session; their files should be loaded together and merged
+    before downstream processing so the warm-up curve sees one continuous
+    timeseries.
+
+    The default ``max_run_num_gap=1`` means only strictly-consecutive
+    ``run_num`` values group. Set higher to tolerate small gaps when the
+    logger skipped numbers for unrelated activity in between.
+
+    Returns a list of groups (each itself a list of SessionCandidate),
+    each group sorted by ``run_num``. Singleton groups (one candidate) are
+    included so callers can iterate uniformly.
+    """
+    if not candidates:
+        return []
+    ordered = sorted(
+        candidates,
+        key=lambda c: (
+            c.date,
+            c.driver or "",
+            c.car or "",
+            c.track_canonical or "",
+            c.session_type or "",
+            c.run_num if c.run_num is not None else -1,
+        ),
+    )
+    groups: list[list[SessionCandidate]] = [[ordered[0]]]
+    for cand in ordered[1:]:
+        prev = groups[-1][-1]
+        same_bucket = (
+            prev.date == cand.date
+            and prev.driver == cand.driver
+            and prev.car == cand.car
+            and prev.track_canonical == cand.track_canonical
+            and prev.session_type == cand.session_type
+        )
+        sequential = (
+            prev.run_num is not None
+            and cand.run_num is not None
+            and 0 < (cand.run_num - prev.run_num) <= max_run_num_gap
+        )
+        if same_bucket and sequential:
+            groups[-1].append(cand)
+        else:
+            groups.append([cand])
+    return groups
