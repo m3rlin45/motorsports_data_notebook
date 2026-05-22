@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using TirePressureCalculator.Services.Modeling;
 
 namespace TirePressureCalculator.ViewModels;
 
@@ -78,13 +79,14 @@ public class TireCornerViewModel : INotifyPropertyChanged
     {
         get
         {
-            double tColdK = _currentTemp + 273.15;
-            double tHotK = AdjustedHotTemp + 273.15;
-            if (tHotK <= 0) return 0;
-            // Convert gauge pressure to absolute, apply Gay-Lussac's Law, convert back
-            double pHotAbs = _targetHotPressure + 1.0;
-            double pColdAbs = pHotAbs * (tColdK / tHotK);
-            return Math.Round(pColdAbs - 1.0, 3);
+            double tHotC = AdjustedHotTemp;
+            if (tHotC + EnergyBalance.TZeroCToK <= 0) return 0;
+            return Math.Round(
+                EnergyBalance.GayLussacColdPressureBar(
+                    targetHotPressureBar: _targetHotPressure,
+                    tHotC: tHotC,
+                    tColdC: _currentTemp),
+                3);
         }
     }
 
