@@ -234,7 +234,9 @@ def _evaluate_fold(root: Path, holdout_ids: list[str]) -> pd.DataFrame:
     # Drop out-laps from evaluation (same convention as training)
     all_laps = all_laps[all_laps["lap_within_stint"] > 0].reset_index(drop=True)
 
-    # Per-lap predictions
+    # Per-lap predictions. Per-lap g² (heat_proxy / on_track_s) is the
+    # held-out lap's actual driving intensity; falls back to the bucket
+    # statistic only when that ratio is unavailable.
     rows: list[dict] = []
     for _, lap in all_laps.iterrows():
         track = lap["track_canonical"]
@@ -246,7 +248,18 @@ def _evaluate_fold(root: Path, holdout_ids: list[str]) -> pd.DataFrame:
         t_eff = float(lap["t_eff_c"]) if pd.notna(lap["t_eff_c"]) else None
         if t_eff is None:
             continue
-        g2 = g2_lookup.get((track, car, cond)) or g2_lookup.get((track, car, "dry"))
+        on_track_s = lap.get("on_track_s")
+        heat_proxy_total = lap.get("heat_proxy")
+        g2: float | None
+        if (
+            pd.notna(heat_proxy_total)
+            and pd.notna(on_track_s)
+            and float(on_track_s) > 0
+            and float(heat_proxy_total) > 0
+        ):
+            g2 = float(heat_proxy_total) / float(on_track_s)
+        else:
+            g2 = g2_lookup.get((track, car, cond)) or g2_lookup.get((track, car, "dry"))
         if g2 is None:
             continue
         c_track = c_track_lookup.get(track, 1.0)
