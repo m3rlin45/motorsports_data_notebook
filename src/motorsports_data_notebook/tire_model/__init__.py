@@ -12,8 +12,10 @@ from .energy_balance import (
     t_road_proxy_c,
     warmup_curve_c,
 )
+from .warmup_table import build_warmup_table
 
 __all__ = [
+    "build_warmup_table",
     "gay_lussac_cold_pressure_bar",
     "t_effective_c",
     "t_road_proxy_c",
