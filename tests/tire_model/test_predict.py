@@ -411,6 +411,43 @@ def test_predict_cold_uses_t_air_not_t_eff_for_gay_lussac() -> None:
     assert p.cold_pressure_bar == pytest.approx(expected_cold)
 
 
+def test_predict_cold_tire_temp_overrides_ambient_in_gay_lussac_only() -> None:
+    """When the tire isn't at air temperature (e.g., warm garage), the user
+    can pin T_cold separately. It MUST only affect the Gay-Lussac inversion
+    — the warmup-curve target T_eff is still computed from ambient_temp_c."""
+    model = _minimal_model()
+    base = predict_cold_pressure(
+        track="track_a",
+        car="ToyCar",
+        lap_within_stint=5,
+        target_hot_pressure_bar={c: 1.95 for c in CORNERS},
+        ambient_temp_c=15.0,
+        _model=model,
+    )
+    # Tire is 10 °C warmer than air (sat in a heated garage). Cold side of
+    # Gay-Lussac uses 25 °C; T_eff and predicted hot temp are unchanged.
+    warm_tire = predict_cold_pressure(
+        track="track_a",
+        car="ToyCar",
+        lap_within_stint=5,
+        target_hot_pressure_bar={c: 1.95 for c in CORNERS},
+        ambient_temp_c=15.0,
+        cold_tire_temp_c=25.0,
+        _model=model,
+    )
+    p_base = base["fl"]
+    p_warm = warm_tire["fl"]
+    # T_eff and predicted hot temp unchanged
+    assert p_base.t_eff_c == pytest.approx(p_warm.t_eff_c)
+    assert p_base.predicted_hot_temp_c == pytest.approx(p_warm.predicted_hot_temp_c)
+    # T_cold differs
+    assert p_base.t_cold_c == pytest.approx(15.0)
+    assert p_warm.t_cold_c == pytest.approx(25.0)
+    # Cold pressure HIGHER for a warmer cold-side (P/T constant ⇒ larger
+    # T_cold ⇒ larger P_cold for the same P_hot/T_hot)
+    assert p_warm.cold_pressure_bar > p_base.cold_pressure_bar
+
+
 def test_predict_missing_corner_in_target_raises_keyerror() -> None:
     model = _minimal_model()
     with pytest.raises(KeyError):
