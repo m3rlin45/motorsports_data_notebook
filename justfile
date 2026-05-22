@@ -39,6 +39,25 @@ run:
 
 run-clean: clean run
 
+# Tire ETL pipeline — extract per-sample telemetry into data/tire_dataset/
+tire-etl *ARGS:
+    uv run python -m motorsports_data_notebook.tire_etl.cli extract {{ARGS}}
+
+# Parse run-notes into structured JSON via `claude -p`
+tire-notes *ARGS:
+    uv run python -m motorsports_data_notebook.tire_etl.cli enrich-notes {{ARGS}}
+
+# Fetch historical weather for sessions
+tire-weather *ARGS:
+    uv run python -m motorsports_data_notebook.tire_etl.cli enrich-weather {{ARGS}}
+
+# Ad-hoc SQL query over the dataset via DuckDB
+tire-query SQL:
+    uv run python -m motorsports_data_notebook.tire_etl.cli query "{{SQL}}"
+
+# Run all three phases in order (full refresh)
+tire-refresh: tire-etl tire-notes tire-weather
+
 # Emscripten SDK setup (one-time, needed for building libxrk Pyodide wheel)
 setup-emsdk:
     #!/usr/bin/env bash
