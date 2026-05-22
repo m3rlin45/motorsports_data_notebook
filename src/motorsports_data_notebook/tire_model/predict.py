@@ -64,44 +64,90 @@ def _load_model(dataset_root: Path | None) -> dict[str, Any]:
     return model
 
 
-def _lookup_tau(model: dict[str, Any], car: str, corner: str) -> tuple[float, float]:
-    for r in model["tau_sec_by_car_corner"]:
-        if r["car"] == car and r["corner"] == corner:
-            return float(r["value_seconds"]), float(r["stderr_seconds"])
-    # fallback to mean over (car) if any
-    same_car = [r for r in model["tau_sec_by_car_corner"] if r["car"] == car]
+DEFAULT_CONDITION = "dry"
+
+# Per-condition fallback order: when the requested condition has no fit,
+# walk this list. Each list begins with the requested condition and walks
+# through physically-closest neighbors before giving up.
+_CONDITION_FALLBACK = {
+    "dry": ("dry",),
+    "damp": ("damp", "dry"),  # if no damp data, fall back to dry
+    "wet": ("wet", "damp", "dry"),  # prefer damp over dry when wet data missing
+}
+
+
+def _condition_chain(condition: str) -> tuple[str, ...]:
+    return _CONDITION_FALLBACK.get(condition, (condition, "dry"))
+
+
+def _lookup_tau(
+    model: dict[str, Any], car: str, corner: str, condition: str
+) -> tuple[float, float, tuple[str, ...]]:
+    """Return (τ_sec, stderr, source_bucket).
+
+    Fallback walks the requested condition's neighbor chain, then (car, corner),
+    then (car), then prior.
+    """
+    table = model["tau_sec_by_car_corner_cond"]
+    for cond in _condition_chain(condition):
+        for r in table:
+            if r["car"] == car and r["corner"] == corner and r["condition"] == cond:
+                return (
+                    float(r["value_seconds"]),
+                    float(r["stderr_seconds"]),
+                    (car, corner, cond),
+                )
+    same_cc = [r for r in table if r["car"] == car and r["corner"] == corner]
+    if same_cc:
+        vals = [r["value_seconds"] for r in same_cc]
+        return float(sum(vals) / len(vals)), 0.0, (car, corner)
+    same_car = [r for r in table if r["car"] == car]
     if same_car:
         vals = [r["value_seconds"] for r in same_car]
-        return float(sum(vals) / len(vals)), 0.0
-    return float(model["priors_when_no_fit"]["tau_sec_seconds"]), 0.0
+        return float(sum(vals) / len(vals)), 0.0, (car,)
+    return float(model["priors_when_no_fit"]["tau_sec_seconds"]), 0.0, ()
 
 
 def _lookup_k(
-    model: dict[str, Any], car: str, corner: str
+    model: dict[str, Any], car: str, corner: str, condition: str
 ) -> tuple[float, float, int, bool, tuple[str, ...]]:
-    """Return (K, stderr, n_samples, from_prior, source_bucket_tuple)."""
-    for r in model["K_buckets"]:
-        if r["key"]["car"] == car and r["key"]["corner"] == corner:
-            return (
-                float(r["value_kelvin_per_g2"]),
-                float(r["stderr_kelvin_per_g2"]),
-                int(r["n_samples"]),
-                bool(r["from_prior"]),
-                (car, corner),
-            )
-    # (car) fallback: average K over corners
-    same_car = [r for r in model["K_buckets"] if r["key"]["car"] == car]
+    """Return (K, stderr, n_samples, from_prior, source_bucket_tuple).
+
+    Fallback chain (condition-aware):
+      1. (car, corner, condition)
+      2. (car, corner, "dry")
+      3. (car, corner) — mean across whatever conditions exist
+      4. (car) — mean across all (corner, condition)
+      5. prior
+    """
+    table = model["K_buckets"]
+    for cond in _condition_chain(condition):
+        for r in table:
+            k = r["key"]
+            if k["car"] == car and k["corner"] == corner and k["condition"] == cond:
+                return (
+                    float(r["value_kelvin_per_g2"]),
+                    float(r["stderr_kelvin_per_g2"]),
+                    int(r["n_samples"]),
+                    bool(r["from_prior"]),
+                    (car, corner, cond),
+                )
+    same_cc = [r for r in table if r["key"]["car"] == car and r["key"]["corner"] == corner]
+    if same_cc:
+        vals = [r["value_kelvin_per_g2"] for r in same_cc]
+        n = sum(int(r["n_samples"]) for r in same_cc)
+        return float(sum(vals) / len(vals)), 0.0, n, False, (car, corner)
+    same_car = [r for r in table if r["key"]["car"] == car]
     if same_car:
         vals = [r["value_kelvin_per_g2"] for r in same_car]
         n = sum(int(r["n_samples"]) for r in same_car)
         return float(sum(vals) / len(vals)), 0.0, n, False, (car,)
-    # global fallback
     prior_k = float(model["priors_when_no_fit"]["K_kelvin_per_g2"])
     return prior_k, 0.0, 0, True, ()
 
 
 def _lookup_c_track(model: dict[str, Any], track: str) -> tuple[float, float, bool]:
-    """Return (c_track, stderr, from_prior)."""
+    """Return (c_track, stderr, from_prior). Track-only (condition-independent)."""
     for r in model["c_track_by_track"]:
         if r["track_canonical"] == track:
             return float(r["value"]), float(r["stderr"]), False
@@ -109,31 +155,56 @@ def _lookup_c_track(model: dict[str, Any], track: str) -> tuple[float, float, bo
     return prior_c, 0.0, True
 
 
-def _lookup_g2(model: dict[str, Any], track: str, car: str) -> tuple[float, int, str]:
-    """Return (g2_typ, n_laps_used, source). Source is one of 'exact', 'track', 'global', 'override'."""
-    for r in model["g2_typ_by_track_car"]:
-        if r["track_canonical"] == track and r["car"] == car:
-            return float(r["g2_typ"]), int(r["n_laps_used"]), "exact"
-    same_track = [r for r in model["g2_typ_by_track_car"] if r["track_canonical"] == track]
-    if same_track:
-        vals = [r["g2_typ"] for r in same_track]
-        n = sum(int(r["n_laps_used"]) for r in same_track)
-        return float(sum(vals) / len(vals)), n, "track"
-    all_g2 = [r["g2_typ"] for r in model["g2_typ_by_track_car"]]
+def _lookup_g2(
+    model: dict[str, Any], track: str, car: str, condition: str
+) -> tuple[float, int, str]:
+    """Return (g2_typ, n_laps_used, source).
+
+    Fallback walks the condition chain ((wet) → damp → dry, (damp) → dry,
+    (dry) → dry), then (track, car) pooled across conditions, then (track),
+    then global.
+    """
+    table = model["g2_typ_by_track_car_cond"]
+    for cond in _condition_chain(condition):
+        for r in table:
+            if r["track_canonical"] == track and r["car"] == car and r["condition"] == cond:
+                tag = "exact" if cond == condition else f"fallback({cond})"
+                return float(r["g2_typ"]), int(r["n_laps_used"]), tag
+    same_tc = [r for r in table if r["track_canonical"] == track and r["car"] == car]
+    if same_tc:
+        vals = [r["g2_typ"] for r in same_tc]
+        n = sum(int(r["n_laps_used"]) for r in same_tc)
+        return float(sum(vals) / len(vals)), n, "track_car_pooled"
+    same_t = [r for r in table if r["track_canonical"] == track]
+    if same_t:
+        vals = [r["g2_typ"] for r in same_t]
+        n = sum(int(r["n_laps_used"]) for r in same_t)
+        return float(sum(vals) / len(vals)), n, "track_pooled"
+    all_g2 = [r["g2_typ"] for r in table]
     if all_g2:
         return float(sum(all_g2) / len(all_g2)), 0, "global"
     return 0.7, 0, "global"
 
 
-def _lookup_lap_time(model: dict[str, Any], track: str, car: str) -> tuple[float, int, str]:
-    for r in model["lap_time_typ_by_track_car"]:
-        if r["track_canonical"] == track and r["car"] == car:
-            return float(r["lap_time_typ_s"]), int(r["n_laps_used"]), "exact"
-    same_track = [r for r in model["lap_time_typ_by_track_car"] if r["track_canonical"] == track]
-    if same_track:
-        vals = [r["lap_time_typ_s"] for r in same_track]
-        n = sum(int(r["n_laps_used"]) for r in same_track)
-        return float(sum(vals) / len(vals)), n, "track"
+def _lookup_lap_time(
+    model: dict[str, Any], track: str, car: str, condition: str
+) -> tuple[float, int, str]:
+    table = model["lap_time_typ_by_track_car_cond"]
+    for cond in _condition_chain(condition):
+        for r in table:
+            if r["track_canonical"] == track and r["car"] == car and r["condition"] == cond:
+                tag = "exact" if cond == condition else f"fallback({cond})"
+                return float(r["lap_time_typ_s"]), int(r["n_laps_used"]), tag
+    same_tc = [r for r in table if r["track_canonical"] == track and r["car"] == car]
+    if same_tc:
+        vals = [r["lap_time_typ_s"] for r in same_tc]
+        n = sum(int(r["n_laps_used"]) for r in same_tc)
+        return float(sum(vals) / len(vals)), n, "track_car_pooled"
+    same_t = [r for r in table if r["track_canonical"] == track]
+    if same_t:
+        vals = [r["lap_time_typ_s"] for r in same_t]
+        n = sum(int(r["n_laps_used"]) for r in same_t)
+        return float(sum(vals) / len(vals)), n, "track_pooled"
     return 90.0, 0, "global"
 
 
@@ -144,6 +215,7 @@ def predict_cold_pressure(
     lap_within_stint: int,
     target_hot_pressure_bar: dict[str, float],
     ambient_temp_c: float,
+    track_condition: str = "dry",
     track_temp_c: float | None = None,
     cloud_cover_pct: float | None = None,
     g2_typ_override: float | None = None,
@@ -155,38 +227,23 @@ def predict_cold_pressure(
 
     Parameters
     ----------
-    track
-        ``track_canonical`` string (e.g. ``"tsukuba_2000"``).
-    car
-        Car string as it appears in ``sessions/*.parquet`` (e.g. ``"KK-SII"``).
-    lap_within_stint
-        0-indexed lap number within a stint. ``5`` means "5 laps in" — the
-        prediction is at the END of that lap.
-    target_hot_pressure_bar
-        Dict keyed by corner ``{"fl", "fr", "rl", "rr"}``, values in bar gauge.
-    ambient_temp_c
-        Outside air temperature in °C (T_air for Gay-Lussac).
-    track_temp_c
-        Optional measured track surface temperature in °C. If ``None``, the
-        proxy ``T_air + Δ_sun · (1 - cloud_cover/100)`` is used (see
-        :func:`energy_balance.t_road_proxy_c`).
-    cloud_cover_pct
-        0..100, used only if ``track_temp_c is None``. ``None`` ⇒ no sun
-        offset (T_road = T_air).
-    g2_typ_override
-        Override the looked-up ⟨g²⟩ for the (track, car) bucket. Useful for
-        brand-new tracks.
-    lap_time_typ_override_s
-        Override the looked-up median lap time. Useful when the user wants a
-        race-pace prediction that differs from session median.
+    track_condition
+        One of ``"dry"`` (default), ``"damp"`` (light drizzle, 0.1–1 mm/hr),
+        or ``"wet"`` (≥ 1 mm/hr). Picks the condition-specific K, τ_sec,
+        ⟨g²⟩, and lap_time_typ. Falls back to ``"dry"`` per-bucket when
+        the requested condition has no data.
     """
     model = _model if _model is not None else _load_model(dataset_root)
 
-    # Lookups
-    g2_typ, g2_n, _g2_source = _lookup_g2(model, track, car)
+    cond = str(track_condition or "dry").lower()
+    if cond not in {"dry", "damp", "wet"}:
+        raise ValueError(f"track_condition must be one of dry/damp/wet; got {track_condition!r}")
+
+    # Lookups (all condition-aware where applicable)
+    g2_typ, g2_n, _g2_source = _lookup_g2(model, track, car, cond)
     if g2_typ_override is not None:
         g2_typ = float(g2_typ_override)
-    lap_time_typ_s, lt_n, _lt_source = _lookup_lap_time(model, track, car)
+    lap_time_typ_s, lt_n, _lt_source = _lookup_lap_time(model, track, car, cond)
     if lap_time_typ_override_s is not None:
         lap_time_typ_s = float(lap_time_typ_override_s)
     c_track, c_track_stderr, _c_from_prior = _lookup_c_track(model, track)
@@ -214,8 +271,8 @@ def predict_cold_pressure(
         if corner not in target_hot_pressure_bar:
             raise KeyError(f"target_hot_pressure_bar missing corner {corner!r}")
         target_hot = float(target_hot_pressure_bar[corner])
-        K, K_stderr, K_n, K_from_prior, K_src = _lookup_k(model, car, corner)
-        tau_sec, tau_stderr = _lookup_tau(model, car, corner)
+        K, K_stderr, K_n, K_from_prior, K_src = _lookup_k(model, car, corner, cond)
+        tau_sec, tau_stderr, _tau_src = _lookup_tau(model, car, corner, cond)
 
         warmup_frac = 1.0 - math.exp(-t_at_lap_n_s / tau_sec) if tau_sec > 0 else 0.0
         delta_t_inf = K * c_track * g2_typ
