@@ -3,14 +3,8 @@ name: Build Tire Pressure Calculator
 on:
   push:
     branches: [master]
-    paths:
-      - 'tire_pressure_calculator/**'
-      - '.github/workflows/build-tire-pressure.yml'
   pull_request:
     branches: [master]
-    paths:
-      - 'tire_pressure_calculator/**'
-      - '.github/workflows/build-tire-pressure.yml'
   release:
     types: [published]
 

@@ -182,6 +182,11 @@ public class TireCornerViewModelTests
 
         vm.CurrentTemp = 20.0;
 
-        Assert.Empty(changedProperties);
+        // Ignore PropertyChanged(string.Empty) — the corner VM uses that
+        // signal to refresh all bindings when the Localizer's Language flips.
+        // The contract under test is "setting CurrentTemp to its current value
+        // fires no value-specific PropertyChanged", so only non-empty
+        // property names matter here.
+        Assert.DoesNotContain(changedProperties, p => !string.IsNullOrEmpty(p));
     }
 }

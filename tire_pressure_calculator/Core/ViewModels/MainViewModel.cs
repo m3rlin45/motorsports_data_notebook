@@ -288,6 +288,16 @@ public class MainViewModel : INotifyPropertyChanged
             FrontRight.ResetToDefaults();
             RearLeft.ResetToDefaults();
             RearRight.ResetToDefaults();
+            // Prediction inputs (only reachable when the model is loaded).
+            // Routed through the public setters so persistence and
+            // RefreshPredictions() run exactly as they do on user input.
+            SelectedTrack = AvailableTracks.FirstOrDefault();
+            SelectedCar = AvailableCars.FirstOrDefault();
+            SelectedCondition = "dry";
+            LapWithinStint = 5;
+            AmbientTempC = 20.0;
+            TrackTempC = null;
+            CloudCoverPct = null;
         });
 
         RefreshPredictions();
