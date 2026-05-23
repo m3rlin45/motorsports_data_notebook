@@ -3,16 +3,8 @@ name: Build Desktop App
 on:
   push:
     branches: [master]
-    paths:
-      - 'desktop_app/**'
-      - 'src/motorsports_data_notebook/**'
-      - '.github/workflows/build-desktop.yml'
   pull_request:
     branches: [master]
-    paths:
-      - 'desktop_app/**'
-      - 'src/motorsports_data_notebook/**'
-      - '.github/workflows/build-desktop.yml'
   release:
     types: [published]
 

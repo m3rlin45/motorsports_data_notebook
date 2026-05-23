@@ -307,9 +307,14 @@
                       ContentTemplate="{StaticResource CornerTemplate}" />
 
       <!-- ROW 4: Bottom bar — reset (always) + correction slider (manual only) -->
+      <!-- Tapped wired in addition to Command: in the WASM head the Button's
+           Click path doesn't reliably reach the bound Command (same class of
+           pointer-event interception that bit ToggleSwitch above). Tapped is
+           the gesture-level fallback that fires on both desktop and WASM. -->
       <Button Grid.Row="4" Grid.Column="0"
               Content="{Binding T_ResetButton}"
               Command="{Binding ResetCommand}"
+              Tapped="OnResetButtonTapped"
               HorizontalAlignment="Left" VerticalAlignment="Center"
               Margin="8,4,0,8" />
       <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal"

@@ -11,8 +11,8 @@
     },
     "corners": {
       "fl": {
-        "cold_pressure_bar": 1.4970642148503628,
-        "predicted_hot_temp_c": 41.661687791179894,
+        "cold_pressure_bar": 1.4845010271743289,
+        "predicted_hot_temp_c": 43.25357214665859,
         "K_source_bucket": [
           "KK-SII",
           "fl",
@@ -20,8 +20,8 @@
         ]
       },
       "fr": {
-        "cold_pressure_bar": 1.5293622025672535,
-        "predicted_hot_temp_c": 37.64178743246765,
+        "cold_pressure_bar": 1.5185052491135536,
+        "predicted_hot_temp_c": 38.98157100891014,
         "K_source_bucket": [
           "KK-SII",
           "fr",
@@ -29,8 +29,8 @@
         ]
       },
       "rl": {
-        "cold_pressure_bar": 1.5219536431724743,
-        "predicted_hot_temp_c": 38.55477781309439,
+        "cold_pressure_bar": 1.5121181607837721,
+        "predicted_hot_temp_c": 39.7751689955293,
         "K_source_bucket": [
           "KK-SII",
           "rl",
@@ -38,8 +38,8 @@
         ]
       },
       "rr": {
-        "cold_pressure_bar": 1.518356544613408,
-        "predicted_hot_temp_c": 39.00000182616114,
+        "cold_pressure_bar": 1.5129550765732027,
+        "predicted_hot_temp_c": 39.67095224399074,
         "K_source_bucket": [
           "KK-SII",
           "rr",
@@ -61,8 +61,8 @@
     },
     "corners": {
       "fl": {
-        "cold_pressure_bar": 1.4529259249261464,
-        "predicted_hot_temp_c": 44.02427423880505,
+        "cold_pressure_bar": 1.4421624999532288,
+        "predicted_hot_temp_c": 45.42216709162479,
         "K_source_bucket": [
           "KK-SII",
           "fl",
@@ -70,8 +70,8 @@
         ]
       },
       "fr": {
-        "cold_pressure_bar": 1.4975935151829258,
-        "predicted_hot_temp_c": 38.35184978880298,
+        "cold_pressure_bar": 1.4881969623621667,
+        "predicted_hot_temp_c": 39.52822112498764,
         "K_source_bucket": [
           "KK-SII",
           "fr",
@@ -79,8 +79,8 @@
         ]
       },
       "rl": {
-        "cold_pressure_bar": 1.4814735874133604,
-        "predicted_hot_temp_c": 40.375400369454375,
+        "cold_pressure_bar": 1.472138972848481,
+        "predicted_hot_temp_c": 41.559249174433205,
         "K_source_bucket": [
           "KK-SII",
           "rl",
@@ -88,8 +88,8 @@
         ]
       },
       "rr": {
-        "cold_pressure_bar": 1.4721539002328958,
-        "predicted_hot_temp_c": 41.55734889389615,
+        "cold_pressure_bar": 1.468758983176754,
+        "predicted_hot_temp_c": 41.99011910505637,
         "K_source_bucket": [
           "KK-SII",
           "rr",
@@ -110,8 +110,8 @@
     },
     "corners": {
       "fl": {
-        "cold_pressure_bar": 1.5142319003376237,
-        "predicted_hot_temp_c": 36.29042985673898,
+        "cold_pressure_bar": 1.4728141079520536,
+        "predicted_hot_temp_c": 41.473326313975015,
         "K_source_bucket": [
           "KK-SII",
           "fl",
@@ -119,8 +119,8 @@
         ]
       },
       "fr": {
-        "cold_pressure_bar": 1.5557861037831082,
-        "predicted_hot_temp_c": 31.259276992463032,
+        "cold_pressure_bar": 1.524186626496705,
+        "predicted_hot_temp_c": 35.07007843365605,
         "K_source_bucket": [
           "KK-SII",
           "fr",
@@ -128,8 +128,8 @@
         ]
       },
       "rl": {
-        "cold_pressure_bar": 1.5661713557506167,
-        "predicted_hot_temp_c": 30.02733780970762,
+        "cold_pressure_bar": 1.5163361027578128,
+        "predicted_hot_temp_c": 36.031670583406964,
         "K_source_bucket": [
           "KK-SII",
           "rl",
@@ -137,8 +137,8 @@
         ]
       },
       "rr": {
-        "cold_pressure_bar": 1.55594567674096,
-        "predicted_hot_temp_c": 31.240272093740295,
+        "cold_pressure_bar": 1.5080367268886423,
+        "predicted_hot_temp_c": 37.05478753720569,
         "K_source_bucket": [
           "KK-SII",
           "rr",
@@ -159,8 +159,8 @@
     },
     "corners": {
       "fl": {
-        "cold_pressure_bar": 1.5142319003376237,
-        "predicted_hot_temp_c": 36.29042985673898,
+        "cold_pressure_bar": 1.4728141079520536,
+        "predicted_hot_temp_c": 41.473326313975015,
         "K_source_bucket": [
           "KK-SII",
           "fl",
@@ -168,8 +168,8 @@
         ]
       },
       "fr": {
-        "cold_pressure_bar": 1.5557861037831082,
-        "predicted_hot_temp_c": 31.259276992463032,
+        "cold_pressure_bar": 1.524186626496705,
+        "predicted_hot_temp_c": 35.07007843365605,
         "K_source_bucket": [
           "KK-SII",
           "fr",
@@ -177,8 +177,8 @@
         ]
       },
       "rl": {
-        "cold_pressure_bar": 1.5661713557506167,
-        "predicted_hot_temp_c": 30.02733780970762,
+        "cold_pressure_bar": 1.5163361027578128,
+        "predicted_hot_temp_c": 36.031670583406964,
         "K_source_bucket": [
           "KK-SII",
           "rl",
@@ -186,8 +186,8 @@
         ]
       },
       "rr": {
-        "cold_pressure_bar": 1.55594567674096,
-        "predicted_hot_temp_c": 31.240272093740295,
+        "cold_pressure_bar": 1.5080367268886423,
+        "predicted_hot_temp_c": 37.05478753720569,
         "K_source_bucket": [
           "KK-SII",
           "rr",
@@ -208,8 +208,8 @@
     },
     "corners": {
       "fl": {
-        "cold_pressure_bar": 1.4263693850389512,
-        "predicted_hot_temp_c": 55.28515291354006,
+        "cold_pressure_bar": 1.426456485922678,
+        "predicted_hot_temp_c": 55.27336329677513,
         "K_source_bucket": [
           "Inferno 86",
           "fl",
@@ -217,8 +217,8 @@
         ]
       },
       "fr": {
-        "cold_pressure_bar": 1.4500953054700179,
-        "predicted_hot_temp_c": 52.104694468762496,
+        "cold_pressure_bar": 1.4483118239894863,
+        "predicted_hot_temp_c": 52.34162741102789,
         "K_source_bucket": [
           "Inferno 86",
           "fr",
@@ -226,8 +226,8 @@
         ]
       },
       "rl": {
-        "cold_pressure_bar": 1.4798957136777493,
-        "predicted_hot_temp_c": 48.19617419785339,
+        "cold_pressure_bar": 1.4788970335135416,
+        "predicted_hot_temp_c": 48.32563582763339,
         "K_source_bucket": [
           "Inferno 86",
           "rl",
@@ -235,8 +235,8 @@
         ]
       },
       "rr": {
-        "cold_pressure_bar": 1.492408328025241,
-        "predicted_hot_temp_c": 46.58292298834337,
+        "cold_pressure_bar": 1.4952029185709472,
+        "predicted_hot_temp_c": 46.2248268202586,
         "K_source_bucket": [
           "Inferno 86",
           "rr",
@@ -258,8 +258,8 @@
     },
     "corners": {
       "fl": {
-        "cold_pressure_bar": 1.5125146164912442,
-        "predicted_hot_temp_c": 44.02427423880505,
+        "cold_pressure_bar": 1.5014897166794912,
+        "predicted_hot_temp_c": 45.42216709162479,
         "K_source_bucket": [
           "KK-SII",
           "fl",
@@ -267,8 +267,8 @@
         ]
       },
       "fr": {
-        "cold_pressure_bar": 1.5582673121854609,
-        "predicted_hot_temp_c": 38.35184978880298,
+        "cold_pressure_bar": 1.5486424898184747,
+        "predicted_hot_temp_c": 39.52822112498764,
         "K_source_bucket": [
           "KK-SII",
           "fr",
@@ -276,8 +276,8 @@
         ]
       },
       "rl": {
-        "cold_pressure_bar": 1.5417557845741916,
-        "predicted_hot_temp_c": 40.375400369454375,
+        "cold_pressure_bar": 1.5321944051231275,
+        "predicted_hot_temp_c": 41.559249174433205,
         "K_source_bucket": [
           "KK-SII",
           "rl",
@@ -285,8 +285,8 @@
         ]
       },
       "rr": {
-        "cold_pressure_bar": 1.5322096951370443,
-        "predicted_hot_temp_c": 41.55734889389615,
+        "cold_pressure_bar": 1.5287323056901578,
+        "predicted_hot_temp_c": 41.99011910505637,
         "K_source_bucket": [
           "KK-SII",
           "rr",
