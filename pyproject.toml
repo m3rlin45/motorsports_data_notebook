@@ -1,6 +1,6 @@
 [project]
 name = "motorsports-data-notebook"
-version = "0.17.2"
+version = "0.17.3"
 description = ""
 authors = [
     {name = "Christopher Dewan",email = "chris.dewan@m3rlin.net"}
