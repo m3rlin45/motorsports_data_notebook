@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "fit_at_utc": "2026-05-22T21:37:42+00:00",
+  "fit_at_utc": "2026-05-23T11:17:05+00:00",
   "model_form": "T_hot - T_eff = K[car,corner,cond] * c_track[track] * g2_typ[track,car,cond] * (1 - exp(-t / tau_sec[car,corner,cond]))   where T_eff = (1-w_road)*T_air + w_road*T_road, t = N * lap_time_typ_s[track,car,cond]",
   "gay_lussac": {
     "p_atm_bar": 1.0,
@@ -130,9 +130,9 @@
       "car": "KK-SII",
       "corner": "fl",
       "condition": "dry",
-      "value_seconds": 195.39932829421264,
-      "stderr_seconds": 9.67123757995021,
-      "n_samples_used": 287,
+      "value_seconds": 186.6345759605798,
+      "stderr_seconds": 9.08727898000595,
+      "n_samples_used": 310,
       "from_prior": false
     },
     {
@@ -148,9 +148,9 @@
       "car": "KK-SII",
       "corner": "fr",
       "condition": "dry",
-      "value_seconds": 174.3743550610135,
-      "stderr_seconds": 10.045413238372793,
-      "n_samples_used": 286,
+      "value_seconds": 166.3821440194984,
+      "stderr_seconds": 9.248440455165428,
+      "n_samples_used": 309,
       "from_prior": false
     },
     {
@@ -166,9 +166,9 @@
       "car": "KK-SII",
       "corner": "rl",
       "condition": "dry",
-      "value_seconds": 204.53962377437642,
-      "stderr_seconds": 11.686606581305103,
-      "n_samples_used": 254,
+      "value_seconds": 193.36358882385915,
+      "stderr_seconds": 10.806429146873777,
+      "n_samples_used": 277,
       "from_prior": false
     },
     {
@@ -184,9 +184,9 @@
       "car": "KK-SII",
       "corner": "rr",
       "condition": "dry",
-      "value_seconds": 220.67679124072228,
-      "stderr_seconds": 11.704922882182482,
-      "n_samples_used": 242,
+      "value_seconds": 205.59832432302167,
+      "stderr_seconds": 10.949436744273267,
+      "n_samples_used": 265,
       "from_prior": false
     }
   ],
@@ -197,8 +197,8 @@
         "corner": "fl",
         "condition": "damp"
       },
-      "value_kelvin_per_g2": 68.95411792269012,
-      "stderr_kelvin_per_g2": 13.692893678828101,
+      "value_kelvin_per_g2": 69.03596002618694,
+      "stderr_kelvin_per_g2": 13.668347406968877,
       "n_samples": 122,
       "from_prior": true,
       "from_single_track": false
@@ -209,8 +209,8 @@
         "corner": "fl",
         "condition": "dry"
       },
-      "value_kelvin_per_g2": 57.4617649355751,
-      "stderr_kelvin_per_g2": 4.600278289148965,
+      "value_kelvin_per_g2": 57.52996668848912,
+      "stderr_kelvin_per_g2": 4.585825275094079,
       "n_samples": 319,
       "from_prior": false,
       "from_single_track": false
@@ -221,8 +221,8 @@
         "corner": "fr",
         "condition": "damp"
       },
-      "value_kelvin_per_g2": 61.09404011367248,
-      "stderr_kelvin_per_g2": 8.713261369119113,
+      "value_kelvin_per_g2": 61.166553038275936,
+      "stderr_kelvin_per_g2": 8.691464240584594,
       "n_samples": 122,
       "from_prior": true,
       "from_single_track": false
@@ -233,8 +233,8 @@
         "corner": "fr",
         "condition": "dry"
       },
-      "value_kelvin_per_g2": 50.91170009472707,
-      "stderr_kelvin_per_g2": 3.214903240270657,
+      "value_kelvin_per_g2": 50.97212753189662,
+      "stderr_kelvin_per_g2": 3.219356238926748,
       "n_samples": 319,
       "from_prior": false,
       "from_single_track": false
@@ -245,8 +245,8 @@
         "corner": "rl",
         "condition": "damp"
       },
-      "value_kelvin_per_g2": 58.66425398768286,
-      "stderr_kelvin_per_g2": 16.13311902706505,
+      "value_kelvin_per_g2": 58.73388298289115,
+      "stderr_kelvin_per_g2": 16.110355249695303,
       "n_samples": 122,
       "from_prior": true,
       "from_single_track": false
@@ -257,8 +257,8 @@
         "corner": "rl",
         "condition": "dry"
       },
-      "value_kelvin_per_g2": 48.886878323069055,
-      "stderr_kelvin_per_g2": 9.899615867916959,
+      "value_kelvin_per_g2": 48.94490248574263,
+      "stderr_kelvin_per_g2": 9.931251090209857,
       "n_samples": 308,
       "from_prior": false,
       "from_single_track": false
@@ -269,8 +269,8 @@
         "corner": "rr",
         "condition": "damp"
       },
-      "value_kelvin_per_g2": 53.47059115191523,
-      "stderr_kelvin_per_g2": 7.902824614372469,
+      "value_kelvin_per_g2": 53.5340557539859,
+      "stderr_kelvin_per_g2": 7.878358732346561,
       "n_samples": 122,
       "from_prior": true,
       "from_single_track": false
@@ -281,8 +281,8 @@
         "corner": "rr",
         "condition": "dry"
       },
-      "value_kelvin_per_g2": 44.55882595992936,
-      "stderr_kelvin_per_g2": 9.325940095159119,
+      "value_kelvin_per_g2": 44.61171312832159,
+      "stderr_kelvin_per_g2": 9.363137654945978,
       "n_samples": 319,
       "from_prior": false,
       "from_single_track": false
@@ -305,9 +305,9 @@
         "corner": "fl",
         "condition": "dry"
       },
-      "value_kelvin_per_g2": 28.122407142487717,
-      "stderr_kelvin_per_g2": 0.63317697905797,
-      "n_samples": 287,
+      "value_kelvin_per_g2": 28.20498515753593,
+      "stderr_kelvin_per_g2": 0.6916490846006482,
+      "n_samples": 310,
       "from_prior": false,
       "from_single_track": false
     },
@@ -329,9 +329,9 @@
         "corner": "fr",
         "condition": "dry"
       },
-      "value_kelvin_per_g2": 22.36321417866846,
-      "stderr_kelvin_per_g2": 0.7999592347721425,
-      "n_samples": 286,
+      "value_kelvin_per_g2": 22.42713599604908,
+      "stderr_kelvin_per_g2": 0.7646636594057102,
+      "n_samples": 309,
       "from_prior": false,
       "from_single_track": false
     },
@@ -353,9 +353,9 @@
         "corner": "rl",
         "condition": "dry"
       },
-      "value_kelvin_per_g2": 24.71610641732915,
-      "stderr_kelvin_per_g2": 0.44258037137825795,
-      "n_samples": 254,
+      "value_kelvin_per_g2": 24.7899504871143,
+      "stderr_kelvin_per_g2": 0.5094425468881313,
+      "n_samples": 277,
       "from_prior": false,
       "from_single_track": false
     },
@@ -377,9 +377,9 @@
         "corner": "rr",
         "condition": "dry"
       },
-      "value_kelvin_per_g2": 25.437182733721826,
+      "value_kelvin_per_g2": 25.470032235363295,
       "stderr_kelvin_per_g2": 0.0,
-      "n_samples": 242,
+      "n_samples": 265,
       "from_prior": false,
       "from_single_track": true
     }
@@ -387,15 +387,15 @@
   "c_track_by_track": [
     {
       "track_canonical": "fuji",
-      "value": 1.464860485197226,
-      "stderr": 0.06120391250880514,
+      "value": 1.4608115366348162,
+      "stderr": 0.061293338963019896,
       "n_buckets_used": 7,
       "anchor": false
     },
     {
       "track_canonical": "sodegaura",
-      "value": 1.068499512960266,
-      "stderr": 0.18270043028782454,
+      "value": 1.0676548861895614,
+      "stderr": 0.18215510964907378,
       "n_buckets_used": 8,
       "anchor": false
     },
@@ -496,8 +496,8 @@
       "track_canonical": "tsukuba_2000",
       "car": "KK-SII",
       "condition": "dry",
-      "g2_typ": 1.1290724277496338,
-      "n_laps_used": 259
+      "g2_typ": 1.1255494356155396,
+      "n_laps_used": 285
     }
   ],
   "lap_time_typ_by_track_car_cond": [
@@ -589,8 +589,8 @@
       "track_canonical": "tsukuba_2000",
       "car": "KK-SII",
       "condition": "dry",
-      "lap_time_typ_s": 61.994998931884766,
-      "n_laps_used": 259
+      "lap_time_typ_s": 61.99800109863281,
+      "n_laps_used": 285
     }
   ],
   "fallback_order_for_K": [
