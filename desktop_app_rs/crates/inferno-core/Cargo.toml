@@ -1,0 +1,16 @@
+[package]
+name = "inferno-core"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Data model and analysis algorithms for Inferno Analyzer"
+
+[dependencies]
+libxrk = { workspace = true }
+libibt = { workspace = true }
+arrow = { workspace = true }
+serde = { workspace = true }
+serde_yaml = { workspace = true }
+rayon = { workspace = true }
+thiserror = { workspace = true }
+dirs = { workspace = true }
