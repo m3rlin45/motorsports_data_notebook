@@ -1,0 +1,121 @@
+name: Build Rust Desktop App
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'desktop_app_rs/**'
+      - '.github/workflows/build-desktop-rs.yml'
+  pull_request:
+    branches: [master]
+    paths:
+      - 'desktop_app_rs/**'
+      - '.github/workflows/build-desktop-rs.yml'
+  release:
+    types: [published]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: desktop_app_rs
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.88.0"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            desktop_app_rs/target
+          key: build-linux-${{ runner.os }}-${{ hashFiles('desktop_app_rs/Cargo.lock') }}
+          restore-keys: build-linux-${{ runner.os }}-
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: InfernoAnalyzer-Rs-Linux
+          path: desktop_app_rs/target/release/inferno-app
+          retention-days: 30
+
+  build-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: desktop_app_rs
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.88.0"
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            desktop_app_rs/target
+          key: build-windows-${{ runner.os }}-${{ hashFiles('desktop_app_rs/Cargo.lock') }}
+          restore-keys: build-windows-${{ runner.os }}-
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: InfernoAnalyzer-Rs-Windows
+          path: desktop_app_rs/target/release/inferno-app.exe
+          retention-days: 30
+
+  attach-to-release:
+    needs: [build-linux, build-windows]
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: InfernoAnalyzer-Rs-Linux
+          path: dist/
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: InfernoAnalyzer-Rs-Windows
+          path: dist/
+
+      - name: Rename binaries
+        run: |
+          mv dist/inferno-app dist/InfernoAnalyzer-Rs-Linux
+          mv dist/inferno-app.exe dist/InfernoAnalyzer-Rs.exe
+
+      - name: Attach to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/InfernoAnalyzer-Rs-Linux
+            dist/InfernoAnalyzer-Rs.exe
