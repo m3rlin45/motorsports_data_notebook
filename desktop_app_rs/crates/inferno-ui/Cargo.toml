@@ -1,0 +1,12 @@
+[package]
+name = "inferno-ui"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "egui widgets and chart views for Inferno Analyzer"
+
+[dependencies]
+inferno-core = { workspace = true }
+egui = { workspace = true }
+egui_plot = { workspace = true }
+rfd = { workspace = true }
