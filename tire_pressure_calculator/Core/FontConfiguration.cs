@@ -5,8 +5,8 @@ namespace TirePressureCalculator;
 
 /// <summary>
 /// Configures Avalonia's font manager with the embedded Noto Sans JP subset
-/// as a fallback. Without this, Japanese characters render as tofu blocks
-/// in the Browser head (which has no system fonts to fall back to).
+/// as a fallback, so Japanese characters render on hosts without a suitable
+/// system font in Avalonia's default fallback chain.
 /// </summary>
 public static class FontConfiguration
 {

@@ -1,0 +1,392 @@
+/* Dark Fluent-like theme matching the previous Avalonia build. */
+
+/* Last-resort Japanese glyph coverage for hosts without a JP system font.
+   The subset is generated from Core/Localization/strings.json (see
+   Core/Assets/Fonts/regen_subset.py) and covers exactly the UI strings. */
+@font-face {
+  font-family: "Noto Sans JP Subset";
+  src: url("fonts/NotoSansJP-Subset.ttf") format("truetype");
+  font-display: swap;
+}
+
+:root {
+  --bg: #1f1f1f;
+  --bar-bg: #2b2b2b;
+  --panel-bg: #272727;
+  --control-bg: #2d2d2d;
+  --control-border: #3a3a3a;
+  --text: #ededed;
+  --text-dim: #9d9d9d;
+  --divider: #7a7a7a;
+  --accent: #4ea3ff;
+  --warn: #ff4500;
+  --border-current: rgba(96, 144, 255, 0.45);
+  --border-target: rgba(255, 64, 64, 0.45);
+  --border-pred: rgba(144, 192, 144, 0.55);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Hiragino Kaku Gothic ProN", "Noto Sans JP", Meiryo,
+    "Noto Sans JP Subset", sans-serif;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#app {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- Top bar ---- */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--bar-bg);
+}
+
+.mode-group {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.mode-label { font-weight: 600; }
+
+.model-unavailable {
+  color: var(--warn);
+  font-size: 11px;
+}
+
+.lang-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+
+/* ---- Fluent-style toggle switch ---- */
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  padding: 4px 0;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.toggle:disabled { cursor: default; opacity: 0.5; }
+
+.toggle-track {
+  display: inline-block;
+  width: 40px;
+  height: 20px;
+  border-radius: 10px;
+  border: 1px solid var(--text-dim);
+  background: transparent;
+  position: relative;
+  transition: background 0.15s, border-color 0.15s;
+  flex: none;
+}
+
+.toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  transition: left 0.15s, background 0.15s;
+}
+
+.toggle[aria-checked="true"] .toggle-track {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.toggle[aria-checked="true"] .toggle-thumb {
+  left: 22px;
+  background: #fff;
+}
+
+/* ---- Corner area: front arrow + cross dividers + 2x2 grid ---- */
+
+.corner-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  padding-top: 6px;
+}
+
+.front-arrow {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--divider);
+  flex: none;
+}
+
+.divider-v {
+  position: absolute;
+  left: calc(50% - 1px);
+  top: 37px;
+  bottom: 8px;
+  width: 2px;
+  background: var(--divider);
+  pointer-events: none;
+}
+
+.divider-h {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: calc(50% + 19px); /* centered within the corner rows below the arrow */
+  height: 2px;
+  background: var(--divider);
+  pointer-events: none;
+}
+
+.corner-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+/* ---- Corner card ---- */
+
+.corner {
+  padding: 6px 14px 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+
+.corner h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+  text-align: center;
+}
+
+.fields {
+  display: grid;
+  gap: 2px 8px;
+  grid-template-columns: 1fr 1fr;
+  grid-template-areas:
+    "l-current l-hot"
+    "current   hot"
+    "l-bar     l-bar"
+    "bar       bar";
+}
+
+.field { display: contents; }
+
+.field > label {
+  font-size: 11px;
+  text-align: center;
+  color: var(--text);
+  margin: 2px 0;
+  align-self: end;
+}
+
+.f-current > label { grid-area: l-current; }
+.f-current > .box  { grid-area: current; }
+.f-target  > label, .f-pred > label { grid-area: l-hot; }
+.f-target  > .box,  .f-pred > .box  { grid-area: hot; }
+.f-bar     > label { grid-area: l-bar; margin-top: 8px; }
+.f-bar     > .box  { grid-area: bar; justify-self: center; width: 55%; min-width: 110px; }
+
+/* Wide viewport: all three fields in a single row */
+@media (min-aspect-ratio: 17/10) {
+  .fields {
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-areas:
+      "l-current l-hot l-bar"
+      "current   hot   bar";
+  }
+  .f-bar > label { margin-top: 2px; }
+  .f-bar > .box { justify-self: stretch; width: auto; min-width: 0; }
+}
+
+/* Narrow viewport: fields stacked vertically at full width */
+@media (max-aspect-ratio: 1/1) {
+  .fields {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "l-current" "current"
+      "l-hot"     "hot"
+      "l-bar"     "bar";
+  }
+  .f-bar > label { margin-top: 2px; }
+  .f-bar > .box { justify-self: stretch; width: auto; min-width: 0; }
+}
+
+/* Mode-dependent visibility */
+body.mode-manual .pred-only { display: none; }
+body.mode-prediction .manual-only { display: none; }
+body.mode-prediction .f-pred { display: contents; }
+
+.box {
+  border: 1.5px solid var(--control-border);
+  border-radius: 4px;
+  background: var(--control-bg);
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.box-current { border-color: var(--border-current); }
+.box-target { border-color: var(--border-target); }
+.box-pred { border-color: var(--border-pred); }
+
+.box > input {
+  width: 100%;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 16px; /* >=16px keeps iOS Safari from auto-zooming on focus */
+  text-align: center;
+  padding: 5px 4px;
+  outline: none;
+  border-radius: 3px;
+}
+
+.box:focus-within {
+  border-color: var(--accent);
+}
+
+.out-pred {
+  font-size: 16px;
+  padding: 5px 4px;
+}
+
+.corner hr {
+  border: none;
+  border-top: 1px solid #3f3f3f;
+  margin: 8px 0 6px;
+  width: 100%;
+}
+
+.setcold {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.setcold-label {
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.setcold-value {
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--accent);
+}
+
+/* ---- Bottom bar ---- */
+
+.bottombar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 8px 8px;
+}
+
+.btn {
+  background: var(--control-bg);
+  color: var(--text);
+  border: 1px solid var(--control-border);
+  border-radius: 4px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.btn:hover { background: #383838; }
+.btn:active { background: #242424; }
+
+.adjust-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.adjust-group[hidden] { display: none; }
+
+.adjust-label { font-size: 12px; }
+
+.adjust-group input[type="range"] {
+  width: 150px;
+  accent-color: var(--accent);
+}
+
+/* ---- Prediction inputs panel ---- */
+
+.pred-panel {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0 4px;
+  padding: 8px 12px;
+  background: var(--panel-bg);
+}
+
+.pred-panel[hidden] { display: none; }
+
+.pred-field {
+  display: flex;
+  flex-direction: column;
+  margin: 4px 6px;
+  min-width: 120px;
+}
+
+.pred-field:nth-child(-n+2) { min-width: 150px; }
+
+.pred-field > label {
+  font-size: 11px;
+  margin-bottom: 2px;
+}
+
+select,
+.pred-field > input {
+  background: var(--control-bg);
+  color: var(--text);
+  border: 1px solid var(--control-border);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 16px; /* >=16px keeps iOS Safari from auto-zooming on focus */
+  padding: 6px 8px;
+}
+
+select:focus, .pred-field > input:focus, .adjust-group input:focus, .btn:focus-visible {
+  outline: 1px solid var(--accent);
+}

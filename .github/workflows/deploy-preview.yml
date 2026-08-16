@@ -18,7 +18,7 @@ jobs:
     uses: ./.github/workflows/build-lite.yml
 
   build-tire-pressure:
-    uses: ./.github/workflows/build-tire-pressure-wasm.yml
+    uses: ./.github/workflows/build-tire-pressure-web.yml
 
   deploy:
     needs: [build, build-tire-pressure]
@@ -37,10 +37,10 @@ jobs:
           name: jupyterlite-site
           path: dist/
 
-      - name: Download tire pressure calculator WASM build
+      - name: Download tire pressure calculator web build
         uses: actions/download-artifact@v4
         with:
-          name: tire-pressure-wasm
+          name: tire-pressure-web
           path: dist/tire-pressure/
 
       - name: Upload pages artifact

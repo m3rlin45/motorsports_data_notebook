@@ -138,36 +138,48 @@ Run (displays via WSLg on WSL2):
 
 ## Tire Pressure Calculator
 
-The `tire_pressure_calculator/` directory contains a C# Avalonia GUI app that calculates cold tire pressure settings using Gay-Lussac's Law. Four quadrants (FL/FR/RL/RR) each take current temp (°C), target hot temp (°C), and target hot pressure (bar), then compute the cold gauge pressure to set.
+The `tire_pressure_calculator/` directory contains the cold tire pressure calculator: a manual Gay-Lussac mode (four FL/FR/RL/RR quadrants: current temp °C + target hot temp °C + target hot pressure bar → cold gauge pressure to set) and a Circuit Prediction mode that predicts per-corner hot temps from the fitted tire warmup model (`data/tire_dataset/tire_model.json`). Two implementations share the same behavior, strings, and settings JSON shape:
 
 ```
 tire_pressure_calculator/
-  TirePressureCalculator.csproj  # .NET 10, Avalonia 11.3, NativeAOT-ready
-  Program.cs
-  App.axaml / App.axaml.cs
-  ViewModels/
-    MainViewModel.cs             # Holds 4 TireCornerViewModel instances
-    TireCornerViewModel.cs       # Per-corner inputs + computed ColdPressure
-  Views/
-    MainWindow.axaml             # 2x2 grid layout with DataTemplate
-    MainWindow.axaml.cs
+  Core/           # C# Avalonia shared UI + modeling (.NET 10, Avalonia 11.3)
+    Services/Modeling/   # EnergyBalance, TireModel, loader — C# port of tire_model/predict.py
+    Services/CircuitPredictor.cs
+    ViewModels/ Views/ Localization/
+  Desktop/        # Windows/Linux desktop head
+  Android/        # Android head
+  Tests/          # xunit tests incl. Python-parity fixture (Fixtures/python_predictions.json)
+  web/            # Static web app (plain HTML/CSS/JS, no build step) — deployed to tires.inferno.racing
+    js/model.js   # JS port of the modeling layer (pinned to the same parity fixture)
+    js/strings.js # Must stay in sync with Core/Localization/strings.json (tested)
+    js/app.js     # DOM wiring, localStorage settings (same key/shape as C# AppSettings)
+    tests/        # node --test suites
 ```
 
-### Building
+The web app fetches `tire_model.json` at runtime; deploy workflows copy it from `data/tire_dataset/` next to `index.html`. Retraining the model (`just tire-build-warmup-table`) + redeploy is enough to update it.
+
+### Web app
+
+```bash
+just tire-web-test    # node --test parity + unit tests
+just tire-web-serve   # serve locally, open http://localhost:8080/tire_pressure_calculator/web/
+```
+
+### Building the .NET heads
 
 ```bash
 # Dev run (requires display - WSLg or X11):
-cd /home/m3rlin45/code/motorsports_data_notebook-worktree/tire_pressure_calculator && dotnet run
+cd /home/m3rlin45/code/motorsports_data_notebook/tire_pressure_calculator && dotnet run --project Desktop
 
 # Windows single-file exe (cross-compiled from Linux, trimmed, not AOT):
-cd /home/m3rlin45/code/motorsports_data_notebook-worktree/tire_pressure_calculator && \
-dotnet publish -c Release -r win-x64 --self-contained \
+cd /home/m3rlin45/code/motorsports_data_notebook/tire_pressure_calculator && \
+dotnet publish Desktop/TirePressureCalculator.Desktop.csproj -c Release -r win-x64 --self-contained \
   -p:PublishAot=false -p:PublishTrimmed=true -p:TrimMode=full \
   -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
 
 # Linux AOT native binary (requires clang, zlib1g-dev):
-cd /home/m3rlin45/code/motorsports_data_notebook-worktree/tire_pressure_calculator && \
-dotnet publish -c Release -r linux-x64 --self-contained
+cd /home/m3rlin45/code/motorsports_data_notebook/tire_pressure_calculator && \
+dotnet publish Desktop/TirePressureCalculator.Desktop.csproj -c Release -r linux-x64 --self-contained
 ```
 
 Note: Cross-OS NativeAOT is not supported. Windows builds from Linux use trimmed single-file instead. NativeAOT works for linux-x64 when building on Linux.

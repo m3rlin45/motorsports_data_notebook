@@ -10,7 +10,7 @@ concurrency:
 
 jobs:
   build:
-    uses: ./.github/workflows/build-tire-pressure-wasm.yml
+    uses: ./.github/workflows/build-tire-pressure-web.yml
 
   deploy:
     needs: build
@@ -19,7 +19,7 @@ jobs:
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
-          name: tire-pressure-wasm
+          name: tire-pressure-web
           path: site/
 
       - name: Setup SSH
