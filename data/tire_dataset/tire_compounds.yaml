@@ -1,10 +1,10 @@
 # Tire compound history for model training — human-curated.
 #
-# Per-session, per-axle labels for the Inferno 86 (compounds change
-# between and even within track days). front/rear: A052, RE-71RS,
-# A050, NS-2R, ... or null when unknown. Null sessions train on the
-# pooled per-car K exactly as before. Sessions marked [no TPMS] have
-# no usable tire telemetry and are listed for the historical record
+# One compound per session — every run has ONE tire on all four corners
+# (team rule; there is no mixed-axle setup). compound: A052, RE-71RS,
+# A050, NS-2R, ... or null when unknown; unlabeled sessions are assigned
+# jointly with the pressure regression (EM). Sessions marked [no TPMS]
+# have no usable tire telemetry and are listed for the historical record
 # only.
 #
 # Provenance: [note] = stated in that day's run notes; [inferred] =
@@ -19,9 +19,10 @@
 # set is re-shod with a different tire, date-scope the sidecar entries
 # instead of relying on this map. "silver-blue" (first seen 2026-02-07) is
 # deliberately unmapped until its tire is known.
+# Only note-explicit mappings ("RE-71RS 40% Black wheels", 2025-12-14).
+# "silver" and "silver-blue" are unmapped until their tire is known.
 wheel_sets:
   black: RE-71RS
-  silver: A052
 
 # Weather-driven tire choices: cars whose compound follows the conditions.
 # An all-dry session seeds as the dry tire, an all-wet session as the wet
@@ -34,353 +35,236 @@ condition_seeds:
 
 sessions:
   - session_id: 9eaa8cd142548a9d  # 2025-03-08 09:09 sodegaura (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: fcf6485751619f8c  # 2025-03-08 10:31 sodegaura (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: 2dac432ad17cec4e  # 2025-03-08 11:29 sodegaura (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: 51e97cbe2130ef10  # 2025-03-16 09:28 sodegaura (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: 5962b494ace54520  # 2025-03-16 10:32 sodegaura (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: 7b4eec31424535e5  # 2025-03-16 11:44 sodegaura (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: ce56f14d5f7bbbee  # 2025-03-20 09:21 sodegaura (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: dd8a94d803b4b7de  # 2025-03-20 10:27 sodegaura (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: d2abd123ae50e5a9  # 2025-03-24 12:51 sodegaura (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: 8afc03cab5618ced  # 2025-03-24 13:50 sodegaura (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: 7e4e02cdaeaf1bbd  # 2025-03-29 10:16 tsukuba_2000 (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: 283ef20e72f4938f  # 2025-03-29 11:21 tsukuba_2000 (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: 38f58fa068360321  # 2025-03-29 12:29 tsukuba_2000 (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: cbbb2e89333c145e  # 2025-04-06 10:09 sodegaura (0 usable laps) [no TPMS]
-    front: null  # note previously attributed here was misdated; it is Fuji 2026-04-06
-    rear: null
+    compound: null  # note previously attributed here was misdated; it is Fuji 2026-04-06
   - session_id: 9af6bcfa00eb87b7  # 2025-04-06 10:46 sodegaura (0 usable laps) [no TPMS]
-    front: null  # note previously attributed here was misdated; it is Fuji 2026-04-06
-    rear: null
+    compound: null  # note previously attributed here was misdated; it is Fuji 2026-04-06
   - session_id: 766ad105f394ef2c  # 2025-04-18 12:49 sodegaura (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: 2d425b8ded6835e6  # 2025-04-18 12:49 sodegaura (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: 2905a50b7e418706  # 2025-04-18 13:56 sodegaura (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: 9437bdc3bc889fd3  # 2025-04-18 14:56 sodegaura (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: 2a17bc6d70b7d667  # 2025-04-20 13:40 minami (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: 6fceae385dd91171  # 2025-04-20 14:12 minami (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: 3cc75046bbbb13d8  # 2025-04-28 09:19 sodegaura (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: 1c30338589ed7d78  # 2025-04-28 10:28 sodegaura (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: 3780e90083b972fa  # 2025-04-28 11:26 sodegaura (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: 6aad601881889fb8  # 2025-04-28 13:49 sodegaura (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: 3f11c1baeb9f1010  # 2025-04-28 14:51 sodegaura (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: 20e99cc3cfc3b2ad  # 2025-04-28 15:56 sodegaura (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: e6dc3ef932ea167d  # 2025-05-02 12:51 sodegaura (0 usable laps) [no TPMS]
-    front: A052  # [inferred] silver front (worn A052 set) / black rear (new RE-71RS set)
-    rear: RE-71RS
+    compound: null  # silver/black wheel sets; tire unknown (mixed-axle inference removed)
   - session_id: c5abb6410931885f  # 2025-05-02 13:56 sodegaura (0 usable laps) [no TPMS]
-    front: A052  # [inferred] silver front (worn A052 set) / black rear (new RE-71RS set)
-    rear: RE-71RS
+    compound: null  # silver/black wheel sets; tire unknown (mixed-axle inference removed)
   - session_id: fa3f0fc82d59bb33  # 2025-05-02 14:56 sodegaura (0 usable laps) [no TPMS]
-    front: A052  # [inferred] silver front (worn A052 set) / black rear (new RE-71RS set)
-    rear: RE-71RS
+    compound: null  # silver/black wheel sets; tire unknown (mixed-axle inference removed)
   - session_id: 9db3d02e6b43546e  # 2025-05-05 09:19 sodegaura (0 usable laps) [no TPMS]
-    front: A052  # [inferred] silver front / black rear
-    rear: RE-71RS
+    compound: null  # silver/black wheel sets; tire unknown (mixed-axle inference removed)
   - session_id: 7eb89dded5aba726  # 2025-05-05 10:21 sodegaura (0 usable laps) [no TPMS]
-    front: A052  # [inferred] silver front / black rear
-    rear: RE-71RS
+    compound: null  # silver/black wheel sets; tire unknown (mixed-axle inference removed)
   - session_id: 56bfd87ba89e00c1  # 2025-05-05 11:24 sodegaura (0 usable laps) [no TPMS]
-    front: A052  # [inferred] silver front / black rear
-    rear: RE-71RS
+    compound: null  # silver/black wheel sets; tire unknown (mixed-axle inference removed)
   - session_id: b163dda526013fc0  # 2025-05-17 10:08 tsukuba_2000 (0 usable laps) [no TPMS]
-    front: A052  # [inferred-low] "worn, better tires on rear" matches silver/black pattern
-    rear: RE-71RS
+    compound: null  # silver/black wheel sets; tire unknown (mixed-axle inference removed)
   - session_id: 0effe66a2925a791  # 2025-05-17 11:18 tsukuba_2000 (0 usable laps) [no TPMS]
-    front: A052  # [inferred-low] "worn, better tires on rear" matches silver/black pattern
-    rear: RE-71RS
+    compound: null  # silver/black wheel sets; tire unknown (mixed-axle inference removed)
   - session_id: 9d521fc473109736  # 2025-05-17 12:29 tsukuba_2000 (0 usable laps) [no TPMS]
-    front: A052  # [inferred-low] "worn, better tires on rear" matches silver/black pattern
-    rear: RE-71RS
+    compound: null  # silver/black wheel sets; tire unknown (mixed-axle inference removed)
   - session_id: 5d13072c9c2b8046  # 2025-05-19 12:03 fuji (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: 31191c846cfa9505  # 2025-05-19 16:22 fuji (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: 2c49342ed7cd4728  # 2025-05-24 09:22 sodegaura (0 usable laps) [no TPMS]
-    front: A052  # [inferred] "Silver worn on front / Black more worn on back"
-    rear: RE-71RS
+    compound: null  # silver/black wheel sets; tire unknown (mixed-axle inference removed)
   - session_id: 6545855ba3ce2fe0  # 2025-05-24 10:23 sodegaura (0 usable laps) [no TPMS]
-    front: A052  # [inferred] "Silver worn on front / Black more worn on back"
-    rear: RE-71RS
+    compound: null  # silver/black wheel sets; tire unknown (mixed-axle inference removed)
   - session_id: 5be6c9af4826745b  # 2025-05-24 11:24 sodegaura (0 usable laps) [no TPMS]
-    front: A052  # [inferred] "Silver worn on front / Black more worn on back"
-    rear: RE-71RS
+    compound: null  # silver/black wheel sets; tire unknown (mixed-axle inference removed)
   - session_id: f2b9de7ae62ec02d  # 2025-06-09 09:30 sodegaura (0 usable laps) [no TPMS]
-    front: RE-71RS  # [note] 9:30 run: "Good RE-71 RS"
-    rear: RE-71RS
+    compound: RE-71RS  # [note] 9:30 run: "Good RE-71 RS"
   - session_id: 1213ad9c6e624655  # 2025-06-09 09:41 sodegaura (0 usable laps) [no TPMS]
-    front: RE-71RS  # [note] 9:30 run: "Good RE-71 RS"
-    rear: RE-71RS
+    compound: RE-71RS  # [note] 9:30 run: "Good RE-71 RS"
   - session_id: c80ea2bc6c74919c  # 2025-06-09 10:30 sodegaura (0 usable laps) [no TPMS]
-    front: A052  # [note] 10:30+ runs: "A052 Sticker all around"
-    rear: A052
+    compound: A052  # [note] 10:30+ runs: "A052 Sticker all around"
   - session_id: f22a1ba4f1faca01  # 2025-06-09 10:48 sodegaura (0 usable laps) [no TPMS]
-    front: A052  # [note] 10:30+ runs: "A052 Sticker all around"
-    rear: A052
+    compound: A052  # [note] 10:30+ runs: "A052 Sticker all around"
   - session_id: 44dffd85214a2b39  # 2025-06-09 11:30 sodegaura (0 usable laps) [no TPMS]
-    front: A052  # [note] 10:30+ runs: "A052 Sticker all around"
-    rear: A052
+    compound: A052  # [note] 10:30+ runs: "A052 Sticker all around"
   - session_id: b7388d982bf2e142  # 2025-06-15 09:41 sodegaura (0 usable laps) [no TPMS]
-    front: A052  # [note] practice 9:40: "Tire A052"
-    rear: A052
+    compound: A052  # [note] practice 9:40: "Tire A052"
   - session_id: 7d3164525f938d5a  # 2025-06-15 10:51 sodegaura (0 usable laps) [no TPMS]
-    front: RE-71RS  # [note] qualifying: "Tire 71RS"
-    rear: RE-71RS
+    compound: RE-71RS  # [note] qualifying: "Tire 71RS"
   - session_id: 5fbbafdc955529f5  # 2025-06-15 12:10 sodegaura (0 usable laps) [no TPMS]
-    front: null  # race: compound not stated (practice A052, quali 71RS)
-    rear: null
+    compound: null  # race: compound not stated (practice A052, quali 71RS)
   - session_id: 1a798bce00410d0d  # 2025-06-15 12:13 sodegaura (0 usable laps) [no TPMS]
-    front: null  # race: compound not stated (practice A052, quali 71RS)
-    rear: null
+    compound: null  # race: compound not stated (practice A052, quali 71RS)
   - session_id: bc3c4a738afcde94  # 2025-07-06 14:21 sodegaura (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: d38e483918dee594  # 2025-07-07 09:30 fuji (3 usable laps)
-    front: null
-    rear: null
+    compound: null
   - session_id: aa6c98a23382f954  # 2025-07-07 09:48 fuji (2 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: 01815db40674b81b  # 2025-07-07 10:49 fuji (9 usable laps)
-    front: null
-    rear: null
+    compound: null
   - session_id: 4483aa4f5a98622d  # 2025-07-07 13:29 fuji (10 usable laps)
-    front: null
-    rear: null
+    compound: null
   - session_id: b1ca72b85740c1ab  # 2025-07-22 07:03 ? (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: 39db26c697536bd5  # 2025-07-23 01:35 ? (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: 70d4a26a75ee5001  # 2025-07-23 02:37 ? (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: c486846bbf4cfd03  # 2025-07-24 09:29 sodegaura (13 usable laps)
-    front: null
-    rear: null
+    compound: null
   - session_id: 22650e6ef6799d69  # 2025-07-24 11:29 sodegaura (1 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: b995b5ce66413c69  # 2025-07-24 13:00 sodegaura (7 usable laps)
-    front: null
-    rear: null
+    compound: null
   - session_id: e3dc18f3605129d0  # 2025-07-24 14:01 sodegaura (12 usable laps)
-    front: null
-    rear: null
+    compound: null
   - session_id: 59e2b0f0c7a09bd1  # 2025-07-24 14:59 sodegaura (12 usable laps)
-    front: null
-    rear: null
+    compound: null
   - session_id: 2589ffaa48d2ee28  # 2025-07-24 16:08 ? (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: 06ed32a8e1264049  # 2025-07-24 17:54 ? (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: 53276d307d23c617  # 2025-07-24 18:27 ? (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: d3852d1ce1533cdf  # 2025-07-26 14:08 tsukuba_2000 (45 usable laps)
-    front: null
-    rear: null
+    compound: null
   - session_id: ba5d166040ca507d  # 2025-08-08 16:30 fuji (2 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: f55d9ab3f8571439  # 2025-08-09 12:31 fuji (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: fa565ff3902977a3  # 2025-08-09 12:48 fuji (20 usable laps)
-    front: null
-    rear: null
+    compound: null
   - session_id: 4c639c1ee3846578  # 2025-08-16 09:49 sodegaura (5 usable laps)
-    front: null
-    rear: null
+    compound: null
   - session_id: 868e761b816246cc  # 2025-08-16 10:30 sodegaura (8 usable laps)
-    front: null
-    rear: null
+    compound: null
   - session_id: 346c27d0dc86cf5a  # 2025-08-16 20:34 ? (16 usable laps)
-    front: null
-    rear: null
+    compound: null
   - session_id: 3dc000b84b6d926f  # 2025-10-04 11:06 motegi (3 usable laps)
-    front: null
-    rear: null
+    compound: null
   - session_id: f1cdb9793729dbbb  # 2025-10-04 13:29 motegi (6 usable laps)
-    front: null
-    rear: null
+    compound: null
   - session_id: 70a656d31f9026a5  # 2025-10-04 19:45 ? (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: e2aebee861c2b5ec  # 2025-10-05 09:06 sodegaura (1 usable laps) [no TPMS]
-    front: A050  # [note] "Tires A050 used" (Marutai event day)
-    rear: A050
+    compound: A050  # [note] "Tires A050 used" (Marutai event day)
   - session_id: f6481d29242753e1  # 2025-10-05 09:49 sodegaura (2 usable laps) [no TPMS]
-    front: A050  # [note] "Tires A050 used" (Marutai event day)
-    rear: A050
+    compound: A050  # [note] "Tires A050 used" (Marutai event day)
   - session_id: 0b9bce111369629a  # 2025-10-05 10:49 sodegaura (1 usable laps) [no TPMS]
-    front: A050  # [note] "Tires A050 used" (Marutai event day)
-    rear: A050
+    compound: A050  # [note] "Tires A050 used" (Marutai event day)
   - session_id: 02b2a9b8aa5af2c1  # 2025-10-05 12:54 sodegaura (56 usable laps)
-    front: A050  # [note] "Tires A050 used" (Marutai event day)
-    rear: A050
+    compound: A050  # [note] "Tires A050 used" (Marutai event day)
   - session_id: 8e880455f1829270  # 2025-10-05 15:15 sodegaura (44 usable laps)
-    front: A050  # [note] "Tires A050 used" (Marutai event day)
-    rear: A050
+    compound: A050  # [note] "Tires A050 used" (Marutai event day)
   - session_id: cc686c307fe888ba  # 2025-10-13 08:49 fuji (0 usable laps) [no TPMS]
-    front: RE-71RS  # [note] note: "71RS 30% used"
-    rear: RE-71RS
+    compound: RE-71RS  # [note] note: "71RS 30% used"
   - session_id: d5a745e0b4c10d2f  # 2025-10-13 09:12 fuji (6 usable laps)
-    front: RE-71RS  # [note] note: "71RS 30% used"
-    rear: RE-71RS
+    compound: RE-71RS  # [note] note: "71RS 30% used"
   - session_id: ecc17d155fe45e3a  # 2025-10-13 10:20 fuji (6 usable laps)
-    front: RE-71RS  # [note] note: "71RS 30% used"
-    rear: RE-71RS
+    compound: RE-71RS  # [note] note: "71RS 30% used"
   - session_id: 11f4cc498bda3417  # 2025-10-13 11:01 fuji (5 usable laps)
-    front: RE-71RS  # [note] note: "71RS 30% used"
-    rear: RE-71RS
+    compound: RE-71RS  # [note] note: "71RS 30% used"
   - session_id: f0c7d7bfd927d734  # 2025-10-13 11:48 fuji (7 usable laps)
-    front: RE-71RS  # [note] note: "71RS 30% used"
-    rear: RE-71RS
+    compound: RE-71RS  # [note] note: "71RS 30% used"
   - session_id: ed32ecafa2168695  # 2025-10-25 10:09 tsukuba_2000 (15 usable laps)
-    front: A052  # [note] note: "Tires A052"
-    rear: A052
+    compound: A052  # [note] note: "Tires A052"
   - session_id: e9d1b5a1e309b06d  # 2025-10-25 10:59 tsukuba_2000 (15 usable laps)
-    front: A052  # [note] note: "Tires A052"
-    rear: A052
+    compound: A052  # [note] note: "Tires A052"
   - session_id: 70593829e2d9a0f2  # 2025-10-25 17:08 ? (9 usable laps)
-    front: A052  # [note] note: "Tires A052"
-    rear: A052
+    compound: A052  # [note] note: "Tires A052"
   - session_id: c324e3840d9ac354  # 2025-10-26 14:37 tsukuba_2000 (49 usable laps)
-    front: A052  # [note] note file 2025-10-25 (±1 day): "Tires A052"
-    rear: A052
+    compound: A052  # [note] note file 2025-10-25 (±1 day): "Tires A052"
   - session_id: 1cd30d2e7b4dabc4  # 2025-11-01 10:04 fuji (5 usable laps)
-    front: A052  # [note] note: "A052 Used (40%?)"
-    rear: A052
+    compound: A052  # [note] note: "A052 Used (40%?)"
   - session_id: 611daf300cad8603  # 2025-11-01 10:39 fuji (13 usable laps)
-    front: A052  # [note] note: "A052 Used (40%?)"
-    rear: A052
+    compound: A052  # [note] note: "A052 Used (40%?)"
   - session_id: 3e1d401bb0106a0b  # 2025-11-18 15:00 motegi (9 usable laps)
-    front: null
-    rear: null
+    compound: null
   - session_id: 2194de4ba142c8f5  # 2025-12-14 10:00 tsukuba_2000 (6 usable laps)
-    front: RE-71RS  # [note] note: "RE-71RS 40% Black wheels"
-    rear: RE-71RS
+    compound: RE-71RS  # [note] note: "RE-71RS 40% Black wheels"
   - session_id: 6e756eedbf4f86fa  # 2025-12-14 11:19 tsukuba_2000 (10 usable laps)
-    front: RE-71RS  # [note] note: "RE-71RS 40% Black wheels"
-    rear: RE-71RS
+    compound: RE-71RS  # [note] note: "RE-71RS 40% Black wheels"
   - session_id: 210ef3d45ace7bff  # 2025-12-14 12:44 tsukuba_2000 (6 usable laps)
-    front: RE-71RS  # [note] note: "RE-71RS 40% Black wheels"
-    rear: RE-71RS
+    compound: RE-71RS  # [note] note: "RE-71RS 40% Black wheels"
   - session_id: fa1a572e75bab05b  # 2026-01-05 09:00 fuji (1 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: 7bb672a1df88a7d3  # 2026-01-05 09:17 fuji (4 usable laps)
-    front: null
-    rear: null
+    compound: null
   - session_id: c0447043b2b2ca3d  # 2026-01-05 10:19 fuji (11 usable laps)
-    front: null
-    rear: null
+    compound: null
   - session_id: 5ee532a60d52896b  # 2026-01-05 11:54 fuji (9 usable laps)
-    front: null
-    rear: null
+    compound: null
   - session_id: 9bc112f39e7d83ef  # 2026-01-11 12:53 fuji (11 usable laps)
-    front: null
-    rear: null
+    compound: null
   - session_id: f2086e0cb777d5ca  # 2026-01-12 13:00 sodegaura (10 usable laps)
-    front: null
-    rear: null
+    compound: null
   - session_id: d094678d80d1a74e  # 2026-01-12 15:00 sodegaura (16 usable laps)
-    front: null
-    rear: null
+    compound: null
   - session_id: 2a8fe819604dd7de  # 2026-01-12 15:58 sodegaura (14 usable laps)
-    front: null
-    rear: null
+    compound: null
   - session_id: 0f1a7021d4af8508  # 2026-02-07 09:31 sodegaura (14 usable laps)
-    front: null
-    rear: null
+    compound: null
   - session_id: 155ee2fb16c57870  # 2026-02-07 10:30 sodegaura (20 usable laps)
-    front: null
-    rear: null
+    compound: null
   - session_id: b97e1ec4a6d9c64e  # 2026-04-06 09:01 fuji (5 usable laps)
-    front: A052  # [note] Fuji 2026-04-06: A052, target press 1.9 (misdated file, fixed)
-    rear: A052
+    compound: A052  # [note] Fuji 2026-04-06: A052, target press 1.9 (misdated file, fixed)
   - session_id: 7ca9b6b064c31e5b  # 2026-04-06 09:42 fuji (2 usable laps) [no TPMS]
-    front: A052  # [note] Fuji 2026-04-06: A052, target press 1.9 (misdated file, fixed)
-    rear: A052
+    compound: A052  # [note] Fuji 2026-04-06: A052, target press 1.9 (misdated file, fixed)
   - session_id: 5a63ddfdc96f95b4  # 2026-07-15 09:49 fuji (0 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: a06767b66e88f2be  # 2026-07-15 10:22 fuji (5 usable laps)
-    front: null
-    rear: null
+    compound: null
   - session_id: 45d3e2b5e05e674e  # 2026-07-15 11:29 fuji (12 usable laps)
-    front: null
-    rear: null
+    compound: null
   - session_id: db515260ad05f97f  # 2026-08-08 10:55 fuji (1 usable laps) [no TPMS]
-    front: null
-    rear: null
+    compound: null
   - session_id: fb07570409f35161  # 2026-08-08 14:19 fuji (21 usable laps)
-    front: null
-    rear: null
+    compound: null
   - session_id: 392f278fe193cf1c  # 2026-08-15 09:28 sodegaura (19 usable laps)
-    front: A052  # [note] note: "A052" on every run
-    rear: A052
+    compound: A052  # [note] note: "A052" on every run
   - session_id: eabbaecc0d4c87ad  # 2026-08-15 10:29 sodegaura (7 usable laps)
-    front: A052  # [note] note: "A052" on every run
-    rear: A052
+    compound: A052  # [note] note: "A052" on every run
   - session_id: a82279951f152d0d  # 2026-08-15 10:49 sodegaura (4 usable laps)
-    front: A052  # [note] note: "A052" on every run
-    rear: A052
+    compound: A052  # [note] note: "A052" on every run
   - session_id: e8d6f67cfa560c51  # 2026-08-15 11:28 sodegaura (20 usable laps)
-    front: A052  # [note] note: "A052" on every run
-    rear: A052
+    compound: A052  # [note] note: "A052" on every run

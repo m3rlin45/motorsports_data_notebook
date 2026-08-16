@@ -241,6 +241,35 @@ export class TireModel {
     return { value: 0.7, nLapsUsed: 0, source: 'global' };
   }
 
+  // ---- Compound-aware K (decomposed c_track × base × multiplier) ----
+
+  // Distinct compounds fitted for a car, for UI enumeration.
+  availableCompounds(car) {
+    const rows = this.dto.K_by_car_compound_corner_cond ?? [];
+    return [...new Set(rows.filter((r) => r.car === car).map((r) => r.compound))].sort();
+  }
+
+  // Compound-specific K via the condition chain, or null when the artifact
+  // has no fitted bucket (caller falls back to the pooled K).
+  lookupCompoundK(car, compound, corner, condition) {
+    const rows = this.dto.K_by_car_compound_corner_cond ?? [];
+    for (const cond of conditionChain(condition)) {
+      const hit = rows.find(
+        (r) => r.car === car && r.compound === compound
+          && r.corner === corner && r.condition === cond);
+      if (hit) {
+        return {
+          valueKelvinPerG2: hit.value_kelvin_per_g2,
+          stderrKelvinPerG2: hit.stderr_kelvin_per_g2 ?? 0,
+          nSamples: hit.n_laps ?? 0,
+          sourceBucket: `(${car}, ${compound}, ${corner}, ${cond})`,
+          fromPrior: false,
+        };
+      }
+    }
+    return null;
+  }
+
   // ---- Target-lap-time pace scaling (schema v3) ----
 
   lookupG2PaceCurve(track, car, condition) {
@@ -311,13 +340,19 @@ export function predictCorner(model, {
   track, car, condition, lapWithinStint, ambientTempC,
   trackTempC = null, cloudCoverPct = null, corner,
   targetHotPressureBar, coldTireTempC = null, targetLapTimeS = null,
+  compound = null,
 }) {
   const cond = condition.toLowerCase();
   if (cond !== 'dry' && cond !== 'damp' && cond !== 'wet') {
     throw new RangeError(`track_condition must be dry/damp/wet; got '${condition}'`);
   }
 
-  const k = model.lookupK(car, corner, cond);
+  // One tire on all four corners — the compound applies to every corner.
+  let k = model.lookupK(car, corner, cond);
+  if (compound) {
+    const hit = model.lookupCompoundK(car, compound, corner, cond);
+    if (hit) k = hit;
+  }
   const tau = model.lookupTau(car, corner, cond);
   const c = model.lookupCTrack(track);
   const g2 = model.lookupG2(track, car, cond);

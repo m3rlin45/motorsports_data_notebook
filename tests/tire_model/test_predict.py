@@ -683,14 +683,14 @@ def test_compound_k_overrides_pooled_k() -> None:
         _model=model,
     )
     pooled = predict_cold_pressure(**kwargs)
-    comp = predict_cold_pressure(compound_front="A052", compound_rear="A052", **kwargs)
+    comp = predict_cold_pressure(compound="A052", **kwargs)
     for c in CORNERS:
         assert comp[c].K_kelvin_per_g2 == pytest.approx(40.0)
         assert comp[c].K_source_bucket == ("ToyCar", "A052", c, "dry")
         assert comp[c].K_kelvin_per_g2 != pooled[c].K_kelvin_per_g2
 
 
-def test_compound_per_axle_only_affects_that_axle() -> None:
+def test_compound_applies_to_all_four_corners() -> None:
     model = _model_with_compound_k()
     kwargs = dict(
         track="track_a",
@@ -700,10 +700,9 @@ def test_compound_per_axle_only_affects_that_axle() -> None:
         ambient_temp_c=20.0,
         _model=model,
     )
-    pooled = predict_cold_pressure(**kwargs)
-    rear_only = predict_cold_pressure(compound_rear="A052", **kwargs)
-    assert rear_only["fl"].K_kelvin_per_g2 == pooled["fl"].K_kelvin_per_g2
-    assert rear_only["rl"].K_kelvin_per_g2 == pytest.approx(40.0)
+    p = predict_cold_pressure(compound="A052", **kwargs)
+    for c in CORNERS:
+        assert p[c].K_kelvin_per_g2 == pytest.approx(40.0)
 
 
 def test_unknown_compound_falls_back_to_pooled_k() -> None:
@@ -717,7 +716,7 @@ def test_unknown_compound_falls_back_to_pooled_k() -> None:
         _model=model,
     )
     pooled = predict_cold_pressure(**kwargs)
-    unknown = predict_cold_pressure(compound_front="RE-71RS", compound_rear="RE-71RS", **kwargs)
+    unknown = predict_cold_pressure(compound="RE-71RS", **kwargs)
     for c in CORNERS:
         assert unknown[c].K_kelvin_per_g2 == pooled[c].K_kelvin_per_g2
         assert unknown[c].K_source_bucket == pooled[c].K_source_bucket
@@ -732,8 +731,7 @@ def test_compound_k_condition_chain_falls_back_to_dry() -> None:
         target_hot_pressure_bar={c: 1.8 for c in CORNERS},
         ambient_temp_c=20.0,
         track_condition="damp",
-        compound_front="A052",
-        compound_rear="A052",
+        compound="A052",
         _model=model,
     )
     assert p["fl"].K_source_bucket == ("ToyCar", "A052", "fl", "dry")

@@ -249,11 +249,7 @@ def _evaluate_fold(root: Path, holdout_ids: list[str]) -> pd.DataFrame:
 
     labels = apply_condition_seeds(labels, all_laps, load_condition_seeds(root))
     label_by_session = {
-        r.session_id: (
-            r.compound_front if isinstance(r.compound_front, str) else None,
-            r.compound_rear if isinstance(r.compound_rear, str) else None,
-        )
-        for r in labels.itertuples()
+        r.session_id: r.compound for r in labels.itertuples() if isinstance(r.compound, str)
     }
 
     # Per-lap predictions. Per-lap g² (heat_proxy / on_track_s) is the
@@ -285,14 +281,13 @@ def _evaluate_fold(root: Path, holdout_ids: list[str]) -> pd.DataFrame:
         if g2 is None:
             continue
         c_track = c_track_lookup.get(track, 1.0)
-        comp_front, comp_rear = label_by_session.get(lap["session_id"], (None, None))
+        session_compound = label_by_session.get(lap["session_id"])
         for c in CORNERS:
             K = k_lookup.get((car, c, cond)) or k_lookup.get((car, c, "dry"))
-            axle_compound = comp_front if c in ("fl", "fr") else comp_rear
-            if axle_compound is not None:
+            if session_compound is not None:
                 K = (
-                    k_compound_lookup.get((car, axle_compound, c, cond))
-                    or k_compound_lookup.get((car, axle_compound, c, "dry"))
+                    k_compound_lookup.get((car, session_compound, c, cond))
+                    or k_compound_lookup.get((car, session_compound, c, "dry"))
                     or K
                 )
             tau = tau_lookup.get((car, c, cond)) or tau_lookup.get((car, c, "dry"))
