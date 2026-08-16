@@ -1,0 +1,87 @@
+{
+  "_cache_key": "b494cdfdbf2c37aa7c7f157a04f55a7af21f04c9|48e2dd24ce10840e0ffb8c4742f42b2b34734ab2|claude-opus-4-7",
+  "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2026-08-15 Sodegaura.txt",
+  "_source_sha1": "b494cdfdbf2c37aa7c7f157a04f55a7af21f04c9",
+  "_prompt_sha1": "48e2dd24ce10840e0ffb8c4742f42b2b34734ab2",
+  "_model": "claude-opus-4-7",
+  "_extracted_at": "2026-08-16T04:56:36+00:00",
+  "data": {
+    "file_date": null,
+    "track": null,
+    "car": null,
+    "sessions": [
+      {
+        "session_index": 1,
+        "start_time_local": "09:30",
+        "weather_text": "Looks dry but might have some damp spots, rained overnight. Rained part way through.",
+        "ambient_temp_c": null,
+        "track_condition": "damp",
+        "cold_pressure_bar": {
+          "fl": 2.0,
+          "fr": 2.0,
+          "rl": 2.0,
+          "rr": 2.0
+        },
+        "tire_compound": {
+          "fl": "A052",
+          "fr": "A052",
+          "rl": "A052",
+          "rr": "A052"
+        },
+        "setup_changes": [
+          "Dampers F26, R22"
+        ],
+        "incidents": [],
+        "notes": "Rained part way through, a little understeery on entry in dry, but decent in damp, would be too sketchy in full wet. Front left is underdamped, way more time in rebound. Front right is slightly underdamped. Rear looks good."
+      },
+      {
+        "session_index": 2,
+        "start_time_local": "10:30",
+        "weather_text": "Damp. Lots of rain partway through.",
+        "ambient_temp_c": null,
+        "track_condition": "damp",
+        "cold_pressure_bar": {
+          "fl": 1.93,
+          "fr": 1.86,
+          "rl": 2.0,
+          "rr": 2.0
+        },
+        "tire_compound": {
+          "fl": "A052",
+          "fr": "A052",
+          "rl": "A052",
+          "rr": "A052"
+        },
+        "setup_changes": [
+          "Stopped half way through to add air"
+        ],
+        "incidents": [],
+        "notes": "Felt good, lots of rain partway through, but decent balance, rear wanted to step out on puddles though. Stopped half way through to add air, balance came back. Front pressures noted as FL 28 psi, FR 27 psi; rears listed as 2/2 bar."
+      },
+      {
+        "session_index": 3,
+        "start_time_local": "11:30",
+        "weather_text": "Damp, dried as the session went on.",
+        "ambient_temp_c": null,
+        "track_condition": "damp",
+        "cold_pressure_bar": {
+          "fl": 2.0,
+          "fr": 1.93,
+          "rl": 1.52,
+          "rr": 1.45
+        },
+        "tire_compound": {
+          "fl": "A052",
+          "fr": "A052",
+          "rl": "A052",
+          "rr": "A052"
+        },
+        "setup_changes": [
+          "Plan: stiffen rear one step (2/3)"
+        ],
+        "incidents": [],
+        "notes": "Dried as the session went on. Tires over-pressured out of the window after a few laps. Lots of understeer mid corner, need to fix that. Probably stiffen rear one step (2/3). Turn in was good, exits were slightly understeering, but hard to tell if that was mid corner continuing. Pressures noted as FL 29, FR 28, RL 22, RR 21 psi."
+      }
+    ]
+  }
+}

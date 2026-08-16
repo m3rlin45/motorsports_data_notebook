@@ -1,0 +1,65 @@
+{
+  "_cache_key": "6fde46b5a4e64f24f00d94748cab8da969d94e64|48e2dd24ce10840e0ffb8c4742f42b2b34734ab2|claude-opus-4-7",
+  "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2026-08-08-Fuji1.txt",
+  "_source_sha1": "6fde46b5a4e64f24f00d94748cab8da969d94e64",
+  "_prompt_sha1": "48e2dd24ce10840e0ffb8c4742f42b2b34734ab2",
+  "_model": "claude-opus-4-7",
+  "_extracted_at": "2026-08-16T04:56:23+00:00",
+  "data": {
+    "file_date": null,
+    "track": null,
+    "car": null,
+    "sessions": [
+      {
+        "session_index": 1,
+        "start_time_local": null,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": "2/2",
+          "fr": "2/2",
+          "rl": "2/2",
+          "rr": "2/2"
+        },
+        "setup_changes": [
+          "Dampers F 25 / R 22",
+          "Tire hot target 1.8 bar"
+        ],
+        "incidents": [],
+        "notes": "Qualifying. Trying to get rid of understeer in 100R. Balance was good. Data says we should use more front rebound."
+      },
+      {
+        "session_index": 2,
+        "start_time_local": null,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": "2/2",
+          "fr": "2/2",
+          "rl": "2/2",
+          "rr": "2/2"
+        },
+        "setup_changes": [
+          "Dampers F 26 / R 22",
+          "Tire hot target 2.0 bar"
+        ],
+        "incidents": [],
+        "notes": "Race."
+      }
+    ]
+  }
+}
