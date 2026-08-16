@@ -243,19 +243,28 @@ Prediction: ``predict_cold_pressure(compound_front=..., compound_rear=...)``
 the compound K per axle when a fitted bucket exists (condition chain
 applies); unknown compounds and unlabeled cars keep the pooled K.
 
-**Partial supervision** (``tire_model/compound_infer.py``): labels are
-sparse, so the compound K is fitted as a multi-task objective — the
-compound-assignment task is supervised where labels exist and latent
-elsewhere, sharing K with the temperature-regression task. Solved by EM
-(mixture of regressions): labeled/seeded sessions are pinned one-hot,
-unlabeled (session, axle) units get posteriors from their lap residuals,
-and each K is refit by responsibility-weighted least squares. Guard
-rails: posteriors are tempered to ``SESSION_EFF_SAMPLES`` effective
-observations (laps within a session are correlated); buckets only exist
-with pinned support (free sessions refine, never spawn, buckets — else a
-symmetric fixed point forms); and an outlier gate (χ²/lap against
-pinned-only variance) leaves sessions that match NO known compound
-unlabeled instead of absorbing them. Weather-driven tire choices use
+**Decomposed K with partial supervision**
+(``tire_model/compound_infer.py``): the compound K is not fitted as free
+buckets but decomposed as
+
+    K_effective = c_track[track] · K_base[car, corner, condition] · m[car, compound]
+
+so every lap of every tire informs the car's base K, and each compound is
+one scalar multiplier shared across corners and conditions (fitted
+Inferno ratios: A050 ×1.18, RE-71RS ×1.05, A052 ×0.86; identifiability:
+lap-weighted geometric mean of m per car is 1, making K_base the
+"average tire"). Labels are sparse, so the fit is a multi-task objective
+— the compound-assignment task is supervised where labels exist and
+latent elsewhere, sharing (K_base, m) with the temperature-regression
+task. Solved by EM: labeled/seeded sessions pinned one-hot, free
+(session, axle) units get posteriors from their lap residuals, and the
+M-step alternates least squares on (K_base, m). Selection is FORCED —
+every unit in a participating car carries an assignment — with two guard
+rails: posteriors tempered to ``SESSION_EFF_SAMPLES`` effective
+observations (laps within a session are correlated), and robust
+down-weighting by best-fit χ²/lap so a session matching no known tire is
+still assigned (flagged ``poor_fit``) but cannot drag a cluster toward
+itself. Weather-driven tire choices use
 declarative ``condition_seeds`` in the sidecar (KK-SII: all-dry session ⇒
 DRY tires, all-wet ⇒ WET; damp/mixed left to the classifier — the EM
 independently recovers the known 2026-04-04 rain day as WET at ≥0.998).

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 
 import numpy as np
@@ -26,7 +27,7 @@ C_TRACK = {"track_a": _FP(1.0)}
 
 
 def _session_laps(sid: str, k_true: float, n_laps: int = 12, noise: float = 1.0) -> pd.DataFrame:
-    rng = np.random.default_rng(abs(hash(sid)) % 2**32)
+    rng = np.random.default_rng(int(hashlib.sha1(sid.encode()).hexdigest()[:8], 16))
     t = np.linspace(120, 120 * n_laps, n_laps)
     g2 = rng.uniform(0.5, 1.1, n_laps)
     frac = 1 - np.exp(-t / 200.0)
@@ -75,19 +76,22 @@ class TestFitCompoundsEM:
     def test_recovers_unlabeled_assignments_and_k(self):
         laps = _mixture_frame()
         labels = _labels({"soft1": "SOFT", "soft2": "SOFT", "hard1": "HARD", "hard2": "HARD"})
-        k, assignments = fit_compounds_em(laps, labels, TAU, C_TRACK)
+        k, assignments, multipliers = fit_compounds_em(laps, labels, TAU, C_TRACK)
 
         by_unit = {(a.session_id, a.axle): a for a in assignments}
         assert by_unit[("mystery_soft", "front")].compound == "SOFT"
         assert by_unit[("mystery_soft", "front")].responsibility > 0.95
         assert by_unit[("mystery_hard", "rear")].compound == "HARD"
         assert by_unit[("mystery_hard", "rear")].responsibility > 0.95
-        # The mid-K session fits neither compound: the outlier gate must
-        # leave it unlabeled rather than absorb it into a cluster.
-        assert ("ambiguous", "front") not in by_unit
-
-        assert k[("ToyCar", "SOFT", "fl", "dry")][0] == pytest.approx(30.0, abs=2.0)
-        assert k[("ToyCar", "HARD", "fl", "dry")][0] == pytest.approx(60.0, abs=2.0)
+        # Selection is forced: the mid-K session gets an assignment but is
+        # flagged as fitting no known compound well.
+        assert by_unit[("ambiguous", "front")].poor_fit
+        # The decomposition keeps clusters honest despite the forced
+        # assignment of a mid-K session.
+        assert k[("ToyCar", "SOFT", "fl", "dry")][0] == pytest.approx(30.0, abs=3.0)
+        assert k[("ToyCar", "HARD", "fl", "dry")][0] == pytest.approx(60.0, abs=3.0)
+        m = multipliers["ToyCar"]
+        assert m["HARD"] / m["SOFT"] == pytest.approx(2.0, rel=0.15)
 
     def test_pinned_labels_never_flip(self):
         laps = _mixture_frame()
@@ -101,7 +105,7 @@ class TestFitCompoundsEM:
                 "mystery_hard": "SOFT",
             }
         )
-        _, assignments = fit_compounds_em(laps, labels, TAU, C_TRACK)
+        _, assignments, _m = fit_compounds_em(laps, labels, TAU, C_TRACK)
         by_unit = {(a.session_id, a.axle): a for a in assignments}
         a = by_unit[("mystery_hard", "front")]
         assert a.pinned and a.compound == "SOFT" and a.responsibility == 1.0
@@ -112,15 +116,18 @@ class TestFitCompoundsEM:
             ignore_index=True,
         )
         labels = _labels({"s1": "ONLY", "s2": "ONLY"})
-        k, assignments = fit_compounds_em(laps, labels, TAU, C_TRACK)
+        k, assignments, multipliers = fit_compounds_em(laps, labels, TAU, C_TRACK)
         assert k[("ToyCar", "ONLY", "fl", "dry")][0] == pytest.approx(40.0, abs=2.0)
-        # The unlabeled session contributes nothing and gets no assignment.
-        assert all(a.session_id != "un" for a in assignments)
+        # Forced selection: the unlabeled session joins the only compound,
+        # whose multiplier is anchored at 1.
+        by_unit = {(a.session_id, a.axle): a for a in assignments}
+        assert by_unit[("un", "front")].compound == "ONLY"
+        assert multipliers["ToyCar"]["ONLY"] == pytest.approx(1.0, abs=0.01)
 
     def test_no_labels_no_output(self):
         laps = _mixture_frame()
-        k, assignments = fit_compounds_em(laps, laps.iloc[0:0], TAU, C_TRACK)
-        assert k == {} and assignments == []
+        k, assignments, multipliers = fit_compounds_em(laps, laps.iloc[0:0], TAU, C_TRACK)
+        assert k == {} and assignments == [] and multipliers == {}
 
 
 class TestApplyConditionSeeds:

@@ -328,7 +328,7 @@ def build_warmup_table(
     compound_labels = apply_condition_seeds(
         compound_labels, laps_for_fit, load_condition_seeds(root)
     )
-    k_em, em_assignments = fit_compounds_em(
+    k_em, em_assignments, compound_multipliers = fit_compounds_em(
         laps_for_fit, compound_labels, tau_by_car_corner_cond, c_track_by_track
     )
     k_by_compound = {
@@ -338,12 +338,13 @@ def build_warmup_table(
     if k_by_compound:
         inferred = [a for a in em_assignments if not a.pinned and a.responsibility >= 0.9]
         logger.info(
-            "Fitted %d compound K buckets (EM over %d session-axles, "
-            "%d pinned, %d confidently inferred)",
+            "Fitted %d compound K buckets (decomposed base×m; EM over %d "
+            "session-axles, %d pinned, %d confidently inferred; multipliers %s)",
             len(k_by_compound),
             len(em_assignments),
             sum(1 for a in em_assignments if a.pinned),
             len(inferred),
+            compound_multipliers,
         )
 
     model = _assemble_model(
@@ -357,6 +358,7 @@ def build_warmup_table(
         g2_curves=g2_curves,
         g2_exponent_default=g2_exponent_default,
         k_by_compound=k_by_compound,
+        compound_multipliers=compound_multipliers,
     )
 
     if write_artifacts:
@@ -942,6 +944,7 @@ def _assemble_model(
     g2_curves: dict[tuple[str, str, str], dict] | None = None,
     g2_exponent_default: float = G2_LAP_TIME_EXPONENT_FALLBACK,
     k_by_compound: dict[tuple[str, str, str, str], "FitParam"] | None = None,
+    compound_multipliers: dict[str, dict[str, float]] | None = None,
 ) -> dict[str, Any]:
     """Build the in-memory model dict that matches the JSON artifact schema.
 
@@ -953,6 +956,7 @@ def _assemble_model(
     """
     g2_curves = g2_curves or {}
     k_by_compound = k_by_compound or {}
+    compound_multipliers = compound_multipliers or {}
 
     def _g2_entry(track: str, car: str, cond: str, value: float, n: int) -> dict[str, Any]:
         entry: dict[str, Any] = {
@@ -1072,6 +1076,14 @@ def _assemble_model(
         "g2_typ_by_track_car_cond": [
             _g2_entry(track, car, cond, value, n)
             for (track, car, cond), (value, n) in sorted(g2_lookup.items())
+        ],
+        # Compound decomposition: K_effective = c_track × K_base × m[compound].
+        # The multipliers document the fitted per-compound ratios; the table
+        # below carries the ready-to-use products.
+        "K_compound_multipliers": [
+            {"car": car, "compound": comp, "multiplier": mult}
+            for car, comps in sorted(compound_multipliers.items())
+            for comp, mult in sorted(comps.items())
         ],
         # Compound-specific K overrides (schema v3 additive; consumers that
         # don't know about compounds ignore this table and use K_buckets).
