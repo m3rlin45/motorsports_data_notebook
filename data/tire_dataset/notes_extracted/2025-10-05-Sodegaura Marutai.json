@@ -1,14 +1,14 @@
 {
-  "_cache_key": "fb23698457ec1e89d07d838a868dd9ae1aaaf23a|745ba5f28ec0515f9e628864b4b32a9c656dc393|claude-opus-4-7",
+  "_cache_key": "db1356f8e832a46b08409b0b639bc6ba7421f178|745ba5f28ec0515f9e628864b4b32a9c656dc393|claude-opus-4-7",
   "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2025-10-05-Sodegaura Marutai.txt",
-  "_source_sha1": "fb23698457ec1e89d07d838a868dd9ae1aaaf23a",
+  "_source_sha1": "db1356f8e832a46b08409b0b639bc6ba7421f178",
   "_prompt_sha1": "745ba5f28ec0515f9e628864b4b32a9c656dc393",
   "_model": "claude-opus-4-7",
-  "_extracted_at": "2026-08-16T13:03:48+00:00",
+  "_extracted_at": "2026-08-16T13:43:09+00:00",
   "data": {
     "file_date": null,
     "track": null,
-    "car": null,
+    "car": "Inferno 86",
     "sessions": [
       {
         "session_index": 1,
@@ -23,17 +23,17 @@
           "rr": 1.3
         },
         "tire_compound": {
-          "fl": null,
-          "fr": null,
-          "rl": null,
-          "rr": null
+          "fl": "A050",
+          "fr": "A050",
+          "rl": "A050",
+          "rr": "A050"
         },
         "setup_changes": [
           "Front camber/toe 2/2, damper 15",
           "Rear camber/toe 3/3, damper 17"
         ],
         "incidents": [],
-        "notes": "Understeery"
+        "notes": "Tires A050 used. Understeery."
       },
       {
         "session_index": 2,
@@ -42,23 +42,23 @@
         "ambient_temp_c": null,
         "track_condition": "unknown",
         "cold_pressure_bar": {
-          "fl": null,
-          "fr": null,
-          "rl": null,
-          "rr": null
+          "fl": 1.4,
+          "fr": 1.4,
+          "rl": 1.4,
+          "rr": 1.4
         },
         "tire_compound": {
-          "fl": null,
-          "fr": null,
-          "rl": null,
-          "rr": null
+          "fl": "A050",
+          "fr": "A050",
+          "rl": "A050",
+          "rr": "A050"
         },
         "setup_changes": [
           "Front camber/toe 2/2, damper 15",
           "Rear camber/toe 3/4, damper 17"
         ],
         "incidents": [],
-        "notes": "Press dropped to 1.4"
+        "notes": "Pressure dropped to 1.4."
       },
       {
         "session_index": 3,
@@ -67,23 +67,23 @@
         "ambient_temp_c": null,
         "track_condition": "unknown",
         "cold_pressure_bar": {
-          "fl": null,
-          "fr": null,
-          "rl": null,
-          "rr": null
+          "fl": 1.4,
+          "fr": 1.4,
+          "rl": 1.4,
+          "rr": 1.4
         },
         "tire_compound": {
-          "fl": null,
-          "fr": null,
-          "rl": null,
-          "rr": null
+          "fl": "A050",
+          "fr": "A050",
+          "rl": "A050",
+          "rr": "A050"
         },
         "setup_changes": [
           "Front camber/toe 2/2, damper 15",
           "Rear camber/toe 3/4, damper 20"
         ],
         "incidents": [],
-        "notes": "Press dropped to 1.4. After 2 laps, all 1.4"
+        "notes": "Pressure dropped to 1.4. After 2 laps, all 1.4."
       }
     ]
   }
