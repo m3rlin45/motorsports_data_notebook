@@ -78,6 +78,15 @@ tire-predict-validate *ARGS:
 tire-predict-holdout *ARGS:
     uv run python -m motorsports_data_notebook.tire_model.cli holdout {{ARGS}}
 
+# Run the tire pressure calculator web app tests (parity vs. Python fixture)
+tire-web-test:
+    node --test 'tire_pressure_calculator/web/tests/*.test.mjs'
+
+# Serve the tire pressure calculator web app locally
+tire-web-serve:
+    @echo "Open http://localhost:8080/tire_pressure_calculator/web/"
+    python3 -m http.server 8080
+
 # Emscripten SDK setup (one-time, needed for building libxrk Pyodide wheel)
 setup-emsdk:
     #!/usr/bin/env bash

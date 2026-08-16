@@ -19,8 +19,8 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Install Android + wasm-tools workloads
-        run: dotnet workload install android wasm-tools
+      - name: Install Android workload
+        run: dotnet workload install android
 
       - name: Install uv
         uses: astral-sh/setup-uv@v3
@@ -34,6 +34,14 @@ jobs:
       - name: Run tests
         working-directory: tire_pressure_calculator
         run: dotnet test Tests/TirePressureCalculator.Tests.csproj --verbosity normal
+
+  web-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run web calculator tests
+        run: node --test 'tire_pressure_calculator/web/tests/*.test.mjs'
 
   build-windows:
     needs: lint-and-test
@@ -127,29 +135,6 @@ jobs:
           name: TirePressureCalculator-Android
           path: tire_pressure_calculator/Android/bin/Release/net10.0-android/publish/com.inferno.tirepressurecalculator-Signed.apk
           retention-days: 30
-
-  build-browser:
-    needs: lint-and-test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0.x'
-
-      - name: Install wasm-tools workload
-        run: dotnet workload install wasm-tools
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v3
-        with:
-          version: latest
-
-      - name: Build (Debug)
-        working-directory: tire_pressure_calculator
-        run: dotnet build Browser/TirePressureCalculator.Browser.csproj -c Debug
 
   attach-to-release:
     needs: [build-windows, build-linux, build-android]
