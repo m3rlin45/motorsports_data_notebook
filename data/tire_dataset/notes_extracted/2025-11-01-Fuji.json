@@ -1,10 +1,10 @@
 {
-  "_cache_key": "e8a3209d65bc14a0ba5b6d3f5860e3d0da808773|f3fc257af4ddabcdd30a29822de83132da7652e1|claude-opus-4-7",
+  "_cache_key": "e8a3209d65bc14a0ba5b6d3f5860e3d0da808773|745ba5f28ec0515f9e628864b4b32a9c656dc393|claude-opus-4-7",
   "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2025-11-01-Fuji.txt",
   "_source_sha1": "e8a3209d65bc14a0ba5b6d3f5860e3d0da808773",
-  "_prompt_sha1": "f3fc257af4ddabcdd30a29822de83132da7652e1",
+  "_prompt_sha1": "745ba5f28ec0515f9e628864b4b32a9c656dc393",
   "_model": "claude-opus-4-7",
-  "_extracted_at": "2026-08-16T07:15:45+00:00",
+  "_extracted_at": "2026-08-16T13:05:00+00:00",
   "data": {
     "file_date": null,
     "track": null,
@@ -13,7 +13,7 @@
       {
         "session_index": 1,
         "start_time_local": "10:00",
-        "weather_text": null,
+        "weather_text": "Road surface drying",
         "ambient_temp_c": null,
         "track_condition": "damp",
         "cold_pressure_bar": {
@@ -30,11 +30,10 @@
         },
         "setup_changes": [
           "Front camber 2/2, Rear camber 3/3",
-          "Front damper 15, Rear damper 20",
-          "Tire pressures 1.75 bar all around"
+          "Front damper 15, Rear damper 20"
         ],
         "incidents": [],
-        "notes": "NS-4 session. A052 tires, used (~40% wear). Road surface drying."
+        "notes": "NS-4 session. Tires A052 used (~40% wear). Road surface drying."
       },
       {
         "session_index": 2,
@@ -43,10 +42,10 @@
         "ambient_temp_c": null,
         "track_condition": "unknown",
         "cold_pressure_bar": {
-          "fl": 1.9,
-          "fr": 1.9,
-          "rl": 1.9,
-          "rr": 1.9
+          "fl": 1.7,
+          "fr": 1.8,
+          "rl": 1.7,
+          "rr": 1.8
         },
         "tire_compound": {
           "fl": "A052",
@@ -55,10 +54,10 @@
           "rr": "A052"
         },
         "setup_changes": [
-          "Dropped all tire pressures to 1.9 bar (left side bled 0.2, right side bled 0.1)"
+          "Dropped all tires to 1.9 target (left dropped .2, right dropped .1)"
         ],
         "incidents": [],
-        "notes": "S-4 session. Good balance, wish I had a bit more stability through Coca Cola."
+        "notes": "S-4 session. Good balance, wish I had a bit more stability through coca cola."
       }
     ]
   }

@@ -1,10 +1,10 @@
 {
-  "_cache_key": "7083888e29a7ef882960724ad8726b5b0abdac19|f3fc257af4ddabcdd30a29822de83132da7652e1|claude-opus-4-7",
+  "_cache_key": "7083888e29a7ef882960724ad8726b5b0abdac19|745ba5f28ec0515f9e628864b4b32a9c656dc393|claude-opus-4-7",
   "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2025-10-13-Fuji.txt",
   "_source_sha1": "7083888e29a7ef882960724ad8726b5b0abdac19",
-  "_prompt_sha1": "f3fc257af4ddabcdd30a29822de83132da7652e1",
+  "_prompt_sha1": "745ba5f28ec0515f9e628864b4b32a9c656dc393",
   "_model": "claude-opus-4-7",
-  "_extracted_at": "2026-08-16T07:14:15+00:00",
+  "_extracted_at": "2026-08-16T13:04:38+00:00",
   "data": {
     "file_date": null,
     "track": null,
@@ -29,11 +29,12 @@
           "rr": "RE-71RS"
         },
         "setup_changes": [
-          "Front camber 2/2, damper 15",
-          "Rear camber 3/4, damper 20"
+          "Front camber 2/2, damper 15 clicks",
+          "Rear camber 3/4, damper 20 clicks",
+          "Cold tire pressures set to 1.75 bar all around"
         ],
         "incidents": [],
-        "notes": "NS-4 A. Tires RE-71RS ~30% used (center rib is screwed though)."
+        "notes": "Session label: NS-4 A. Tires RE-71RS approximately 30% used; center rib is damaged (\"screwed\")."
       },
       {
         "session_index": 2,
@@ -54,10 +55,11 @@
           "rr": "RE-71RS"
         },
         "setup_changes": [
-          "Cold pressures dropped all around from 2.1 to 1.95 bar (hot->cold adjustment)"
+          "Dropped tire pressures on all four corners from 2.1 to 1.95 bar",
+          "No other changes"
         ],
         "incidents": [],
-        "notes": "NS-4 B. No other changes. Analysis: rear drops on straight, front rises — more rake?"
+        "notes": "Session label: NS-4 B. Analysis: rear pressure drops on the straight while front rises — consider adding more rake."
       },
       {
         "session_index": 3,
@@ -66,10 +68,10 @@
         "ambient_temp_c": null,
         "track_condition": "unknown",
         "cold_pressure_bar": {
-          "fl": 1.95,
-          "fr": 1.95,
-          "rl": 1.95,
-          "rr": 1.95
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
         },
         "tire_compound": {
           "fl": "RE-71RS",
@@ -79,7 +81,7 @@
         },
         "setup_changes": [],
         "incidents": [],
-        "notes": "S-4. No changes."
+        "notes": "Session label: S-4. No changes from previous session."
       },
       {
         "session_index": 4,
@@ -88,10 +90,10 @@
         "ambient_temp_c": null,
         "track_condition": "unknown",
         "cold_pressure_bar": {
-          "fl": 1.95,
-          "fr": 1.95,
-          "rl": 1.95,
-          "rr": 1.95
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
         },
         "tire_compound": {
           "fl": "RE-71RS",
@@ -100,10 +102,10 @@
           "rr": "RE-71RS"
         },
         "setup_changes": [
-          "Front camber set to 2/2 (driver unsure whether it had been 3/3 previously)"
+          "Front camber 2/2 (uncertain whether it had been 3/3 previously)"
         ],
         "incidents": [],
-        "notes": "NS-4. Better turn-in!"
+        "notes": "Session label: NS-4. Better turn-in noted after front camber change."
       }
     ]
   }

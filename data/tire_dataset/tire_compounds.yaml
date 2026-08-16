@@ -64,11 +64,11 @@ sessions:
     front: null
     rear: null
   - session_id: cbbb2e89333c145e  # 2025-04-06 10:09 sodegaura (0 usable laps) [no TPMS]
-    front: A052  # [note] note: "A052, target press 1.9"
-    rear: A052
+    front: null  # note previously attributed here was misdated; it is Fuji 2026-04-06
+    rear: null
   - session_id: 9af6bcfa00eb87b7  # 2025-04-06 10:46 sodegaura (0 usable laps) [no TPMS]
-    front: A052  # [note] note: "A052, target press 1.9"
-    rear: A052
+    front: null  # note previously attributed here was misdated; it is Fuji 2026-04-06
+    rear: null
   - session_id: 766ad105f394ef2c  # 2025-04-18 12:49 sodegaura (0 usable laps) [no TPMS]
     front: null
     rear: null
@@ -343,11 +343,11 @@ sessions:
     front: null
     rear: null
   - session_id: b97e1ec4a6d9c64e  # 2026-04-06 09:01 fuji (5 usable laps)
-    front: null
-    rear: null
+    front: A052  # [note] Fuji 2026-04-06: A052, target press 1.9 (misdated file, fixed)
+    rear: A052
   - session_id: 7ca9b6b064c31e5b  # 2026-04-06 09:42 fuji (2 usable laps) [no TPMS]
-    front: null
-    rear: null
+    front: A052  # [note] Fuji 2026-04-06: A052, target press 1.9 (misdated file, fixed)
+    rear: A052
   - session_id: 5a63ddfdc96f95b4  # 2026-07-15 09:49 fuji (0 usable laps) [no TPMS]
     front: null
     rear: null

@@ -1,10 +1,10 @@
 {
-  "_cache_key": "8049646daf65899518f5da029436728461993cd2|f3fc257af4ddabcdd30a29822de83132da7652e1|claude-opus-4-7",
+  "_cache_key": "8049646daf65899518f5da029436728461993cd2|745ba5f28ec0515f9e628864b4b32a9c656dc393|claude-opus-4-7",
   "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2026-08-08-Fuji1.txt",
   "_source_sha1": "8049646daf65899518f5da029436728461993cd2",
-  "_prompt_sha1": "f3fc257af4ddabcdd30a29822de83132da7652e1",
+  "_prompt_sha1": "745ba5f28ec0515f9e628864b4b32a9c656dc393",
   "_model": "claude-opus-4-7",
-  "_extracted_at": "2026-08-16T07:19:48+00:00",
+  "_extracted_at": "2026-08-16T13:09:31+00:00",
   "data": {
     "file_date": null,
     "track": null,
@@ -33,7 +33,7 @@
           "Dampers: F 25, R 22"
         ],
         "incidents": [],
-        "notes": "Qualifying. A052 new tires. Trying to get rid of understeer in 100R. Tires target 1.8 bar hot. Balance was good. Data says we should use more front rebound."
+        "notes": "Qualifying. A052 new. Trying to get rid of understeer in 100R. Tires target 1.8 hot. Balance was good. Data says we should use more front rebound."
       },
       {
         "session_index": 2,
@@ -55,10 +55,10 @@
         },
         "setup_changes": [
           "Camber: Front 2/2, Rear 2/2",
-          "Dampers: F 26, R 22 (front damper +1 from qualifying)"
+          "Dampers: F 26, R 22"
         ],
         "incidents": [],
-        "notes": "Race. A052 used from qualifying. Tires target 2.0 bar hot."
+        "notes": "Race. A052 used from qualifying. Tires target 2.0 hot."
       }
     ]
   }

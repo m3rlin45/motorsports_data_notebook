@@ -1,10 +1,10 @@
 {
-  "_cache_key": "958d5dcd32855e15da02c2ab35f6292d7cbba155|f3fc257af4ddabcdd30a29822de83132da7652e1|claude-opus-4-7",
+  "_cache_key": "958d5dcd32855e15da02c2ab35f6292d7cbba155|745ba5f28ec0515f9e628864b4b32a9c656dc393|claude-opus-4-7",
   "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2025-10-04-motegi.txt",
   "_source_sha1": "958d5dcd32855e15da02c2ab35f6292d7cbba155",
-  "_prompt_sha1": "f3fc257af4ddabcdd30a29822de83132da7652e1",
+  "_prompt_sha1": "745ba5f28ec0515f9e628864b4b32a9c656dc393",
   "_model": "claude-opus-4-7",
-  "_extracted_at": "2026-08-16T07:13:25+00:00",
+  "_extracted_at": "2026-08-16T13:03:38+00:00",
   "data": {
     "file_date": null,
     "track": null,
@@ -33,12 +33,12 @@
           "Rear 5/5 bar, 10 dampers"
         ],
         "incidents": [],
-        "notes": "feeling: way too assy, can't step on accelerator on exit\nBraking is very grabby\nTurn in is awesome (probably too awesome)"
+        "notes": "feeling: way too assy, can't step on accelerator on exit. Braking is very grabby. Turn in is awesome (probably too awesome)."
       },
       {
         "session_index": 2,
         "start_time_local": "13:30",
-        "weather_text": "23.8 C\n61%",
+        "weather_text": null,
         "ambient_temp_c": 23.8,
         "track_condition": "unknown",
         "cold_pressure_bar": {
@@ -58,7 +58,7 @@
           "Rear 4/4 bar, 15 dampers"
         ],
         "incidents": [],
-        "notes": "Oversteer fixed, a bit lacking on turn-in though"
+        "notes": "Humidity 61%. Oversteer fixed, a bit lacking on turn-in though."
       }
     ]
   }

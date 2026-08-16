@@ -1,10 +1,10 @@
 {
-  "_cache_key": "63c0a02104d3342f19cd58f418091f87f88bc5fc|f3fc257af4ddabcdd30a29822de83132da7652e1|claude-opus-4-7",
+  "_cache_key": "63c0a02104d3342f19cd58f418091f87f88bc5fc|745ba5f28ec0515f9e628864b4b32a9c656dc393|claude-opus-4-7",
   "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/Sodegaura 2025-06-09.txt",
   "_source_sha1": "63c0a02104d3342f19cd58f418091f87f88bc5fc",
-  "_prompt_sha1": "f3fc257af4ddabcdd30a29822de83132da7652e1",
+  "_prompt_sha1": "745ba5f28ec0515f9e628864b4b32a9c656dc393",
   "_model": "claude-opus-4-7",
-  "_extracted_at": "2026-08-16T07:21:56+00:00",
+  "_extracted_at": "2026-08-16T13:10:50+00:00",
   "data": {
     "file_date": null,
     "track": null,
@@ -13,7 +13,7 @@
       {
         "session_index": 1,
         "start_time_local": "09:30",
-        "weather_text": null,
+        "weather_text": "Ambient: 23.7c 62%",
         "ambient_temp_c": 23.7,
         "track_condition": "unknown",
         "cold_pressure_bar": {
@@ -29,17 +29,17 @@
           "rr": "RE-71RS"
         },
         "setup_changes": [
-          "Dampers F 27 / R 25"
+          "Dampers: F 27, R 25"
         ],
         "incidents": [
-          "Spin"
+          "Spin — after spin RL 2.2 bar / 80c, RR 2.1 bar / 57c"
         ],
-        "notes": "Humidity 62%. Tires: Good RE-71 RS, front lightly used, rear nearly new. Tires at 27c. After a few laps: FR 1.9, FL 2.0; front camber temps look good, 5c spread. RR/RL 2.0; rear camber temps look extreme, +10c on the inside. After spin: RL 2.2 and 80c, RR 2.1 57c. FR 2.0 60/64/66 (OMI). FL 2.1 70/64/63 (OMI)."
+        "notes": "Tires: Good RE-71 RS, front lightly used, rear nearly new. Cold tires at 27c. After a few laps: FR 1.9, FL 2.0, RR/RL 2.0. Front camber temps look good, 5c spread. Rear camber temps look extreme, +10c on the inside. After spin: RL 2.2 bar / 80c, RR 2.1 bar / 57c. FR 2.0 bar / 60, 64, 66 (OMI); FL 2.1 bar / 70, 64, 63 (OMI)."
       },
       {
         "session_index": 2,
         "start_time_local": "10:30",
-        "weather_text": null,
+        "weather_text": "Ambient 23.5c 68%",
         "ambient_temp_c": 23.5,
         "track_condition": "unknown",
         "cold_pressure_bar": {
@@ -55,10 +55,10 @@
           "rr": "A052"
         },
         "setup_changes": [
-          "Dampers F 27 / R 25"
+          "Dampers: F 27, R 25"
         ],
         "incidents": [],
-        "notes": "A052 Sticker all around. Humidity 68%. Hot pressure adjustments: FL 2.2->2.0, 78 outside / 63 inside; FR 2.15->2.0, 72 outside / 65 inside; RR 2.1->2.0, too much camber; RL 2.2->2.0, too much camber."
+        "notes": "A052 Sticker all around. FL 2.2 -> 2.0, 78 outside, 63 inside. FR 2.15 -> 2.0, 72 outside, 65 inside. RR 2.1 -> 2.0, too much camber. RL 2.2 -> 2.0, too much camber."
       },
       {
         "session_index": 3,
@@ -82,7 +82,7 @@
           "VSC cut"
         ],
         "incidents": [],
-        "notes": "Same as before, but with VSC cut. Cold tire temps. RE-71RS rear 1.75, front 1.65/1.68. A052 (33c): FR 1.85, FL 1.85, RR 1.85, RL 1.9. Final session pressures reflect the A052 set used for this run."
+        "notes": "Same as before, but with VSC cut. Cold tire temps — RE-71RS rear: 1.75; front: 1.65, 1.68. A052 (33c): FR 1.85, FL 1.85, RR 1.85, RL 1.9."
       }
     ]
   }
