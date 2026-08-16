@@ -56,11 +56,17 @@ function defaultSettings() {
   };
 }
 
+// True when settings came from storage (vs factory defaults). First run
+// prefills the corner targets from the model; a returning user's tuned
+// values are left alone until they change car/condition or hit Reset.
+let hadSavedSettings = false;
+
 function loadSettings() {
   const defaults = defaultSettings();
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return defaults;
+    hadSavedSettings = true;
     const parsed = JSON.parse(raw);
     // Shallow-merge each section over the defaults so partial/older payloads
     // still produce a complete settings object.
@@ -305,6 +311,22 @@ function snapTargetLap() {
   if (Number.isFinite(typ) && typ > 0) p.TargetLapTimeS = Math.round(typ * 10) / 10;
 }
 
+// Corner-card prefills follow the car: the target hot temp and hot
+// pressure snap to the model's steady-state medians for the selected
+// (car, condition). Buckets missing from the artifact keep whatever the
+// fields currently hold.
+function snapCornerTargets() {
+  const p = settings.Prediction;
+  if (!model || !p.Car) return;
+  for (const c of CORNERS) {
+    const d = model.lookupCornerDefaults(p.Car, c.id, p.Condition);
+    if (!d) continue;
+    const cs = settings[c.settingsKey];
+    cs.TargetHotTemp = Math.round(d.hotTempC * 10) / 10;
+    cs.TargetHotPressure = Math.round(d.hotPressureBar * 100) / 100;
+  }
+}
+
 // Compound choices depend on the selected car. The choice is FORCED —
 // every run has exactly one tire on all four corners, so there is no
 // pooled "default" option; an unset selection snaps to the first compound.
@@ -418,6 +440,8 @@ function wireEvents() {
       TargetLapTimeS: null, // snapped to the selection's typical lap once the model loads
       Compound: null,
     };
+    snapTargetLap();
+    snapCornerTargets();
     saveSettings();
     applyStrings(); // condition + compound selections changed
     render();
@@ -442,6 +466,7 @@ function wireEvents() {
     settings.Prediction.Compound = null;
     fillCompoundSelects();
     snapTargetLap();
+    snapCornerTargets();
     saveSettings();
     render();
   });
@@ -455,6 +480,7 @@ function wireEvents() {
   els.conditionSelect.addEventListener('change', () => {
     settings.Prediction.Condition = els.conditionSelect.value;
     snapTargetLap();
+    snapCornerTargets();
     saveSettings();
     render();
   });
@@ -535,6 +561,7 @@ async function init() {
     fillCompoundSelects();
     if (p.TargetLapTimeS === null) snapTargetLap();
     if (p.CloudCoverPct === null) p.CloudCoverPct = 50;
+    if (!hadSavedSettings) snapCornerTargets();
   } else {
     settings.Mode = MODE_MANUAL;
   }

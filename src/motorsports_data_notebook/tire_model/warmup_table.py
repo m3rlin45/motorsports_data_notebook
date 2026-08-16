@@ -70,6 +70,14 @@ G2_TYP_PERCENTILE = 75.0
 MIN_LAPS_FOR_TAU_FIT = 30  # per (car, track, corner) bucket to participate in Pass 1
 MIN_LAPS_FOR_K_BUCKET = 5  # per (car, track, corner) bucket to factor in Pass 2
 
+# Laps this deep into a stint count as steady-state for the UI prefill
+# medians (hot temp / hot pressure per car+corner+condition). Buckets with
+# fewer than CORNER_DEFAULTS_MIN_LAPS steady laps are dropped so a couple
+# of outlier laps (e.g. two crawling wet laps) can't seed the prefill —
+# the UI's condition chain falls back to a denser bucket instead.
+CORNER_DEFAULTS_MIN_LAP_IN_STINT = 4
+CORNER_DEFAULTS_MIN_LAPS = 5
+
 # ---- Target-lap-time feature: g² as a function of pace ----
 # Energy into the tires scales strongly with pace (log(g²) vs log(lap time)
 # slopes of -2.4…-3.6, |r| 0.8-0.97 on the 2026-08 dataset; pure v²-scaling
@@ -268,6 +276,7 @@ def build_warmup_table(
 
     lap_time_lookup = _build_lap_time_typ(laps)
     g2_lookup = _build_g2_typ(laps)
+    corner_defaults = _build_corner_defaults(laps)
     from .sectors import build_pace_model
 
     g2_curves, g2_exponent_default = build_pace_model(root, laps)
@@ -359,6 +368,7 @@ def build_warmup_table(
         g2_exponent_default=g2_exponent_default,
         k_by_compound=k_by_compound,
         compound_multipliers=compound_multipliers,
+        corner_defaults=corner_defaults,
     )
 
     if write_artifacts:
@@ -686,6 +696,36 @@ def _build_g2_typ_per_corner(
     return out
 
 
+def _build_corner_defaults(
+    laps: pd.DataFrame,
+    *,
+    min_lap_within_stint: int = CORNER_DEFAULTS_MIN_LAP_IN_STINT,
+    min_laps: int = CORNER_DEFAULTS_MIN_LAPS,
+) -> dict[tuple[str, str, str], tuple[float, float, int]]:
+    """Median steady-state hot temp/pressure per (car, corner, condition).
+
+    UI prefill values: what this car's tires actually settle at once warm
+    (``lap_within_stint >= min_lap_within_stint``). Blacklisted corners are
+    already NaN-masked upstream, so they drop out of the medians.
+
+    Returns ``{(car, corner, condition): (hot_temp_c, hot_pressure_bar, n)}``.
+    """
+    steady = laps[laps["lap_within_stint"] >= min_lap_within_stint]
+    steady = steady[steady["condition"] != "unknown"]
+    out: dict[tuple[str, str, str], tuple[float, float, int]] = {}
+    for (car, cond), grp in steady.groupby(["car", "condition"]):
+        for c in CORNERS:
+            paired = grp[[f"tpms_temp_{c}_end", f"tpms_press_{c}_mean"]].dropna()
+            if len(paired) < min_laps:
+                continue
+            out[(str(car), c, str(cond))] = (
+                float(paired[f"tpms_temp_{c}_end"].median()),
+                float(paired[f"tpms_press_{c}_mean"].median()),
+                int(len(paired)),
+            )
+    return out
+
+
 def _laps_for_fit(
     laps: pd.DataFrame,
     g2_lookup: dict[tuple[str, str, str], tuple[float, int]],
@@ -945,6 +985,7 @@ def _assemble_model(
     g2_exponent_default: float = G2_LAP_TIME_EXPONENT_FALLBACK,
     k_by_compound: dict[tuple[str, str, str, str], "FitParam"] | None = None,
     compound_multipliers: dict[str, dict[str, float]] | None = None,
+    corner_defaults: dict[tuple[str, str, str], tuple[float, float, int]] | None = None,
 ) -> dict[str, Any]:
     """Build the in-memory model dict that matches the JSON artifact schema.
 
@@ -957,6 +998,7 @@ def _assemble_model(
     g2_curves = g2_curves or {}
     k_by_compound = k_by_compound or {}
     compound_multipliers = compound_multipliers or {}
+    corner_defaults = corner_defaults or {}
 
     def _g2_entry(track: str, car: str, cond: str, value: float, n: int) -> dict[str, Any]:
         entry: dict[str, Any] = {
@@ -1098,6 +1140,20 @@ def _assemble_model(
                 "n_laps": fp.n_samples,
             }
             for (car, compound, corner, cond), fp in sorted(k_by_compound.items())
+        ],
+        # UI prefill medians: what the tires settle at once warm (additive;
+        # calculators use these to seed the target hot temp / hot pressure
+        # inputs when the car or condition selection changes).
+        "corner_defaults_by_car_corner_cond": [
+            {
+                "car": car,
+                "corner": corner,
+                "condition": cond,
+                "hot_temp_c": temp,
+                "hot_pressure_bar": press,
+                "n_laps_used": n,
+            }
+            for (car, corner, cond), (temp, press, n) in sorted(corner_defaults.items())
         ],
         "lap_time_typ_by_track_car_cond": [
             {
