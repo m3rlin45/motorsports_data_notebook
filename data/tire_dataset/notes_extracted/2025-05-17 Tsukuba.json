@@ -1,10 +1,10 @@
 {
-  "_cache_key": "e8e7bdab367ba75623624faed1b920240be2b690|48e2dd24ce10840e0ffb8c4742f42b2b34734ab2|claude-opus-4-7",
+  "_cache_key": "e8e7bdab367ba75623624faed1b920240be2b690|f3fc257af4ddabcdd30a29822de83132da7652e1|claude-opus-4-7",
   "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2025-05-17 Tsukuba.txt",
   "_source_sha1": "e8e7bdab367ba75623624faed1b920240be2b690",
-  "_prompt_sha1": "48e2dd24ce10840e0ffb8c4742f42b2b34734ab2",
+  "_prompt_sha1": "f3fc257af4ddabcdd30a29822de83132da7652e1",
   "_model": "claude-opus-4-7",
-  "_extracted_at": "2026-04-18T14:03:54+00:00",
+  "_extracted_at": "2026-08-16T07:13:17+00:00",
   "data": {
     "file_date": null,
     "track": "Tsukuba",
@@ -23,12 +23,15 @@
           "rr": 2.1
         },
         "tire_compound": {
-          "fl": "15",
-          "fr": "15",
-          "rl": "10",
-          "rr": "10"
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
         },
-        "setup_changes": [],
+        "setup_changes": [
+          "Front damper 15",
+          "Rear damper 10"
+        ],
         "incidents": [],
         "notes": "All runs on worn tires (60%+ tread, better tires on rear)."
       }
