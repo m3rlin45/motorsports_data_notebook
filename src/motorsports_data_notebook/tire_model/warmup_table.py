@@ -38,7 +38,7 @@ from .energy_balance import t_effective_c, t_road_proxy_c
 logger = logging.getLogger(__name__)
 
 CORNERS = ("fl", "fr", "rl", "rr")
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 3
 
 # Anchored track for the c_track identifiability constraint. Tsukuba has the
 # most coverage across both cars in the current dataset.
@@ -69,6 +69,18 @@ G2_TYP_PERCENTILE = 75.0
 # Bucket-size thresholds
 MIN_LAPS_FOR_TAU_FIT = 30  # per (car, track, corner) bucket to participate in Pass 1
 MIN_LAPS_FOR_K_BUCKET = 5  # per (car, track, corner) bucket to factor in Pass 2
+
+# ---- Target-lap-time feature: g² as a function of pace ----
+# Energy into the tires scales strongly with pace (log(g²) vs log(lap time)
+# slopes of -2.4…-3.6, |r| 0.8-0.97 on the 2026-08 dataset; pure v²-scaling
+# physics would give -4). Fitted sector-wise — see tire_model.sectors — so
+# one bad turn on an otherwise aggressive lap can't skew the mapping. Each
+# ⟨g²⟩ bucket carries a piecewise-linear g2_vs_lap_time curve; buckets
+# without one fall back to the pooled sector-fit exponent below.
+G2_LAP_TIME_EXPONENT_FALLBACK = 3.0  # used when even the pooled sector fit is empty
+# Prediction-time clamp on the g² multiplier so an unrealistic target lap
+# time can't extrapolate the asymptote into nonsense.
+G2_SCALE_MULTIPLIER_CLAMP = (0.4, 2.5)
 
 # Damp/wet τ should physically be ≤ the dry τ (faster cooling in rain). When a
 # rain bucket fits a τ_sec much larger than the same (car, corner)'s dry τ,
@@ -249,6 +261,9 @@ def build_warmup_table(
 
     lap_time_lookup = _build_lap_time_typ(laps)
     g2_lookup = _build_g2_typ(laps)
+    from .sectors import build_pace_model
+
+    g2_curves, g2_exponent_default = build_pace_model(root, laps)
 
     laps_for_fit = _laps_for_fit(laps, g2_lookup)
 
@@ -295,6 +310,8 @@ def build_warmup_table(
         lap_time_lookup=lap_time_lookup,
         bucket_n_samples=bucket_n_samples,
         blacklist_applied=blacklist_applied,
+        g2_curves=g2_curves,
+        g2_exponent_default=g2_exponent_default,
     )
 
     if write_artifacts:
@@ -877,12 +894,32 @@ def _assemble_model(
     lap_time_lookup: dict[tuple[str, str, str], tuple[float, int]],
     bucket_n_samples: dict[tuple[str, str, str, str], int],
     blacklist_applied: list[dict] | None = None,
+    g2_curves: dict[tuple[str, str, str], dict] | None = None,
+    g2_exponent_default: float = G2_LAP_TIME_EXPONENT_FALLBACK,
 ) -> dict[str, Any]:
     """Build the in-memory model dict that matches the JSON artifact schema.
 
-    Schema version 2: K and τ_sec are now keyed by (car, corner, condition),
-    and the ⟨g²⟩ + lap_time_typ lookups by (track, car, condition).
+    Schema version 3: adds the target-lap-time feature — a per-bucket
+    ``g2_lap_time_exponent`` on each ⟨g²⟩ entry plus the top-level
+    ``g2_lap_time_model`` block (default exponent + multiplier clamp).
+    Version 2 keyed K and τ_sec by (car, corner, condition) and the ⟨g²⟩ +
+    lap_time_typ lookups by (track, car, condition).
     """
+    g2_curves = g2_curves or {}
+
+    def _g2_entry(track: str, car: str, cond: str, value: float, n: int) -> dict[str, Any]:
+        entry: dict[str, Any] = {
+            "track_canonical": track,
+            "car": car,
+            "condition": cond,
+            "g2_typ": value,
+            "n_laps_used": n,
+        }
+        curve = g2_curves.get((track, car, cond))
+        if curve is not None:
+            entry["g2_vs_lap_time"] = curve
+        return entry
+
     fit_at = datetime.now(tz=timezone.utc).isoformat(timespec="seconds")
 
     # tracks where K-bucket data was seen for a (car, corner, condition)
@@ -891,13 +928,29 @@ def _assemble_model(
         seen_tracks_per_kcell.setdefault((car, corner, cond), set()).add(track)
 
     return {
-        "schema_version": 2,
+        "schema_version": SCHEMA_VERSION,
         "fit_at_utc": fit_at,
         "model_form": (
-            "T_hot - T_eff = K[car,corner,cond] * c_track[track] * g2_typ[track,car,cond] "
+            "T_hot - T_eff = K[car,corner,cond] * c_track[track] * g2 "
             "* (1 - exp(-t / tau_sec[car,corner,cond]))   "
-            "where T_eff = (1-w_road)*T_air + w_road*T_road, t = N * lap_time_typ_s[track,car,cond]"
+            "where T_eff = (1-w_road)*T_air + w_road*T_road, t = N * lap_time_s, "
+            "g2 = g2_typ[track,car,cond] * clamp((lap_time_typ_s / target_lap_time_s)"
+            "^g2_lap_time_exponent) when a target lap time is given, else g2_typ"
         ),
+        "g2_lap_time_model": {
+            "method": "sector_knn_median_curve",
+            "formula": (
+                "g2 = g2_typ * interp(target_lap_time_s, g2_vs_lap_time) / "
+                "interp(lap_time_typ_s, g2_vs_lap_time); buckets without a curve "
+                "fall back to g2_typ * (lap_time_typ_s / target_lap_time_s) ** "
+                "default_exponent. The multiplier is clamped either way."
+            ),
+            "default_exponent": g2_exponent_default,
+            "multiplier_clamp": {
+                "min": G2_SCALE_MULTIPLIER_CLAMP[0],
+                "max": G2_SCALE_MULTIPLIER_CLAMP[1],
+            },
+        },
         "gay_lussac": {
             "p_atm_bar": 1.0,
             "t_zero_c_to_k": 273.15,
@@ -970,13 +1023,7 @@ def _assemble_model(
             for track, fp in sorted(c_track_by_track.items())
         ],
         "g2_typ_by_track_car_cond": [
-            {
-                "track_canonical": track,
-                "car": car,
-                "condition": cond,
-                "g2_typ": value,
-                "n_laps_used": n,
-            }
+            _g2_entry(track, car, cond, value, n)
             for (track, car, cond), (value, n) in sorted(g2_lookup.items())
         ],
         "lap_time_typ_by_track_car_cond": [

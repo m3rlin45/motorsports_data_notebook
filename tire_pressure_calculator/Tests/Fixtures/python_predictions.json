@@ -9,6 +9,8 @@
       "ambient_temp_c": 18.0,
       "target_hot_pressure_bar": 1.7
     },
+    "g2_scale": 1.0,
+    "g2_pace_source": null,
     "corners": {
       "fl": {
         "cold_pressure_bar": 1.4785250808519224,
@@ -59,6 +61,8 @@
       "cloud_cover_pct": 100.0,
       "target_hot_pressure_bar": 1.7
     },
+    "g2_scale": 1.0,
+    "g2_pace_source": null,
     "corners": {
       "fl": {
         "cold_pressure_bar": 1.435059166608208,
@@ -108,6 +112,8 @@
       "ambient_temp_c": 15.0,
       "target_hot_pressure_bar": 1.7
     },
+    "g2_scale": 1.0,
+    "g2_pace_source": null,
     "corners": {
       "fl": {
         "cold_pressure_bar": 1.464252383240789,
@@ -157,6 +163,8 @@
       "ambient_temp_c": 15.0,
       "target_hot_pressure_bar": 1.7
     },
+    "g2_scale": 1.0,
+    "g2_pace_source": null,
     "corners": {
       "fl": {
         "cold_pressure_bar": 1.464252383240789,
@@ -206,6 +214,8 @@
       "ambient_temp_c": 22.0,
       "target_hot_pressure_bar": 1.7
     },
+    "g2_scale": 1.0,
+    "g2_pace_source": null,
     "corners": {
       "fl": {
         "cold_pressure_bar": 1.4216805785525888,
@@ -256,6 +266,8 @@
       "cold_tire_temp_c": 22.0,
       "target_hot_pressure_bar": 1.7
     },
+    "g2_scale": 1.0,
+    "g2_pace_source": null,
     "corners": {
       "fl": {
         "cold_pressure_bar": 1.4942138227465303,
@@ -289,6 +301,162 @@
         "predicted_hot_temp_c": 44.74764833019006,
         "K_source_bucket": [
           "KK-SII",
+          "rr",
+          "dry"
+        ]
+      }
+    }
+  },
+  {
+    "label": "tsukuba_KKSII_dry_lap5_target60",
+    "inputs": {
+      "track": "tsukuba_2000",
+      "car": "KK-SII",
+      "lap_within_stint": 5,
+      "track_condition": "dry",
+      "ambient_temp_c": 18.0,
+      "target_hot_pressure_bar": 1.7,
+      "target_lap_time_s": 60.0
+    },
+    "g2_scale": 1.1056696404347284,
+    "g2_pace_source": "curve",
+    "corners": {
+      "fl": {
+        "cold_pressure_bar": 1.4602112409182024,
+        "predicted_hot_temp_c": 46.37744013420945,
+        "K_source_bucket": [
+          "KK-SII",
+          "fl",
+          "dry"
+        ]
+      },
+      "fr": {
+        "cold_pressure_bar": 1.4930385831391444,
+        "predicted_hot_temp_c": 42.17002966843974,
+        "K_source_bucket": [
+          "KK-SII",
+          "fr",
+          "dry"
+        ]
+      },
+      "rl": {
+        "cold_pressure_bar": 1.4815070034401803,
+        "predicted_hot_temp_c": 43.63532396249591,
+        "K_source_bucket": [
+          "KK-SII",
+          "rl",
+          "dry"
+        ]
+      },
+      "rr": {
+        "cold_pressure_bar": 1.4761494343613224,
+        "predicted_hot_temp_c": 44.32074271499347,
+        "K_source_bucket": [
+          "KK-SII",
+          "rr",
+          "dry"
+        ]
+      }
+    }
+  },
+  {
+    "label": "tsukuba_KKSII_dry_lap5_target68",
+    "inputs": {
+      "track": "tsukuba_2000",
+      "car": "KK-SII",
+      "lap_within_stint": 5,
+      "track_condition": "dry",
+      "ambient_temp_c": 18.0,
+      "target_hot_pressure_bar": 1.7,
+      "target_lap_time_s": 68.0
+    },
+    "g2_scale": 0.8087146811178814,
+    "g2_pace_source": "curve",
+    "corners": {
+      "fl": {
+        "cold_pressure_bar": 1.5118218325126245,
+        "predicted_hot_temp_c": 39.812085855286924,
+        "K_source_bucket": [
+          "KK-SII",
+          "fl",
+          "dry"
+        ]
+      },
+      "fr": {
+        "cold_pressure_bar": 1.5390506638896695,
+        "predicted_hot_temp_c": 36.45587402999496,
+        "K_source_bucket": [
+          "KK-SII",
+          "fr",
+          "dry"
+        ]
+      },
+      "rl": {
+        "cold_pressure_bar": 1.528482224648911,
+        "predicted_hot_temp_c": 37.74995109977631,
+        "K_source_bucket": [
+          "KK-SII",
+          "rl",
+          "dry"
+        ]
+      },
+      "rr": {
+        "cold_pressure_bar": 1.5239119619111166,
+        "predicted_hot_temp_c": 38.31292416822576,
+        "K_source_bucket": [
+          "KK-SII",
+          "rr",
+          "dry"
+        ]
+      }
+    }
+  },
+  {
+    "label": "motegi_Inferno_dry_target_exponent_fallback",
+    "inputs": {
+      "track": "motegi",
+      "car": "Inferno 86",
+      "lap_within_stint": 5,
+      "track_condition": "dry",
+      "ambient_temp_c": 20.0,
+      "target_hot_pressure_bar": 1.7,
+      "target_lap_time_s": 120.0
+    },
+    "g2_scale": 1.2957785953959053,
+    "g2_pace_source": "exponent",
+    "corners": {
+      "fl": {
+        "cold_pressure_bar": 1.3884058812275568,
+        "predicted_hot_temp_c": 58.24467886136433,
+        "K_source_bucket": [
+          "Inferno 86",
+          "fl",
+          "dry"
+        ]
+      },
+      "fr": {
+        "cold_pressure_bar": 1.4138397450667637,
+        "predicted_hot_temp_c": 54.75287823275029,
+        "K_source_bucket": [
+          "Inferno 86",
+          "fr",
+          "dry"
+        ]
+      },
+      "rl": {
+        "cold_pressure_bar": 1.4406082559822826,
+        "predicted_hot_temp_c": 51.15645027111879,
+        "K_source_bucket": [
+          "Inferno 86",
+          "rl",
+          "dry"
+        ]
+      },
+      "rr": {
+        "cold_pressure_bar": 1.4600377695610458,
+        "predicted_hot_temp_c": 48.59506009362264,
+        "K_source_bucket": [
+          "Inferno 86",
           "rr",
           "dry"
         ]

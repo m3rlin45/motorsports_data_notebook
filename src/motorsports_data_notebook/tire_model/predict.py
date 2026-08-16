@@ -51,6 +51,10 @@ class Prediction:
     K_stderr: float
     tau_stderr: float
     c_track_stderr: float
+    # ---- Target-lap-time feature (schema v3); defaults preserve v2 behavior ----
+    target_lap_time_s: float | None = None
+    g2_scale: float = 1.0  # multiplier applied to g2_typ (1.0 when no target given)
+    g2_pace_source: str | None = None  # "curve" | "exponent" | None (no target)
 
 
 def _load_model(dataset_root: Path | None) -> dict[str, Any]:
@@ -187,6 +191,71 @@ def _lookup_g2(
     return 0.7, 0, "global"
 
 
+def _interp_clamped(x: float, xs: list[float], ys: list[float]) -> float:
+    """Piecewise-linear interpolation, clamped to the endpoints.
+
+    Endpoint clamping is deliberate: beyond the fastest lap ever driven the
+    curve has no support, so the prediction saturates at the fastest
+    observed energy level rather than extrapolating. Must stay in lockstep
+    with the C# and web-app implementations (pinned by the parity fixture).
+    """
+    if x <= xs[0]:
+        return ys[0]
+    if x >= xs[-1]:
+        return ys[-1]
+    for i in range(1, len(xs)):
+        if x <= xs[i]:
+            w = (x - xs[i - 1]) / (xs[i] - xs[i - 1])
+            return ys[i - 1] + w * (ys[i] - ys[i - 1])
+    return ys[-1]
+
+
+def _lookup_g2_pace_curve(
+    model: dict[str, Any], track: str, car: str, condition: str
+) -> dict[str, Any] | None:
+    """The bucket's sector-fit ``g2_vs_lap_time`` curve, via the condition chain."""
+    table = model.get("g2_typ_by_track_car_cond", [])
+    for cond in _condition_chain(condition):
+        for r in table:
+            if r["track_canonical"] == track and r["car"] == car and r["condition"] == cond:
+                curve = r.get("g2_vs_lap_time")
+                return curve if isinstance(curve, dict) else None
+    return None
+
+
+def _g2_pace_scale(
+    model: dict[str, Any],
+    track: str,
+    car: str,
+    condition: str,
+    lap_time_typ_s: float,
+    target_lap_time_s: float,
+) -> tuple[float, str]:
+    """Multiplier on g2_typ for a target lap time. Returns (scale, source).
+
+    Preferred: ratio along the bucket's sector-fit curve (anchored at
+    lap_time_typ_s so no-target and target==typical agree exactly).
+    Fallback: pooled sector exponent. Clamped either way.
+    """
+    pace_cfg = model.get("g2_lap_time_model", {})
+    clamp = pace_cfg.get("multiplier_clamp", {})
+    lo = float(clamp.get("min", 0.4))
+    hi = float(clamp.get("max", 2.5))
+
+    curve = _lookup_g2_pace_curve(model, track, car, condition)
+    if curve is not None:
+        xs = [float(v) for v in curve["lap_time_s"]]
+        ys = [float(v) for v in curve["g2"]]
+        ref = _interp_clamped(lap_time_typ_s, xs, ys)
+        if ref > 0:
+            scale = _interp_clamped(target_lap_time_s, xs, ys) / ref
+            return min(hi, max(lo, scale)), "curve"
+
+    exponent = float(pace_cfg.get("default_exponent", 3.0))
+    scale = (lap_time_typ_s / target_lap_time_s) ** exponent
+    return min(hi, max(lo, scale)), "exponent"
+
+
 def _lookup_lap_time(
     model: dict[str, Any], track: str, car: str, condition: str
 ) -> tuple[float, int, str]:
@@ -222,6 +291,7 @@ def predict_cold_pressure(
     cloud_cover_pct: float | None = None,
     g2_typ_override: float | None = None,
     lap_time_typ_override_s: float | None = None,
+    target_lap_time_s: float | None = None,
     dataset_root: Path | None = None,
     _model: dict[str, Any] | None = None,
 ) -> dict[str, Prediction]:
@@ -232,6 +302,13 @@ def predict_cold_pressure(
     ambient_temp_c
         Air temperature for the upcoming session. Drives the T_road sun-proxy
         and the T_eff baseline used in the warmup curve.
+    target_lap_time_s
+        Optional pace target for the stint. When given, time-on-track uses
+        it directly (``t = N * target_lap_time_s``) and ⟨g²⟩ is scaled by
+        ``(lap_time_typ_s / target_lap_time_s) ** g2_lap_time_exponent``
+        (clamped per the artifact's ``g2_lap_time_model.multiplier_clamp``)
+        — running faster than the historical typical pace puts more energy
+        into the tires, and vice versa. Omitted: v2 behavior.
     cold_tire_temp_c
         Optional temperature the tire is at right *now* when you'll measure
         or set cold pressure. Defaults to ``ambient_temp_c`` when omitted.
@@ -279,8 +356,20 @@ def predict_cold_pressure(
     # value (e.g., garage temp ≠ track ambient).
     t_cold_c = float(cold_tire_temp_c) if cold_tire_temp_c is not None else ambient_temp_c
 
+    # Target-lap-time feature: pace sets both time-on-track and tire energy.
+    g2_scale = 1.0
+    g2_pace_source: str | None = None
+    lap_time_for_clock_s = lap_time_typ_s
+    if target_lap_time_s is not None:
+        target = float(target_lap_time_s)
+        if target <= 0:
+            raise ValueError(f"target_lap_time_s must be > 0; got {target_lap_time_s!r}")
+        g2_scale, g2_pace_source = _g2_pace_scale(model, track, car, cond, lap_time_typ_s, target)
+        g2_typ = g2_typ * g2_scale
+        lap_time_for_clock_s = target
+
     # Time at end of lap N
-    t_at_lap_n_s = float(lap_within_stint) * lap_time_typ_s
+    t_at_lap_n_s = float(lap_within_stint) * lap_time_for_clock_s
 
     out: dict[str, Prediction] = {}
     for corner in CORNERS:
@@ -330,6 +419,9 @@ def predict_cold_pressure(
             K_stderr=K_stderr,
             tau_stderr=tau_stderr,
             c_track_stderr=c_track_stderr,
+            target_lap_time_s=(float(target_lap_time_s) if target_lap_time_s is not None else None),
+            g2_scale=g2_scale,
+            g2_pace_source=g2_pace_source,
         )
     return out
 

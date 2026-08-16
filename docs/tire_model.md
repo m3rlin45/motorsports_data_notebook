@@ -185,6 +185,38 @@ artifact updates in lockstep and the JSON diff shows reviewers exactly which
 buckets gained samples or changed coefficients. The C# calculator (future
 plan) reads the same file.
 
+### 2.10 Target lap time (schema v3)
+
+Tire energy scales strongly with pace: within a (track, car, condition)
+bucket, `log(g²_lap)` vs `log(lap_time)` is close to a power law (slopes
+−2.4…−3.6, |r| 0.8–0.97 on the 2026-08 dataset; pure v²-scaling physics
+would give −4). Schema v3 exposes that as an optional prediction input: a
+**target lap time** sets both the time-on-track clock (`t = N × target`)
+and a multiplier on ⟨g²⟩.
+
+The pace→energy mapping is fitted **sector-wise** (`tire_model/sectors.py`)
+so one bad turn on an otherwise aggressive lap can't skew it: each lap is
+split into 3 distance-based sectors from the timeseries (same
+`(lat² + long²)·dt` integrand as `heat_proxy`), and for each curve sample
+at total time T the 15 nearest laps by lap time contribute *median* sector
+times and median sector g² (rescaled to sum to T, recombined as
+`g²(T) = Σ g²_s·t_s / T`). The artifact stores the result as a small
+piecewise-linear `g2_vs_lap_time` curve per ⟨g²⟩ entry; prediction scales
+`g2_typ` by `curve(target)/curve(lap_time_typ)` so an omitted target (or
+target == typical pace) reproduces v2 behavior exactly. Buckets without a
+curve fall back to the pooled sector-fit exponent
+(`g2_lap_time_model.default_exponent`); the multiplier is clamped to
+`multiplier_clamp` either way, and interpolation clamps at the curve
+endpoints (no extrapolation beyond the fastest pace ever driven).
+
+Held-out CV evidence (predicting with only the lap's time instead of its
+measured g²): on the KK-SII an accurate target recovers ≈half the gap
+between the pooled-⟨g²⟩ prediction and the measured-g² oracle
+(−0.35…−0.5 °C MAE per corner). On the Inferno 86 pace-conditioning
+currently *hurts* — that car's heat does not track measured g²
+proportionally (even the oracle underperforms a constant), so leave the
+target blank there until the per-car g² sensitivity is modeled.
+
 ### 2.9 Track condition (rain)
 
 v0.3 adds a `condition` dimension to K, τ_sec, ⟨g²⟩, and lap_time_typ. The
@@ -488,6 +520,11 @@ just tire-predict --track tsukuba_2000 --car KK-SII --lap 5 --ambient 18 --hot-a
 # Predict per-corner cold pressures, with rain condition
 just tire-predict --track tsukuba_2000 --car KK-SII --lap 5 --ambient 15 \
                   --condition damp --hot-all 1.5
+
+# Predict with a target lap time (scales tire energy via the sector-fit
+# g² vs lap-time curve and sets time-on-track t = N × target)
+just tire-predict --track tsukuba_2000 --car KK-SII --lap 5 --ambient 15 \
+                  --hot-all 1.7 --target-lap-time 60
 
 # Held-out validation (train without N sessions per bucket, report per-corner T_hot residuals)
 just tire-predict-holdout

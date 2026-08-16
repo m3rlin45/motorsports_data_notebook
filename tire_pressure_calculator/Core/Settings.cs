@@ -33,6 +33,7 @@ public class PredictionSettings
     public double AmbientTempC { get; set; } = 20.0;
     public double? TrackTempC { get; set; }
     public double? CloudCoverPct { get; set; }
+    public double? TargetLapTimeS { get; set; }
 }
 
 public class AppSettings

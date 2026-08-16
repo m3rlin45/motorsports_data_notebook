@@ -35,6 +35,7 @@ public class MainViewModel : INotifyPropertyChanged
     private double _ambientTempC = 20.0;
     private double? _trackTempC;
     private double? _cloudCoverPct;
+    private double? _targetLapTimeS;
 
     public AppMode Mode
     {
@@ -78,6 +79,7 @@ public class MainViewModel : INotifyPropertyChanged
     public string T_LapWithinStint => Localizer.Instance["LapWithinStint"];
     public string T_Ambient => Localizer.Instance["Ambient"];
     public string T_CloudCover => Localizer.Instance["CloudCover"];
+    public string T_TargetLapTime => Localizer.Instance["TargetLapTime"];
     public string T_ResetButton => Localizer.Instance["ResetButton"];
 
     // ---- Language picker ----
@@ -203,6 +205,20 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
+    public double? TargetLapTimeS
+    {
+        get => _targetLapTimeS;
+        set
+        {
+            if (_targetLapTimeS == value) return;
+            _targetLapTimeS = value;
+            OnPropertyChanged();
+            _settings.Prediction.TargetLapTimeS = value;
+            _settings.Save();
+            RefreshPredictions();
+        }
+    }
+
     public bool TireModelAvailable => _tireModel is not null;
 
     // ---- TempAdjust (existing) ----
@@ -280,6 +296,7 @@ public class MainViewModel : INotifyPropertyChanged
         _ambientTempC = _settings.Prediction.AmbientTempC;
         _trackTempC = _settings.Prediction.TrackTempC;
         _cloudCoverPct = _settings.Prediction.CloudCoverPct;
+        _targetLapTimeS = _settings.Prediction.TargetLapTimeS;
 
         ResetCommand = new RelayCommand(() =>
         {
@@ -298,6 +315,7 @@ public class MainViewModel : INotifyPropertyChanged
             AmbientTempC = 20.0;
             TrackTempC = null;
             CloudCoverPct = null;
+            TargetLapTimeS = null;
         });
 
         RefreshPredictions();
@@ -380,7 +398,8 @@ public class MainViewModel : INotifyPropertyChanged
                     cloudCoverPct: _cloudCoverPct,
                     corner: corner,
                     targetHotPressureBar: vm.TargetHotPressure,
-                    coldTireTempC: vm.CurrentTemp);
+                    coldTireTempC: vm.CurrentTemp,
+                    targetLapTimeS: _targetLapTimeS);
                 vm.PredictedHotTempC = prediction.PredictedHotTempC;
             }
             catch (Exception)

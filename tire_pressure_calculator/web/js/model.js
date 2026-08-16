@@ -12,7 +12,10 @@
 export const P_ATM_BAR = 1.0;
 export const T_ZERO_C_TO_K = 273.15;
 
-export const SUPPORTED_SCHEMA_VERSION = 2;
+// v3 adds the target-lap-time feature; v2 artifacts still load (the pace
+// scaling then always uses the exponent fallback defaults).
+export const SUPPORTED_SCHEMA_VERSION = 3;
+export const MIN_SUPPORTED_SCHEMA_VERSION = 2;
 
 // C# Math.Round uses banker's rounding (half to even); mirror it so the
 // web app displays the exact same values as the desktop/Android heads.
@@ -92,14 +95,31 @@ export function conditionChain(condition) {
 const average = (rows, pick) => rows.reduce((s, r) => s + pick(r), 0) / rows.length;
 const sum = (rows, pick) => rows.reduce((s, r) => s + pick(r), 0);
 
+// Piecewise-linear interpolation clamped to the endpoints. Must stay in
+// lockstep with the Python and C# implementations (pinned by the parity
+// fixture).
+export function interpClamped(x, xs, ys) {
+  if (x <= xs[0]) return ys[0];
+  if (x >= xs[xs.length - 1]) return ys[ys.length - 1];
+  for (let i = 1; i < xs.length; i++) {
+    if (x <= xs[i]) {
+      const w = (x - xs[i - 1]) / (xs[i] - xs[i - 1]);
+      return ys[i - 1] + w * (ys[i] - ys[i - 1]);
+    }
+  }
+  return ys[ys.length - 1];
+}
+
 // In-memory wrapper around the parsed tire_model.json (schema v2). Adds the
 // lookup helpers + fallback chains that mirror the Python predictor.
 export class TireModel {
   constructor(dto) {
-    if (dto.schema_version !== SUPPORTED_SCHEMA_VERSION) {
+    if (dto.schema_version < MIN_SUPPORTED_SCHEMA_VERSION
+        || dto.schema_version > SUPPORTED_SCHEMA_VERSION) {
       throw new Error(
         `Unsupported tire_model.json schema_version ${dto.schema_version}; ` +
-        `expected ${SUPPORTED_SCHEMA_VERSION}. Rebuild with \`just tire-build-warmup-table\`.`);
+        `expected ${MIN_SUPPORTED_SCHEMA_VERSION}-${SUPPORTED_SCHEMA_VERSION}. ` +
+        'Rebuild with `just tire-build-warmup-table`.');
     }
     this.dto = dto;
   }
@@ -221,6 +241,41 @@ export class TireModel {
     return { value: 0.7, nLapsUsed: 0, source: 'global' };
   }
 
+  // ---- Target-lap-time pace scaling (schema v3) ----
+
+  lookupG2PaceCurve(track, car, condition) {
+    const rows = this.dto.g2_typ_by_track_car_cond;
+    for (const cond of conditionChain(condition)) {
+      const hit = rows.find(
+        (r) => r.track_canonical === track && r.car === car && r.condition === cond);
+      if (hit) return hit.g2_vs_lap_time ?? null;
+    }
+    return null;
+  }
+
+  // Multiplier on g2_typ for a target lap time; mirrors the Python
+  // predictor's _g2_pace_scale. Preferred: ratio along the bucket's
+  // sector-fit curve (anchored at lap_time_typ so target === typical
+  // scales by exactly 1). Fallback: the pooled sector exponent.
+  // Clamped either way.
+  g2PaceScale(track, car, condition, lapTimeTypS, targetLapTimeS) {
+    const paceCfg = this.dto.g2_lap_time_model ?? {};
+    const lo = paceCfg.multiplier_clamp?.min ?? 0.4;
+    const hi = paceCfg.multiplier_clamp?.max ?? 2.5;
+
+    const curve = this.lookupG2PaceCurve(track, car, condition);
+    if (curve) {
+      const ref = interpClamped(lapTimeTypS, curve.lap_time_s, curve.g2);
+      if (ref > 0) {
+        const scale = interpClamped(targetLapTimeS, curve.lap_time_s, curve.g2) / ref;
+        return { scale: Math.min(hi, Math.max(lo, scale)), source: 'curve' };
+      }
+    }
+    const exponent = paceCfg.default_exponent ?? 3.0;
+    const scale = (lapTimeTypS / targetLapTimeS) ** exponent;
+    return { scale: Math.min(hi, Math.max(lo, scale)), source: 'exponent' };
+  }
+
   lookupLapTime(track, car, condition) {
     const rows = this.dto.lap_time_typ_by_track_car_cond;
     for (const cond of conditionChain(condition)) {
@@ -255,7 +310,7 @@ export class TireModel {
 export function predictCorner(model, {
   track, car, condition, lapWithinStint, ambientTempC,
   trackTempC = null, cloudCoverPct = null, corner,
-  targetHotPressureBar, coldTireTempC = null,
+  targetHotPressureBar, coldTireTempC = null, targetLapTimeS = null,
 }) {
   const cond = condition.toLowerCase();
   if (cond !== 'dry' && cond !== 'damp' && cond !== 'wet') {
@@ -275,10 +330,26 @@ export function predictCorner(model, {
 
   const tColdC = coldTireTempC ?? ambientTempC;
 
-  const tAtLapNs = lapWithinStint * lap.valueSeconds;
+  // Target-lap-time feature: pace sets both time-on-track and tire energy.
+  let g2Scale = 1.0;
+  let g2PaceSource = null;
+  let lapTimeForClockS = lap.valueSeconds;
+  let g2Value = g2.value;
+  if (targetLapTimeS !== null && targetLapTimeS !== undefined) {
+    if (!(targetLapTimeS > 0)) {
+      throw new RangeError(`target lap time must be > 0; got ${targetLapTimeS}`);
+    }
+    const pace = model.g2PaceScale(track, car, cond, lap.valueSeconds, targetLapTimeS);
+    g2Scale = pace.scale;
+    g2PaceSource = pace.source;
+    g2Value *= g2Scale;
+    lapTimeForClockS = targetLapTimeS;
+  }
+
+  const tAtLapNs = lapWithinStint * lapTimeForClockS;
   const warmupFrac = tau.valueSeconds > 0 ? 1 - Math.exp(-tAtLapNs / tau.valueSeconds) : 0;
-  const deltaTInf = k.valueKelvinPerG2 * c.value * g2.value;
-  const tHotC = warmupCurveC(tAtLapNs, tEffC, k.valueKelvinPerG2, c.value, g2.value, tau.valueSeconds);
+  const deltaTInf = k.valueKelvinPerG2 * c.value * g2Value;
+  const tHotC = warmupCurveC(tAtLapNs, tEffC, k.valueKelvinPerG2, c.value, g2Value, tau.valueSeconds);
 
   const coldPressureBar = gayLussacColdPressureBar(
     targetHotPressureBar, tHotC, tColdC, model.pAtmBar);
@@ -291,7 +362,7 @@ export function predictCorner(model, {
     kKelvinPerG2: k.valueKelvinPerG2,
     tauSec: tau.valueSeconds,
     cTrack: c.value,
-    g2Typ: g2.value,
+    g2Typ: g2Value,
     lapTimeTypS: lap.valueSeconds,
     tAtLapNs,
     warmupFrac,
@@ -303,5 +374,8 @@ export function predictCorner(model, {
     kSourceBucket: k.sourceBucket,
     kFromPrior: k.fromPrior,
     kNSamples: k.nSamples,
+    targetLapTimeS,
+    g2Scale,
+    g2PaceSource,
   };
 }

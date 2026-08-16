@@ -20,7 +20,30 @@ public sealed record TireModelDto(
     [property: JsonPropertyName("K_buckets")] IReadOnlyList<KBucketEntryDto> KBuckets,
     [property: JsonPropertyName("c_track_by_track")] IReadOnlyList<CTrackEntryDto> CTrackByTrack,
     [property: JsonPropertyName("g2_typ_by_track_car_cond")] IReadOnlyList<G2EntryDto> G2TypByTrackCarCond,
-    [property: JsonPropertyName("lap_time_typ_by_track_car_cond")] IReadOnlyList<LapTimeEntryDto> LapTimeTypByTrackCarCond
+    [property: JsonPropertyName("lap_time_typ_by_track_car_cond")] IReadOnlyList<LapTimeEntryDto> LapTimeTypByTrackCarCond,
+    [property: JsonPropertyName("g2_lap_time_model")] G2LapTimeModelDto? G2LapTimeModel = null
+);
+
+// ---- Target-lap-time feature (schema v3) ----
+
+public sealed record G2LapTimeModelDto(
+    [property: JsonPropertyName("method")] string? Method,
+    [property: JsonPropertyName("formula")] string? Formula,
+    [property: JsonPropertyName("default_exponent")] double DefaultExponent,
+    [property: JsonPropertyName("multiplier_clamp")] MultiplierClampDto? MultiplierClamp
+);
+
+public sealed record MultiplierClampDto(
+    [property: JsonPropertyName("min")] double Min,
+    [property: JsonPropertyName("max")] double Max
+);
+
+/// <summary>Piecewise-linear g² vs lap-time curve (sector-fit, see
+/// src/motorsports_data_notebook/tire_model/sectors.py).</summary>
+public sealed record G2CurveDto(
+    [property: JsonPropertyName("lap_time_s")] IReadOnlyList<double> LapTimeS,
+    [property: JsonPropertyName("g2")] IReadOnlyList<double> G2,
+    [property: JsonPropertyName("n_laps")] int NLaps
 );
 
 public sealed record GayLussacConfigDto(
@@ -90,7 +113,8 @@ public sealed record G2EntryDto(
     [property: JsonPropertyName("car")] string Car,
     [property: JsonPropertyName("condition")] string Condition,
     [property: JsonPropertyName("g2_typ")] double G2Typ,
-    [property: JsonPropertyName("n_laps_used")] int NLapsUsed
+    [property: JsonPropertyName("n_laps_used")] int NLapsUsed,
+    [property: JsonPropertyName("g2_vs_lap_time")] G2CurveDto? G2VsLapTime = null
 );
 
 public sealed record LapTimeEntryDto(

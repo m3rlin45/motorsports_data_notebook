@@ -49,6 +49,7 @@ function defaultSettings() {
       AmbientTempC: 20.0,
       TrackTempC: null,
       CloudCoverPct: null,
+      TargetLapTimeS: null,
     },
     UiLanguage: 'auto',
   };
@@ -110,6 +111,7 @@ const els = {
   lapLabel: $('lapLabel'), lapInput: $('lapInput'),
   ambientLabel: $('ambientLabel'), ambientInput: $('ambientInput'),
   cloudLabel: $('cloudLabel'), cloudInput: $('cloudInput'),
+  targetLapLabel: $('targetLapLabel'), targetLapInput: $('targetLapInput'),
 };
 
 // ---- Corner cards ----
@@ -228,6 +230,7 @@ function refreshPredictions() {
         corner: c.id,
         targetHotPressureBar: settings[c.settingsKey].TargetHotPressure,
         coldTireTempC: settings[c.settingsKey].CurrentTemp,
+        targetLapTimeS: p.TargetLapTimeS,
       });
       predictions[c.id] = result.predictedHotTempC;
     } catch {
@@ -253,6 +256,7 @@ function applyStrings() {
   els.lapLabel.textContent = t('LapWithinStint');
   els.ambientLabel.textContent = t('Ambient');
   els.cloudLabel.textContent = t('CloudCover');
+  els.targetLapLabel.textContent = t('TargetLapTime');
 
   fillSelect(els.langSelect, [
     { value: 'auto', label: t('LanguageAuto') },
@@ -304,6 +308,7 @@ function render() {
   els.lapInput.value = String(p.LapWithinStint);
   els.ambientInput.value = p.AmbientTempC.toFixed(1);
   els.cloudInput.value = p.CloudCoverPct === null ? '' : String(p.CloudCoverPct);
+  els.targetLapInput.value = p.TargetLapTimeS === null ? '' : p.TargetLapTimeS.toFixed(1);
 
   // Corner cards.
   for (const c of CORNERS) {
@@ -356,6 +361,7 @@ function wireEvents() {
       AmbientTempC: 20.0,
       TrackTempC: null,
       CloudCoverPct: null,
+      TargetLapTimeS: null,
     };
     saveSettings();
     applyStrings(); // condition select selection changed
@@ -407,6 +413,18 @@ function wireEvents() {
     } else {
       const v = parseFloat(raw);
       if (Number.isFinite(v)) settings.Prediction.CloudCoverPct = Math.min(100, Math.max(0, v));
+    }
+    saveSettings();
+    render();
+  });
+
+  els.targetLapInput.addEventListener('change', () => {
+    const raw = els.targetLapInput.value.trim();
+    if (raw === '') {
+      settings.Prediction.TargetLapTimeS = null;
+    } else {
+      const v = parseFloat(raw);
+      if (Number.isFinite(v)) settings.Prediction.TargetLapTimeS = Math.min(900, Math.max(20, v));
     }
     saveSettings();
     render();
