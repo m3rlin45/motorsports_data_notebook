@@ -198,3 +198,74 @@ def test_filename_date_outranks_hallucinated_body_date() -> None:
     matches = match_notes_to_sessions(sess, [pn])
     assert len(matches) == 1
     assert matches[0].session_id == "s1"
+
+
+def _sess_row(sid: str, d: date, track: str, hh: int, mm: int) -> dict:
+    # JST session times: UTC = JST - 9h
+    return {
+        "session_id": sid,
+        "date": d,
+        "track_canonical": track,
+        "session_start_utc": datetime(d.year, d.month, d.day, hh - 9, mm, tzinfo=timezone.utc),
+    }
+
+
+def test_untimed_note_sessions_align_by_order() -> None:
+    """Qualifying/Race notes without written times must map to telemetry
+    in chronological order — not dogpile onto the first note-session."""
+    sess = _sessions(
+        [
+            _sess_row("quali", date(2026, 8, 8), "fuji", 10, 55),
+            _sess_row("race", date(2026, 8, 8), "fuji", 14, 19),
+        ]
+    )
+    notes = [
+        NoteSession(session_index=1, track_condition="dry"),  # Qualifying, no time
+        NoteSession(session_index=2, track_condition="dry"),  # Race, no time
+    ]
+    pn = _make_parsed("2026-08-08", "fuji", notes)
+    matches = {m.session_id: m.note_session_index for m in match_notes_to_sessions(sess, [pn])}
+    assert matches == {"quali": 1, "race": 2}
+
+
+def test_anchor_window_prevents_backward_assignment() -> None:
+    """A telemetry session after the last time anchor can only take
+    note-sessions written after that anchor's."""
+    sess = _sessions(
+        [
+            _sess_row("s1", date(2026, 1, 12), "sodegaura", 13, 0),
+            _sess_row("s3", date(2026, 1, 12), "sodegaura", 15, 0),
+            _sess_row("s4", date(2026, 1, 12), "sodegaura", 15, 58),
+        ]
+    )
+    notes = [
+        NoteSession(session_index=1, start_time_local="13:00", track_condition="dry"),
+        NoteSession(session_index=2, track_condition="dry"),  # "couldn't run"
+        NoteSession(session_index=3, start_time_local="15:00", track_condition="dry"),
+        NoteSession(session_index=4, track_condition="dry"),
+    ]
+    pn = _make_parsed("2026-01-12", "sodegaura", notes)
+    matches = {m.session_id: m.note_session_index for m in match_notes_to_sessions(sess, [pn])}
+    # 15:58 must take session 4 (after the 15:00 anchor), never session 2;
+    # the "couldn't run" note-session stays unmatched.
+    assert matches == {"s1": 1, "s3": 3, "s4": 4}
+
+
+def test_split_stint_attaches_to_preceding_note_session() -> None:
+    """Red-flag restart: two telemetry stints for one written race session."""
+    sess = _sessions(
+        [
+            _sess_row("practice", date(2025, 6, 15), "sodegaura", 9, 41),
+            _sess_row("quali", date(2025, 6, 15), "sodegaura", 10, 51),
+            _sess_row("race_a", date(2025, 6, 15), "sodegaura", 12, 10),
+            _sess_row("race_b", date(2025, 6, 15), "sodegaura", 12, 13),
+        ]
+    )
+    notes = [
+        NoteSession(session_index=1, start_time_local="09:40", track_condition="damp"),
+        NoteSession(session_index=2, track_condition="dry"),  # Qualifying
+        NoteSession(session_index=3, track_condition="dry"),  # Race
+    ]
+    pn = _make_parsed("2025-06-15", "sodegaura", notes)
+    matches = {m.session_id: m.note_session_index for m in match_notes_to_sessions(sess, [pn])}
+    assert matches == {"practice": 1, "quali": 2, "race_a": 3, "race_b": 3}
