@@ -43,9 +43,12 @@ run-clean: clean run
 tire-etl *ARGS:
     uv run python -m motorsports_data_notebook.tire_etl.cli extract {{ARGS}}
 
-# Parse run-notes into structured JSON via `claude -p`
+# Parse run-notes into structured JSON via `claude -p`, then re-match them
+# to sessions (matching must re-run even on cached parses — session IDs
+# change when the extractor is bumped).
 tire-notes *ARGS:
     uv run python -m motorsports_data_notebook.tire_etl.cli enrich-notes {{ARGS}}
+    uv run python -m motorsports_data_notebook.tire_etl.cli match-notes
 
 # Fetch historical weather for sessions
 tire-weather *ARGS:
