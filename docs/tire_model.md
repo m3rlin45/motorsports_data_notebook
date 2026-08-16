@@ -241,10 +241,32 @@ without compound support ignore the table).
 Prediction: ``predict_cold_pressure(compound_front=..., compound_rear=...)``
 (CLI ``--compound`` / ``--compound-front`` / ``--compound-rear``) swaps in
 the compound K per axle when a fitted bucket exists (condition chain
-applies); unknown compounds and unlabeled cars keep the pooled K. Held-out
-CV on the labeled Inferno sessions (same folds, pooled vs compound K):
-FL 6.80→4.95, FR 5.39→4.28, RL 5.99→4.49, RR 4.99→4.51 °C MAE, with the
-per-corner bias collapsing (RL +3.50→0.00).
+applies); unknown compounds and unlabeled cars keep the pooled K.
+
+**Partial supervision** (``tire_model/compound_infer.py``): labels are
+sparse, so the compound K is fitted as a multi-task objective — the
+compound-assignment task is supervised where labels exist and latent
+elsewhere, sharing K with the temperature-regression task. Solved by EM
+(mixture of regressions): labeled/seeded sessions are pinned one-hot,
+unlabeled (session, axle) units get posteriors from their lap residuals,
+and each K is refit by responsibility-weighted least squares. Guard
+rails: posteriors are tempered to ``SESSION_EFF_SAMPLES`` effective
+observations (laps within a session are correlated); buckets only exist
+with pinned support (free sessions refine, never spawn, buckets — else a
+symmetric fixed point forms); and an outlier gate (χ²/lap against
+pinned-only variance) leaves sessions that match NO known compound
+unlabeled instead of absorbing them. Weather-driven tire choices use
+declarative ``condition_seeds`` in the sidecar (KK-SII: all-dry session ⇒
+DRY tires, all-wet ⇒ WET; damp/mixed left to the classifier — the EM
+independently recovers the known 2026-04-04 rain day as WET at ≥0.998).
+Soft assignments are training-only; held-out evaluation uses human/seed
+labels exclusively. ``just tire-model infer-compounds`` audits every
+latent assignment for human review.
+
+Held-out CV, fleet pooled MAE at v0.20: FL 4.22 / FR 4.21 / RL 4.61 /
+RR 4.18 °C with pooled bias within ±0.75 °C — versus FL 4.95 / FR 4.01 /
+RL 5.63 / RR 4.70 before the compound era (v0.17), with the Inferno's
+rear bias collapsing from ≈−5 °C to −0.7/−1.5 °C.
 
 ### 2.9 Track condition (rain)
 

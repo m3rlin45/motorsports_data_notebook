@@ -144,6 +144,16 @@ def main(argv: list[str] | None = None) -> int:
     )
     _add_dataset_root_arg(p_audit)
 
+    p_infer = sub.add_parser(
+        "infer-compounds",
+        help=(
+            "Audit semi-supervised compound inference: list which unlabeled "
+            "sessions the K-signature classifier would label, with evidence. "
+            "Promote assignments you trust into tire_compounds.yaml."
+        ),
+    )
+    _add_dataset_root_arg(p_infer)
+
     p_holdout = sub.add_parser(
         "holdout",
         help="Held-out validation: exclude sessions from training, predict per-lap T_hot, report residuals.",
@@ -189,8 +199,92 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_holdout(args)
     if args.cmd == "audit-sensors":
         return _cmd_audit_sensors(args)
+    if args.cmd == "infer-compounds":
+        return _cmd_infer_compounds(args)
     parser.print_help()
     return 2
+
+
+def _cmd_infer_compounds(args: argparse.Namespace) -> int:
+    from pathlib import Path
+
+    import pandas as pd
+
+    from ..tire_etl.paths import default_dataset_root
+    from .compound_infer import apply_condition_seeds, fit_compounds_em
+    from .compounds import load_compound_labels, load_condition_seeds
+    from .warmup_table import (
+        FitParam,
+        _apply_blacklist,
+        _attach_weather,
+        _build_g2_typ,
+        _compute_delta_t,
+        _compute_stint_clock,
+        _laps_for_fit,
+        _load_filtered_laps,
+        _load_weather,
+        build_warmup_table,
+        load_sensor_blacklist,
+    )
+
+    root = Path(args.dataset_root) if args.dataset_root else default_dataset_root()
+    model = build_warmup_table(root, write_artifacts=False)
+    tau = {
+        (d["car"], d["corner"], d["condition"]): FitParam(
+            d["value_seconds"], d["stderr_seconds"], d["n_samples_used"], d["from_prior"]
+        )
+        for d in model["tau_sec_by_car_corner_cond"]
+    }
+    c_track = {
+        d["track_canonical"]: FitParam(d["value"], d["stderr"], d["n_buckets_used"])
+        for d in model["c_track_by_track"]
+    }
+
+    laps = _load_filtered_laps(root)
+    laps = _attach_weather(laps, _load_weather(root))
+    laps = _compute_stint_clock(laps)
+    laps, _ = _apply_blacklist(laps, load_sensor_blacklist(root), warn_on_unknown=False)
+    laps = _compute_delta_t(laps)
+    laps = _laps_for_fit(laps, _build_g2_typ(laps))
+
+    labels = load_compound_labels(root)
+    labels = apply_condition_seeds(labels, laps, load_condition_seeds(root))
+    _, assignments = fit_compounds_em(laps, labels, tau, c_track)
+    detail = [a for a in assignments if not a.pinned]
+
+    sess_meta = pd.concat(
+        [
+            __import__("pyarrow.parquet", fromlist=["read_table"]).read_table(f).to_pandas()
+            for f in sorted((root / "sessions").glob("*.parquet"))
+        ]
+    )[["session_id", "date", "car", "track_canonical"]]
+
+    if not detail:
+        print("No latent assignments (all sessions labeled/seeded, or car ineligible).")
+        return 0
+    df = (
+        pd.DataFrame([d.__dict__ for d in detail])
+        .drop(columns=["car"])
+        .merge(sess_meta, on="session_id")
+    )
+    df = df.sort_values(["date", "session_id", "axle"])
+    cols = [
+        "date",
+        "car",
+        "track_canonical",
+        "session_id",
+        "axle",
+        "compound",
+        "responsibility",
+        "n_laps",
+    ]
+    print(df[cols].to_string(index=False))
+    confident = df[df.responsibility >= 0.9].session_id.nunique()
+    print(
+        f"\n{confident} sessions with responsibility >= 0.9 "
+        "(training uses soft posteriors; promote rows you trust into tire_compounds.yaml)."
+    )
+    return 0
 
 
 def _cmd_build(args: argparse.Namespace) -> int:

@@ -309,22 +309,41 @@ def build_warmup_table(
     # Same physical-prior clip on K (rain ⇒ less heat ⇒ K ≤ dry K).
     k_by_car_corner_cond = _clip_wet_k_to_dry_ratio(k_by_car_corner_cond)
 
-    # Compound-aware K for labeled sessions (sidecar + notes labels).
-    from .compounds import load_compound_labels
+    # Compound-aware K: multi-task fit with partial supervision. The
+    # compound-assignment task is supervised where labels exist (sidecar +
+    # notes, plus weather-driven condition seeds like the KK-SII's
+    # DRY/WET) and latent elsewhere; the temperature-regression task
+    # shares the per-compound K parameters. Solved jointly by EM
+    # (mixture of regressions with pinned responsibilities). Soft
+    # assignments are training-only — held-out evaluation uses human/seed
+    # labels exclusively (see validate._evaluate_fold).
+    from .compound_infer import apply_condition_seeds, fit_compounds_em
+    from .compounds import load_compound_labels, load_condition_seeds
 
     compound_labels = load_compound_labels(root)
     if exclude_session_ids:
         compound_labels = compound_labels[
             ~compound_labels["session_id"].isin(exclude_session_ids)
         ].reset_index(drop=True)
-    k_by_compound = _fit_compound_k(
+    compound_labels = apply_condition_seeds(
+        compound_labels, laps_for_fit, load_condition_seeds(root)
+    )
+    k_em, em_assignments = fit_compounds_em(
         laps_for_fit, compound_labels, tau_by_car_corner_cond, c_track_by_track
     )
+    k_by_compound = {
+        key: FitParam(value=k, stderr=stderr, n_samples=int(round(n_eff)))
+        for key, (k, stderr, n_eff) in k_em.items()
+    }
     if k_by_compound:
+        inferred = [a for a in em_assignments if not a.pinned and a.responsibility >= 0.9]
         logger.info(
-            "Fitted %d compound-specific K buckets from %d labeled sessions",
+            "Fitted %d compound K buckets (EM over %d session-axles, "
+            "%d pinned, %d confidently inferred)",
             len(k_by_compound),
-            compound_labels["session_id"].nunique(),
+            len(em_assignments),
+            sum(1 for a in em_assignments if a.pinned),
+            len(inferred),
         )
 
     model = _assemble_model(
@@ -662,65 +681,6 @@ def _build_g2_typ_per_corner(
                 float(np.percentile(g2_per_lap, percentile)),
                 int(len(g2_per_lap)),
             )
-    return out
-
-
-def _fit_compound_k(
-    laps_for_fit: pd.DataFrame,
-    labels: pd.DataFrame,
-    tau_by_car_corner_cond: dict[tuple[str, str, str], "FitParam"],
-    c_track_by_track: dict[str, "FitParam"],
-) -> dict[tuple[str, str, str, str], "FitParam"]:
-    """Per-(car, compound, corner, condition) K from labeled sessions.
-
-    The pooled τ and c_track are held fixed, which reduces the fit to
-    closed-form weighted least squares through the origin:
-    ``ΔT_i = K · x_i`` with ``x_i = g²_i · c_track · (1 − exp(−t_i/τ))``.
-    That keeps sparse compound buckets stable where a joint curve fit
-    would wander.
-    """
-    if labels.empty:
-        return {}
-    laps = laps_for_fit.merge(labels, on="session_id", how="inner")
-    if laps.empty:
-        return {}
-    laps = laps.copy()
-    laps["g2_lap"] = laps["heat_proxy"] / laps["on_track_s"]
-    laps = laps[laps["g2_lap"].notna() & (laps["g2_lap"] > 0) & (laps["t_cum_s"] > 0)]
-
-    out: dict[tuple[str, str, str, str], FitParam] = {}
-    axis_of = {
-        "fl": "compound_front",
-        "fr": "compound_front",
-        "rl": "compound_rear",
-        "rr": "compound_rear",
-    }
-    for corner in CORNERS:
-        comp_col = axis_of[corner]
-        delta_col = f"delta_t_{corner}"
-        sub_all = laps[laps[comp_col].notna() & laps[delta_col].notna()]
-        for (car, compound, cond), grp in sub_all.groupby(["car", comp_col, "condition"]):
-            if cond == "unknown" or len(grp) < MIN_LAPS_FOR_COMPOUND_K:
-                continue
-            tau_fp = tau_by_car_corner_cond.get(
-                (str(car), corner, str(cond))
-            ) or tau_by_car_corner_cond.get((str(car), corner, "dry"))
-            if tau_fp is None or tau_fp.value <= 0:
-                continue
-            c_track = grp["track_canonical"].map(
-                lambda t: c_track_by_track.get(str(t), FitParam(PRIOR_C_TRACK, 0.0, 0, True)).value
-            )
-            frac = 1.0 - np.exp(-grp["t_cum_s"].to_numpy() / tau_fp.value)
-            x = grp["g2_lap"].to_numpy() * c_track.to_numpy() * frac
-            y = grp[delta_col].to_numpy(dtype=float)
-            sxx = float(np.sum(x * x))
-            if sxx <= 0:
-                continue
-            k = float(np.sum(x * y) / sxx)
-            resid = y - k * x
-            n = len(y)
-            stderr = float(np.sqrt(np.sum(resid * resid) / max(n - 1, 1) / sxx))
-            out[(str(car), str(compound), corner, str(cond))] = FitParam(k, stderr, n)
     return out
 
 

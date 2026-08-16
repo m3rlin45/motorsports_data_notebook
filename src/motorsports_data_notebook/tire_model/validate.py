@@ -207,16 +207,13 @@ def _evaluate_fold(root: Path, holdout_ids: list[str]) -> pd.DataFrame:
     }
     # Held-out sessions' compound labels (metadata, not telemetry — using
     # them mirrors a driver entering the compound in the calculator).
-    from .compounds import load_compound_labels
+    # Condition seeds count as metadata too (the driver knows whether wets
+    # are bolted on); signature-INFERRED labels do not — classifying a
+    # held-out session from its own temps would leak the target.
+    from .compound_infer import apply_condition_seeds
+    from .compounds import load_compound_labels, load_condition_seeds
 
     labels = load_compound_labels(root)
-    label_by_session = {
-        r.session_id: (
-            r.compound_front if isinstance(r.compound_front, str) else None,
-            r.compound_rear if isinstance(r.compound_rear, str) else None,
-        )
-        for r in labels.itertuples()
-    }
     tau_lookup = {
         (d["car"], d["corner"], d["condition"]): d["value_seconds"]
         for d in model["tau_sec_by_car_corner_cond"]
@@ -249,6 +246,15 @@ def _evaluate_fold(root: Path, holdout_ids: list[str]) -> pd.DataFrame:
     all_laps = _compute_delta_t(all_laps)
     # Drop out-laps from evaluation (same convention as training)
     all_laps = all_laps[all_laps["lap_within_stint"] > 0].reset_index(drop=True)
+
+    labels = apply_condition_seeds(labels, all_laps, load_condition_seeds(root))
+    label_by_session = {
+        r.session_id: (
+            r.compound_front if isinstance(r.compound_front, str) else None,
+            r.compound_rear if isinstance(r.compound_rear, str) else None,
+        )
+        for r in labels.itertuples()
+    }
 
     # Per-lap predictions. Per-lap g² (heat_proxy / on_track_s) is the
     # held-out lap's actual driving intensity; falls back to the bucket
