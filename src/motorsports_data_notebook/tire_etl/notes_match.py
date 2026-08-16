@@ -135,10 +135,14 @@ def match_notes_to_sessions(
     sess_tracks = sessions.column("track_canonical").to_pylist()
     sess_utc = sessions.column("session_start_utc").to_pylist()
 
-    for i, sess_id in enumerate(sess_ids):
-        sess_date: _date = sess_dates[i]
-        track_can: str | None = sess_tracks[i]
-        # Candidate notes: within date window + same track.
+    # Group telemetry sessions by (date, track): assignment quality depends
+    # on seeing a day's sessions together (one-to-one anchors + ordering),
+    # not on matching each session in isolation.
+    groups: dict[tuple, list[int]] = {}
+    for i in range(len(sess_ids)):
+        groups.setdefault((sess_dates[i], sess_tracks[i]), []).append(i)
+
+    for (sess_date, track_can), idxs in groups.items():
         candidates = [
             entry
             for entry in note_entries
@@ -148,37 +152,86 @@ def match_notes_to_sessions(
         if not candidates:
             continue
 
-        # If only one candidate: high confidence.
-        if len(candidates) == 1:
-            _, _, pn, ns = candidates[0]
-            matches.append(_make_match(sess_id, pn, ns, confidence=1.0 if track_can else 0.9))
-            continue
-
-        # Multiple candidates: prefer time-of-day match.
-        sess_local_min = _session_utc_to_local_minutes(
-            sess_utc[i].replace(tzinfo=timezone.utc) if sess_utc[i].tzinfo is None else sess_utc[i],
-            track_can,
+        # Chronological telemetry order within the group.
+        idxs = sorted(
+            idxs,
+            key=lambda i: (
+                sess_utc[i].replace(tzinfo=timezone.utc)
+                if sess_utc[i].tzinfo is None
+                else sess_utc[i]
+            ),
         )
-        best = None
-        best_delta = None
+        sess_minutes = {
+            i: _session_utc_to_local_minutes(
+                (
+                    sess_utc[i].replace(tzinfo=timezone.utc)
+                    if sess_utc[i].tzinfo is None
+                    else sess_utc[i]
+                ),
+                track_can,
+            )
+            for i in idxs
+        }
+        # Candidate note-sessions in (file, index) order = chronological
+        # order as written. Key each by position in this list.
+        cand_minutes = []
         for entry in candidates:
-            _, _, pn, ns = entry
-            lt = _parse_local_time(ns.start_time_local)
-            if lt is None or sess_local_min is None:
+            lt = _parse_local_time(entry[3].start_time_local)
+            cand_minutes.append(lt[0] * 60 + lt[1] if lt else None)
+
+        assigned_sess: dict[int, tuple[int, float]] = {}  # sess idx -> (cand pos, conf)
+        used_cand: set[int] = set()
+
+        # Stage 1 — time anchors: globally greedy by smallest delta,
+        # one-to-one, within tolerance.
+        pairs = []
+        for i in idxs:
+            smin = sess_minutes[i]
+            if smin is None:
                 continue
-            nmin = lt[0] * 60 + lt[1]
-            delta = abs(nmin - sess_local_min)
-            if delta <= time_tolerance_minutes and (best_delta is None or delta < best_delta):
-                best = entry
-                best_delta = delta
-        if best is not None:
-            _, _, pn, ns = best
-            conf = max(0.5, 1.0 - (best_delta or 0) / (time_tolerance_minutes * 2))
-            matches.append(_make_match(sess_id, pn, ns, confidence=conf))
-        else:
-            # All candidates equally plausible — record first with low confidence.
-            _, _, pn, ns = candidates[0]
-            matches.append(_make_match(sess_id, pn, ns, confidence=0.3))
+            for c, nmin in enumerate(cand_minutes):
+                if nmin is None:
+                    continue
+                delta = abs(nmin - smin)
+                if delta <= time_tolerance_minutes:
+                    pairs.append((delta, i, c))
+        for delta, i, c in sorted(pairs):
+            if i in assigned_sess or c in used_cand:
+                continue
+            assigned_sess[i] = (c, max(0.5, 1.0 - delta / (time_tolerance_minutes * 2)))
+            used_cand.add(c)
+
+        # Stage 2 — order-preserving alignment for the rest. Walk telemetry
+        # chronologically: each unmatched session may only take a
+        # note-session written after the previous assignment (anchor or
+        # aligned) and before the next anchor's.
+        anchor_positions = sorted((idxs.index(i), c) for i, (c, _) in assigned_sess.items())
+        prev_c: int | None = None
+        for pos, i in enumerate(idxs):
+            if i in assigned_sess:
+                prev_c = assigned_sess[i][0]
+                continue
+            lo = 0 if prev_c is None else prev_c + 1
+            hi = len(candidates) - 1
+            for a_pos, a_c in anchor_positions:
+                if a_pos > pos:
+                    hi = min(hi, a_c - 1)
+                    break
+            feasible = [c for c in range(lo, hi + 1) if c not in used_cand]
+            if feasible:
+                c = feasible[0]
+                assigned_sess[i] = (c, 0.5)
+                used_cand.add(c)
+                prev_c = c
+            elif prev_c is not None:
+                # Window exhausted — attach to the preceding note-session
+                # (split stints: a red-flag restart is two telemetry
+                # sessions for one written session).
+                assigned_sess[i] = (prev_c, 0.35)
+
+        for i, (c, conf) in assigned_sess.items():
+            _, _, pn, ns = candidates[c]
+            matches.append(_make_match(sess_ids[i], pn, ns, confidence=conf))
 
     return matches
 
