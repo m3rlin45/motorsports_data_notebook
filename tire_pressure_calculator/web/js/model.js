@@ -129,7 +129,12 @@ export class TireModel {
   }
 
   get availableTracks() {
-    return this.dto.c_track_by_track.map((r) => r.track_canonical).sort();
+    // Every track with observed data, not just those with a fitted
+    // c_track — thin tracks (e.g. Motegi's 18 Inferno laps) predict via
+    // the c_track prior until enough laps accumulate.
+    const fitted = this.dto.c_track_by_track.map((r) => r.track_canonical);
+    const observed = this.dto.g2_typ_by_track_car_cond.map((r) => r.track_canonical);
+    return [...new Set([...fitted, ...observed])].sort();
   }
 
   get availableConditions() { return this.dto.conditions.values; }
