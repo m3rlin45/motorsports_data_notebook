@@ -115,14 +115,16 @@ def match_notes_to_sessions(
         except ValueError:
             d = None
         note_track_can = normalize_track_name(pn.data.track or "")
-        # Fall back to the notes filename for date/track when the LLM didn't
-        # extract them from the body.
-        if d is None or note_track_can is None:
-            fb_date, fb_track = infer_date_track_from_filename(pn.source_file)
-            if d is None:
-                d = fb_date
-            if note_track_can is None:
-                note_track_can = fb_track
+        # The filename is authoritative when it carries a date/track — note
+        # files are named for the day, and a filename can't hallucinate.
+        # The LLM's file_date is only trusted when the filename has none
+        # (it has been observed inventing dates for undated note bodies,
+        # which silently voids every match for that file).
+        fb_date, fb_track = infer_date_track_from_filename(pn.source_file)
+        if fb_date is not None:
+            d = fb_date
+        if fb_track is not None:
+            note_track_can = fb_track
         if d is None:
             continue
         for ns in pn.data.sessions:
