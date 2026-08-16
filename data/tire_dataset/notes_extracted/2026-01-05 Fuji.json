@@ -1,10 +1,10 @@
 {
-  "_cache_key": "a3ee0c8746a6990547f4c5c82cdc9bc12dabbd74|48e2dd24ce10840e0ffb8c4742f42b2b34734ab2|claude-opus-4-7",
+  "_cache_key": "a3ee0c8746a6990547f4c5c82cdc9bc12dabbd74|f3fc257af4ddabcdd30a29822de83132da7652e1|claude-opus-4-7",
   "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2026-01-05 Fuji.txt",
   "_source_sha1": "a3ee0c8746a6990547f4c5c82cdc9bc12dabbd74",
-  "_prompt_sha1": "48e2dd24ce10840e0ffb8c4742f42b2b34734ab2",
+  "_prompt_sha1": "f3fc257af4ddabcdd30a29822de83132da7652e1",
   "_model": "claude-opus-4-7",
-  "_extracted_at": "2026-04-18T14:08:27+00:00",
+  "_extracted_at": "2026-08-16T07:18:19+00:00",
   "data": {
     "file_date": null,
     "track": null,
@@ -23,14 +23,17 @@
           "rr": 1.67
         },
         "tire_compound": {
-          "fl": "20",
-          "fr": "20",
-          "rl": "25",
-          "rr": "25"
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
         },
-        "setup_changes": [],
+        "setup_changes": [
+          "Front: 20 2/2",
+          "Rear: 25 1/1"
+        ],
         "incidents": [],
-        "notes": "NS-4A. Front: 20 2/2. Rear: 25 1/1. Cold 2.13 at 11c. Hot target temp 45c, hot target press 2.0. Formula: p1/t1 * t2 = p2."
+        "notes": "Session tag: NS-4A. Cold reference 2.13 bar at 11c. Hot target temp 45c, hot target press 2.0 bar. Gay-Lussac calc (p1/t1 * t2 = p2) used to derive cold set of 1.67 bar."
       }
     ]
   }

@@ -1,10 +1,10 @@
 {
-  "_cache_key": "c0518b5013141f2fbf203aa9d5757a0c806794e4|48e2dd24ce10840e0ffb8c4742f42b2b34734ab2|claude-opus-4-7",
+  "_cache_key": "c0518b5013141f2fbf203aa9d5757a0c806794e4|f3fc257af4ddabcdd30a29822de83132da7652e1|claude-opus-4-7",
   "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/Fuji 2025-04-06.txt",
   "_source_sha1": "c0518b5013141f2fbf203aa9d5757a0c806794e4",
-  "_prompt_sha1": "48e2dd24ce10840e0ffb8c4742f42b2b34734ab2",
+  "_prompt_sha1": "f3fc257af4ddabcdd30a29822de83132da7652e1",
   "_model": "claude-opus-4-7",
-  "_extracted_at": "2026-08-16T04:56:44+00:00",
+  "_extracted_at": "2026-08-16T07:21:02+00:00",
   "data": {
     "file_date": null,
     "track": null,
@@ -13,12 +13,12 @@
       {
         "session_index": 1,
         "start_time_local": null,
-        "weather_text": "Track 18c in sun, 14c in shade",
+        "weather_text": "Track 18c in sun, 14c in shade; air 19c",
         "ambient_temp_c": 19.0,
         "track_condition": "dry",
         "cold_pressure_bar": {
-          "fl": 1.5858,
-          "fr": 1.5858,
+          "fl": 1.586,
+          "fr": 1.586,
           "rl": 1.379,
           "rr": 1.379
         },
@@ -28,9 +28,13 @@
           "rl": "A052",
           "rr": "A052"
         },
-        "setup_changes": [],
+        "setup_changes": [
+          "Front camber 2/2",
+          "Rear camber 1/1",
+          "All checked"
+        ],
         "incidents": [],
-        "notes": "F 2/2, R 1/1, all checked. Target pressure 1.9 bar. When it was 10c out, target temps FL: 54, FR: 51, RL: 49, RR: 48. Cold temps FL: 22c, FR: 23c, RL: 20c, RR: 21c."
+        "notes": "Target pressure 1.9 bar. Target temps (from when 10c out): FL 54, FR 51, RL 49, RR 48. Cold tire temps: FL 22c, FR 23c, RL 20c, RR 21c."
       },
       {
         "session_index": 2,
@@ -39,10 +43,10 @@
         "ambient_temp_c": null,
         "track_condition": "dry",
         "cold_pressure_bar": {
-          "fl": 1.7237,
-          "fr": 1.7237,
-          "rl": null,
-          "rr": null
+          "fl": 1.724,
+          "fr": 1.724,
+          "rl": 1.379,
+          "rr": 1.379
         },
         "tire_compound": {
           "fl": "A052",
@@ -56,7 +60,7 @@
         "incidents": [
           "Crashed"
         ],
-        "notes": "Added a little air to better hit target. FL/FR 25 psi. Good balance, but crashed."
+        "notes": "Good balance, but crashed."
       }
     ]
   }
