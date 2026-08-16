@@ -269,3 +269,28 @@ def test_split_stint_attaches_to_preceding_note_session() -> None:
     pn = _make_parsed("2025-06-15", "sodegaura", notes)
     matches = {m.session_id: m.note_session_index for m in match_notes_to_sessions(sess, [pn])}
     assert matches == {"practice": 1, "quali": 2, "race_a": 3, "race_b": 3}
+
+
+def test_filename_track_leftmost_token_wins() -> None:
+    d, track = infer_date_track_from_filename(Path("/tmp/2025-10-05-Sodegaura Marutai.txt"))
+    assert d == date(2025, 10, 5)
+    assert track == "sodegaura"
+
+
+def test_carless_note_on_multicar_day_needs_time_anchor() -> None:
+    """A note that names no car must not order-align onto a multi-car day
+    — one car's setup notes would be attributed to another's telemetry."""
+    rows = [
+        _sess_row("inferno_1", date(2025, 10, 5), "sodegaura", 10, 0),
+        _sess_row("rx8_1", date(2025, 10, 5), "sodegaura", 10, 30),
+    ]
+    table = _sessions(rows)
+    table = table.append_column("car", pa.array(["Inferno 86", "RX8"]))
+    notes = [NoteSession(session_index=1, track_condition="dry")]  # no time, no car
+    pn = _make_parsed("2025-10-05", "sodegaura", notes)
+    assert match_notes_to_sessions(table, [pn]) == []
+
+    # Same day, but the note names the car: full matching for that car only.
+    pn.data.car = "Inferno 86"
+    matches = match_notes_to_sessions(table, [pn])
+    assert [m.session_id for m in matches] == ["inferno_1"]
