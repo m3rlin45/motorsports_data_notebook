@@ -1,6 +1,6 @@
 {
   "schema_version": 3,
-  "fit_at_utc": "2026-08-16T13:12:30+00:00",
+  "fit_at_utc": "2026-08-16T13:43:46+00:00",
   "model_form": "T_hot - T_eff = K[car,corner,cond] * c_track[track] * g2 * (1 - exp(-t / tau_sec[car,corner,cond]))   where T_eff = (1-w_road)*T_air + w_road*T_road, t = N * lap_time_s, g2 = g2_typ[track,car,cond] * clamp((lap_time_typ_s / target_lap_time_s)^g2_lap_time_exponent) when a target lap time is given, else g2_typ",
   "g2_lap_time_model": {
     "method": "sector_knn_median_curve",
@@ -806,6 +806,42 @@
     }
   ],
   "K_by_car_compound_corner_cond": [
+    {
+      "car": "Inferno 86",
+      "compound": "A050",
+      "corner": "fl",
+      "condition": "dry",
+      "value_kelvin_per_g2": 66.12435277236563,
+      "stderr_kelvin_per_g2": 0.8498679602191533,
+      "n_laps": 99
+    },
+    {
+      "car": "Inferno 86",
+      "compound": "A050",
+      "corner": "fr",
+      "condition": "dry",
+      "value_kelvin_per_g2": 57.40604453220069,
+      "stderr_kelvin_per_g2": 0.7718853616390704,
+      "n_laps": 99
+    },
+    {
+      "car": "Inferno 86",
+      "compound": "A050",
+      "corner": "rl",
+      "condition": "dry",
+      "value_kelvin_per_g2": 64.1915214486994,
+      "stderr_kelvin_per_g2": 0.8545315461349715,
+      "n_laps": 99
+    },
+    {
+      "car": "Inferno 86",
+      "compound": "A050",
+      "corner": "rr",
+      "condition": "dry",
+      "value_kelvin_per_g2": 57.499575045160526,
+      "stderr_kelvin_per_g2": 0.7237151693154246,
+      "n_laps": 99
+    },
     {
       "car": "Inferno 86",
       "compound": "A052",

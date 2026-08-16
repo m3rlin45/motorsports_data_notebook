@@ -253,20 +253,20 @@ sessions:
     front: null
     rear: null
   - session_id: e2aebee861c2b5ec  # 2025-10-05 09:06 sodegaura (1 usable laps) [no TPMS]
-    front: null
-    rear: null
+    front: A050  # [note] "Tires A050 used" (Marutai event day)
+    rear: A050
   - session_id: f6481d29242753e1  # 2025-10-05 09:49 sodegaura (2 usable laps) [no TPMS]
-    front: null
-    rear: null
+    front: A050  # [note] "Tires A050 used" (Marutai event day)
+    rear: A050
   - session_id: 0b9bce111369629a  # 2025-10-05 10:49 sodegaura (1 usable laps) [no TPMS]
-    front: null
-    rear: null
+    front: A050  # [note] "Tires A050 used" (Marutai event day)
+    rear: A050
   - session_id: 02b2a9b8aa5af2c1  # 2025-10-05 12:54 sodegaura (56 usable laps)
-    front: null
-    rear: null
+    front: A050  # [note] "Tires A050 used" (Marutai event day)
+    rear: A050
   - session_id: 8e880455f1829270  # 2025-10-05 15:15 sodegaura (44 usable laps)
-    front: null
-    rear: null
+    front: A050  # [note] "Tires A050 used" (Marutai event day)
+    rear: A050
   - session_id: cc686c307fe888ba  # 2025-10-13 08:49 fuji (0 usable laps) [no TPMS]
     front: RE-71RS  # [note] note: "71RS 30% used"
     rear: RE-71RS
