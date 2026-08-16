@@ -1,13 +1,13 @@
 {
-  "_cache_key": "6a144fb86448460646888160c36f70e9937f28d5|f3fc257af4ddabcdd30a29822de83132da7652e1|claude-opus-4-7",
+  "_cache_key": "6a144fb86448460646888160c36f70e9937f28d5|745ba5f28ec0515f9e628864b4b32a9c656dc393|claude-opus-4-7",
   "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2025-05-02 Sodegaura.txt",
   "_source_sha1": "6a144fb86448460646888160c36f70e9937f28d5",
-  "_prompt_sha1": "f3fc257af4ddabcdd30a29822de83132da7652e1",
+  "_prompt_sha1": "745ba5f28ec0515f9e628864b4b32a9c656dc393",
   "_model": "claude-opus-4-7",
-  "_extracted_at": "2026-08-16T07:12:58+00:00",
+  "_extracted_at": "2026-08-16T13:03:08+00:00",
   "data": {
-    "file_date": "2024-09-21",
-    "track": "Sodegaura",
+    "file_date": null,
+    "track": null,
     "car": null,
     "sessions": [
       {
@@ -29,10 +29,10 @@
           "rr": "SET:black"
         },
         "setup_changes": [
-          "Dampers: Front 15 / Rear 10"
+          "Dampers: Front 15, Rear 10"
         ],
         "incidents": [],
-        "notes": "Front silver wheels worn, rear black wheels worn."
+        "notes": "Front silver tires worn; rear black tires worn."
       },
       {
         "session_index": 2,
@@ -52,9 +52,11 @@
           "rl": "SET:black",
           "rr": "SET:black"
         },
-        "setup_changes": [],
+        "setup_changes": [
+          "Dampers unchanged (Front 15, Rear 10)"
+        ],
         "incidents": [],
-        "notes": "Dampers unchanged. Front silver wheels new-ish, rear black wheels new."
+        "notes": "Front silver new-ish; rear black new."
       },
       {
         "session_index": 3,

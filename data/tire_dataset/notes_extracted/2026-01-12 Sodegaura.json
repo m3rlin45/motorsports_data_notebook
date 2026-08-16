@@ -1,12 +1,12 @@
 {
-  "_cache_key": "27e47a8cce1316fee6504e2b60e5733a220e803c|f3fc257af4ddabcdd30a29822de83132da7652e1|claude-opus-4-7",
+  "_cache_key": "27e47a8cce1316fee6504e2b60e5733a220e803c|745ba5f28ec0515f9e628864b4b32a9c656dc393|claude-opus-4-7",
   "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2026-01-12 Sodegaura.txt",
   "_source_sha1": "27e47a8cce1316fee6504e2b60e5733a220e803c",
-  "_prompt_sha1": "f3fc257af4ddabcdd30a29822de83132da7652e1",
+  "_prompt_sha1": "745ba5f28ec0515f9e628864b4b32a9c656dc393",
   "_model": "claude-opus-4-7",
-  "_extracted_at": "2026-08-16T07:18:51+00:00",
+  "_extracted_at": "2026-08-16T13:07:55+00:00",
   "data": {
-    "file_date": "2024-04-28",
+    "file_date": null,
     "track": "Sodegaura",
     "car": null,
     "sessions": [
@@ -34,9 +34,9 @@
           "Rear camber/toe 1/1"
         ],
         "incidents": [
-          "Overspeed at corner 3, got stuck in gravel"
+          "Overspeed turn 3, got stuck in gravel"
         ],
-        "notes": "Feeling was good, braking is kind of bad though."
+        "notes": "Feeling was good, braking is kind of bad though, overspeed 3 got stuck in gravel."
       },
       {
         "session_index": 2,
@@ -45,10 +45,10 @@
         "ambient_temp_c": null,
         "track_condition": "unknown",
         "cold_pressure_bar": {
-          "fl": null,
-          "fr": null,
-          "rl": null,
-          "rr": null
+          "fl": 1.7,
+          "fr": 1.7,
+          "rl": 1.7,
+          "rr": 1.7
         },
         "tire_compound": {
           "fl": null,
@@ -57,9 +57,7 @@
           "rr": null
         },
         "setup_changes": [],
-        "incidents": [
-          "Could not run"
-        ],
+        "incidents": [],
         "notes": "Couldn't run."
       },
       {
@@ -81,7 +79,7 @@
           "rr": null
         },
         "setup_changes": [
-          "All setup same as session 1"
+          "All setup same"
         ],
         "incidents": [],
         "notes": "Feeling was great until tires went, then it was ok."
@@ -105,11 +103,12 @@
           "rr": null
         },
         "setup_changes": [
-          "Tires dropped 0.1 bar all around",
-          "Rear dampers 20->5, then raised to 22"
+          "Tires drop 0.1 bar all around",
+          "Rear dampers 20 -> 5",
+          "Rear dampers raised to 22"
         ],
         "incidents": [],
-        "notes": "Initially not enough rotation, very stable but lots of understeer, snaps if you try to push it. After upping rear dampers to 22: nice feeling, good rotation, still can lean on the exit of 5-6. Probably this is the right setup direction for Sodegaura."
+        "notes": "Initially with rear dampers at 5: not enough rotation, very stable, but lots of understeer, snaps if you try to push it. Upped rear dampers to 22: nice feeling, good rotation, still can lean on the exit of 5-6. Probably this is the right setup direction for Sodegaura."
       }
     ]
   }

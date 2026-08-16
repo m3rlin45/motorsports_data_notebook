@@ -1,10 +1,10 @@
 {
-  "_cache_key": "1fd96e32d1ac57e55943e334b62b1a4ed369c547|f3fc257af4ddabcdd30a29822de83132da7652e1|claude-opus-4-7",
+  "_cache_key": "fc80d7bd3afe19a83a08d3d123f557724e8cff97|745ba5f28ec0515f9e628864b4b32a9c656dc393|claude-opus-4-7",
   "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2026-01-11 Fuji1.txt",
-  "_source_sha1": "1fd96e32d1ac57e55943e334b62b1a4ed369c547",
-  "_prompt_sha1": "f3fc257af4ddabcdd30a29822de83132da7652e1",
+  "_source_sha1": "fc80d7bd3afe19a83a08d3d123f557724e8cff97",
+  "_prompt_sha1": "745ba5f28ec0515f9e628864b4b32a9c656dc393",
   "_model": "claude-opus-4-7",
-  "_extracted_at": "2026-08-16T07:18:37+00:00",
+  "_extracted_at": "2026-08-16T13:07:40+00:00",
   "data": {
     "file_date": null,
     "track": null,
@@ -23,17 +23,17 @@
           "rr": 1.59
         },
         "tire_compound": {
-          "fl": null,
-          "fr": null,
-          "rl": null,
-          "rr": null
+          "fl": "A052",
+          "fr": "A052",
+          "rl": "A052",
+          "rr": "A052"
         },
         "setup_changes": [
-          "Front dampers 20, camber/toe 2/2",
-          "Rear dampers 20, camber/toe 1/1"
+          "Front damper 20, camber/toe 2/2",
+          "Rear damper 20, camber/toe 1/1"
         ],
         "incidents": [],
-        "notes": "Cold pressure setpoints 1.59 bar all around. Hot pressures/temps measured — FL: 2.07 / 15.0, FR: 2.13 / 13.0, RL: 2.13 / 12.0, RR: 2.16 / 12.0. Car felt great, but I was slow."
+        "notes": "Hot pressures/temps observed — FL: 2.07 bar 15.0, FR: 2.13 bar 13.0, RL: 2.13 bar 12.0, RR: 2.16 bar 12.0. Cold pressure setpoints 1.59 all around. Car felt great, but I was slow."
       }
     ]
   }

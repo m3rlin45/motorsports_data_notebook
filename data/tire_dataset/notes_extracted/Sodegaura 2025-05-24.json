@@ -1,10 +1,10 @@
 {
-  "_cache_key": "16bc902b025eb942cfc1aeb10d930279ed1d97bf|f3fc257af4ddabcdd30a29822de83132da7652e1|claude-opus-4-7",
+  "_cache_key": "16bc902b025eb942cfc1aeb10d930279ed1d97bf|745ba5f28ec0515f9e628864b4b32a9c656dc393|claude-opus-4-7",
   "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/Sodegaura 2025-05-24.txt",
   "_source_sha1": "16bc902b025eb942cfc1aeb10d930279ed1d97bf",
-  "_prompt_sha1": "f3fc257af4ddabcdd30a29822de83132da7652e1",
+  "_prompt_sha1": "745ba5f28ec0515f9e628864b4b32a9c656dc393",
   "_model": "claude-opus-4-7",
-  "_extracted_at": "2026-08-16T07:21:44+00:00",
+  "_extracted_at": "2026-08-16T13:10:36+00:00",
   "data": {
     "file_date": null,
     "track": null,
@@ -30,11 +30,12 @@
         },
         "setup_changes": [
           "Dampers: Front 27, Rear 25",
-          "Cusco ARB",
-          "Lowered all tires to 2.1 hot (front tires were over 2.4 hot)"
+          "Cusco ARB"
         ],
-        "incidents": [],
-        "notes": "Ambient 22.4c 57%. Silver worn on front, Black more worn on back. Track VSC. Lots of oversteer, both on corner entry and exit. Better front end grip, no understeer unless overspeed. Front tires way over pressure (2.4+), lowered all tires to 2.1 hot."
+        "incidents": [
+          "Track VSC"
+        ],
+        "notes": "Silver worn on front, Black more worn on back. Lots of oversteer, both on corner entry and exit. Better front end grip, no understeer unless overspeed. Front tires way over pressure (2.4+). Lowered all tires to 2.1 hot."
       },
       {
         "session_index": 2,
@@ -56,7 +57,7 @@
         },
         "setup_changes": [],
         "incidents": [],
-        "notes": "No changes. Very slidy, tires are dead. Ambient 21c 60%."
+        "notes": "No changes. Very slidy, tires are dead."
       },
       {
         "session_index": 3,
@@ -78,7 +79,7 @@
         },
         "setup_changes": [],
         "incidents": [],
-        "notes": "Same everything. Ambient 20c 65%. Light rain across session (5%). Light understeer, some front push, but lots of tail movement. Car was very stable at 1:21 pace. Car was decent at 1:20 pace. Car was good for 1 lap at 1:19 pace, then got very slidy, both over and understeer."
+        "notes": "Same everything. Light understeer, some front push, but lots of tail movement. Car was very stable at 1:21 pace. Car was decent at 1:20 pace. Car was good for 1 lap at 1:19 pace, then got very slidy, both over and understeer."
       }
     ]
   }

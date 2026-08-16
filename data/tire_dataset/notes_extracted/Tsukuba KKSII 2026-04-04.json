@@ -1,10 +1,10 @@
 {
-  "_cache_key": "c9fba742a7fa779a089c2d395d13dbda0fdd1aaa|f3fc257af4ddabcdd30a29822de83132da7652e1|claude-opus-4-7",
+  "_cache_key": "c9fba742a7fa779a089c2d395d13dbda0fdd1aaa|745ba5f28ec0515f9e628864b4b32a9c656dc393|claude-opus-4-7",
   "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/Tsukuba KKSII 2026-04-04.txt",
   "_source_sha1": "c9fba742a7fa779a089c2d395d13dbda0fdd1aaa",
-  "_prompt_sha1": "f3fc257af4ddabcdd30a29822de83132da7652e1",
+  "_prompt_sha1": "745ba5f28ec0515f9e628864b4b32a9c656dc393",
   "_model": "claude-opus-4-7",
-  "_extracted_at": "2026-08-16T07:22:38+00:00",
+  "_extracted_at": "2026-08-16T13:11:59+00:00",
   "data": {
     "file_date": null,
     "track": null,

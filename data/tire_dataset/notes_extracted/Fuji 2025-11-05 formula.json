@@ -1,14 +1,14 @@
 {
-  "_cache_key": "bea1593b5026f6ce75647fac55a2fee0c0333394|f3fc257af4ddabcdd30a29822de83132da7652e1|claude-opus-4-7",
+  "_cache_key": "bea1593b5026f6ce75647fac55a2fee0c0333394|745ba5f28ec0515f9e628864b4b32a9c656dc393|claude-opus-4-7",
   "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/Fuji 2025-11-05 formula.txt",
   "_source_sha1": "bea1593b5026f6ce75647fac55a2fee0c0333394",
-  "_prompt_sha1": "f3fc257af4ddabcdd30a29822de83132da7652e1",
+  "_prompt_sha1": "745ba5f28ec0515f9e628864b4b32a9c656dc393",
   "_model": "claude-opus-4-7",
-  "_extracted_at": "2026-08-16T07:21:29+00:00",
+  "_extracted_at": "2026-08-16T13:10:13+00:00",
   "data": {
     "file_date": null,
     "track": null,
-    "car": "FS-4A",
+    "car": null,
     "sessions": [
       {
         "session_index": 1,
@@ -30,7 +30,7 @@
         },
         "setup_changes": [],
         "incidents": [],
-        "notes": "課題: 異音チェック、振動チェック、回転数チェック。バランス。ブレーキングポイント。"
+        "notes": "FS-4A. 課題：異音チェック、振動チェック、回転数チェック。バランス。ブレーキングポイント。"
       }
     ]
   }
