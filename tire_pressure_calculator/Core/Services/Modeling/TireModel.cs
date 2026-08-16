@@ -32,8 +32,12 @@ public sealed class TireModel
     public IReadOnlyList<string> AvailableCars => Dto.TauSecByCarCornerCond
         .Select(r => r.Car).Distinct().OrderBy(s => s).ToList();
 
+    // Every track with observed data, not just those with a fitted c_track —
+    // thin tracks predict via the c_track prior until enough laps accumulate.
     public IReadOnlyList<string> AvailableTracks => Dto.CTrackByTrack
-        .Select(r => r.TrackCanonical).OrderBy(s => s).ToList();
+        .Select(r => r.TrackCanonical)
+        .Concat(Dto.G2TypByTrackCarCond.Select(r => r.TrackCanonical))
+        .Distinct().OrderBy(s => s).ToList();
 
     public IReadOnlyList<string> AvailableConditions => Dto.Conditions.Values;
 

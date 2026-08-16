@@ -48,8 +48,8 @@ function defaultSettings() {
       LapWithinStint: 5,
       AmbientTempC: 20.0,
       TrackTempC: null,
-      CloudCoverPct: null,
-      TargetLapTimeS: null,
+      CloudCoverPct: 50,
+      TargetLapTimeS: null, // snapped to the selection's typical lap once the model loads
       Compound: null,
     },
     UiLanguage: 'auto',
@@ -273,6 +273,38 @@ function applyStrings() {
     settings.Prediction.Condition);
 }
 
+// Lap times read as minutes:seconds — "1:05.2" — the way everyone thinks
+// about them. Sub-minute laps display as plain seconds ("58.4"). Input
+// accepts either form.
+function formatLapTime(s) {
+  if (!Number.isFinite(s) || s <= 0) return '';
+  if (s < 60) return s.toFixed(1);
+  const m = Math.floor(s / 60);
+  const sec = s - m * 60;
+  return `${m}:${sec.toFixed(1).padStart(4, '0')}`;
+}
+
+function parseLapTime(raw) {
+  const t = raw.trim();
+  if (!t) return null;
+  if (t.includes(':')) {
+    const [m, s] = t.split(':');
+    const v = parseInt(m, 10) * 60 + parseFloat(s.replace(',', '.'));
+    return Number.isFinite(v) ? v : null;
+  }
+  const v = parseFloat(t.replace(',', '.'));
+  return Number.isFinite(v) ? v : null;
+}
+
+// Target lap time always carries a value: the typical lap for the current
+// (track, car, condition). Snaps on selection change; edit it per session.
+function snapTargetLap() {
+  const p = settings.Prediction;
+  if (!model || !p.Track || !p.Car) return;
+  const typ = model.lookupLapTime(p.Track, p.Car, p.Condition).valueSeconds;
+  if (Number.isFinite(typ) && typ > 0) p.TargetLapTimeS = Math.round(typ * 10) / 10;
+}
+
 // Compound choices depend on the selected car. The choice is FORCED —
 // every run has exactly one tire on all four corners, so there is no
 // pooled "default" option; an unset selection snaps to the first compound.
@@ -327,7 +359,9 @@ function render() {
   els.lapInput.value = String(p.LapWithinStint);
   els.ambientInput.value = p.AmbientTempC.toFixed(1);
   els.cloudInput.value = p.CloudCoverPct === null ? '' : String(p.CloudCoverPct);
-  els.targetLapInput.value = p.TargetLapTimeS === null ? '' : p.TargetLapTimeS.toFixed(1);
+  if (document.activeElement !== els.targetLapInput) {
+    els.targetLapInput.value = formatLapTime(p.TargetLapTimeS);
+  }
   els.compoundSelect.value = p.Compound ?? '';
 
   // Corner cards.
@@ -380,8 +414,8 @@ function wireEvents() {
       LapWithinStint: 5,
       AmbientTempC: 20.0,
       TrackTempC: null,
-      CloudCoverPct: null,
-      TargetLapTimeS: null,
+      CloudCoverPct: 50,
+      TargetLapTimeS: null, // snapped to the selection's typical lap once the model loads
       Compound: null,
     };
     saveSettings();
@@ -397,6 +431,7 @@ function wireEvents() {
 
   els.trackSelect.addEventListener('change', () => {
     settings.Prediction.Track = els.trackSelect.value || null;
+    snapTargetLap();
     saveSettings();
     render();
   });
@@ -406,6 +441,7 @@ function wireEvents() {
     // Compounds are per-car: snap to the new car's first compound.
     settings.Prediction.Compound = null;
     fillCompoundSelects();
+    snapTargetLap();
     saveSettings();
     render();
   });
@@ -418,6 +454,7 @@ function wireEvents() {
 
   els.conditionSelect.addEventListener('change', () => {
     settings.Prediction.Condition = els.conditionSelect.value;
+    snapTargetLap();
     saveSettings();
     render();
   });
@@ -438,23 +475,22 @@ function wireEvents() {
 
   els.cloudInput.addEventListener('change', () => {
     const raw = els.cloudInput.value.trim();
-    if (raw === '') {
-      settings.Prediction.CloudCoverPct = null;
+    const v = parseFloat(raw);
+    if (raw === '' || !Number.isFinite(v)) {
+      settings.Prediction.CloudCoverPct = 50; // neutral sky, never blank
     } else {
-      const v = parseFloat(raw);
-      if (Number.isFinite(v)) settings.Prediction.CloudCoverPct = Math.min(100, Math.max(0, v));
+      settings.Prediction.CloudCoverPct = Math.min(100, Math.max(0, v));
     }
     saveSettings();
     render();
   });
 
   els.targetLapInput.addEventListener('change', () => {
-    const raw = els.targetLapInput.value.trim();
-    if (raw === '') {
-      settings.Prediction.TargetLapTimeS = null;
+    const v = parseLapTime(els.targetLapInput.value);
+    if (v === null) {
+      snapTargetLap(); // blank/invalid falls back to the selection's typical lap
     } else {
-      const v = parseFloat(raw);
-      if (Number.isFinite(v)) settings.Prediction.TargetLapTimeS = Math.min(900, Math.max(20, v));
+      settings.Prediction.TargetLapTimeS = Math.min(900, Math.max(20, v));
     }
     saveSettings();
     render();
@@ -497,6 +533,8 @@ async function init() {
     fillSelect(els.carSelect,
       model.availableCars.map((v) => ({ value: v, label: v })), p.Car);
     fillCompoundSelects();
+    if (p.TargetLapTimeS === null) snapTargetLap();
+    if (p.CloudCoverPct === null) p.CloudCoverPct = 50;
   } else {
     settings.Mode = MODE_MANUAL;
   }
