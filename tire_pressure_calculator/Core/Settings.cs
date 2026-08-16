@@ -10,8 +10,8 @@ public class CornerSettings
     public double TargetHotPressure { get; set; } = 1.80;
 }
 
-// Platform-pluggable persistence: Desktop/Android use the on-disk default,
-// the Browser head swaps in a localStorage-backed implementation.
+// Platform-pluggable persistence: Desktop/Android use the on-disk default.
+// (The standalone web app at ../web mirrors this JSON shape in localStorage.)
 public interface ISettingsStorage
 {
     string? Read();

@@ -1,0 +1,307 @@
+// Pure model logic for the tire pressure calculator web app.
+//
+// JS port of the C# Core modeling layer, which is itself a port of the
+// Python source of truth:
+//   - EnergyBalance:    src/motorsports_data_notebook/tire_model/energy_balance.py
+//   - TireModel/lookups + predictCorner: src/motorsports_data_notebook/tire_model/predict.py
+//
+// Any change here MUST be mirrored in the Python module and the C# Core
+// (Core/Services/Modeling/*), and is pinned against the shared fixture at
+// Tests/Fixtures/python_predictions.json by web/tests/model.test.mjs.
+
+export const P_ATM_BAR = 1.0;
+export const T_ZERO_C_TO_K = 273.15;
+
+export const SUPPORTED_SCHEMA_VERSION = 2;
+
+// C# Math.Round uses banker's rounding (half to even); mirror it so the
+// web app displays the exact same values as the desktop/Android heads.
+export function roundTo(value, digits) {
+  const factor = 10 ** digits;
+  const x = value * factor;
+  const floor = Math.floor(x);
+  if (Math.abs(x - floor - 0.5) < Number.EPSILON) {
+    return (floor % 2 === 0 ? floor : floor + 1) / factor;
+  }
+  return Math.round(x) / factor;
+}
+
+export function tEffectiveC(tAirC, tRoadC, wRoad) {
+  if (wRoad < 0 || wRoad > 1) throw new RangeError(`w_road must be in [0, 1]; got ${wRoad}`);
+  return (1 - wRoad) * tAirC + wRoad * tRoadC;
+}
+
+export function warmupCurveC(tSeconds, tEffC, kKelvinPerG2, cTrack, g2Typ, tauSec) {
+  if (tauSec <= 0) throw new RangeError(`tau_sec must be > 0; got ${tauSec}`);
+  if (tSeconds < 0) throw new RangeError(`t_seconds must be >= 0; got ${tSeconds}`);
+  const warmupFrac = 1 - Math.exp(-tSeconds / tauSec);
+  const deltaTInf = kKelvinPerG2 * cTrack * g2Typ;
+  return tEffC + deltaTInf * warmupFrac;
+}
+
+// Invert Gay-Lussac: cold gauge pressure from target hot gauge pressure +
+// hot/cold temperatures (gauge <-> absolute via +pAtm).
+export function gayLussacColdPressureBar(targetHotPressureBar, tHotC, tColdC, pAtmBar = P_ATM_BAR) {
+  const tColdK = tColdC + T_ZERO_C_TO_K;
+  const tHotK = tHotC + T_ZERO_C_TO_K;
+  if (tHotK <= 0 || tColdK <= 0) {
+    throw new RangeError(`Absolute temperatures must be positive (got T_hot_K=${tHotK}, T_cold_K=${tColdK})`);
+  }
+  const pHotAbs = targetHotPressureBar + pAtmBar;
+  const pColdAbs = pHotAbs * (tColdK / tHotK);
+  return pColdAbs - pAtmBar;
+}
+
+// Track-surface temperature proxy from air temp + cloud cover.
+// 0 % cloud cover => T_air + deltaSunMaxC; 100 % => T_air.
+export function tRoadProxyC(tAirC, cloudCoverPct, sunFactor = 1.0, deltaSunMaxC = 10.0) {
+  if (cloudCoverPct === null || cloudCoverPct === undefined) return tAirC;
+  const clamped = Math.max(0, Math.min(100, cloudCoverPct));
+  return tAirC + deltaSunMaxC * (1 - clamped / 100) * sunFactor;
+}
+
+// ---- Manual-mode helpers (port of TireCornerViewModel math) ----
+
+// Percent adjustment applied in Kelvin space, rounded to 0.1 degC.
+export function adjustedHotTempC(targetHotTempC, adjustPercent) {
+  const baseK = targetHotTempC + T_ZERO_C_TO_K;
+  const adjustedK = baseK * (1 + adjustPercent / 100);
+  return roundTo(adjustedK - T_ZERO_C_TO_K, 1);
+}
+
+// Displayed "Set Cold" value: Gay-Lussac inversion rounded to 3 decimals,
+// with the same non-physical-temperature guard as the corner view model.
+export function cornerColdPressureBar(targetHotPressureBar, effectiveHotTempC, currentTempC) {
+  if (effectiveHotTempC + T_ZERO_C_TO_K <= 0) return 0;
+  if (currentTempC + T_ZERO_C_TO_K <= 0) return 0;
+  return roundTo(gayLussacColdPressureBar(targetHotPressureBar, effectiveHotTempC, currentTempC), 3);
+}
+
+// ---- Condition fallback chain (mirrors predict.py:_CONDITION_FALLBACK) ----
+
+const CONDITION_CHAIN = {
+  dry: ['dry'],
+  damp: ['damp', 'dry'],
+  wet: ['wet', 'damp', 'dry'],
+};
+
+export function conditionChain(condition) {
+  return CONDITION_CHAIN[condition] ?? [condition, 'dry'];
+}
+
+const average = (rows, pick) => rows.reduce((s, r) => s + pick(r), 0) / rows.length;
+const sum = (rows, pick) => rows.reduce((s, r) => s + pick(r), 0);
+
+// In-memory wrapper around the parsed tire_model.json (schema v2). Adds the
+// lookup helpers + fallback chains that mirror the Python predictor.
+export class TireModel {
+  constructor(dto) {
+    if (dto.schema_version !== SUPPORTED_SCHEMA_VERSION) {
+      throw new Error(
+        `Unsupported tire_model.json schema_version ${dto.schema_version}; ` +
+        `expected ${SUPPORTED_SCHEMA_VERSION}. Rebuild with \`just tire-build-warmup-table\`.`);
+    }
+    this.dto = dto;
+  }
+
+  get availableCars() {
+    return [...new Set(this.dto.tau_sec_by_car_corner_cond.map((r) => r.car))].sort();
+  }
+
+  get availableTracks() {
+    return this.dto.c_track_by_track.map((r) => r.track_canonical).sort();
+  }
+
+  get availableConditions() { return this.dto.conditions.values; }
+  get defaultCondition() { return this.dto.conditions.default; }
+  get wRoad() { return this.dto.energy_balance.w_road; }
+  get sunFactorDefault() { return this.dto.energy_balance.t_road_proxy.sun_factor_default; }
+  get deltaSunMaxC() { return this.dto.energy_balance.t_road_proxy.delta_sun_max_c; }
+  get pAtmBar() { return this.dto.gay_lussac.p_atm_bar; }
+
+  lookupTau(car, corner, condition) {
+    const rows = this.dto.tau_sec_by_car_corner_cond;
+    for (const cond of conditionChain(condition)) {
+      const hit = rows.find((r) => r.car === car && r.corner === corner && r.condition === cond);
+      if (hit) {
+        return {
+          valueSeconds: hit.value_seconds, stderrSeconds: hit.stderr_seconds,
+          sourceBucket: `(${car}, ${corner}, ${cond})`, fromPrior: hit.from_prior,
+        };
+      }
+    }
+    const sameCC = rows.filter((r) => r.car === car && r.corner === corner);
+    if (sameCC.length > 0) {
+      return {
+        valueSeconds: average(sameCC, (r) => r.value_seconds), stderrSeconds: 0,
+        sourceBucket: `(${car}, ${corner})`, fromPrior: false,
+      };
+    }
+    const sameCar = rows.filter((r) => r.car === car);
+    if (sameCar.length > 0) {
+      return {
+        valueSeconds: average(sameCar, (r) => r.value_seconds), stderrSeconds: 0,
+        sourceBucket: `(${car})`, fromPrior: false,
+      };
+    }
+    return {
+      valueSeconds: this.dto.priors_when_no_fit.tau_sec_seconds, stderrSeconds: 0,
+      sourceBucket: '(prior)', fromPrior: true,
+    };
+  }
+
+  lookupK(car, corner, condition) {
+    const rows = this.dto.K_buckets;
+    for (const cond of conditionChain(condition)) {
+      const hit = rows.find(
+        (r) => r.key.car === car && r.key.corner === corner && r.key.condition === cond);
+      if (hit) {
+        return {
+          valueKelvinPerG2: hit.value_kelvin_per_g2, stderrKelvinPerG2: hit.stderr_kelvin_per_g2,
+          nSamples: hit.n_samples,
+          sourceBucket: `(${car}, ${corner}, ${cond})`, fromPrior: hit.from_prior,
+        };
+      }
+    }
+    const sameCC = rows.filter((r) => r.key.car === car && r.key.corner === corner);
+    if (sameCC.length > 0) {
+      return {
+        valueKelvinPerG2: average(sameCC, (r) => r.value_kelvin_per_g2), stderrKelvinPerG2: 0,
+        nSamples: sum(sameCC, (r) => r.n_samples),
+        sourceBucket: `(${car}, ${corner})`, fromPrior: false,
+      };
+    }
+    const sameCar = rows.filter((r) => r.key.car === car);
+    if (sameCar.length > 0) {
+      return {
+        valueKelvinPerG2: average(sameCar, (r) => r.value_kelvin_per_g2), stderrKelvinPerG2: 0,
+        nSamples: sum(sameCar, (r) => r.n_samples),
+        sourceBucket: `(${car})`, fromPrior: false,
+      };
+    }
+    return {
+      valueKelvinPerG2: this.dto.priors_when_no_fit.K_kelvin_per_g2, stderrKelvinPerG2: 0,
+      nSamples: 0, sourceBucket: '(prior)', fromPrior: true,
+    };
+  }
+
+  lookupCTrack(track) {
+    const hit = this.dto.c_track_by_track.find((r) => r.track_canonical === track);
+    if (hit) return { value: hit.value, stderr: hit.stderr, fromPrior: false };
+    return { value: this.dto.priors_when_no_fit.c_track, stderr: 0, fromPrior: true };
+  }
+
+  lookupG2(track, car, condition) {
+    const rows = this.dto.g2_typ_by_track_car_cond;
+    for (const cond of conditionChain(condition)) {
+      const hit = rows.find(
+        (r) => r.track_canonical === track && r.car === car && r.condition === cond);
+      if (hit) {
+        const source = cond === condition ? 'exact' : `fallback(${cond})`;
+        return { value: hit.g2_typ, nLapsUsed: hit.n_laps_used, source };
+      }
+    }
+    const sameTC = rows.filter((r) => r.track_canonical === track && r.car === car);
+    if (sameTC.length > 0) {
+      return {
+        value: average(sameTC, (r) => r.g2_typ),
+        nLapsUsed: sum(sameTC, (r) => r.n_laps_used), source: 'track_car_pooled',
+      };
+    }
+    const sameT = rows.filter((r) => r.track_canonical === track);
+    if (sameT.length > 0) {
+      return {
+        value: average(sameT, (r) => r.g2_typ),
+        nLapsUsed: sum(sameT, (r) => r.n_laps_used), source: 'track_pooled',
+      };
+    }
+    if (rows.length > 0) {
+      return { value: average(rows, (r) => r.g2_typ), nLapsUsed: 0, source: 'global' };
+    }
+    return { value: 0.7, nLapsUsed: 0, source: 'global' };
+  }
+
+  lookupLapTime(track, car, condition) {
+    const rows = this.dto.lap_time_typ_by_track_car_cond;
+    for (const cond of conditionChain(condition)) {
+      const hit = rows.find(
+        (r) => r.track_canonical === track && r.car === car && r.condition === cond);
+      if (hit) {
+        const source = cond === condition ? 'exact' : `fallback(${cond})`;
+        return { valueSeconds: hit.lap_time_typ_s, nLapsUsed: hit.n_laps_used, source };
+      }
+    }
+    const sameTC = rows.filter((r) => r.track_canonical === track && r.car === car);
+    if (sameTC.length > 0) {
+      return {
+        valueSeconds: average(sameTC, (r) => r.lap_time_typ_s),
+        nLapsUsed: sum(sameTC, (r) => r.n_laps_used), source: 'track_car_pooled',
+      };
+    }
+    const sameT = rows.filter((r) => r.track_canonical === track);
+    if (sameT.length > 0) {
+      return {
+        valueSeconds: average(sameT, (r) => r.lap_time_typ_s),
+        nLapsUsed: sum(sameT, (r) => r.n_laps_used), source: 'track_pooled',
+      };
+    }
+    return { valueSeconds: 90.0, nLapsUsed: 0, source: 'global' };
+  }
+}
+
+// Per-corner cold-pressure prediction (port of CircuitPredictor.Predict /
+// predict.py:predict_cold_pressure). Returns the recommended cold pressure
+// plus the intermediate quantities.
+export function predictCorner(model, {
+  track, car, condition, lapWithinStint, ambientTempC,
+  trackTempC = null, cloudCoverPct = null, corner,
+  targetHotPressureBar, coldTireTempC = null,
+}) {
+  const cond = condition.toLowerCase();
+  if (cond !== 'dry' && cond !== 'damp' && cond !== 'wet') {
+    throw new RangeError(`track_condition must be dry/damp/wet; got '${condition}'`);
+  }
+
+  const k = model.lookupK(car, corner, cond);
+  const tau = model.lookupTau(car, corner, cond);
+  const c = model.lookupCTrack(track);
+  const g2 = model.lookupG2(track, car, cond);
+  const lap = model.lookupLapTime(track, car, cond);
+
+  // T_road: user-supplied -> sun-cover proxy -> fall back to T_air.
+  const tRoadC = trackTempC ?? tRoadProxyC(
+    ambientTempC, cloudCoverPct, model.sunFactorDefault, model.deltaSunMaxC);
+  const tEffC = tEffectiveC(ambientTempC, tRoadC, model.wRoad);
+
+  const tColdC = coldTireTempC ?? ambientTempC;
+
+  const tAtLapNs = lapWithinStint * lap.valueSeconds;
+  const warmupFrac = tau.valueSeconds > 0 ? 1 - Math.exp(-tAtLapNs / tau.valueSeconds) : 0;
+  const deltaTInf = k.valueKelvinPerG2 * c.value * g2.value;
+  const tHotC = warmupCurveC(tAtLapNs, tEffC, k.valueKelvinPerG2, c.value, g2.value, tau.valueSeconds);
+
+  const coldPressureBar = gayLussacColdPressureBar(
+    targetHotPressureBar, tHotC, tColdC, model.pAtmBar);
+
+  return {
+    corner,
+    coldPressureBar,
+    predictedHotTempC: tHotC,
+    targetHotPressureBar,
+    kKelvinPerG2: k.valueKelvinPerG2,
+    tauSec: tau.valueSeconds,
+    cTrack: c.value,
+    g2Typ: g2.value,
+    lapTimeTypS: lap.valueSeconds,
+    tAtLapNs,
+    warmupFrac,
+    deltaTInfKelvin: deltaTInf,
+    tEffC,
+    tAirC: ambientTempC,
+    tRoadC,
+    tColdC,
+    kSourceBucket: k.sourceBucket,
+    kFromPrior: k.fromPrior,
+    kNSamples: k.nSamples,
+  };
+}
