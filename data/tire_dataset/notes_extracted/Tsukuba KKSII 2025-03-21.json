@@ -1,10 +1,10 @@
 {
-  "_cache_key": "f3f6bbbe922147bf1db7d117ed1d88a4f74f887c|48e2dd24ce10840e0ffb8c4742f42b2b34734ab2|claude-opus-4-7",
+  "_cache_key": "f3f6bbbe922147bf1db7d117ed1d88a4f74f887c|f3fc257af4ddabcdd30a29822de83132da7652e1|claude-opus-4-7",
   "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/Tsukuba KKSII 2025-03-21.txt",
   "_source_sha1": "f3f6bbbe922147bf1db7d117ed1d88a4f74f887c",
-  "_prompt_sha1": "48e2dd24ce10840e0ffb8c4742f42b2b34734ab2",
+  "_prompt_sha1": "f3fc257af4ddabcdd30a29822de83132da7652e1",
   "_model": "claude-opus-4-7",
-  "_extracted_at": "2026-04-18T14:11:05+00:00",
+  "_extracted_at": "2026-08-16T07:22:21+00:00",
   "data": {
     "file_date": null,
     "track": null,
@@ -30,7 +30,7 @@
         },
         "setup_changes": [],
         "incidents": [],
-        "notes": "Target temps: FL 45c, FR 40c, RL 42c, RR 42c. Target press 1.6 bar. Never quite got to temp/press."
+        "notes": "Target temps: FL 45, FR 40, RL 42, RR 42. Target pressure 1.6. Never quite got to temp/press."
       },
       {
         "session_index": 2,
@@ -52,7 +52,7 @@
         },
         "setup_changes": [],
         "incidents": [],
-        "notes": "Cold temps: FL 29c, FR 24c, RL 28c, RR 24c. Target temps & set press -> actuals: FL 43c 1.48 -> 42c 1.66; FR 38c 1.48 -> 36c 1.6; RL 40c 1.5 -> 39c 1.63; RR 41c 1.45 -> 40c 1.63."
+        "notes": "Cold tire temps: FL 29c, FR 24c, RL 28c, RR 24c. Target temps & set press -> actuals: FL 43c 1.48 -> 42c 1.66; FR 38c 1.48 -> 36c 1.6; RL 40c 1.5 -> 39c 1.63; RR 41c 1.45 -> 40c 1.63."
       },
       {
         "session_index": 3,
@@ -74,7 +74,7 @@
         },
         "setup_changes": [],
         "incidents": [],
-        "notes": "Cold temps: FL 25c, FR 28c, RL 28c, RR 29c. Target temps & set press: FL 43c 1.45; FR 37c 1.52; RL 40c 1.50; RR 41c 1.50."
+        "notes": "Cold tire temps: FL 25c, FR 28c, RL 28c, RR 29c. Target temps & set press: FL 43c 1.45; FR 37c 1.52; RL 40c 1.50; RR 41c 1.50."
       },
       {
         "session_index": 4,
@@ -96,7 +96,7 @@
         },
         "setup_changes": [],
         "incidents": [],
-        "notes": "Race. Cold temps: FL 20c, FR 14c, RL 20c, RR 11c. Target temps and press: FL 37c 1.45; FR 31c 1.45; RL 34c 1.48; RR 36c 1.38."
+        "notes": "Race. Cold tire temps: FL 20c, FR 14c, RL 20c, RR 11c. Target temps and press: FL 37c 1.45; FR 31c 1.45; RL 34c 1.48; RR 36c 1.38."
       },
       {
         "session_index": 5,
@@ -118,7 +118,7 @@
         },
         "setup_changes": [],
         "incidents": [],
-        "notes": "Cold temps: FL 24c, FR 25c, RL 24c, RR 24c. Target temps and press: FL 43c 1.44; FR 37c 1.50; RL 40c 1.46; RR 41c 1.46."
+        "notes": "Cold tire temps: FL 24c, FR 25c, RL 24c, RR 24c. Target temps and press: FL 43c 1.44; FR 37c 1.50; RL 40c 1.46; RR 41c 1.46."
       }
     ]
   }

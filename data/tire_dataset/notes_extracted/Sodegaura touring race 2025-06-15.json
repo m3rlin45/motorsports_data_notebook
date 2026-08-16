@@ -1,10 +1,10 @@
 {
-  "_cache_key": "1bf850e7d73d06333c2900cb1b4d42b0a38b8b5d|48e2dd24ce10840e0ffb8c4742f42b2b34734ab2|claude-opus-4-7",
+  "_cache_key": "1bf850e7d73d06333c2900cb1b4d42b0a38b8b5d|f3fc257af4ddabcdd30a29822de83132da7652e1|claude-opus-4-7",
   "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/Sodegaura touring race 2025-06-15.txt",
   "_source_sha1": "1bf850e7d73d06333c2900cb1b4d42b0a38b8b5d",
-  "_prompt_sha1": "48e2dd24ce10840e0ffb8c4742f42b2b34734ab2",
+  "_prompt_sha1": "f3fc257af4ddabcdd30a29822de83132da7652e1",
   "_model": "claude-opus-4-7",
-  "_extracted_at": "2026-04-18T14:10:47+00:00",
+  "_extracted_at": "2026-08-16T07:22:06+00:00",
   "data": {
     "file_date": null,
     "track": null,
@@ -33,7 +33,7 @@
           "Rear damper 10"
         ],
         "incidents": [],
-        "notes": "Practice session. Wet but drying. Ambient 25c 98% humidity."
+        "notes": "Practice. Ambient 25c 98% humidity."
       },
       {
         "session_index": 2,
@@ -48,10 +48,10 @@
           "rr": 2.1
         },
         "tire_compound": {
-          "fl": "71RS",
-          "fr": "71RS",
-          "rl": "71RS",
-          "rr": "71RS"
+          "fl": "RE-71RS",
+          "fr": "RE-71RS",
+          "rl": "RE-71RS",
+          "rr": "RE-71RS"
         },
         "setup_changes": [
           "Front damper 15",
@@ -73,10 +73,10 @@
           "rr": 1.9
         },
         "tire_compound": {
-          "fl": null,
-          "fr": null,
-          "rl": null,
-          "rr": null
+          "fl": "RE-71RS",
+          "fr": "RE-71RS",
+          "rl": "RE-71RS",
+          "rr": "RE-71RS"
         },
         "setup_changes": [
           "Rear damper 15",

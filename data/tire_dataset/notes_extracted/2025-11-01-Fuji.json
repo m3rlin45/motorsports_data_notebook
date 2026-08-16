@@ -1,10 +1,10 @@
 {
-  "_cache_key": "e8a3209d65bc14a0ba5b6d3f5860e3d0da808773|48e2dd24ce10840e0ffb8c4742f42b2b34734ab2|claude-opus-4-7",
+  "_cache_key": "e8a3209d65bc14a0ba5b6d3f5860e3d0da808773|f3fc257af4ddabcdd30a29822de83132da7652e1|claude-opus-4-7",
   "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2025-11-01-Fuji.txt",
   "_source_sha1": "e8a3209d65bc14a0ba5b6d3f5860e3d0da808773",
-  "_prompt_sha1": "48e2dd24ce10840e0ffb8c4742f42b2b34734ab2",
+  "_prompt_sha1": "f3fc257af4ddabcdd30a29822de83132da7652e1",
   "_model": "claude-opus-4-7",
-  "_extracted_at": "2026-04-18T14:06:50+00:00",
+  "_extracted_at": "2026-08-16T07:15:45+00:00",
   "data": {
     "file_date": null,
     "track": null,
@@ -13,7 +13,7 @@
       {
         "session_index": 1,
         "start_time_local": "10:00",
-        "weather_text": "Road surface drying",
+        "weather_text": null,
         "ambient_temp_c": null,
         "track_condition": "damp",
         "cold_pressure_bar": {
@@ -28,9 +28,13 @@
           "rl": "A052",
           "rr": "A052"
         },
-        "setup_changes": [],
+        "setup_changes": [
+          "Front camber 2/2, Rear camber 3/3",
+          "Front damper 15, Rear damper 20",
+          "Tire pressures 1.75 bar all around"
+        ],
         "incidents": [],
-        "notes": "NS-4. Tires A052 used (40%?). Front 2/2, Rear 3/3. Front 15, Rear 20."
+        "notes": "NS-4 session. A052 tires, used (~40% wear). Road surface drying."
       },
       {
         "session_index": 2,
@@ -45,16 +49,16 @@
           "rr": 1.9
         },
         "tire_compound": {
-          "fl": null,
-          "fr": null,
-          "rl": null,
-          "rr": null
+          "fl": "A052",
+          "fr": "A052",
+          "rl": "A052",
+          "rr": "A052"
         },
         "setup_changes": [
-          "Dropped all tires to 1.9 bar (left dropped by 0.2, right dropped by 0.1)"
+          "Dropped all tire pressures to 1.9 bar (left side bled 0.2, right side bled 0.1)"
         ],
         "incidents": [],
-        "notes": "S-4. Good balance, wish I had a bit more stability through coca cola."
+        "notes": "S-4 session. Good balance, wish I had a bit more stability through Coca Cola."
       }
     ]
   }
