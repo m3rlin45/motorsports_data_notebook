@@ -61,7 +61,9 @@ MIN_PINNED_LAPS_PER_BUCKET = 5.0
 EM_MAX_ITER = 30
 EM_TOL = 1e-4
 
-_AXLE_CORNERS = {"front": ("fl", "fr"), "rear": ("rl", "rr")}
+# Every run has ONE tire on all four corners (team rule): the latent unit
+# is the whole session, and all four corners' laps vote on one posterior.
+_AXLE_CORNERS = {"all": ("fl", "fr", "rl", "rr")}
 _CORNER_AXLE = {c: a for a, cs in _AXLE_CORNERS.items() for c in cs}
 
 
@@ -179,13 +181,10 @@ def fit_compounds_em(
         return {}, [], {}
     stats["axle"] = stats["corner"].map(_CORNER_AXLE)
 
-    label_cols = {"front": "compound_front", "rear": "compound_rear"}
     pinned: dict[tuple[str, str], str] = {}
     for r in labels.itertuples():
-        for axle, col in label_cols.items():
-            comp = getattr(r, col)
-            if isinstance(comp, str) and comp:
-                pinned[(str(r.session_id), axle)] = comp
+        if isinstance(r.compound, str) and r.compound:
+            pinned[(str(r.session_id), "all")] = r.compound
 
     out_k: dict[tuple[str, str, str, str], tuple[float, float, float]] = {}
     assignments: list[AxleAssignment] = []
@@ -220,10 +219,10 @@ def fit_compounds_em(
         resp = np.full((n_units, n_comp), 1.0 / n_comp)
         pin_mask = np.zeros(n_units, dtype=bool)
         for u, i in unit_idx.items():
-            comp = pinned.get(u)
-            if comp is not None and comp in comp_idx:
+            pcomp = pinned.get(u)
+            if pcomp is not None and pcomp in comp_idx:
                 resp[i] = 0.0
-                resp[i, comp_idx[comp]] = 1.0
+                resp[i, comp_idx[pcomp]] = 1.0
                 pin_mask[i] = True
 
         s_unit = car_stats.copy()
@@ -435,14 +434,7 @@ def apply_condition_seeds(
             continue
         compound = mapping.get(next(iter(condset)))
         if compound:
-            rows.append(
-                {
-                    "session_id": sid,
-                    "compound_front": compound,
-                    "compound_rear": compound,
-                    "source": "seed",
-                }
-            )
+            rows.append({"session_id": sid, "compound": compound, "source": "seed"})
     if not rows:
         return labels
     return pd.concat([labels, pd.DataFrame(rows)], ignore_index=True)

@@ -48,12 +48,7 @@ def _session_laps(sid: str, k_true: float, n_laps: int = 12, noise: float = 1.0)
 def _labels(entries: dict[str, str]) -> pd.DataFrame:
     return pd.DataFrame(
         [
-            {
-                "session_id": sid,
-                "compound_front": comp,
-                "compound_rear": comp,
-                "source": "sidecar",
-            }
+            {"session_id": sid, "compound": comp, "source": "sidecar"}
             for sid, comp in entries.items()
         ]
     )
@@ -79,13 +74,13 @@ class TestFitCompoundsEM:
         k, assignments, multipliers = fit_compounds_em(laps, labels, TAU, C_TRACK)
 
         by_unit = {(a.session_id, a.axle): a for a in assignments}
-        assert by_unit[("mystery_soft", "front")].compound == "SOFT"
-        assert by_unit[("mystery_soft", "front")].responsibility > 0.95
-        assert by_unit[("mystery_hard", "rear")].compound == "HARD"
-        assert by_unit[("mystery_hard", "rear")].responsibility > 0.95
+        assert by_unit[("mystery_soft", "all")].compound == "SOFT"
+        assert by_unit[("mystery_soft", "all")].responsibility > 0.95
+        assert by_unit[("mystery_hard", "all")].compound == "HARD"
+        assert by_unit[("mystery_hard", "all")].responsibility > 0.95
         # Selection is forced: the mid-K session gets an assignment but is
         # flagged as fitting no known compound well.
-        assert by_unit[("ambiguous", "front")].poor_fit
+        assert by_unit[("ambiguous", "all")].poor_fit
         # The decomposition keeps clusters honest despite the forced
         # assignment of a mid-K session.
         assert k[("ToyCar", "SOFT", "fl", "dry")][0] == pytest.approx(30.0, abs=3.0)
@@ -107,7 +102,7 @@ class TestFitCompoundsEM:
         )
         _, assignments, _m = fit_compounds_em(laps, labels, TAU, C_TRACK)
         by_unit = {(a.session_id, a.axle): a for a in assignments}
-        a = by_unit[("mystery_hard", "front")]
+        a = by_unit[("mystery_hard", "all")]
         assert a.pinned and a.compound == "SOFT" and a.responsibility == 1.0
 
     def test_single_compound_car_fits_without_latents(self):
@@ -121,7 +116,7 @@ class TestFitCompoundsEM:
         # Forced selection: the unlabeled session joins the only compound,
         # whose multiplier is anchored at 1.
         by_unit = {(a.session_id, a.axle): a for a in assignments}
-        assert by_unit[("un", "front")].compound == "ONLY"
+        assert by_unit[("un", "all")].compound == "ONLY"
         assert multipliers["ToyCar"]["ONLY"] == pytest.approx(1.0, abs=0.01)
 
     def test_no_labels_no_output(self):
@@ -139,9 +134,9 @@ class TestApplyConditionSeeds:
                 "condition": ["dry", "dry", "wet", "dry", "wet"],
             }
         )
-        labels = pd.DataFrame(columns=["session_id", "compound_front", "compound_rear", "source"])
+        labels = pd.DataFrame(columns=["session_id", "compound", "source"])
         out = apply_condition_seeds(labels, laps, {"KK-SII": {"dry": "DRY", "wet": "WET"}})
-        got = dict(zip(out.session_id, out.compound_front))
+        got = dict(zip(out.session_id, out.compound))
         assert got == {"dry1": "DRY", "wet1": "WET"}  # mixed stays unlabeled
 
     def test_existing_labels_win(self):

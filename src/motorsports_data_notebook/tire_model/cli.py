@@ -105,20 +105,9 @@ def main(argv: list[str] | None = None) -> int:
         "--compound",
         type=str,
         default=None,
-        help="Tire compound on all four corners (e.g. A052, RE-71RS). Uses the "
-        "compound-specific K when the artifact has one fitted.",
-    )
-    p_predict.add_argument(
-        "--compound-front",
-        type=str,
-        default=None,
-        help="Front-axle compound (overrides --compound for FL/FR).",
-    )
-    p_predict.add_argument(
-        "--compound-rear",
-        type=str,
-        default=None,
-        help="Rear-axle compound (overrides --compound for RL/RR).",
+        help="The tire on the car (e.g. A052, RE-71RS) — one compound on all "
+        "four corners. Uses the compound-specific K when the artifact has "
+        "one fitted.",
     )
     group = p_predict.add_argument_group("Target hot pressures (bar gauge)")
     group.add_argument(
@@ -340,8 +329,7 @@ def _cmd_predict(args: argparse.Namespace) -> int:
         g2_typ_override=args.g2_typ,
         lap_time_typ_override_s=args.lap_time_s,
         target_lap_time_s=args.target_lap_time,
-        compound_front=args.compound_front or args.compound,
-        compound_rear=args.compound_rear or args.compound,
+        compound=args.compound,
         dataset_root=args.dataset_root,
     )
     _print_prediction(result, args)

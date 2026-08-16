@@ -3,14 +3,15 @@
 Two sources, in priority order:
 
 1. ``data/tire_dataset/tire_compounds.yaml`` — the human-curated sidecar
-   (per-session, per-axle). Authoritative wherever it has a value.
+   (one compound per session — every run has one tire on all four
+   corners). Authoritative wherever it has a value.
 2. ``notes_matches.parquet`` — compounds extracted from run notes by the
    LLM stage, normalized here. Wheel-set labels (``SET:<name>``) resolve
    through the sidecar's optional ``wheel_sets`` mapping (e.g. the 86's
    black wheels carried the RE-71RS set through 2025).
 
-Sessions with no label from either source stay unlabeled and train/predict
-on the pooled per-car parameters exactly as before.
+Sessions with no label are assigned jointly with the pressure regression
+(EM, see compound_infer) — every run carries exactly one compound.
 """
 
 from __future__ import annotations
@@ -82,9 +83,12 @@ def load_condition_seeds(dataset_root: Path) -> dict[str, dict[str, str]]:
 
 def load_compound_labels(dataset_root: Path) -> pd.DataFrame:
     """Return per-session compound labels: columns
-    ``session_id, compound_front, compound_rear, source``.
+    ``session_id, compound, source``.
 
-    Sidecar rows win over notes-derived rows; either axle may be null.
+    All four corners always run the same compound (team rule), so a label
+    is one value per session. Sidecar rows win over notes-derived rows.
+    Legacy per-axle sidecar entries (``front``/``rear``) are accepted and
+    collapse to the front value.
     """
     import yaml  # local import to keep top-of-module deps minimal
 
@@ -100,15 +104,15 @@ def load_compound_labels(dataset_root: Path) -> pd.DataFrame:
                 wheel_sets[str(name).lower()] = canon
         rows = []
         for entry in doc.get("sessions") or []:
-            front = normalize_compound(entry.get("front"))
-            rear = normalize_compound(entry.get("rear"))
-            if front is None and rear is None:
+            compound = normalize_compound(
+                entry.get("compound") or entry.get("front") or entry.get("rear")
+            )
+            if compound is None:
                 continue
             rows.append(
                 {
                     "session_id": entry["session_id"],
-                    "compound_front": front,
-                    "compound_rear": rear,
+                    "compound": compound,
                     "source": "sidecar",
                 }
             )
@@ -135,9 +139,10 @@ def load_compound_labels(dataset_root: Path) -> pd.DataFrame:
                 return wheel_sets.get(canon[4:])
             return canon
 
-        m["compound_front"] = m["tire_compound_fl"].map(_resolve)
-        m["compound_rear"] = m["tire_compound_rl"].map(_resolve)
-        m = m[(m["compound_front"].notna()) | (m["compound_rear"].notna())]
+        m["compound"] = m["tire_compound_fl"].map(_resolve)
+        rear = m["tire_compound_rl"].map(_resolve)
+        m["compound"] = m["compound"].fillna(rear)
+        m = m[m["compound"].notna()]
         if len(m) > 0:
             # One note-session may match several telemetry sessions; keep the
             # highest-confidence row per session.
@@ -146,10 +151,10 @@ def load_compound_labels(dataset_root: Path) -> pd.DataFrame:
                 .drop_duplicates("session_id")
                 .assign(source="notes")
             )
-            frames.append(m[["session_id", "compound_front", "compound_rear", "source"]])
+            frames.append(m[["session_id", "compound", "source"]])
 
     if not frames:
-        return pd.DataFrame(columns=["session_id", "compound_front", "compound_rear", "source"])
+        return pd.DataFrame(columns=["session_id", "compound", "source"])
 
     out = pd.concat(frames, ignore_index=True)
     # Sidecar first (it was appended first) — drop notes rows it covers.
