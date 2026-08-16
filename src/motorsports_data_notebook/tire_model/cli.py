@@ -101,6 +101,25 @@ def main(argv: list[str] | None = None) -> int:
         help="Target pace for the stint in seconds. Scales tire energy via the "
         "sector-fit g² vs lap-time curve and sets time-on-track (t = N × target).",
     )
+    p_predict.add_argument(
+        "--compound",
+        type=str,
+        default=None,
+        help="Tire compound on all four corners (e.g. A052, RE-71RS). Uses the "
+        "compound-specific K when the artifact has one fitted.",
+    )
+    p_predict.add_argument(
+        "--compound-front",
+        type=str,
+        default=None,
+        help="Front-axle compound (overrides --compound for FL/FR).",
+    )
+    p_predict.add_argument(
+        "--compound-rear",
+        type=str,
+        default=None,
+        help="Rear-axle compound (overrides --compound for RL/RR).",
+    )
     group = p_predict.add_argument_group("Target hot pressures (bar gauge)")
     group.add_argument(
         "--hot-all", type=float, default=None, help="Shorthand: same target for all 4 corners."
@@ -224,6 +243,8 @@ def _cmd_predict(args: argparse.Namespace) -> int:
         g2_typ_override=args.g2_typ,
         lap_time_typ_override_s=args.lap_time_s,
         target_lap_time_s=args.target_lap_time,
+        compound_front=args.compound_front or args.compound,
+        compound_rear=args.compound_rear or args.compound,
         dataset_root=args.dataset_root,
     )
     _print_prediction(result, args)
