@@ -191,6 +191,31 @@ def _lookup_g2(
     return 0.7, 0, "global"
 
 
+def _lookup_compound_k(
+    model: dict[str, Any], car: str, compound: str, corner: str, condition: str
+) -> tuple[float, float, int, tuple[str, ...]] | None:
+    """Compound-specific K via the condition chain, or None if unavailable.
+
+    Returns (value, stderr, n_laps, source_bucket_tuple).
+    """
+    table = model.get("K_by_car_compound_corner_cond", [])
+    for cond in _condition_chain(condition):
+        for r in table:
+            if (
+                r["car"] == car
+                and r["compound"] == compound
+                and r["corner"] == corner
+                and r["condition"] == cond
+            ):
+                return (
+                    float(r["value_kelvin_per_g2"]),
+                    float(r.get("stderr_kelvin_per_g2", 0.0)),
+                    int(r.get("n_laps", 0)),
+                    (car, compound, corner, cond),
+                )
+    return None
+
+
 def _interp_clamped(x: float, xs: list[float], ys: list[float]) -> float:
     """Piecewise-linear interpolation, clamped to the endpoints.
 
@@ -292,6 +317,8 @@ def predict_cold_pressure(
     g2_typ_override: float | None = None,
     lap_time_typ_override_s: float | None = None,
     target_lap_time_s: float | None = None,
+    compound_front: str | None = None,
+    compound_rear: str | None = None,
     dataset_root: Path | None = None,
     _model: dict[str, Any] | None = None,
 ) -> dict[str, Prediction]:
@@ -309,6 +336,11 @@ def predict_cold_pressure(
         (clamped per the artifact's ``g2_lap_time_model.multiplier_clamp``)
         — running faster than the historical typical pace puts more energy
         into the tires, and vice versa. Omitted: v2 behavior.
+    compound_front, compound_rear
+        Optional tire compound per axle (canonical names, e.g. "A052",
+        "RE-71RS"). When the artifact carries a fitted compound-specific K
+        for that (car, compound, corner, condition), it replaces the pooled
+        K for the matching corners; otherwise the pooled K is used.
     cold_tire_temp_c
         Optional temperature the tire is at right *now* when you'll measure
         or set cold pressure. Defaults to ``ambient_temp_c`` when omitted.
@@ -377,6 +409,12 @@ def predict_cold_pressure(
             raise KeyError(f"target_hot_pressure_bar missing corner {corner!r}")
         target_hot = float(target_hot_pressure_bar[corner])
         K, K_stderr, K_n, K_from_prior, K_src = _lookup_k(model, car, corner, cond)
+        axle_compound = compound_front if corner in ("fl", "fr") else compound_rear
+        if axle_compound is not None:
+            hit = _lookup_compound_k(model, car, axle_compound, corner, cond)
+            if hit is not None:
+                K, K_stderr, K_n, K_src = hit[0], hit[1], hit[2], hit[3]
+                K_from_prior = False
         tau_sec, tau_stderr, _tau_src = _lookup_tau(model, car, corner, cond)
 
         warmup_frac = 1.0 - math.exp(-t_at_lap_n_s / tau_sec) if tau_sec > 0 else 0.0

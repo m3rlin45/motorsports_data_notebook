@@ -217,6 +217,35 @@ currently *hurts* — that car's heat does not track measured g²
 proportionally (even the oracle underperforms a constant), so leave the
 target blank there until the per-car g² sensitivity is modeled.
 
+### 2.11 Tire compound (per-axle K overrides)
+
+The Inferno 86 alternates between tire sets (A052 and RE-71RS through
+2025-2026, sometimes different compounds per axle in the same session),
+and the two heat very differently: session-median implied K separates by
+~45% on the rears (A052 ≈ 39-43, RE-71RS ≈ 59-61 K/G² dry) with
+within-compound spread of ±2-4 vs ±10 for the pooled mix. The pooled K
+splits the difference and mis-predicts both — this was the dominant
+source of the car's dry-rear MAE.
+
+Labels come from ``data/tire_dataset/tire_compounds.yaml`` (human-curated
+per-session, per-axle; authoritative) with the notes-extraction compounds
+as fallback; wheel-set names from the notes ("Black wheels") resolve
+through the sidecar's ``wheel_sets`` mapping. Labeled sessions get a
+per-(car, compound, corner, condition) K fitted by closed-form weighted
+least squares with the pooled τ and c_track held fixed
+(``ΔT = K · g²·c_track·warmup_frac``), which stays stable on sparse
+buckets; ``MIN_LAPS_FOR_COMPOUND_K = 10``. The artifact carries these in
+``K_by_car_compound_corner_cond`` (additive to schema v3 — consumers
+without compound support ignore the table).
+
+Prediction: ``predict_cold_pressure(compound_front=..., compound_rear=...)``
+(CLI ``--compound`` / ``--compound-front`` / ``--compound-rear``) swaps in
+the compound K per axle when a fitted bucket exists (condition chain
+applies); unknown compounds and unlabeled cars keep the pooled K. Held-out
+CV on the labeled Inferno sessions (same folds, pooled vs compound K):
+FL 6.80→4.95, FR 5.39→4.28, RL 5.99→4.49, RR 4.99→4.51 °C MAE, with the
+per-corner bias collapsing (RL +3.50→0.00).
+
 ### 2.9 Track condition (rain)
 
 v0.3 adds a `condition` dimension to K, τ_sec, ⟨g²⟩, and lap_time_typ. The
@@ -525,6 +554,11 @@ just tire-predict --track tsukuba_2000 --car KK-SII --lap 5 --ambient 15 \
 # g² vs lap-time curve and sets time-on-track t = N × target)
 just tire-predict --track tsukuba_2000 --car KK-SII --lap 5 --ambient 15 \
                   --hot-all 1.7 --target-lap-time 60
+
+# Predict with the tire compound (per-axle K override; --compound-front /
+# --compound-rear for split setups)
+just tire-predict --track sodegaura --car "Inferno 86" --lap 5 --ambient 22 \
+                  --hot-all 1.9 --compound A052
 
 # Held-out validation (train without N sessions per bucket, report per-corner T_hot residuals)
 just tire-predict-holdout

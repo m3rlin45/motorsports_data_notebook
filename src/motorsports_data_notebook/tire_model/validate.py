@@ -201,6 +201,22 @@ def _evaluate_fold(root: Path, holdout_ids: list[str]) -> pd.DataFrame:
         (d["key"]["car"], d["key"]["corner"], d["key"]["condition"]): d["value_kelvin_per_g2"]
         for d in model["K_buckets"]
     }
+    k_compound_lookup = {
+        (d["car"], d["compound"], d["corner"], d["condition"]): d["value_kelvin_per_g2"]
+        for d in model.get("K_by_car_compound_corner_cond", [])
+    }
+    # Held-out sessions' compound labels (metadata, not telemetry — using
+    # them mirrors a driver entering the compound in the calculator).
+    from .compounds import load_compound_labels
+
+    labels = load_compound_labels(root)
+    label_by_session = {
+        r.session_id: (
+            r.compound_front if isinstance(r.compound_front, str) else None,
+            r.compound_rear if isinstance(r.compound_rear, str) else None,
+        )
+        for r in labels.itertuples()
+    }
     tau_lookup = {
         (d["car"], d["corner"], d["condition"]): d["value_seconds"]
         for d in model["tau_sec_by_car_corner_cond"]
@@ -263,8 +279,16 @@ def _evaluate_fold(root: Path, holdout_ids: list[str]) -> pd.DataFrame:
         if g2 is None:
             continue
         c_track = c_track_lookup.get(track, 1.0)
+        comp_front, comp_rear = label_by_session.get(lap["session_id"], (None, None))
         for c in CORNERS:
             K = k_lookup.get((car, c, cond)) or k_lookup.get((car, c, "dry"))
+            axle_compound = comp_front if c in ("fl", "fr") else comp_rear
+            if axle_compound is not None:
+                K = (
+                    k_compound_lookup.get((car, axle_compound, c, cond))
+                    or k_compound_lookup.get((car, axle_compound, c, "dry"))
+                    or K
+                )
             tau = tau_lookup.get((car, c, cond)) or tau_lookup.get((car, c, "dry"))
             if K is None or tau is None:
                 continue

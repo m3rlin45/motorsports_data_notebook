@@ -82,6 +82,13 @@ G2_LAP_TIME_EXPONENT_FALLBACK = 3.0  # used when even the pooled sector fit is e
 # time can't extrapolate the asymptote into nonsense.
 G2_SCALE_MULTIPLIER_CLAMP = (0.4, 2.5)
 
+# ---- Compound-aware K (Inferno 86 runs A052 and RE-71RS interchangeably) ----
+# Labeled sessions (tire_compounds.yaml sidecar + notes extraction) get a
+# per-(car, compound, corner, condition) K fitted with the pooled τ and
+# c_track held fixed — closed-form weighted least squares, so sparse
+# compound buckets stay stable. Unlabeled sessions keep the pooled K.
+MIN_LAPS_FOR_COMPOUND_K = 10
+
 # Damp/wet τ should physically be ≤ the dry τ (faster cooling in rain). When a
 # rain bucket fits a τ_sec much larger than the same (car, corner)'s dry τ,
 # the fit is almost certainly picking up warmup-interrupted short stints
@@ -302,6 +309,24 @@ def build_warmup_table(
     # Same physical-prior clip on K (rain ⇒ less heat ⇒ K ≤ dry K).
     k_by_car_corner_cond = _clip_wet_k_to_dry_ratio(k_by_car_corner_cond)
 
+    # Compound-aware K for labeled sessions (sidecar + notes labels).
+    from .compounds import load_compound_labels
+
+    compound_labels = load_compound_labels(root)
+    if exclude_session_ids:
+        compound_labels = compound_labels[
+            ~compound_labels["session_id"].isin(exclude_session_ids)
+        ].reset_index(drop=True)
+    k_by_compound = _fit_compound_k(
+        laps_for_fit, compound_labels, tau_by_car_corner_cond, c_track_by_track
+    )
+    if k_by_compound:
+        logger.info(
+            "Fitted %d compound-specific K buckets from %d labeled sessions",
+            len(k_by_compound),
+            compound_labels["session_id"].nunique(),
+        )
+
     model = _assemble_model(
         tau_by_car_corner_cond=tau_by_car_corner_cond,
         k_by_car_corner_cond=k_by_car_corner_cond,
@@ -312,6 +337,7 @@ def build_warmup_table(
         blacklist_applied=blacklist_applied,
         g2_curves=g2_curves,
         g2_exponent_default=g2_exponent_default,
+        k_by_compound=k_by_compound,
     )
 
     if write_artifacts:
@@ -639,6 +665,65 @@ def _build_g2_typ_per_corner(
     return out
 
 
+def _fit_compound_k(
+    laps_for_fit: pd.DataFrame,
+    labels: pd.DataFrame,
+    tau_by_car_corner_cond: dict[tuple[str, str, str], "FitParam"],
+    c_track_by_track: dict[str, "FitParam"],
+) -> dict[tuple[str, str, str, str], "FitParam"]:
+    """Per-(car, compound, corner, condition) K from labeled sessions.
+
+    The pooled τ and c_track are held fixed, which reduces the fit to
+    closed-form weighted least squares through the origin:
+    ``ΔT_i = K · x_i`` with ``x_i = g²_i · c_track · (1 − exp(−t_i/τ))``.
+    That keeps sparse compound buckets stable where a joint curve fit
+    would wander.
+    """
+    if labels.empty:
+        return {}
+    laps = laps_for_fit.merge(labels, on="session_id", how="inner")
+    if laps.empty:
+        return {}
+    laps = laps.copy()
+    laps["g2_lap"] = laps["heat_proxy"] / laps["on_track_s"]
+    laps = laps[laps["g2_lap"].notna() & (laps["g2_lap"] > 0) & (laps["t_cum_s"] > 0)]
+
+    out: dict[tuple[str, str, str, str], FitParam] = {}
+    axis_of = {
+        "fl": "compound_front",
+        "fr": "compound_front",
+        "rl": "compound_rear",
+        "rr": "compound_rear",
+    }
+    for corner in CORNERS:
+        comp_col = axis_of[corner]
+        delta_col = f"delta_t_{corner}"
+        sub_all = laps[laps[comp_col].notna() & laps[delta_col].notna()]
+        for (car, compound, cond), grp in sub_all.groupby(["car", comp_col, "condition"]):
+            if cond == "unknown" or len(grp) < MIN_LAPS_FOR_COMPOUND_K:
+                continue
+            tau_fp = tau_by_car_corner_cond.get(
+                (str(car), corner, str(cond))
+            ) or tau_by_car_corner_cond.get((str(car), corner, "dry"))
+            if tau_fp is None or tau_fp.value <= 0:
+                continue
+            c_track = grp["track_canonical"].map(
+                lambda t: c_track_by_track.get(str(t), FitParam(PRIOR_C_TRACK, 0.0, 0, True)).value
+            )
+            frac = 1.0 - np.exp(-grp["t_cum_s"].to_numpy() / tau_fp.value)
+            x = grp["g2_lap"].to_numpy() * c_track.to_numpy() * frac
+            y = grp[delta_col].to_numpy(dtype=float)
+            sxx = float(np.sum(x * x))
+            if sxx <= 0:
+                continue
+            k = float(np.sum(x * y) / sxx)
+            resid = y - k * x
+            n = len(y)
+            stderr = float(np.sqrt(np.sum(resid * resid) / max(n - 1, 1) / sxx))
+            out[(str(car), str(compound), corner, str(cond))] = FitParam(k, stderr, n)
+    return out
+
+
 def _laps_for_fit(
     laps: pd.DataFrame,
     g2_lookup: dict[tuple[str, str, str], tuple[float, int]],
@@ -896,6 +981,7 @@ def _assemble_model(
     blacklist_applied: list[dict] | None = None,
     g2_curves: dict[tuple[str, str, str], dict] | None = None,
     g2_exponent_default: float = G2_LAP_TIME_EXPONENT_FALLBACK,
+    k_by_compound: dict[tuple[str, str, str, str], "FitParam"] | None = None,
 ) -> dict[str, Any]:
     """Build the in-memory model dict that matches the JSON artifact schema.
 
@@ -906,6 +992,7 @@ def _assemble_model(
     lap_time_typ lookups by (track, car, condition).
     """
     g2_curves = g2_curves or {}
+    k_by_compound = k_by_compound or {}
 
     def _g2_entry(track: str, car: str, cond: str, value: float, n: int) -> dict[str, Any]:
         entry: dict[str, Any] = {
@@ -1025,6 +1112,20 @@ def _assemble_model(
         "g2_typ_by_track_car_cond": [
             _g2_entry(track, car, cond, value, n)
             for (track, car, cond), (value, n) in sorted(g2_lookup.items())
+        ],
+        # Compound-specific K overrides (schema v3 additive; consumers that
+        # don't know about compounds ignore this table and use K_buckets).
+        "K_by_car_compound_corner_cond": [
+            {
+                "car": car,
+                "compound": compound,
+                "corner": corner,
+                "condition": cond,
+                "value_kelvin_per_g2": fp.value,
+                "stderr_kelvin_per_g2": fp.stderr,
+                "n_laps": fp.n_samples,
+            }
+            for (car, compound, corner, cond), fp in sorted(k_by_compound.items())
         ],
         "lap_time_typ_by_track_car_cond": [
             {
