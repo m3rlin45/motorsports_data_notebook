@@ -14,6 +14,15 @@
 # arrived 2025-06-09 ("A052 Sticker"). Review [inferred] rows
 # before trusting them.
 
+# Wheel-set -> compound mapping: resolves "SET:<name>" labels coming from
+# the notes extraction (e.g. "Black wheels"). Valid for the 2025 sets; if a
+# set is re-shod with a different tire, date-scope the sidecar entries
+# instead of relying on this map. "silver-blue" (first seen 2026-02-07) is
+# deliberately unmapped until its tire is known.
+wheel_sets:
+  black: RE-71RS
+  silver: A052
+
 sessions:
   - session_id: 9eaa8cd142548a9d  # 2025-03-08 09:09 sodegaura (0 usable laps) [no TPMS]
     front: null

@@ -650,3 +650,90 @@ def test_nonpositive_target_lap_time_raises() -> None:
             target_lap_time_s=0.0,
             _model=model,
         )
+
+
+# ---------- Compound-aware K ----------
+
+
+def _model_with_compound_k() -> dict:
+    model = _model_with_pace_curve()
+    model["K_by_car_compound_corner_cond"] = [
+        {
+            "car": "ToyCar",
+            "compound": "A052",
+            "corner": c,
+            "condition": "dry",
+            "value_kelvin_per_g2": 40.0,
+            "stderr_kelvin_per_g2": 1.0,
+            "n_laps": 50,
+        }
+        for c in CORNERS
+    ]
+    return model
+
+
+def test_compound_k_overrides_pooled_k() -> None:
+    model = _model_with_compound_k()
+    kwargs = dict(
+        track="track_a",
+        car="ToyCar",
+        lap_within_stint=5,
+        target_hot_pressure_bar={c: 1.8 for c in CORNERS},
+        ambient_temp_c=20.0,
+        _model=model,
+    )
+    pooled = predict_cold_pressure(**kwargs)
+    comp = predict_cold_pressure(compound_front="A052", compound_rear="A052", **kwargs)
+    for c in CORNERS:
+        assert comp[c].K_kelvin_per_g2 == pytest.approx(40.0)
+        assert comp[c].K_source_bucket == ("ToyCar", "A052", c, "dry")
+        assert comp[c].K_kelvin_per_g2 != pooled[c].K_kelvin_per_g2
+
+
+def test_compound_per_axle_only_affects_that_axle() -> None:
+    model = _model_with_compound_k()
+    kwargs = dict(
+        track="track_a",
+        car="ToyCar",
+        lap_within_stint=5,
+        target_hot_pressure_bar={c: 1.8 for c in CORNERS},
+        ambient_temp_c=20.0,
+        _model=model,
+    )
+    pooled = predict_cold_pressure(**kwargs)
+    rear_only = predict_cold_pressure(compound_rear="A052", **kwargs)
+    assert rear_only["fl"].K_kelvin_per_g2 == pooled["fl"].K_kelvin_per_g2
+    assert rear_only["rl"].K_kelvin_per_g2 == pytest.approx(40.0)
+
+
+def test_unknown_compound_falls_back_to_pooled_k() -> None:
+    model = _model_with_compound_k()
+    kwargs = dict(
+        track="track_a",
+        car="ToyCar",
+        lap_within_stint=5,
+        target_hot_pressure_bar={c: 1.8 for c in CORNERS},
+        ambient_temp_c=20.0,
+        _model=model,
+    )
+    pooled = predict_cold_pressure(**kwargs)
+    unknown = predict_cold_pressure(compound_front="RE-71RS", compound_rear="RE-71RS", **kwargs)
+    for c in CORNERS:
+        assert unknown[c].K_kelvin_per_g2 == pooled[c].K_kelvin_per_g2
+        assert unknown[c].K_source_bucket == pooled[c].K_source_bucket
+
+
+def test_compound_k_condition_chain_falls_back_to_dry() -> None:
+    model = _model_with_compound_k()  # only dry compound entries exist
+    p = predict_cold_pressure(
+        track="track_a",
+        car="ToyCar",
+        lap_within_stint=5,
+        target_hot_pressure_bar={c: 1.8 for c in CORNERS},
+        ambient_temp_c=20.0,
+        track_condition="damp",
+        compound_front="A052",
+        compound_rear="A052",
+        _model=model,
+    )
+    assert p["fl"].K_source_bucket == ("ToyCar", "A052", "fl", "dry")
