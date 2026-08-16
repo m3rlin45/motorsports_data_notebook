@@ -169,3 +169,32 @@ def test_greedy_time_matching_with_multiple_sessions() -> None:
     by_sid = {m.session_id: m for m in matches}
     assert by_sid["morning"].note_session_index == 1
     assert by_sid["afternoon"].note_session_index == 2
+
+
+def test_filename_date_outranks_hallucinated_body_date() -> None:
+    """The LLM has been observed inventing file_date for undated note
+    bodies, which voided every match for the file. A date in the filename
+    is authoritative."""
+    sess = _sessions(
+        [
+            {
+                "session_id": "s1",
+                "date": date(2026, 1, 12),
+                "track_canonical": "sodegaura",
+                "session_start_utc": datetime(2026, 1, 12, 4, 0, tzinfo=timezone.utc),
+            }
+        ]
+    )
+    ns = NoteSession(session_index=1, track_condition="dry")
+    data = NotesData(file_date="2024-04-28", track="Sodegaura", sessions=[ns])
+    pn = ParsedNotes(
+        source_file=Path("/tmp/2026-01-12 Sodegaura.txt"),
+        source_sha1="abc",
+        prompt_sha1="def",
+        model="claude-opus-4-7",
+        extracted_at="2026-04-04T00:00:00Z",
+        data=data,
+    )
+    matches = match_notes_to_sessions(sess, [pn])
+    assert len(matches) == 1
+    assert matches[0].session_id == "s1"

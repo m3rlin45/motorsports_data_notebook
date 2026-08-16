@@ -68,4 +68,7 @@ Sessions:
 
 Rules:
 - Use null when a value is unknown. Never guess.
+- file_date must come from the file's TEXT. If no date is written in the
+  body, emit null — do NOT infer one from context, format, or similarity
+  to other days. (Filenames are handled outside this extraction.)
 - Output MUST be parseable JSON. No leading text, no trailing commentary.
