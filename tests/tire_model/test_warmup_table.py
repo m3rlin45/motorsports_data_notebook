@@ -225,3 +225,62 @@ def test_w_road_default_is_zero_point_two() -> None:
 def test_anchor_track_is_tsukuba_2000() -> None:
     """The c_track identifiability anchor must remain stable across runs."""
     assert wt.ANCHOR_TRACK == "tsukuba_2000"
+
+
+def test_build_corner_defaults_medians_and_steady_state_filter() -> None:
+    """Prefills use only steady-state laps and take per-corner medians."""
+    rows = []
+    for lap_within_stint, temp, press in [
+        (1, 40.0, 1.5),  # warmup lap — must be excluded
+        (4, 70.0, 1.9),
+        (5, 71.0, 1.95),
+        (6, 72.0, 2.0),
+        (7, 73.0, 2.05),
+        (8, 74.0, 2.1),
+    ]:
+        row: dict = {
+            "car": "KK-SII",
+            "condition": "dry",
+            "lap_within_stint": lap_within_stint,
+        }
+        for c in ("fl", "fr", "rl", "rr"):
+            row[f"tpms_temp_{c}_end"] = temp
+            row[f"tpms_press_{c}_mean"] = press
+        rows.append(row)
+    # An unknown-condition steady lap must be excluded too.
+    unknown = dict(rows[-1], condition="unknown")
+    laps = pd.DataFrame(rows + [unknown])
+
+    out = wt._build_corner_defaults(laps)
+
+    assert set(out) == {("KK-SII", c, "dry") for c in ("fl", "fr", "rl", "rr")}
+    temp, press, n = out[("KK-SII", "fl", "dry")]
+    assert temp == pytest.approx(72.0)
+    assert press == pytest.approx(2.0)
+    assert n == 5
+
+
+def test_build_corner_defaults_drops_thin_buckets() -> None:
+    """Fewer than min_laps steady laps -> no prefill row for that bucket."""
+    row: dict = {"car": "Inferno 86", "condition": "wet", "lap_within_stint": 5}
+    for c in ("fl", "fr", "rl", "rr"):
+        row[f"tpms_temp_{c}_end"] = 23.0
+        row[f"tpms_press_{c}_mean"] = 2.5
+    laps = pd.DataFrame([row, dict(row)])  # only 2 steady wet laps
+
+    assert wt._build_corner_defaults(laps) == {}
+
+
+def test_build_corner_defaults_skips_nan_masked_corners() -> None:
+    """A blacklist-masked (NaN) corner drops out; the others still fit."""
+    row: dict = {"car": "Inferno 86", "condition": "dry", "lap_within_stint": 5}
+    for c in ("fl", "fr", "rl", "rr"):
+        row[f"tpms_temp_{c}_end"] = 80.0
+        row[f"tpms_press_{c}_mean"] = 1.8
+    row["tpms_temp_fr_end"] = float("nan")
+    laps = pd.DataFrame([row])
+
+    out = wt._build_corner_defaults(laps, min_laps=1)
+
+    assert ("Inferno 86", "fr", "dry") not in out
+    assert out[("Inferno 86", "rl", "dry")][0] == pytest.approx(80.0)

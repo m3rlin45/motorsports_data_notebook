@@ -275,6 +275,26 @@ export class TireModel {
     return null;
   }
 
+  // Steady-state hot temp / hot pressure medians for UI prefills, via the
+  // condition chain; null when the artifact has no entry (caller keeps its
+  // static defaults).
+  lookupCornerDefaults(car, corner, condition) {
+    const rows = this.dto.corner_defaults_by_car_corner_cond ?? [];
+    for (const cond of conditionChain(condition)) {
+      const hit = rows.find(
+        (r) => r.car === car && r.corner === corner && r.condition === cond);
+      if (hit) {
+        return {
+          hotTempC: hit.hot_temp_c,
+          hotPressureBar: hit.hot_pressure_bar,
+          nLapsUsed: hit.n_laps_used ?? 0,
+          source: cond === condition ? 'exact' : `fallback(${cond})`,
+        };
+      }
+    }
+    return null;
+  }
+
   // ---- Target-lap-time pace scaling (schema v3) ----
 
   lookupG2PaceCurve(track, car, condition) {
