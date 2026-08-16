@@ -277,13 +277,24 @@ class MergedLogFile:
     The wrapper is duck-type compatible with LogFile — it exposes the same
     attributes (metadata, channels, laps, file_name) and the critical
     filter_by_lap() method that the analysis pipeline relies on.
+
+    ``offsets_ms`` places each constituent file on the first file's clock:
+    entry *i* is added to file *i*'s lap ``start_time``/``end_time`` so the
+    merged lap table has one monotonic timeline instead of every file
+    restarting at zero. Without it (the default), each file keeps its own
+    zero-based clock — later files' laps then overlap the first file's on
+    the merged timeline, which breaks anything downstream that assumes
+    time-sorted laps (stint detection, warm-up time-in-stint).
     """
 
-    def __init__(self, logs: list) -> None:
+    def __init__(self, logs: list, *, offsets_ms: list[int] | None = None) -> None:
         if len(logs) < 2:
             raise ValueError("MergedLogFile requires at least 2 LogFile objects")
+        if offsets_ms is not None and len(offsets_ms) != len(logs):
+            raise ValueError(f"offsets_ms has {len(offsets_ms)} entries for {len(logs)} logs")
 
         self._logs = logs
+        self._offsets_ms = offsets_ms or [0] * len(logs)
 
         # Build lap mapping: new_num -> (log_index, original_num)
         self._lap_map: dict[int, tuple[int, int]] = {}
@@ -344,6 +355,13 @@ class MergedLogFile:
                 continue
 
             kept = laps.take(keep_indices)
+            offset = self._offsets_ms[log_idx]
+            if offset:
+                for col_name in ("start_time", "end_time"):
+                    col_idx = kept.schema.get_field_index(col_name)
+                    col = kept.column(col_name)
+                    shifted = pc.add(col, pa.scalar(offset).cast(col.type))
+                    kept = kept.set_column(col_idx, col_name, shifted)
             new_nums = pa.array(
                 list(range(next_num - len(keep_indices), next_num)),
                 type=kept.column("num").type,
