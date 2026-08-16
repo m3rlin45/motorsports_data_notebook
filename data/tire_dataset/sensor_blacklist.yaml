@@ -12,16 +12,12 @@
 #       reason: "<short human-readable explanation>"
 #
 # History: the original 8 entries (documented in docs/tire_model.md §2.8)
-# referenced pre-merge session IDs that no longer exist after the AIM-split
-# session merge (tire-etl, 2026-06). Re-audit of the merged dataset
-# (2026-08-16) found the stuck-channel data from 7 of them is now non-finite
-# in the merged sessions (zero finite usable laps on those corners), so it is
-# excluded from training automatically. The one channel whose stuck values
-# survived the merge is listed below under its current session ID.
+# referenced session IDs from before the AIM-split session merge and had
+# been silently masking nothing. After the wall-clock-aware re-extraction
+# (extractor 0.8.0, 2026-08-16) every one of those stuck channels is
+# non-finite in its session — a channel that is flat from the first sample
+# gets fully masked by the session-level stale-prefix logic — so no manual
+# entries are currently required. Audit candidates that remain are genuine
+# slow-warmup or pre-warmed short stints, reviewed and left unmasked.
 
-entries:
-  # KK-SII RR sensor failure cluster, Fuji 2026-02-25/26 (see docs §2.8).
-  # Sole surviving finite stuck channel after the AIM-split session merge.
-  - session_id: d5db9e681a1ca2b9
-    corner: rr
-    reason: "Stuck at 14.0 °C across 14 laps (KK-SII, Fuji 2026-02-26)"
+entries: []

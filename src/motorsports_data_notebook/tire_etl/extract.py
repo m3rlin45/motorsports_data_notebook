@@ -11,7 +11,7 @@ import hashlib
 import logging
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -141,18 +141,29 @@ def _resolve_channels(profile_channel_names: dict[str, str], keys: list[str]) ->
     return out
 
 
-def _extract_session_datetime_utc(
-    log: "LogFile",
-    fallback_date: str,
-    track_canonical: str | None,
-) -> datetime:
-    """Derive a UTC timestamp for session start.
-
-    Prefers AIM metadata if it exposes a parseable "Date" field, else falls
-    back to midnight of the parsed filename date in the track's local tz.
-    """
+def _localize_to_utc(dt_local: datetime, track_canonical: str | None) -> datetime:
+    """Attach the track's local timezone (UTC if unknown) and convert to UTC."""
     from .tracks import get_track
 
+    tz_name = None
+    if track_canonical:
+        ti = get_track(track_canonical)
+        if ti:
+            tz_name = ti.timezone
+    if tz_name:
+        from zoneinfo import ZoneInfo
+
+        return dt_local.replace(tzinfo=ZoneInfo(tz_name)).astimezone(timezone.utc)
+    return dt_local.replace(tzinfo=timezone.utc)
+
+
+def _try_parse_log_start_utc(log: "LogFile", track_canonical: str | None) -> datetime | None:
+    """Parse the wall-clock session start from AIM metadata, or None.
+
+    Unlike :func:`_extract_session_datetime_utc` this has NO fallback —
+    callers that need to reason about wall-clock adjacency (split-session
+    grouping) must be able to tell "parsed" from "guessed".
+    """
     meta = getattr(log, "metadata", {}) or {}
 
     # AIM RaceStudio splits the start timestamp into two fields:
@@ -164,16 +175,7 @@ def _extract_session_datetime_utc(
     if log_date and log_time:
         try:
             dt_local = datetime.strptime(f"{log_date} {log_time}", "%m/%d/%Y %H:%M:%S")
-            tz_name = None
-            if track_canonical:
-                ti = get_track(track_canonical)
-                if ti:
-                    tz_name = ti.timezone
-            if tz_name:
-                from zoneinfo import ZoneInfo
-
-                return dt_local.replace(tzinfo=ZoneInfo(tz_name)).astimezone(timezone.utc)
-            return dt_local.replace(tzinfo=timezone.utc)
+            return _localize_to_utc(dt_local, track_canonical)
         except ValueError:
             pass
 
@@ -192,18 +194,27 @@ def _extract_session_datetime_utc(
         ):
             try:
                 dt_local = datetime.strptime(raw, fmt)
-                tz_name = None
-                if track_canonical:
-                    ti = get_track(track_canonical)
-                    if ti:
-                        tz_name = ti.timezone
-                if tz_name:
-                    from zoneinfo import ZoneInfo
-
-                    return dt_local.replace(tzinfo=ZoneInfo(tz_name)).astimezone(timezone.utc)
-                return dt_local.replace(tzinfo=timezone.utc)
+                return _localize_to_utc(dt_local, track_canonical)
             except ValueError:
                 continue
+    return None
+
+
+def _extract_session_datetime_utc(
+    log: "LogFile",
+    fallback_date: str,
+    track_canonical: str | None,
+) -> datetime:
+    """Derive a UTC timestamp for session start.
+
+    Prefers AIM metadata if it exposes a parseable "Date" field, else falls
+    back to midnight of the parsed filename date in the track's local tz.
+    """
+    from .tracks import get_track
+
+    parsed = _try_parse_log_start_utc(log, track_canonical)
+    if parsed is not None:
+        return parsed
 
     # Fallback: midnight local.
     y, m, d = (int(x) for x in fallback_date.split("-"))
@@ -217,6 +228,71 @@ def _extract_session_datetime_utc(
     except Exception:
         pass
     return datetime(y, m, d, tzinfo=timezone.utc)
+
+
+# Max wall-clock gap between the END of one constituent file and the START
+# of the next for the two to still count as one physical session. Genuine
+# logger restarts (spin, power cycle) resume within a couple of minutes;
+# anything longer is a separate track session even when AIM numbers the
+# files consecutively.
+MERGE_MAX_GAP_S = 300.0
+
+
+def _log_end_ms(log: "LogFile") -> int:
+    """Last lap end time (ms on the file's own clock); 0 if no laps."""
+    laps = log.laps
+    if len(laps) == 0:
+        return 0
+    return int(np.max(laps.column("end_time").to_numpy()))
+
+
+def split_group_by_wallclock(
+    paths: list[Path],
+    logs: list,
+    *,
+    track_canonical: str | None,
+    max_gap_s: float = MERGE_MAX_GAP_S,
+) -> list[tuple[list[Path], list, list[int]]]:
+    """Split a filename-grouped candidate list into wall-clock-contiguous runs.
+
+    Filename grouping (consecutive ``run_num``) cannot tell a mid-run logger
+    restart from two separate track sessions that happen to be numbered
+    consecutively. This uses each file's metadata wall-clock start plus its
+    lap-table duration: whenever the next file starts more than ``max_gap_s``
+    after the previous file ends, the group is split.
+
+    Returns ``[(paths, logs, offsets_ms), ...]`` — one tuple per physical
+    session. ``offsets_ms[i]`` places file *i* on its subgroup's first file's
+    clock (for :class:`~motorsports_data_notebook._util.MergedLogFile`).
+
+    If any file's wall-clock start can't be parsed, the group is kept whole
+    (legacy behavior) but each file is stitched immediately after the
+    previous one so the merged timeline is at least monotonic.
+    """
+    if len(logs) == 1:
+        return [(list(paths), list(logs), [0])]
+
+    maybe_starts = [_try_parse_log_start_utc(log, track_canonical) for log in logs]
+    if any(s is None for s in maybe_starts):
+        offsets = [0]
+        for i in range(1, len(logs)):
+            offsets.append(offsets[i - 1] + _log_end_ms(logs[i - 1]))
+        return [(list(paths), list(logs), offsets)]
+    starts = [s for s in maybe_starts if s is not None]
+
+    groups: list[tuple[list[Path], list, list[int]]] = []
+    sub_start = 0
+    for i in range(1, len(logs) + 1):
+        if i < len(logs):
+            prev_end = starts[i - 1] + timedelta(milliseconds=_log_end_ms(logs[i - 1]))
+            gap_s = (starts[i] - prev_end).total_seconds()
+            if gap_s <= max_gap_s:
+                continue
+        base = starts[sub_start]
+        offsets = [int((starts[j] - base).total_seconds() * 1000.0) for j in range(sub_start, i)]
+        groups.append((list(paths[sub_start:i]), list(logs[sub_start:i]), offsets))
+        sub_start = i
+    return groups
 
 
 def _build_lap_timeseries(
@@ -329,6 +405,8 @@ def extract_session(
     *,
     fallback_date_str: str | None = None,
     extractor_version: str | None = None,
+    _preloaded_logs: list | None = None,
+    _offsets_ms: list[int] | None = None,
 ) -> ExtractResult:
     """Extract one AIM session into session/laps/timeseries tables.
 
@@ -336,9 +414,14 @@ def extract_session(
     paths, they're loaded and stitched together with
     :class:`~motorsports_data_notebook._util.MergedLogFile` so the AIM
     logger's "new file per restart" splits become one logical session
-    with sequentially-renumbered laps and one continuous timeseries.
-    Boundary partial laps (truncated mid-spin) are dropped automatically
-    by ``MergedLogFile``.
+    with sequentially-renumbered laps and one continuous timeseries on the
+    first file's clock (later files' lap times are shifted by the wall-clock
+    delta between file starts). Boundary partial laps (truncated mid-spin)
+    are dropped automatically by ``MergedLogFile``.
+
+    ``_preloaded_logs``/``_offsets_ms`` let :func:`extract_all` reuse the
+    logs it already loaded for wall-clock split grouping; external callers
+    should pass paths only.
 
     On failure returns an ExtractResult with ``status="error"`` and empty
     data tables — callers still record the attempt in the manifest so we
@@ -380,7 +463,10 @@ def extract_session(
     )
 
     try:
-        logs = [load_session(str(p)) for p in paths]
+        if _preloaded_logs is not None:
+            logs = list(_preloaded_logs)
+        else:
+            logs = [load_session(str(p)) for p in paths]
     except Exception as e:
         logger.exception("load_session failed for %s", primary_path)
         row = empty_session.set_column(
@@ -399,7 +485,17 @@ def extract_session(
             status="error",
             error_msg=str(e),
         )
-    log = logs[0] if len(logs) == 1 else MergedLogFile(logs)
+    if len(logs) == 1:
+        log = logs[0]
+    else:
+        offsets_ms = _offsets_ms
+        if offsets_ms is None:
+            # Compute wall-clock offsets without splitting (max_gap_s=inf):
+            # the caller already decided these files are one session.
+            _, _, offsets_ms = split_group_by_wallclock(
+                paths, logs, track_canonical=cand.track_canonical, max_gap_s=float("inf")
+            )[0]
+        log = MergedLogFile(logs, offsets_ms=offsets_ms)
 
     # Resolve profile + channel names.
     logger_id = get_logger_id(log) or ""
@@ -825,11 +921,15 @@ def run_extract(
     Files that the AIM logger split across a single physical run (matching
     ``date / driver / car / track / session_type`` and with consecutive
     ``run_num`` values) are grouped via
-    :func:`~motorsports_data_notebook.tire_etl.discovery.group_split_sessions`
-    and extracted together. Each constituent file still gets its own
-    manifest row (so re-runs detect when any file changed) but they all
-    point at the same merged session_id.
+    :func:`~motorsports_data_notebook.tire_etl.discovery.group_split_sessions`,
+    then verified against wall-clock metadata with
+    :func:`split_group_by_wallclock` — consecutive run numbers more than
+    ``MERGE_MAX_GAP_S`` apart are separate track sessions, not restart
+    splits, and are extracted individually. Each constituent file still gets
+    its own manifest row (so re-runs detect when any file changed) pointing
+    at its (sub)group's session_id.
     """
+    from .._util import load_session
     from .dataset import load_manifest, upsert_session
     from .discovery import group_split_sessions
 
@@ -866,35 +966,65 @@ def run_extract(
 
         paths = [c.path for c in group]
         t0 = time.perf_counter()
-        result = extract_session(paths)
-        elapsed = time.perf_counter() - t0
-        if len(paths) == 1:
-            logger.info(
-                "extracted %s status=%s elapsed=%.2fs",
-                paths[0].name,
-                result.status,
-                elapsed,
-            )
-        else:
-            logger.info(
-                "extracted %d-file merged session %s (primary=%s) status=%s elapsed=%.2fs",
-                len(paths),
-                result.session_row.column("session_id")[0].as_py(),
-                paths[0].name,
-                result.status,
-                elapsed,
-            )
 
-        upsert_session(dataset_root, result, all_xrk_paths=paths)
-        if result.status == "error":
-            counts["errors"] += len(paths)
+        # Filename grouping can fuse two separate track sessions that AIM
+        # happened to number consecutively; verify wall-clock adjacency
+        # before merging. Load failures fall through to extract_session,
+        # which retries the load and records the error result uniformly.
+        subgroups: list[tuple[list[Path], list | None, list[int] | None]]
+        if len(paths) == 1:
+            subgroups = [(paths, None, None)]
         else:
-            counts["extracted"] += len(paths)
+            try:
+                logs = [load_session(str(p)) for p in paths]
+            except Exception:
+                subgroups = [(paths, None, None)]
+            else:
+                split = split_group_by_wallclock(
+                    paths, logs, track_canonical=group[0].track_canonical
+                )
+                if len(split) > 1:
+                    logger.info(
+                        "wall-clock gap split %d-file group (primary=%s) into %d sessions",
+                        len(paths),
+                        paths[0].name,
+                        len(split),
+                    )
+                subgroups = [(sp, sl, so) for sp, sl, so in split]
+
+        status_by_path: dict[str, str] = {}
+        for sub_paths, sub_logs, sub_offsets in subgroups:
+            result = extract_session(sub_paths, _preloaded_logs=sub_logs, _offsets_ms=sub_offsets)
+            if len(sub_paths) == 1:
+                logger.info(
+                    "extracted %s status=%s elapsed=%.2fs",
+                    sub_paths[0].name,
+                    result.status,
+                    time.perf_counter() - t0,
+                )
+            else:
+                logger.info(
+                    "extracted %d-file merged session %s (primary=%s) status=%s elapsed=%.2fs",
+                    len(sub_paths),
+                    result.session_row.column("session_id")[0].as_py(),
+                    sub_paths[0].name,
+                    result.status,
+                    time.perf_counter() - t0,
+                )
+
+            upsert_session(dataset_root, result, all_xrk_paths=sub_paths)
+            if result.status == "error":
+                counts["errors"] += len(sub_paths)
+            else:
+                counts["extracted"] += len(sub_paths)
+            for p in sub_paths:
+                status_by_path[str(p)] = result.status
+
         for cand, mtime_ns, size in zip(group, mtimes, sizes):
             existing[str(cand.path)] = {
                 "xrk_mtime_ns": mtime_ns,
                 "file_size": size,
                 "extractor_version": EXTRACTOR_VERSION,
-                "status": result.status,
+                "status": status_by_path.get(str(cand.path), "error"),
             }
     return counts
