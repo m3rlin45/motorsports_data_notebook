@@ -1,7 +1,16 @@
 {
-  "schema_version": 2,
-  "fit_at_utc": "2026-08-16T05:40:31+00:00",
-  "model_form": "T_hot - T_eff = K[car,corner,cond] * c_track[track] * g2_typ[track,car,cond] * (1 - exp(-t / tau_sec[car,corner,cond]))   where T_eff = (1-w_road)*T_air + w_road*T_road, t = N * lap_time_typ_s[track,car,cond]",
+  "schema_version": 3,
+  "fit_at_utc": "2026-08-16T06:04:34+00:00",
+  "model_form": "T_hot - T_eff = K[car,corner,cond] * c_track[track] * g2 * (1 - exp(-t / tau_sec[car,corner,cond]))   where T_eff = (1-w_road)*T_air + w_road*T_road, t = N * lap_time_s, g2 = g2_typ[track,car,cond] * clamp((lap_time_typ_s / target_lap_time_s)^g2_lap_time_exponent) when a target lap time is given, else g2_typ",
+  "g2_lap_time_model": {
+    "method": "sector_knn_median_curve",
+    "formula": "g2 = g2_typ * interp(target_lap_time_s, g2_vs_lap_time) / interp(lap_time_typ_s, g2_vs_lap_time); buckets without a curve fall back to g2_typ * (lap_time_typ_s / target_lap_time_s) ** default_exponent. The multiplier is clamped either way.",
+    "default_exponent": 1.4781301845777226,
+    "multiplier_clamp": {
+      "min": 0.4,
+      "max": 2.5
+    }
+  },
   "gay_lussac": {
     "p_atm_bar": 1.0,
     "t_zero_c_to_k": 273.15,
@@ -420,28 +429,128 @@
       "car": "Inferno 86",
       "condition": "damp",
       "g2_typ": 0.5872521996498108,
-      "n_laps_used": 48
+      "n_laps_used": 48,
+      "g2_vs_lap_time": {
+        "lap_time_s": [
+          125.566,
+          127.524,
+          129.482,
+          131.439,
+          133.397,
+          135.354,
+          137.312,
+          139.269,
+          141.227
+        ],
+        "g2": [
+          0.62021,
+          0.61433,
+          0.5796,
+          0.56389,
+          0.51787,
+          0.49122,
+          0.46995,
+          0.46995,
+          0.46958
+        ],
+        "n_laps": 48
+      }
     },
     {
       "track_canonical": "fuji",
       "car": "Inferno 86",
       "condition": "dry",
       "g2_typ": 0.62061607837677,
-      "n_laps_used": 122
+      "n_laps_used": 122,
+      "g2_vs_lap_time": {
+        "lap_time_s": [
+          124.674,
+          126.204,
+          127.735,
+          129.265,
+          130.796,
+          132.326,
+          133.857,
+          135.387,
+          136.918
+        ],
+        "g2": [
+          0.64749,
+          0.63518,
+          0.61061,
+          0.5966,
+          0.57033,
+          0.52876,
+          0.51454,
+          0.51339,
+          0.51339
+        ],
+        "n_laps": 122
+      }
     },
     {
       "track_canonical": "fuji",
       "car": "KK-SII",
       "condition": "dry",
       "g2_typ": 0.9024049043655396,
-      "n_laps_used": 43
+      "n_laps_used": 43,
+      "g2_vs_lap_time": {
+        "lap_time_s": [
+          116.36,
+          119.339,
+          122.317,
+          125.296,
+          128.274,
+          131.253,
+          134.232,
+          137.21,
+          140.189
+        ],
+        "g2": [
+          0.91437,
+          0.86369,
+          0.81513,
+          0.80927,
+          0.80691,
+          0.80013,
+          0.80013,
+          0.80013,
+          0.80013
+        ],
+        "n_laps": 43
+      }
     },
     {
       "track_canonical": "fuji",
       "car": "KK-SII",
       "condition": "wet",
       "g2_typ": 0.47700443863868713,
-      "n_laps_used": 29
+      "n_laps_used": 29,
+      "g2_vs_lap_time": {
+        "lap_time_s": [
+          121.181,
+          126.221,
+          131.261,
+          136.301,
+          141.341,
+          146.381,
+          151.421,
+          156.461,
+          161.501
+        ],
+        "g2": [
+          0.47814,
+          0.47781,
+          0.47781,
+          0.47414,
+          0.44089,
+          0.43945,
+          0.42507,
+          0.42507,
+          0.42507
+        ],
+        "n_laps": 29
+      }
     },
     {
       "track_canonical": "motegi",
@@ -462,14 +571,64 @@
       "car": "Inferno 86",
       "condition": "damp",
       "g2_typ": 0.6984928250312805,
-      "n_laps_used": 89
+      "n_laps_used": 89,
+      "g2_vs_lap_time": {
+        "lap_time_s": [
+          76.799,
+          77.717,
+          78.635,
+          79.552,
+          80.47,
+          81.387,
+          82.305,
+          83.223,
+          84.14
+        ],
+        "g2": [
+          0.71491,
+          0.69524,
+          0.68357,
+          0.67347,
+          0.61802,
+          0.5972,
+          0.57807,
+          0.56957,
+          0.5668
+        ],
+        "n_laps": 89
+      }
     },
     {
       "track_canonical": "sodegaura",
       "car": "Inferno 86",
       "condition": "dry",
       "g2_typ": 0.6910534501075745,
-      "n_laps_used": 197
+      "n_laps_used": 197,
+      "g2_vs_lap_time": {
+        "lap_time_s": [
+          76.594,
+          77.924,
+          79.254,
+          80.584,
+          81.914,
+          83.244,
+          84.574,
+          85.904,
+          87.234
+        ],
+        "g2": [
+          0.74665,
+          0.71384,
+          0.68195,
+          0.6281,
+          0.59585,
+          0.57981,
+          0.55646,
+          0.55214,
+          0.54168
+        ],
+        "n_laps": 197
+      }
     },
     {
       "track_canonical": "suzuka",
@@ -483,21 +642,96 @@
       "car": "KK-SII",
       "condition": "dry",
       "g2_typ": 0.9883631467819214,
-      "n_laps_used": 49
+      "n_laps_used": 49,
+      "g2_vs_lap_time": {
+        "lap_time_s": [
+          139.992,
+          140.964,
+          141.936,
+          142.908,
+          143.88,
+          144.852,
+          145.824,
+          146.796,
+          147.768
+        ],
+        "g2": [
+          0.9967,
+          0.9967,
+          0.97436,
+          0.97108,
+          0.92755,
+          0.92186,
+          0.91621,
+          0.91621,
+          0.91621
+        ],
+        "n_laps": 49
+      }
     },
     {
       "track_canonical": "tsukuba_2000",
       "car": "Inferno 86",
       "condition": "damp",
       "g2_typ": 0.5997306108474731,
-      "n_laps_used": 91
+      "n_laps_used": 91,
+      "g2_vs_lap_time": {
+        "lap_time_s": [
+          69.554,
+          71.389,
+          73.224,
+          75.059,
+          76.894,
+          78.729,
+          80.564,
+          82.399,
+          84.234
+        ],
+        "g2": [
+          0.62896,
+          0.5768,
+          0.53237,
+          0.5035,
+          0.40351,
+          0.39058,
+          0.38808,
+          0.38808,
+          0.38642
+        ],
+        "n_laps": 91
+      }
     },
     {
       "track_canonical": "tsukuba_2000",
       "car": "Inferno 86",
       "condition": "dry",
       "g2_typ": 0.4728357195854187,
-      "n_laps_used": 49
+      "n_laps_used": 49,
+      "g2_vs_lap_time": {
+        "lap_time_s": [
+          73.394,
+          74.499,
+          75.604,
+          76.709,
+          77.813,
+          78.918,
+          80.023,
+          81.128,
+          82.233
+        ],
+        "g2": [
+          0.48384,
+          0.471,
+          0.44987,
+          0.42927,
+          0.4217,
+          0.41094,
+          0.40795,
+          0.40795,
+          0.40795
+        ],
+        "n_laps": 49
+      }
     },
     {
       "track_canonical": "tsukuba_2000",
@@ -511,14 +745,64 @@
       "car": "KK-SII",
       "condition": "damp",
       "g2_typ": 1.080701231956482,
-      "n_laps_used": 117
+      "n_laps_used": 117,
+      "g2_vs_lap_time": {
+        "lap_time_s": [
+          60.662,
+          62.255,
+          63.847,
+          65.44,
+          67.032,
+          68.624,
+          70.217,
+          71.809,
+          73.402
+        ],
+        "g2": [
+          1.10979,
+          1.06015,
+          0.95841,
+          0.91323,
+          0.7647,
+          0.72686,
+          0.69523,
+          0.70256,
+          0.70256
+        ],
+        "n_laps": 117
+      }
     },
     {
       "track_canonical": "tsukuba_2000",
       "car": "KK-SII",
       "condition": "dry",
       "g2_typ": 1.1263415813446045,
-      "n_laps_used": 299
+      "n_laps_used": 299,
+      "g2_vs_lap_time": {
+        "lap_time_s": [
+          60.395,
+          61.658,
+          62.921,
+          64.184,
+          65.447,
+          66.71,
+          67.973,
+          69.236,
+          70.499
+        ],
+        "g2": [
+          1.18472,
+          1.09048,
+          1.01933,
+          0.94479,
+          0.91286,
+          0.88298,
+          0.86697,
+          0.84658,
+          0.84553
+        ],
+        "n_laps": 299
+      }
     }
   ],
   "lap_time_typ_by_track_car_cond": [

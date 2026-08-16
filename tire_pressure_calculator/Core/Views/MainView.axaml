@@ -384,6 +384,13 @@
                            FormatString="F0"
                            ShowButtonSpinner="True" />
           </StackPanel>
+          <StackPanel Margin="6,4" MinWidth="120">
+            <TextBlock Text="{Binding T_TargetLapTime}" FontSize="11" />
+            <NumericUpDown Value="{Binding TargetLapTimeS}"
+                           Minimum="20" Maximum="900" Increment="0.5"
+                           FormatString="F1"
+                           ShowButtonSpinner="True" />
+          </StackPanel>
         </WrapPanel>
       </Border>
     </Grid>

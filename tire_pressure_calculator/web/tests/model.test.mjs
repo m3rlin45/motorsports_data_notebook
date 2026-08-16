@@ -36,6 +36,7 @@ test('parity with Python predictor fixture', () => {
         corner,
         targetHotPressureBar: inputs.target_hot_pressure_bar,
         coldTireTempC: inputs.cold_tire_temp_c ?? null,
+        targetLapTimeS: inputs.target_lap_time_s ?? null,
       });
       const label = `${testCase.label}/${corner}`;
       assert.ok(
@@ -48,6 +49,12 @@ test('parity with Python predictor fixture', () => {
         prediction.kSourceBucket,
         `(${expected.K_source_bucket.join(', ')})`,
         `${label}: K source bucket`);
+      if (testCase.g2_scale !== undefined) {
+        assert.ok(
+          Math.abs(prediction.g2Scale - testCase.g2_scale) < 1e-9,
+          `${label}: g2 scale ${prediction.g2Scale} != ${testCase.g2_scale}`);
+        assert.equal(prediction.g2PaceSource, testCase.g2_pace_source, `${label}: pace source`);
+      }
     }
   }
 });
@@ -159,4 +166,46 @@ test('roundTo uses banker\'s rounding like C# Math.Round', () => {
   assert.equal(roundTo(1.2345, 3), 1.234); // stored as 1.23449999…
   assert.equal(roundTo(80.05, 1), 80);     // stored as 80.04999…
   assert.equal(roundTo(80.15, 1), 80.2);   // stored as 80.15000000000000568…
+});
+
+test('interpClamped: linear inside, clamped outside', async () => {
+  const { interpClamped } = await import('../js/model.js');
+  const xs = [55, 60, 65];
+  const ys = [1.2, 0.9, 0.6];
+  assert.equal(interpClamped(60, xs, ys), 0.9);
+  assert.ok(Math.abs(interpClamped(57.5, xs, ys) - 1.05) < 1e-12);
+  assert.equal(interpClamped(40, xs, ys), 1.2);  // clamp low
+  assert.equal(interpClamped(80, xs, ys), 0.6);  // clamp high
+});
+
+test('g2PaceScale: curve ratio anchored at typical, exponent fallback, clamps', () => {
+  const model = new TireModel(modelDto);
+  const track = model.availableTracks.find(
+    (t) => model.lookupG2PaceCurve(t, 'KK-SII', 'dry') !== null);
+  assert.ok(track, 'expected at least one curve-covered KK-SII bucket');
+  const lapTyp = model.lookupLapTime(track, 'KK-SII', 'dry').valueSeconds;
+  const atTyp = model.g2PaceScale(track, 'KK-SII', 'dry', lapTyp, lapTyp);
+  assert.equal(atTyp.source, 'curve');
+  assert.ok(Math.abs(atTyp.scale - 1.0) < 1e-12);
+  const faster = model.g2PaceScale(track, 'KK-SII', 'dry', lapTyp, lapTyp * 0.95);
+  assert.ok(faster.scale > 1.0);
+  // Unknown bucket -> exponent fallback, extreme target hits the clamp
+  const fb = model.g2PaceScale('no_such_track', 'NoSuchCar', 'dry', 100, 10);
+  assert.equal(fb.source, 'exponent');
+  assert.equal(fb.scale, modelDto.g2_lap_time_model.multiplier_clamp.max);
+});
+
+test('target lap time drives time-on-track and rejects non-positive values', () => {
+  const model = new TireModel(modelDto);
+  const args = {
+    track: model.availableTracks[0], car: model.availableCars[0],
+    condition: 'dry', lapWithinStint: 5, ambientTempC: 20,
+    corner: 'fl', targetHotPressureBar: 1.8,
+  };
+  const withTarget = predictCorner(model, { ...args, targetLapTimeS: 61.5 });
+  assert.ok(Math.abs(withTarget.tAtLapNs - 5 * 61.5) < 1e-9);
+  const without = predictCorner(model, args);
+  assert.equal(without.g2Scale, 1.0);
+  assert.equal(without.g2PaceSource, null);
+  assert.throws(() => predictCorner(model, { ...args, targetLapTimeS: 0 }), RangeError);
 });

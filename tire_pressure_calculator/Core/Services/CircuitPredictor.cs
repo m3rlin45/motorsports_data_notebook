@@ -33,7 +33,8 @@ public sealed class CircuitPredictor
         double? cloudCoverPct,
         string corner,
         double targetHotPressureBar,
-        double? coldTireTempC = null)
+        double? coldTireTempC = null,
+        double? targetLapTimeS = null)
     {
         ArgumentNullException.ThrowIfNull(track);
         ArgumentNullException.ThrowIfNull(car);
@@ -61,17 +62,34 @@ public sealed class CircuitPredictor
 
         double tColdC = coldTireTempC ?? ambientTempC;
 
-        double tAtLapNs = (double)lapWithinStint * lap.ValueSeconds;
+        // Target-lap-time feature: pace sets both time-on-track and tire energy.
+        double g2Scale = 1.0;
+        string? g2PaceSource = null;
+        double lapTimeForClockS = lap.ValueSeconds;
+        double g2Value = g2.Value;
+        if (targetLapTimeS is double target)
+        {
+            if (target <= 0)
+                throw new ArgumentOutOfRangeException(
+                    nameof(targetLapTimeS), target, "target lap time must be > 0");
+            var pace = _model.ComputeG2PaceScale(track, car, cond, lap.ValueSeconds, target);
+            g2Scale = pace.Scale;
+            g2PaceSource = pace.Source;
+            g2Value *= g2Scale;
+            lapTimeForClockS = target;
+        }
+
+        double tAtLapNs = (double)lapWithinStint * lapTimeForClockS;
         double warmupFrac = tau.ValueSeconds > 0
             ? 1.0 - Math.Exp(-tAtLapNs / tau.ValueSeconds)
             : 0.0;
-        double deltaTInf = k.ValueKelvinPerG2 * c.Value * g2.Value;
+        double deltaTInf = k.ValueKelvinPerG2 * c.Value * g2Value;
         double tHotC = EnergyBalance.WarmupCurveC(
             tSeconds: tAtLapNs,
             tEffC: tEffC,
             kKelvinPerG2: k.ValueKelvinPerG2,
             cTrack: c.Value,
-            g2Typ: g2.Value,
+            g2Typ: g2Value,
             tauSec: tau.ValueSeconds);
 
         double cold = EnergyBalance.GayLussacColdPressureBar(
@@ -88,7 +106,7 @@ public sealed class CircuitPredictor
             KKelvinPerG2: k.ValueKelvinPerG2,
             TauSec: tau.ValueSeconds,
             CTrack: c.Value,
-            G2Typ: g2.Value,
+            G2Typ: g2Value,
             LapTimeTypS: lap.ValueSeconds,
             TAtLapNs: tAtLapNs,
             WarmupFrac: warmupFrac,
@@ -99,7 +117,10 @@ public sealed class CircuitPredictor
             TColdC: tColdC,
             KSourceBucket: k.SourceBucket,
             KFromPrior: k.FromPrior,
-            KNSamples: k.NSamples);
+            KNSamples: k.NSamples,
+            TargetLapTimeS: targetLapTimeS,
+            G2Scale: g2Scale,
+            G2PaceSource: g2PaceSource);
     }
 }
 
@@ -122,4 +143,7 @@ public sealed record CornerPrediction(
     double TColdC,
     string KSourceBucket,
     bool KFromPrior,
-    int KNSamples);
+    int KNSamples,
+    double? TargetLapTimeS = null,
+    double G2Scale = 1.0,
+    string? G2PaceSource = null);
