@@ -1,6 +1,6 @@
 {
   "schema_version": 3,
-  "fit_at_utc": "2026-08-16T14:52:56+00:00",
+  "fit_at_utc": "2026-08-16T23:56:04+00:00",
   "model_form": "T_hot - T_eff = K[car,corner,cond] * c_track[track] * g2 * (1 - exp(-t / tau_sec[car,corner,cond]))   where T_eff = (1-w_road)*T_air + w_road*T_road, t = N * lap_time_s, g2 = g2_typ[track,car,cond] * clamp((lap_time_typ_s / target_lap_time_s)^g2_lap_time_exponent) when a target lap time is given, else g2_typ",
   "g2_lap_time_model": {
     "method": "sector_knn_median_curve",
@@ -1228,6 +1228,168 @@
       "value_kelvin_per_g2": 21.735339090688928,
       "stderr_kelvin_per_g2": 0.6834068688418966,
       "n_laps": 13
+    }
+  ],
+  "corner_defaults_by_car_corner_cond": [
+    {
+      "car": "Inferno 86",
+      "corner": "fl",
+      "condition": "damp",
+      "hot_temp_c": 68.5,
+      "hot_pressure_bar": 2.09228253364563,
+      "n_laps_used": 168
+    },
+    {
+      "car": "Inferno 86",
+      "corner": "fl",
+      "condition": "dry",
+      "hot_temp_c": 67.0,
+      "hot_pressure_bar": 1.8795039653778076,
+      "n_laps_used": 259
+    },
+    {
+      "car": "Inferno 86",
+      "corner": "fr",
+      "condition": "damp",
+      "hot_temp_c": 67.0,
+      "hot_pressure_bar": 2.0578603744506836,
+      "n_laps_used": 168
+    },
+    {
+      "car": "Inferno 86",
+      "corner": "fr",
+      "condition": "dry",
+      "hot_temp_c": 62.0,
+      "hot_pressure_bar": 1.8568100929260254,
+      "n_laps_used": 259
+    },
+    {
+      "car": "Inferno 86",
+      "corner": "rl",
+      "condition": "damp",
+      "hot_temp_c": 60.5,
+      "hot_pressure_bar": 2.0687546730041504,
+      "n_laps_used": 168
+    },
+    {
+      "car": "Inferno 86",
+      "corner": "rl",
+      "condition": "dry",
+      "hot_temp_c": 63.0,
+      "hot_pressure_bar": 1.8593504428863525,
+      "n_laps_used": 254
+    },
+    {
+      "car": "Inferno 86",
+      "corner": "rr",
+      "condition": "damp",
+      "hot_temp_c": 59.5,
+      "hot_pressure_bar": 2.0532326698303223,
+      "n_laps_used": 168
+    },
+    {
+      "car": "Inferno 86",
+      "corner": "rr",
+      "condition": "dry",
+      "hot_temp_c": 61.0,
+      "hot_pressure_bar": 1.8656189441680908,
+      "n_laps_used": 259
+    },
+    {
+      "car": "KK-SII",
+      "corner": "fl",
+      "condition": "damp",
+      "hot_temp_c": 43.0,
+      "hot_pressure_bar": 1.5950980186462402,
+      "n_laps_used": 69
+    },
+    {
+      "car": "KK-SII",
+      "corner": "fl",
+      "condition": "dry",
+      "hot_temp_c": 47.0,
+      "hot_pressure_bar": 1.5950578451156616,
+      "n_laps_used": 252
+    },
+    {
+      "car": "KK-SII",
+      "corner": "fl",
+      "condition": "wet",
+      "hot_temp_c": 26.0,
+      "hot_pressure_bar": 1.4291354417800903,
+      "n_laps_used": 14
+    },
+    {
+      "car": "KK-SII",
+      "corner": "fr",
+      "condition": "damp",
+      "hot_temp_c": 35.0,
+      "hot_pressure_bar": 1.5508381128311157,
+      "n_laps_used": 69
+    },
+    {
+      "car": "KK-SII",
+      "corner": "fr",
+      "condition": "dry",
+      "hot_temp_c": 39.0,
+      "hot_pressure_bar": 1.5413929224014282,
+      "n_laps_used": 252
+    },
+    {
+      "car": "KK-SII",
+      "corner": "fr",
+      "condition": "wet",
+      "hot_temp_c": 22.5,
+      "hot_pressure_bar": 1.406614065170288,
+      "n_laps_used": 14
+    },
+    {
+      "car": "KK-SII",
+      "corner": "rl",
+      "condition": "damp",
+      "hot_temp_c": 38.0,
+      "hot_pressure_bar": 1.5836442708969116,
+      "n_laps_used": 69
+    },
+    {
+      "car": "KK-SII",
+      "corner": "rl",
+      "condition": "dry",
+      "hot_temp_c": 43.0,
+      "hot_pressure_bar": 1.6022546291351318,
+      "n_laps_used": 226
+    },
+    {
+      "car": "KK-SII",
+      "corner": "rl",
+      "condition": "wet",
+      "hot_temp_c": 21.5,
+      "hot_pressure_bar": 1.4102553129196167,
+      "n_laps_used": 14
+    },
+    {
+      "car": "KK-SII",
+      "corner": "rr",
+      "condition": "damp",
+      "hot_temp_c": 39.0,
+      "hot_pressure_bar": 1.5692331790924072,
+      "n_laps_used": 69
+    },
+    {
+      "car": "KK-SII",
+      "corner": "rr",
+      "condition": "dry",
+      "hot_temp_c": 43.0,
+      "hot_pressure_bar": 1.5990227460861206,
+      "n_laps_used": 225
+    },
+    {
+      "car": "KK-SII",
+      "corner": "rr",
+      "condition": "wet",
+      "hot_temp_c": 23.0,
+      "hot_pressure_bar": 1.4287058115005493,
+      "n_laps_used": 7
     }
   ],
   "lap_time_typ_by_track_car_cond": [
