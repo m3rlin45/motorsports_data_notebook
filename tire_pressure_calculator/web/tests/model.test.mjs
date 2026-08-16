@@ -232,3 +232,22 @@ test('compound K overrides pooled K per axle', () => {
   const unknown = predictCorner(model, { ...args, compound: 'SLICKS9000' });
   assert.equal(unknown.kKelvinPerG2, pooled.kKelvinPerG2);
 });
+
+test('corner defaults: per-car steady-state medians with condition fallback', () => {
+  const model = new TireModel(modelDto);
+  const kk = model.lookupCornerDefaults('KK-SII', 'fl', 'dry');
+  const inferno = model.lookupCornerDefaults('Inferno 86', 'fl', 'dry');
+  assert.ok(kk && inferno, 'both cars carry dry FL defaults');
+  assert.ok(inferno.hotTempC > kk.hotTempC, 'Inferno runs hotter than KK-SII');
+  assert.ok(kk.hotTempC > 20 && kk.hotTempC < 100);
+  assert.ok(kk.hotPressureBar > 1.0 && kk.hotPressureBar < 3.0);
+  assert.equal(kk.source, 'exact');
+  // Wet KK-SII data exists and is cooler than dry.
+  const wet = model.lookupCornerDefaults('KK-SII', 'fl', 'wet');
+  assert.ok(wet.hotTempC < kk.hotTempC);
+  // Inferno has no wet laps: the condition chain falls back toward dry.
+  const infernoWet = model.lookupCornerDefaults('Inferno 86', 'fl', 'wet');
+  assert.ok(infernoWet && infernoWet.source.startsWith('fallback('));
+  // Unknown car -> null (caller keeps its static defaults).
+  assert.equal(model.lookupCornerDefaults('NoSuchCar', 'fl', 'dry'), null);
+});
