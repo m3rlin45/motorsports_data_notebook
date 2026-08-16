@@ -1,10 +1,10 @@
 {
-  "_cache_key": "04a20cc137e4c83f6f37e3f711461e9448e6af8f|48e2dd24ce10840e0ffb8c4742f42b2b34734ab2|claude-opus-4-7",
+  "_cache_key": "04a20cc137e4c83f6f37e3f711461e9448e6af8f|f3fc257af4ddabcdd30a29822de83132da7652e1|claude-opus-4-7",
   "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2024-04-28-sodegaura.txt",
   "_source_sha1": "04a20cc137e4c83f6f37e3f711461e9448e6af8f",
-  "_prompt_sha1": "48e2dd24ce10840e0ffb8c4742f42b2b34734ab2",
+  "_prompt_sha1": "f3fc257af4ddabcdd30a29822de83132da7652e1",
   "_model": "claude-opus-4-7",
-  "_extracted_at": "2026-04-18T14:03:19+00:00",
+  "_extracted_at": "2026-08-16T07:12:39+00:00",
   "data": {
     "file_date": null,
     "track": null,
@@ -13,9 +13,9 @@
       {
         "session_index": 1,
         "start_time_local": "09:30",
-        "weather_text": "Cloudy, 55% humidity",
+        "weather_text": "Cloudy",
         "ambient_temp_c": 20.0,
-        "track_condition": "unknown",
+        "track_condition": "dry",
         "cold_pressure_bar": {
           "fl": 1.8,
           "fr": 1.8,
@@ -28,18 +28,16 @@
           "rl": null,
           "rr": null
         },
-        "setup_changes": [
-          "Hot bleed after 5 laps: FR/FL/RL 2.1→2.0 bar, RR 2.05→2.0 bar"
-        ],
+        "setup_changes": [],
         "incidents": [],
-        "notes": "Front tires most worn; rear middle worn. 5 laps. Handling: understeer on 5-6, under/over on 8, understeer on 9."
+        "notes": "Front: most worn. Rear: middle worn. Humidity 55%. 5 laps. Hot pressures after 5 laps: FR, FL, RL 2.1 -> 2; RR 2.05 -> 2. Handling: understeer on 5-6, under/over on 8, understeer on 9."
       },
       {
         "session_index": 2,
         "start_time_local": "10:30",
-        "weather_text": "cloudy, 48% humidity",
+        "weather_text": "cloudy",
         "ambient_temp_c": 22.0,
-        "track_condition": "unknown",
+        "track_condition": "dry",
         "cold_pressure_bar": {
           "fl": 1.8,
           "fr": 1.8,
@@ -53,17 +51,17 @@
           "rr": null
         },
         "setup_changes": [
-          "Drop fronts 0.1 bar"
+          "drop fronts .1"
         ],
         "incidents": [],
-        "notes": "Front new at 1.8 bar; rear middle worn, pressures continued from last session. Hot pressures measured: FL 2.25, FR 2.20, RL 2.15, RR 2.10. Oversteer on 9; understeer on 5-6 as tire overheated; not pushing hard enough on 3-4 to evaluate; understeer on 8 after tire up to temp."
+        "notes": "Front: new. Rear: middle worn, continue from last session. Humidity 48%. Hot pressures: FL 2.25, FR 2.20, RL 2.15, RR 2.10. Handling: oversteer on 9; as tire overheated, understeer on 5-6; not pushing enough on 3-4 to know; understeer on 8 after tire up to temp."
       },
       {
         "session_index": 3,
         "start_time_local": "11:30",
         "weather_text": null,
         "ambient_temp_c": null,
-        "track_condition": "unknown",
+        "track_condition": "dry",
         "cold_pressure_bar": {
           "fl": null,
           "fr": null,
@@ -77,18 +75,18 @@
           "rr": null
         },
         "setup_changes": [
-          "Bleed all corners to 2.1 bar (hot)",
-          "Loosen rear sway/damper from 25 to 22"
+          "loosen rear 25->22",
+          "all pressures set to 2.1"
         ],
         "incidents": [],
-        "notes": "Hot pressures after: FL 2.20, FR 2.15, RL 2.15, RR 2.10. Oversteer in slow corners due to not slowing enough; oversteer in high-speed corners, can't put the power down."
+        "notes": "Hot pressures after: FL 2.2, FR 2.15, RL 2.15, RR 2.10; all adjusted to 2.1. Handling: oversteer in slow corners due to not slowing enough; oversteer in high corners -> can't put the power down."
       },
       {
         "session_index": 4,
         "start_time_local": "14:00",
-        "weather_text": "cloudy, 58% humidity",
+        "weather_text": "cloudy",
         "ambient_temp_c": 20.0,
-        "track_condition": "unknown",
+        "track_condition": "dry",
         "cold_pressure_bar": {
           "fl": 1.65,
           "fr": 1.7,
@@ -102,17 +100,17 @@
           "rr": null
         },
         "setup_changes": [
-          "Loosen rear from 22 to 20"
+          "loosen rear to 20"
         ],
         "incidents": [],
-        "notes": "Front: best tires (formerly new). Rear: worst/most-worn tires. Suspension front 25, rear 22. Oversteer everywhere, rear tires had little grip, no understeer anywhere."
+        "notes": "Front: best tires (formerly new). Rear: worst tires (most worn). Suspension: Front 25, rear 22. Humidity 58%. Oversteer everywhere, rear tires had little grip, no understeer anywhere."
       },
       {
         "session_index": 5,
         "start_time_local": "15:00",
         "weather_text": null,
         "ambient_temp_c": null,
-        "track_condition": "unknown",
+        "track_condition": "dry",
         "cold_pressure_bar": {
           "fl": 1.65,
           "fr": 1.7,
@@ -127,14 +125,14 @@
         },
         "setup_changes": [],
         "incidents": [],
-        "notes": "Everything carried over from 14:00. Rear at 20. Lots of oversteer, no understeer. Felt more stable than 14:00 but slower."
+        "notes": "Everything carried over. Rear 20. Lots of oversteer, no understeer, felt more stable than 14:00, but slower."
       },
       {
         "session_index": 6,
         "start_time_local": "16:00",
-        "weather_text": "cloudy, 60% humidity",
+        "weather_text": "cloudy",
         "ambient_temp_c": 18.0,
-        "track_condition": "unknown",
+        "track_condition": "dry",
         "cold_pressure_bar": {
           "fl": 1.65,
           "fr": 1.7,
@@ -148,10 +146,10 @@
           "rr": null
         },
         "setup_changes": [
-          "Suspension front 25, rear 25"
+          "Front 25, Rear 25"
         ],
         "incidents": [],
-        "notes": "Front: worst tires, pressures carried over. Rear: middle tires at 1.8 bar."
+        "notes": "Front: worst tires, pressures carried over. Rear: middle tires: RL, RR 1.8. Humidity 60%."
       }
     ]
   }

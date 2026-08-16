@@ -39,8 +39,28 @@ Pressure unit normalization (always emit bar):
 - If the notes say "Tires 1.75 all around" or similar, fill all four corners with the same value.
 
 Compound codes:
-- Preserve verbatim (e.g. "22", "14c", "R7", "A050_22"). Do not guess or expand them.
-- If the notes say "Front 22 / Rear 21" or "22 Front 2/2", apply the front code to FL+FR and rear code to RL+RR.
+- Known tire names to recognize (spelling varies in the notes): A052 ("052"),
+  RE-71RS ("71RS", "RE-71 RS"), A050 (often with a compound suffix like
+  "A050_22"), Nankang NS-2R, AD09, CR-S, ZIII. Emit the canonical form
+  shown here.
+- Numeric-only codes (e.g. "22", "14c", "R7") are valid compounds ONLY when
+  the text explicitly ties them to tires ("Tires: 22", "tire compound 14c").
+- NEVER take numbers from damper lines ("Front 15 / Rear 10" next to damper
+  or suspension context), camber/setup codes ("2/2", "3/4"), pressures
+  (bar/psi values), temperatures ("28c"), or wear percentages ("30% used").
+  When in doubt whether a number is a tire compound, use null.
+- Wheel-set identifiers (a color or name standing in for a set of mounted
+  wheels, e.g. "silver", "Black wheels", "silver-blue") are not compounds:
+  emit them as "SET:<name>" (e.g. "SET:black") so they can be mapped to a
+  compound later.
+- Strip wear/condition adjectives from the compound itself: "A052 Sticker",
+  "Good RE-71 RS", "71RS 30% used" → compound "A052" / "RE-71RS" / "RE-71RS"
+  (put the wear detail in the session notes field instead).
+- If the notes say "Front 22 / Rear 21" for tires, apply the front code to
+  FL+FR and rear code to RL+RR. A compound stated once with no axle
+  qualifier ("A052", "Tire 71RS") applies to all four corners of that
+  session, and carries forward to later sessions in the same file unless a
+  different tire is stated.
 
 Sessions:
 - Each block marked by a time like "09:30 Session" or an ordinal like "First run" or "Second session" counts as a separate session.

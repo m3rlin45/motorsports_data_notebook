@@ -1,10 +1,10 @@
 {
-  "_cache_key": "ec2a423cffee0a32393c2ae6345b10c6e3654656|48e2dd24ce10840e0ffb8c4742f42b2b34734ab2|claude-opus-4-7",
+  "_cache_key": "ec2a423cffee0a32393c2ae6345b10c6e3654656|f3fc257af4ddabcdd30a29822de83132da7652e1|claude-opus-4-7",
   "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/Tsukuba KKSII 2026-03-28.txt",
   "_source_sha1": "ec2a423cffee0a32393c2ae6345b10c6e3654656",
-  "_prompt_sha1": "48e2dd24ce10840e0ffb8c4742f42b2b34734ab2",
+  "_prompt_sha1": "f3fc257af4ddabcdd30a29822de83132da7652e1",
   "_model": "claude-opus-4-7",
-  "_extracted_at": "2026-04-18T14:11:12+00:00",
+  "_extracted_at": "2026-08-16T07:22:28+00:00",
   "data": {
     "file_date": null,
     "track": null,
@@ -30,7 +30,7 @@
         },
         "setup_changes": [],
         "incidents": [],
-        "notes": "Target pressure 1.6 bar. Cold tire temps FL 27c, FR 28c, RL 29c, RR 23c. Target hot temp/pressure: FL 53c/1.39, FR 44c/1.46, RL 46c/1.46, RR 47c/1.40."
+        "notes": "Target cold pressure: 1.6 bar. Cold tire temps: FL 27C, FR 28C, RL 29C, RR 23C. Target hot temps/pressures: FL 53C/1.39, FR 44C/1.46, RL 46C/1.46, RR 47C/1.40."
       }
     ]
   }
