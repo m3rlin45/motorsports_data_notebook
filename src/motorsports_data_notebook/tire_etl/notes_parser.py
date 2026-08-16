@@ -78,6 +78,9 @@ class ParsedNotes:
     model: str
     extracted_at: str
     data: NotesData
+    # True when this parse came from the on-disk cache (content + prompt +
+    # model hashes all matched) rather than a fresh LLM call.
+    from_cache: bool = False
 
 
 def _load_system_prompt() -> str:
@@ -160,6 +163,7 @@ def parse_notes_file(
                     model=model,
                     extracted_at=cached.get("_extracted_at", ""),
                     data=data,
+                    from_cache=True,
                 )
         except (json.JSONDecodeError, ValidationError, KeyError):
             logger.warning("cache invalid for %s — re-parsing", path.name)
@@ -220,10 +224,10 @@ def run_enrich_notes(
     for path in sorted(notes_root.glob("*.txt")):
         counts["scanned"] += 1
         try:
-            before = (notes_extracted_dir(dataset_root) / f"{path.stem}.json").exists()
-            parse_notes_file(path, dataset_root=dataset_root, model=model, force=force)
-            # Classify as cache hit if file existed AND we're not forcing.
-            if before and not force:
+            parsed = parse_notes_file(path, dataset_root=dataset_root, model=model, force=force)
+            # A stale cache (e.g. after a prompt change) re-parses even when
+            # the file exists — count what actually happened.
+            if parsed.from_cache:
                 counts["cached"] += 1
             else:
                 counts["parsed"] += 1

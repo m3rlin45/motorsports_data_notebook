@@ -1,10 +1,10 @@
 {
-  "_cache_key": "0b0065fcf84a303f34f5df6e2de356bcf4ae1a57|f3fc257af4ddabcdd30a29822de83132da7652e1|claude-opus-4-7",
+  "_cache_key": "0b0065fcf84a303f34f5df6e2de356bcf4ae1a57|745ba5f28ec0515f9e628864b4b32a9c656dc393|claude-opus-4-7",
   "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2025-10-25-Tsukuba.txt",
   "_source_sha1": "0b0065fcf84a303f34f5df6e2de356bcf4ae1a57",
-  "_prompt_sha1": "f3fc257af4ddabcdd30a29822de83132da7652e1",
+  "_prompt_sha1": "745ba5f28ec0515f9e628864b4b32a9c656dc393",
   "_model": "claude-opus-4-7",
-  "_extracted_at": "2026-08-16T07:14:45+00:00",
+  "_extracted_at": "2026-08-16T13:04:50+00:00",
   "data": {
     "file_date": null,
     "track": null,
@@ -15,7 +15,7 @@
         "start_time_local": "08:00",
         "weather_text": "cold, active rain (30%)",
         "ambient_temp_c": 16.0,
-        "track_condition": "damp",
+        "track_condition": "wet",
         "cold_pressure_bar": {
           "fl": 1.85,
           "fr": 1.85,
@@ -29,7 +29,8 @@
           "rr": "A052"
         },
         "setup_changes": [
-          "Dampers: Front 2/2, Rear 3/4",
+          "Front dampers 2/2",
+          "Rear dampers 3/4",
           "All 5"
         ],
         "incidents": [],
@@ -38,7 +39,7 @@
       {
         "session_index": 2,
         "start_time_local": "10:10",
-        "weather_text": "cold, drying",
+        "weather_text": "drying, cold",
         "ambient_temp_c": 16.0,
         "track_condition": "damp",
         "cold_pressure_bar": {
@@ -54,14 +55,14 @@
           "rr": "A052"
         },
         "setup_changes": [
-          "Dampers: Front 2/2, Rear 3/3 (rear changed from 3/4 to 3/3)",
-          "All 5",
-          "Cold pressures raised to 2.2 bar all around"
+          "Front dampers 2/2",
+          "Rear dampers 3/3",
+          "All 5"
         ],
         "incidents": [
           "Spun at 2nd hairpin"
         ],
-        "notes": "Tires A052 mediocre condition. Really good balance, spun at 2nd hairpin — that's sketchy. Histograms say more rear damper needed."
+        "notes": "Tires A052 in mediocre condition. Really good balance, spun at 2nd hairpin, that's sketchy. Histograms say more rear damper."
       },
       {
         "session_index": 3,
@@ -82,12 +83,13 @@
           "rr": "A052"
         },
         "setup_changes": [
-          "Dampers: Front 15, Rear 20",
-          "Cold pressures: dropped FL by 0.2 bar, all others by 0.1 bar (FL 2.0, FR/RL/RR 2.1)",
-          "Nothing else changed"
+          "Front dampers 15",
+          "Rear dampers 20",
+          "Drop FL cold pressure by 0.2 bar",
+          "Drop FR/RL/RR cold pressure by 0.1 bar"
         ],
         "incidents": [],
-        "notes": "Felt awesome — best setup for damp conditions so far."
+        "notes": "Felt awesome, best setup for damp so far."
       }
     ]
   }

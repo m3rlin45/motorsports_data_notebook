@@ -1,10 +1,10 @@
 {
-  "_cache_key": "04a20cc137e4c83f6f37e3f711461e9448e6af8f|f3fc257af4ddabcdd30a29822de83132da7652e1|claude-opus-4-7",
+  "_cache_key": "04a20cc137e4c83f6f37e3f711461e9448e6af8f|745ba5f28ec0515f9e628864b4b32a9c656dc393|claude-opus-4-7",
   "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2024-04-28-sodegaura.txt",
   "_source_sha1": "04a20cc137e4c83f6f37e3f711461e9448e6af8f",
-  "_prompt_sha1": "f3fc257af4ddabcdd30a29822de83132da7652e1",
+  "_prompt_sha1": "745ba5f28ec0515f9e628864b4b32a9c656dc393",
   "_model": "claude-opus-4-7",
-  "_extracted_at": "2026-08-16T07:12:39+00:00",
+  "_extracted_at": "2026-08-16T13:02:47+00:00",
   "data": {
     "file_date": null,
     "track": null,
@@ -13,7 +13,7 @@
       {
         "session_index": 1,
         "start_time_local": "09:30",
-        "weather_text": "Cloudy",
+        "weather_text": "Cloudy, 55% humidity",
         "ambient_temp_c": 20.0,
         "track_condition": "dry",
         "cold_pressure_bar": {
@@ -30,12 +30,12 @@
         },
         "setup_changes": [],
         "incidents": [],
-        "notes": "Front: most worn. Rear: middle worn. Humidity 55%. 5 laps. Hot pressures after 5 laps: FR, FL, RL 2.1 -> 2; RR 2.05 -> 2. Handling: understeer on 5-6, under/over on 8, understeer on 9."
+        "notes": "Front: most worn. Rear: middle worn. 5 laps. Hot pressures after 5 laps: FR, FL, RL 2.1 -> 2; RR 2.05 -> 2. Understeer on 5-6, under/over on 8, under on 9."
       },
       {
         "session_index": 2,
         "start_time_local": "10:30",
-        "weather_text": "cloudy",
+        "weather_text": "Cloudy, 48% humidity",
         "ambient_temp_c": 22.0,
         "track_condition": "dry",
         "cold_pressure_bar": {
@@ -51,17 +51,17 @@
           "rr": null
         },
         "setup_changes": [
-          "drop fronts .1"
+          "Drop fronts 0.1 bar"
         ],
         "incidents": [],
-        "notes": "Front: new. Rear: middle worn, continue from last session. Humidity 48%. Hot pressures: FL 2.25, FR 2.20, RL 2.15, RR 2.10. Handling: oversteer on 9; as tire overheated, understeer on 5-6; not pushing enough on 3-4 to know; understeer on 8 after tire up to temp."
+        "notes": "Front: new tires. Rear: middle worn, continue from last session. Hot pressures: FL 2.25, FR 2.20, RL 2.15, RR 2.1. Oversteer on 9; as tire overheated, understeer on 5-6; not pushing enough on 3-4 to know; understeer on 8 after tire up to temp."
       },
       {
         "session_index": 3,
         "start_time_local": "11:30",
         "weather_text": null,
         "ambient_temp_c": null,
-        "track_condition": "dry",
+        "track_condition": "unknown",
         "cold_pressure_bar": {
           "fl": null,
           "fr": null,
@@ -75,16 +75,16 @@
           "rr": null
         },
         "setup_changes": [
-          "loosen rear 25->22",
-          "all pressures set to 2.1"
+          "Loosen rear 25 -> 22",
+          "All pressures targeted to 2.1"
         ],
         "incidents": [],
-        "notes": "Hot pressures after: FL 2.2, FR 2.15, RL 2.15, RR 2.10; all adjusted to 2.1. Handling: oversteer in slow corners due to not slowing enough; oversteer in high corners -> can't put the power down."
+        "notes": "Hot pressures after: FL 2.2, FR 2.15, RL 2.15, RR 2.1; all targeted to 2.1. Oversteer in slow corners due to not slowing enough; oversteer in high corners - can't put the power down."
       },
       {
         "session_index": 4,
         "start_time_local": "14:00",
-        "weather_text": "cloudy",
+        "weather_text": "Cloudy, 58% humidity",
         "ambient_temp_c": 20.0,
         "track_condition": "dry",
         "cold_pressure_bar": {
@@ -100,17 +100,17 @@
           "rr": null
         },
         "setup_changes": [
-          "loosen rear to 20"
+          "Loosen rear to 20"
         ],
         "incidents": [],
-        "notes": "Front: best tires (formerly new). Rear: worst tires (most worn). Suspension: Front 25, rear 22. Humidity 58%. Oversteer everywhere, rear tires had little grip, no understeer anywhere."
+        "notes": "Front: best tires (formerly new). Rear: worst tires (most worn). Suspension: Front 25, rear 22. Oversteer everywhere, rear tires had little grip, no understeer anywhere."
       },
       {
         "session_index": 5,
         "start_time_local": "15:00",
         "weather_text": null,
         "ambient_temp_c": null,
-        "track_condition": "dry",
+        "track_condition": "unknown",
         "cold_pressure_bar": {
           "fl": 1.65,
           "fr": 1.7,
@@ -125,12 +125,12 @@
         },
         "setup_changes": [],
         "incidents": [],
-        "notes": "Everything carried over. Rear 20. Lots of oversteer, no understeer, felt more stable than 14:00, but slower."
+        "notes": "Everything carried over. Rear suspension 20. Lots of oversteer, no understeer, felt more stable than 14:00 but slower."
       },
       {
         "session_index": 6,
         "start_time_local": "16:00",
-        "weather_text": "cloudy",
+        "weather_text": "Cloudy, 60% humidity",
         "ambient_temp_c": 18.0,
         "track_condition": "dry",
         "cold_pressure_bar": {
@@ -146,10 +146,10 @@
           "rr": null
         },
         "setup_changes": [
-          "Front 25, Rear 25"
+          "Front suspension 25, rear suspension 25"
         ],
         "incidents": [],
-        "notes": "Front: worst tires, pressures carried over. Rear: middle tires: RL, RR 1.8. Humidity 60%."
+        "notes": "Front: worst tires, pressure carried over. Rear: middle tires, RL and RR 1.8."
       }
     ]
   }

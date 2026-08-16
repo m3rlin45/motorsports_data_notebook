@@ -1,10 +1,10 @@
 {
-  "_cache_key": "2d36860b78dc837bb9393917f2bc35b31bbe29df|f3fc257af4ddabcdd30a29822de83132da7652e1|claude-opus-4-7",
+  "_cache_key": "2d36860b78dc837bb9393917f2bc35b31bbe29df|745ba5f28ec0515f9e628864b4b32a9c656dc393|claude-opus-4-7",
   "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2026-02-07_Sodegaura.txt",
   "_source_sha1": "2d36860b78dc837bb9393917f2bc35b31bbe29df",
-  "_prompt_sha1": "f3fc257af4ddabcdd30a29822de83132da7652e1",
+  "_prompt_sha1": "745ba5f28ec0515f9e628864b4b32a9c656dc393",
   "_model": "claude-opus-4-7",
-  "_extracted_at": "2026-08-16T07:19:29+00:00",
+  "_extracted_at": "2026-08-16T13:09:21+00:00",
   "data": {
     "file_date": null,
     "track": null,
@@ -13,9 +13,9 @@
       {
         "session_index": 1,
         "start_time_local": "09:30",
-        "weather_text": "snow flurry",
+        "weather_text": "snow flurry 4c",
         "ambient_temp_c": 4.0,
-        "track_condition": "snow",
+        "track_condition": "damp",
         "cold_pressure_bar": {
           "fl": 1.75,
           "fr": 1.75,
@@ -23,18 +23,16 @@
           "rr": 1.75
         },
         "tire_compound": {
-          "fl": "22",
-          "fr": "22",
-          "rl": "21",
-          "rr": "21"
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
         },
         "setup_changes": [
-          "Front camber 2/2",
-          "Rear camber 1/1",
           "Brakes brand new, need to bed in"
         ],
         "incidents": [],
-        "notes": "A bit slippery, but not terrible. Balance was ok."
+        "notes": "22 Front 2/2, 21 Rear 1/1. A bit slippery, but not terrible. Balance was ok."
       },
       {
         "session_index": 2,
@@ -43,20 +41,20 @@
         "ambient_temp_c": null,
         "track_condition": "unknown",
         "cold_pressure_bar": {
-          "fl": 1.65,
-          "fr": 1.59,
-          "rl": 1.45,
-          "rr": 1.38
+          "fl": 1.655,
+          "fr": 1.586,
+          "rl": 1.448,
+          "rr": 1.379
         },
         "tire_compound": {
-          "fl": "22",
-          "fr": "22",
-          "rl": "21",
-          "rr": "21"
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
         },
         "setup_changes": [],
         "incidents": [],
-        "notes": "Keep tires as is."
+        "notes": "Keep tires as is"
       },
       {
         "session_index": 3,

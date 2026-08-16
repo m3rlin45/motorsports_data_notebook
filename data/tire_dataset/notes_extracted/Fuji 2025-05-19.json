@@ -1,10 +1,10 @@
 {
-  "_cache_key": "86361605fa56f1271747117feaf9ada5bc237ae1|f3fc257af4ddabcdd30a29822de83132da7652e1|claude-opus-4-7",
+  "_cache_key": "86361605fa56f1271747117feaf9ada5bc237ae1|745ba5f28ec0515f9e628864b4b32a9c656dc393|claude-opus-4-7",
   "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/Fuji 2025-05-19.txt",
   "_source_sha1": "86361605fa56f1271747117feaf9ada5bc237ae1",
-  "_prompt_sha1": "f3fc257af4ddabcdd30a29822de83132da7652e1",
+  "_prompt_sha1": "745ba5f28ec0515f9e628864b4b32a9c656dc393",
   "_model": "claude-opus-4-7",
-  "_extracted_at": "2026-08-16T07:21:19+00:00",
+  "_extracted_at": "2026-08-16T13:10:04+00:00",
   "data": {
     "file_date": null,
     "track": null,
@@ -15,7 +15,7 @@
         "start_time_local": "16:40",
         "weather_text": "Overcast, 56% humidity",
         "ambient_temp_c": 19.0,
-        "track_condition": "dry",
+        "track_condition": "unknown",
         "cold_pressure_bar": {
           "fl": 1.8,
           "fr": 1.8,
@@ -23,14 +23,14 @@
           "rr": 1.8
         },
         "tire_compound": {
-          "fl": "27",
-          "fr": "27",
-          "rl": "25",
-          "rr": "25"
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
         },
         "setup_changes": [],
         "incidents": [],
-        "notes": "T-4 run. Tires all pretty heavily worn. Humidity 56%."
+        "notes": "T-4 run. Tires all pretty heavily worn. Front 27 / Rear 25 (unlabeled — possibly hot pressures or damper settings). Humidity 56%."
       }
     ]
   }

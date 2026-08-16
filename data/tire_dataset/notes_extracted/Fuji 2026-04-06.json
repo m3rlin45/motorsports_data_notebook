@@ -1,10 +1,10 @@
 {
-  "_cache_key": "c0518b5013141f2fbf203aa9d5757a0c806794e4|f3fc257af4ddabcdd30a29822de83132da7652e1|claude-opus-4-7",
-  "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/Fuji 2025-04-06.txt",
+  "_cache_key": "c0518b5013141f2fbf203aa9d5757a0c806794e4|745ba5f28ec0515f9e628864b4b32a9c656dc393|claude-opus-4-7",
+  "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/Fuji 2026-04-06.txt",
   "_source_sha1": "c0518b5013141f2fbf203aa9d5757a0c806794e4",
-  "_prompt_sha1": "f3fc257af4ddabcdd30a29822de83132da7652e1",
+  "_prompt_sha1": "745ba5f28ec0515f9e628864b4b32a9c656dc393",
   "_model": "claude-opus-4-7",
-  "_extracted_at": "2026-08-16T07:21:02+00:00",
+  "_extracted_at": "2026-08-16T13:10:23+00:00",
   "data": {
     "file_date": null,
     "track": null,
@@ -34,7 +34,7 @@
           "All checked"
         ],
         "incidents": [],
-        "notes": "Target pressure 1.9 bar. Target temps (from when 10c out): FL 54, FR 51, RL 49, RR 48. Cold tire temps: FL 22c, FR 23c, RL 20c, RR 21c."
+        "notes": "Target pressure 1.9 bar. Reference from when it was 10c out — target temps FL:54, FR:51, RL:49, RR:48. Cold tire temps FL:22c, FR:23c, RL:20c, RR:21c."
       },
       {
         "session_index": 2,
@@ -45,8 +45,8 @@
         "cold_pressure_bar": {
           "fl": 1.724,
           "fr": 1.724,
-          "rl": 1.379,
-          "rr": 1.379
+          "rl": null,
+          "rr": null
         },
         "tire_compound": {
           "fl": "A052",
@@ -55,12 +55,12 @@
           "rr": "A052"
         },
         "setup_changes": [
-          "Added a little air to better hit target pressure"
+          "Added air to front tires to better hit target pressure"
         ],
         "incidents": [
           "Crashed"
         ],
-        "notes": "Good balance, but crashed."
+        "notes": "Added a little air to better hit target. Good balance, but crashed."
       }
     ]
   }

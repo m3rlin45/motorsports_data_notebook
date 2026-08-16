@@ -1,13 +1,13 @@
 {
-  "_cache_key": "c53c068b7670fb29f93ceec2b47497732f33574f|f3fc257af4ddabcdd30a29822de83132da7652e1|claude-opus-4-7",
+  "_cache_key": "c53c068b7670fb29f93ceec2b47497732f33574f|745ba5f28ec0515f9e628864b4b32a9c656dc393|claude-opus-4-7",
   "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2024-09-21 Nakajima sodegaura.txt",
   "_source_sha1": "c53c068b7670fb29f93ceec2b47497732f33574f",
-  "_prompt_sha1": "f3fc257af4ddabcdd30a29822de83132da7652e1",
+  "_prompt_sha1": "745ba5f28ec0515f9e628864b4b32a9c656dc393",
   "_model": "claude-opus-4-7",
-  "_extracted_at": "2026-08-16T07:12:49+00:00",
+  "_extracted_at": "2026-08-16T13:02:57+00:00",
   "data": {
-    "file_date": "2024-04-28",
-    "track": "Sodegaura",
+    "file_date": null,
+    "track": null,
     "car": "Motorsoft RX8",
     "sessions": [
       {
@@ -29,11 +29,11 @@
           "rr": "Nankang NS-2R"
         },
         "setup_changes": [
-          "After 3 laps hot pressures reached 2.3 all round; bled to 2.0 front / 1.8 rear cold-equivalent target",
-          "After 2 more laps hot pressures settled at 2.05 front / 1.85 rear"
+          "After 3 laps hot pressures all 2.3; dropped cold to front 2.0 / rear 1.8",
+          "After 2 more laps hot: front 2.05, rear 1.85"
         ],
         "incidents": [],
-        "notes": "Tires used. Driver reports car is super slippery and scary at initial 2.0 cold / 2.3 hot. After bleed to 2.0F/1.8R, hot settled at 2.05F/1.85R."
+        "notes": "Driver reports car is super slippery and scary after 3 laps at 2.3 hot all round. Pressures dropped to front 2.0 / rear 1.8; after 2 more laps hot pressures front 2.05, rear 1.85. Tires: Nankang NS-2R (used)."
       },
       {
         "session_index": 2,
@@ -42,10 +42,10 @@
         "ambient_temp_c": null,
         "track_condition": "unknown",
         "cold_pressure_bar": {
-          "fl": null,
-          "fr": null,
-          "rl": null,
-          "rr": null
+          "fl": 2.0,
+          "fr": 2.0,
+          "rl": 1.8,
+          "rr": 1.8
         },
         "tire_compound": {
           "fl": "Nankang NS-2R",
@@ -54,11 +54,10 @@
           "rr": "Nankang NS-2R"
         },
         "setup_changes": [
-          "After 4 laps bled front hot 2.1 -> 2.0",
-          "After 4 laps bled rear hot 1.9 -> 1.8"
+          "After 4 laps: front 2.1 -> 2.0, rear 1.9 -> 1.8"
         ],
         "incidents": [],
-        "notes": "Driver reports feeling is good, car is slow."
+        "notes": "Driver reports feeling is good but car is slow. After 4 laps pressures adjusted: front 2.1 -> 2.0, rear 1.9 -> 1.8."
       }
     ]
   }

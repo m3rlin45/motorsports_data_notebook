@@ -1,10 +1,10 @@
 {
-  "_cache_key": "3fbdaab354c1d35801bd6bb769f90677558a9ba7|f3fc257af4ddabcdd30a29822de83132da7652e1|claude-opus-4-7",
+  "_cache_key": "3fbdaab354c1d35801bd6bb769f90677558a9ba7|745ba5f28ec0515f9e628864b4b32a9c656dc393|claude-opus-4-7",
   "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2025-11-18 Motegi Test.txt",
   "_source_sha1": "3fbdaab354c1d35801bd6bb769f90677558a9ba7",
-  "_prompt_sha1": "f3fc257af4ddabcdd30a29822de83132da7652e1",
+  "_prompt_sha1": "745ba5f28ec0515f9e628864b4b32a9c656dc393",
   "_model": "claude-opus-4-7",
-  "_extracted_at": "2026-08-16T07:15:57+00:00",
+  "_extracted_at": "2026-08-16T13:05:08+00:00",
   "data": {
     "file_date": null,
     "track": null,
@@ -29,11 +29,11 @@
           "rr": null
         },
         "setup_changes": [
-          "Rear dampers 20 clicks, camber 1/1",
-          "Front dampers 15 clicks, camber 2/2"
+          "Rear: 20 clicks damper, 1/1 camber",
+          "Front: 15 clicks damper, 2/2 camber"
         ],
         "incidents": [],
-        "notes": "Balance was ok, but a little tail happy, seems like too much camber on rear. Maybe try 2/2 next time. Front camber was awesome, this seems like a good start."
+        "notes": "Balance was ok, but a little tail happy, seems like too much camber on rear. Maybe try 2/2 next time. Front camber was awesome, this seems like a good start"
       }
     ]
   }
