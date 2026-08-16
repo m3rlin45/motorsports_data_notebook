@@ -510,3 +510,143 @@ def test_predict_loads_from_disk_when_no_model_kwarg(tmp_path: Path) -> None:
         dataset_root=tmp_path,
     )
     assert result["fl"].cold_pressure_bar > 0
+
+
+# ---------- Target-lap-time feature (schema v3) ----------
+
+
+def _model_with_pace_curve() -> dict:
+    """Minimal model + pace block: track_a/ToyCar/dry carries a curve."""
+    model = _minimal_model()
+    model["schema_version"] = 3
+    model["g2_lap_time_model"] = {
+        "method": "sector_knn_median_curve",
+        "default_exponent": 2.0,
+        "multiplier_clamp": {"min": 0.4, "max": 2.5},
+    }
+    for r in model["g2_typ_by_track_car_cond"]:
+        if r["track_canonical"] == "track_a" and r["car"] == "ToyCar" and r["condition"] == "dry":
+            # Linear curve through (55 s, 1.2) … (65 s, 0.6); typical lap is 60 s.
+            r["g2_vs_lap_time"] = {
+                "lap_time_s": [55.0, 60.0, 65.0],
+                "g2": [1.2, 0.9, 0.6],
+                "n_laps": 80,
+            }
+    return model
+
+
+def test_target_lap_time_none_is_v2_behavior() -> None:
+    model = _model_with_pace_curve()
+    kwargs = dict(
+        track="track_a",
+        car="ToyCar",
+        lap_within_stint=5,
+        target_hot_pressure_bar={c: 1.8 for c in CORNERS},
+        ambient_temp_c=20.0,
+        _model=model,
+    )
+    base = predict_cold_pressure(**kwargs)
+    assert base["fl"].g2_scale == 1.0
+    assert base["fl"].g2_pace_source is None
+    assert base["fl"].target_lap_time_s is None
+
+
+def test_target_lap_time_equal_to_typical_matches_no_target() -> None:
+    model = _model_with_pace_curve()
+    kwargs = dict(
+        track="track_a",
+        car="ToyCar",
+        lap_within_stint=5,
+        target_hot_pressure_bar={c: 1.8 for c in CORNERS},
+        ambient_temp_c=20.0,
+        _model=model,
+    )
+    base = predict_cold_pressure(**kwargs)
+    at_typ = predict_cold_pressure(target_lap_time_s=60.0, **kwargs)
+    for c in CORNERS:
+        assert at_typ[c].predicted_hot_temp_c == pytest.approx(base[c].predicted_hot_temp_c)
+        assert at_typ[c].cold_pressure_bar == pytest.approx(base[c].cold_pressure_bar)
+    assert at_typ["fl"].g2_scale == pytest.approx(1.0)
+    assert at_typ["fl"].g2_pace_source == "curve"
+
+
+def test_faster_target_heats_more_and_lowers_cold_pressure() -> None:
+    model = _model_with_pace_curve()
+    kwargs = dict(
+        track="track_a",
+        car="ToyCar",
+        lap_within_stint=5,
+        target_hot_pressure_bar={c: 1.8 for c in CORNERS},
+        ambient_temp_c=20.0,
+        _model=model,
+    )
+    slow = predict_cold_pressure(target_lap_time_s=64.0, **kwargs)
+    fast = predict_cold_pressure(target_lap_time_s=56.0, **kwargs)
+    for c in CORNERS:
+        assert fast[c].predicted_hot_temp_c > slow[c].predicted_hot_temp_c
+        assert fast[c].cold_pressure_bar < slow[c].cold_pressure_bar
+    # Curve is linear here: at 56 s g2 = 1.14, ratio vs 0.9 at 60 s
+    assert fast["fl"].g2_scale == pytest.approx(1.14 / 0.9)
+    # Time-on-track follows the target, not the typical lap time
+    assert fast["fl"].t_at_lap_n_s == pytest.approx(5 * 56.0)
+    assert slow["fl"].t_at_lap_n_s == pytest.approx(5 * 64.0)
+
+
+def test_target_beyond_curve_range_clamps_to_endpoint() -> None:
+    model = _model_with_pace_curve()
+    kwargs = dict(
+        track="track_a",
+        car="ToyCar",
+        lap_within_stint=5,
+        target_hot_pressure_bar={c: 1.8 for c in CORNERS},
+        ambient_temp_c=20.0,
+        _model=model,
+    )
+    at_edge = predict_cold_pressure(target_lap_time_s=55.0, **kwargs)
+    beyond = predict_cold_pressure(target_lap_time_s=40.0, **kwargs)
+    assert beyond["fl"].g2_scale == pytest.approx(at_edge["fl"].g2_scale)
+
+
+def test_bucket_without_curve_falls_back_to_default_exponent() -> None:
+    model = _model_with_pace_curve()
+    kwargs = dict(
+        track="track_b",  # no curve on this bucket
+        car="ToyCar",
+        lap_within_stint=5,
+        target_hot_pressure_bar={c: 1.8 for c in CORNERS},
+        ambient_temp_c=20.0,
+        _model=model,
+    )
+    lap_typ = predict_cold_pressure(**kwargs)["fl"].lap_time_typ_s
+    target = lap_typ * 0.9
+    p = predict_cold_pressure(target_lap_time_s=target, **kwargs)
+    assert p["fl"].g2_pace_source == "exponent"
+    assert p["fl"].g2_scale == pytest.approx((lap_typ / target) ** 2.0)
+
+
+def test_extreme_target_is_clamped_by_multiplier_clamp() -> None:
+    model = _model_with_pace_curve()
+    kwargs = dict(
+        track="track_b",
+        car="ToyCar",
+        lap_within_stint=5,
+        target_hot_pressure_bar={c: 1.8 for c in CORNERS},
+        ambient_temp_c=20.0,
+        _model=model,
+    )
+    p = predict_cold_pressure(target_lap_time_s=10.0, **kwargs)
+    assert p["fl"].g2_scale == pytest.approx(2.5)  # clamp max
+
+
+def test_nonpositive_target_lap_time_raises() -> None:
+    model = _model_with_pace_curve()
+    with pytest.raises(ValueError, match="target_lap_time_s"):
+        predict_cold_pressure(
+            track="track_a",
+            car="ToyCar",
+            lap_within_stint=5,
+            target_hot_pressure_bar={c: 1.8 for c in CORNERS},
+            ambient_temp_c=20.0,
+            target_lap_time_s=0.0,
+            _model=model,
+        )

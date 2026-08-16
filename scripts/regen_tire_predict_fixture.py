@@ -95,6 +95,45 @@ CASES: list[tuple[str, dict]] = [
             "target_hot_pressure_bar": 1.7,
         },
     ),
+    # Target-lap-time feature (schema v3): fast target on a curve-covered
+    # bucket, slow target on the same bucket, and a target on a bucket
+    # without a curve (motegi) to pin the default-exponent fallback.
+    (
+        "tsukuba_KKSII_dry_lap5_target60",
+        {
+            "track": "tsukuba_2000",
+            "car": "KK-SII",
+            "lap_within_stint": 5,
+            "track_condition": "dry",
+            "ambient_temp_c": 18.0,
+            "target_hot_pressure_bar": 1.7,
+            "target_lap_time_s": 60.0,
+        },
+    ),
+    (
+        "tsukuba_KKSII_dry_lap5_target68",
+        {
+            "track": "tsukuba_2000",
+            "car": "KK-SII",
+            "lap_within_stint": 5,
+            "track_condition": "dry",
+            "ambient_temp_c": 18.0,
+            "target_hot_pressure_bar": 1.7,
+            "target_lap_time_s": 68.0,
+        },
+    ),
+    (
+        "motegi_Inferno_dry_target_exponent_fallback",
+        {
+            "track": "motegi",
+            "car": "Inferno 86",
+            "lap_within_stint": 5,
+            "track_condition": "dry",
+            "ambient_temp_c": 20.0,
+            "target_hot_pressure_bar": 1.7,
+            "target_lap_time_s": 120.0,
+        },
+    ),
 ]
 
 
@@ -103,9 +142,12 @@ def _run_case(label: str, inputs: dict) -> dict:
     kwargs = {k: v for k, v in inputs.items() if k != "target_hot_pressure_bar"}
     kwargs["target_hot_pressure_bar"] = {c: scalar_target for c in CORNERS}
     predictions = predict_cold_pressure(**kwargs)
+    any_p = next(iter(predictions.values()))
     return {
         "label": label,
         "inputs": inputs,
+        "g2_scale": any_p.g2_scale,
+        "g2_pace_source": any_p.g2_pace_source,
         "corners": {
             c: {
                 "cold_pressure_bar": predictions[c].cold_pressure_bar,

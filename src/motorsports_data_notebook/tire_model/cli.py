@@ -94,6 +94,13 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Override the looked-up median lap time in seconds.",
     )
+    p_predict.add_argument(
+        "--target-lap-time",
+        type=float,
+        default=None,
+        help="Target pace for the stint in seconds. Scales tire energy via the "
+        "sector-fit g² vs lap-time curve and sets time-on-track (t = N × target).",
+    )
     group = p_predict.add_argument_group("Target hot pressures (bar gauge)")
     group.add_argument(
         "--hot-all", type=float, default=None, help="Shorthand: same target for all 4 corners."
@@ -216,6 +223,7 @@ def _cmd_predict(args: argparse.Namespace) -> int:
         cloud_cover_pct=args.cloud_cover,
         g2_typ_override=args.g2_typ,
         lap_time_typ_override_s=args.lap_time_s,
+        target_lap_time_s=args.target_lap_time,
         dataset_root=args.dataset_root,
     )
     _print_prediction(result, args)
@@ -234,6 +242,11 @@ def _print_prediction(result: dict[str, Prediction], args: argparse.Namespace) -
         f" lap_time_typ = {any_p.lap_time_typ_s:.1f} s"
     )
     print(f"                                  t at lap {args.lap} = {any_p.t_at_lap_n_s:.1f} s")
+    if any_p.target_lap_time_s is not None:
+        print(
+            f"Target lap:   {any_p.target_lap_time_s:.1f} s  →  g² × {any_p.g2_scale:.3f}"
+            f" ({any_p.g2_pace_source})"
+        )
     print(
         f"T_air = {any_p.t_air_c:.1f} °C    T_road = {any_p.t_road_c:.1f} °C    "
         f"T_eff = {any_p.t_eff_c:.1f} °C (w_road=0.20)"

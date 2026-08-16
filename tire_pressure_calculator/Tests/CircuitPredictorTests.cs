@@ -43,7 +43,8 @@ public class CircuitPredictorTests
                     cloudCoverPct: c.Inputs.CloudCoverPct,
                     corner: corner,
                     targetHotPressureBar: c.Inputs.TargetHotPressureBar,
-                    coldTireTempC: c.Inputs.ColdTireTempC);
+                    coldTireTempC: c.Inputs.ColdTireTempC,
+                    targetLapTimeS: c.Inputs.TargetLapTimeS);
                 var py = c.Corners[corner];
                 Assert.True(
                     Math.Abs(prediction.ColdPressureBar - py.ColdPressureBar) < 1e-3,
@@ -55,6 +56,13 @@ public class CircuitPredictorTests
                     $"vs Python={py.PredictedHotTempC:F4}");
                 Assert.Equal(string.Join(", ", py.KSourceBucket),
                     StripParens(prediction.KSourceBucket));
+                if (c.G2Scale is double expectedScale)
+                {
+                    Assert.True(Math.Abs(prediction.G2Scale - expectedScale) < 1e-9,
+                        $"[{c.Label}/{corner}] g2 scale C#={prediction.G2Scale:F6} " +
+                        $"vs Python={expectedScale:F6}");
+                    Assert.Equal(c.G2PaceSource, prediction.G2PaceSource);
+                }
             }
         }
     }
@@ -143,7 +151,9 @@ public class CircuitPredictorTests
     private sealed record FixtureCase(
         [property: System.Text.Json.Serialization.JsonPropertyName("label")] string Label,
         [property: System.Text.Json.Serialization.JsonPropertyName("inputs")] FixtureInputs Inputs,
-        [property: System.Text.Json.Serialization.JsonPropertyName("corners")] Dictionary<string, FixtureCornerOutput> Corners);
+        [property: System.Text.Json.Serialization.JsonPropertyName("corners")] Dictionary<string, FixtureCornerOutput> Corners,
+        [property: System.Text.Json.Serialization.JsonPropertyName("g2_scale")] double? G2Scale = null,
+        [property: System.Text.Json.Serialization.JsonPropertyName("g2_pace_source")] string? G2PaceSource = null);
 
     private sealed record FixtureInputs(
         [property: System.Text.Json.Serialization.JsonPropertyName("track")] string Track,
@@ -154,7 +164,8 @@ public class CircuitPredictorTests
         [property: System.Text.Json.Serialization.JsonPropertyName("track_temp_c")] double? TrackTempC,
         [property: System.Text.Json.Serialization.JsonPropertyName("cloud_cover_pct")] double? CloudCoverPct,
         [property: System.Text.Json.Serialization.JsonPropertyName("cold_tire_temp_c")] double? ColdTireTempC,
-        [property: System.Text.Json.Serialization.JsonPropertyName("target_hot_pressure_bar")] double TargetHotPressureBar);
+        [property: System.Text.Json.Serialization.JsonPropertyName("target_hot_pressure_bar")] double TargetHotPressureBar,
+        [property: System.Text.Json.Serialization.JsonPropertyName("target_lap_time_s")] double? TargetLapTimeS = null);
 
     private sealed record FixtureCornerOutput(
         [property: System.Text.Json.Serialization.JsonPropertyName("cold_pressure_bar")] double ColdPressureBar,

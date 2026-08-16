@@ -11,16 +11,19 @@ namespace TirePressureCalculator.Services.Modeling;
 /// </summary>
 public sealed class TireModel
 {
-    public const int SupportedSchemaVersion = 2;
+    // v3 adds the target-lap-time feature; v2 artifacts still load (the
+    // pace scaling then always uses the exponent fallback defaults).
+    public const int SupportedSchemaVersion = 3;
+    public const int MinSupportedSchemaVersion = 2;
 
     public TireModelDto Dto { get; }
 
     public TireModel(TireModelDto dto)
     {
-        if (dto.SchemaVersion != SupportedSchemaVersion)
+        if (dto.SchemaVersion < MinSupportedSchemaVersion || dto.SchemaVersion > SupportedSchemaVersion)
         {
             throw new InvalidOperationException(
-                $"Unsupported tire_model.json schema_version {dto.SchemaVersion}; expected {SupportedSchemaVersion}. " +
+                $"Unsupported tire_model.json schema_version {dto.SchemaVersion}; expected {MinSupportedSchemaVersion}–{SupportedSchemaVersion}. " +
                 "Rebuild the artifact with `just tire-build-warmup-table`.");
         }
         Dto = dto;
@@ -163,6 +166,68 @@ public sealed class TireModel
         return new G2Lookup(0.7, 0, "global");
     }
 
+    // ---- Target-lap-time pace scaling (schema v3) ----
+
+    /// <summary>Piecewise-linear interpolation clamped to the endpoints.
+    /// Must stay in lockstep with the Python and web implementations
+    /// (pinned by the parity fixture).</summary>
+    internal static double InterpClamped(double x, IReadOnlyList<double> xs, IReadOnlyList<double> ys)
+    {
+        if (x <= xs[0]) return ys[0];
+        if (x >= xs[xs.Count - 1]) return ys[ys.Count - 1];
+        for (int i = 1; i < xs.Count; i++)
+        {
+            if (x <= xs[i])
+            {
+                double w = (x - xs[i - 1]) / (xs[i] - xs[i - 1]);
+                return ys[i - 1] + w * (ys[i] - ys[i - 1]);
+            }
+        }
+        return ys[ys.Count - 1];
+    }
+
+    private G2CurveDto? LookupG2PaceCurve(string track, string car, string condition)
+    {
+        foreach (var cond in ConditionChain(condition))
+        {
+            var hit = Dto.G2TypByTrackCarCond.FirstOrDefault(
+                r => r.TrackCanonical == track && r.Car == car && r.Condition == cond);
+            if (hit is not null) return hit.G2VsLapTime;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Multiplier on g2_typ for a target lap time; mirrors the Python
+    /// predictor's <c>_g2_pace_scale</c>. Preferred: ratio along the
+    /// bucket's sector-fit curve (anchored at lap_time_typ so
+    /// target == typical scales by exactly 1). Fallback: the pooled
+    /// sector exponent. Clamped either way.
+    /// </summary>
+    public G2PaceScale ComputeG2PaceScale(
+        string track, string car, string condition,
+        double lapTimeTypS, double targetLapTimeS)
+    {
+        double clampMin = Dto.G2LapTimeModel?.MultiplierClamp?.Min ?? 0.4;
+        double clampMax = Dto.G2LapTimeModel?.MultiplierClamp?.Max ?? 2.5;
+
+        var curve = LookupG2PaceCurve(track, car, condition);
+        if (curve is not null)
+        {
+            double reference = InterpClamped(lapTimeTypS, curve.LapTimeS, curve.G2);
+            if (reference > 0)
+            {
+                double curveScale = InterpClamped(targetLapTimeS, curve.LapTimeS, curve.G2) / reference;
+                return new G2PaceScale(
+                    Math.Min(clampMax, Math.Max(clampMin, curveScale)), "curve");
+            }
+        }
+
+        double exponent = Dto.G2LapTimeModel?.DefaultExponent ?? 3.0;
+        double scale = Math.Pow(lapTimeTypS / targetLapTimeS, exponent);
+        return new G2PaceScale(Math.Min(clampMax, Math.Max(clampMin, scale)), "exponent");
+    }
+
     public LapTimeLookup LookupLapTime(string track, string car, string condition)
     {
         foreach (var cond in ConditionChain(condition))
@@ -206,3 +271,6 @@ public readonly record struct G2Lookup(
 
 public readonly record struct LapTimeLookup(
     double ValueSeconds, int NLapsUsed, string Source);
+
+public readonly record struct G2PaceScale(
+    double Scale, string Source);
