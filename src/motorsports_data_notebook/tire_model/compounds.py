@@ -59,6 +59,27 @@ def normalize_compound(raw: object) -> str | None:
     return None
 
 
+def load_condition_seeds(dataset_root: Path) -> dict[str, dict[str, str]]:
+    """The sidecar's declarative ``condition_seeds`` block.
+
+    Maps ``car -> {track_condition -> compound}`` for cars whose tire
+    choice follows the weather (e.g. the KK-SII's DRY/WET tires): an
+    all-dry session seeds as the dry tire, an all-wet one as the wet
+    tire, and mixed/damp sessions are left for signature inference.
+    """
+    import yaml
+
+    sidecar_path = dataset_root / COMPOUNDS_FILE
+    if not sidecar_path.exists():
+        return {}
+    doc = yaml.safe_load(sidecar_path.read_text(encoding="utf-8")) or {}
+    out: dict[str, dict[str, str]] = {}
+    for car, mapping in (doc.get("condition_seeds") or {}).items():
+        if isinstance(mapping, dict):
+            out[str(car)] = {str(k): str(v) for k, v in mapping.items() if v}
+    return out
+
+
 def load_compound_labels(dataset_root: Path) -> pd.DataFrame:
     """Return per-session compound labels: columns
     ``session_id, compound_front, compound_rear, source``.
