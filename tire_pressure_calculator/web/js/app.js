@@ -50,6 +50,7 @@ function defaultSettings() {
       TrackTempC: null,
       CloudCoverPct: null,
       TargetLapTimeS: null,
+      Compound: null,
     },
     UiLanguage: 'auto',
   };
@@ -112,6 +113,7 @@ const els = {
   ambientLabel: $('ambientLabel'), ambientInput: $('ambientInput'),
   cloudLabel: $('cloudLabel'), cloudInput: $('cloudInput'),
   targetLapLabel: $('targetLapLabel'), targetLapInput: $('targetLapInput'),
+  compoundLabel: $('compoundLabel'), compoundSelect: $('compoundSelect'),
 };
 
 // ---- Corner cards ----
@@ -231,6 +233,7 @@ function refreshPredictions() {
         targetHotPressureBar: settings[c.settingsKey].TargetHotPressure,
         coldTireTempC: settings[c.settingsKey].CurrentTemp,
         targetLapTimeS: p.TargetLapTimeS,
+        compound: p.Compound,
       });
       predictions[c.id] = result.predictedHotTempC;
     } catch {
@@ -257,6 +260,8 @@ function applyStrings() {
   els.ambientLabel.textContent = t('Ambient');
   els.cloudLabel.textContent = t('CloudCover');
   els.targetLapLabel.textContent = t('TargetLapTime');
+  els.compoundLabel.textContent = t('Compound');
+  fillCompoundSelects();
 
   fillSelect(els.langSelect, [
     { value: 'auto', label: t('LanguageAuto') },
@@ -266,6 +271,20 @@ function applyStrings() {
   fillSelect(els.conditionSelect,
     CONDITIONS.map((c) => ({ value: c.value, label: t(c.key) })),
     settings.Prediction.Condition);
+}
+
+// Compound choices depend on the selected car. The choice is FORCED —
+// every run has exactly one tire on all four corners, so there is no
+// pooled "default" option; an unset selection snaps to the first compound.
+function fillCompoundSelects() {
+  const car = settings.Prediction.Car;
+  const compounds = model && car ? model.availableCompounds(car) : [];
+  if (compounds.length > 0
+      && (!settings.Prediction.Compound || !compounds.includes(settings.Prediction.Compound))) {
+    settings.Prediction.Compound = compounds[0];
+  }
+  fillSelect(els.compoundSelect,
+    compounds.map((v) => ({ value: v, label: v })), settings.Prediction.Compound ?? '');
 }
 
 function fillSelect(select, options, selectedValue) {
@@ -309,6 +328,7 @@ function render() {
   els.ambientInput.value = p.AmbientTempC.toFixed(1);
   els.cloudInput.value = p.CloudCoverPct === null ? '' : String(p.CloudCoverPct);
   els.targetLapInput.value = p.TargetLapTimeS === null ? '' : p.TargetLapTimeS.toFixed(1);
+  els.compoundSelect.value = p.Compound ?? '';
 
   // Corner cards.
   for (const c of CORNERS) {
@@ -362,9 +382,10 @@ function wireEvents() {
       TrackTempC: null,
       CloudCoverPct: null,
       TargetLapTimeS: null,
+      Compound: null,
     };
     saveSettings();
-    applyStrings(); // condition select selection changed
+    applyStrings(); // condition + compound selections changed
     render();
   });
 
@@ -382,6 +403,15 @@ function wireEvents() {
 
   els.carSelect.addEventListener('change', () => {
     settings.Prediction.Car = els.carSelect.value || null;
+    // Compounds are per-car: snap to the new car's first compound.
+    settings.Prediction.Compound = null;
+    fillCompoundSelects();
+    saveSettings();
+    render();
+  });
+
+  els.compoundSelect.addEventListener('change', () => {
+    settings.Prediction.Compound = els.compoundSelect.value || null;
     saveSettings();
     render();
   });
@@ -466,6 +496,7 @@ async function init() {
       model.availableTracks.map((v) => ({ value: v, label: v })), p.Track);
     fillSelect(els.carSelect,
       model.availableCars.map((v) => ({ value: v, label: v })), p.Car);
+    fillCompoundSelects();
   } else {
     settings.Mode = MODE_MANUAL;
   }

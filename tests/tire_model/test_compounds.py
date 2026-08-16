@@ -51,7 +51,7 @@ def _write_matches(root: Path, rows: list[dict]) -> None:
 
 class TestLoadCompoundLabels:
     def test_sidecar_wins_over_notes(self, tmp_path: Path):
-        _write_sidecar(tmp_path, "sessions:\n  - session_id: s1\n    front: A052\n    rear: A052\n")
+        _write_sidecar(tmp_path, "sessions:\n  - session_id: s1\n    compound: A052\n")
         _write_matches(
             tmp_path,
             [
@@ -60,9 +60,9 @@ class TestLoadCompoundLabels:
             ],
         )
         out = load_compound_labels(tmp_path).set_index("session_id")
-        assert out.loc["s1", "compound_front"] == "A052"
+        assert out.loc["s1", "compound"] == "A052"
         assert out.loc["s1", "source"] == "sidecar"
-        assert out.loc["s2", "compound_front"] == "RE-71RS"
+        assert out.loc["s2", "compound"] == "RE-71RS"
         assert out.loc["s2", "source"] == "notes"
 
     def test_wheel_sets_resolve_set_labels(self, tmp_path: Path):
@@ -83,8 +83,9 @@ class TestLoadCompoundLabels:
             ],
         )
         out = load_compound_labels(tmp_path).set_index("session_id")
-        assert out.loc["s1", "compound_front"] == "A052"
-        assert out.loc["s1", "compound_rear"] == "RE-71RS"
+        # One tire per run: fl column resolves first (fronts and rears
+        # always agree in real data).
+        assert out.loc["s1", "compound"] == "A052"
         # Unmapped set -> no label at all for that session
         assert "s2" not in out.index
 
@@ -97,7 +98,7 @@ class TestLoadCompoundLabels:
             ],
         )
         out = load_compound_labels(tmp_path).set_index("session_id")
-        assert out.loc["s1", "compound_front"] == "RE-71RS"
+        assert out.loc["s1", "compound"] == "RE-71RS"
 
     def test_missing_files(self, tmp_path: Path):
         out = load_compound_labels(tmp_path)

@@ -209,3 +209,26 @@ test('target lap time drives time-on-track and rejects non-positive values', () 
   assert.equal(without.g2PaceSource, null);
   assert.throws(() => predictCorner(model, { ...args, targetLapTimeS: 0 }), RangeError);
 });
+
+test('compound K overrides pooled K per axle', () => {
+  const model = new TireModel(modelDto);
+  const compounds = model.availableCompounds('Inferno 86');
+  assert.ok(compounds.includes('A052') && compounds.includes('RE-71RS'));
+  const args = {
+    track: 'sodegaura', car: 'Inferno 86', condition: 'dry',
+    lapWithinStint: 5, ambientTempC: 22, corner: 'rr', targetHotPressureBar: 1.9,
+  };
+  const pooled = predictCorner(model, args);
+  const a052 = predictCorner(model, { ...args, compound: 'A052' });
+  const rs71 = predictCorner(model, { ...args, compound: 'RE-71RS' });
+  assert.ok(a052.kKelvinPerG2 < pooled.kKelvinPerG2, 'A052 cooler than pooled');
+  assert.ok(rs71.kKelvinPerG2 > a052.kKelvinPerG2, '71RS hotter than A052');
+  assert.ok(a052.predictedHotTempC < rs71.predictedHotTempC);
+  assert.ok(a052.coldPressureBar > rs71.coldPressureBar);
+  // One tire on all four corners: a front corner moves too.
+  const front = predictCorner(model, { ...args, corner: 'fl', compound: 'A052' });
+  assert.notEqual(front.kKelvinPerG2, predictCorner(model, { ...args, corner: 'fl' }).kKelvinPerG2);
+  // Unknown compound falls back to pooled.
+  const unknown = predictCorner(model, { ...args, compound: 'SLICKS9000' });
+  assert.equal(unknown.kKelvinPerG2, pooled.kKelvinPerG2);
+});
