@@ -74,6 +74,7 @@ class AxleAssignment:
     responsibility: float
     n_laps: int
     pinned: bool  # True when from a human/seed label
+    poor_fit: bool = False  # best compound still fits badly (unknown tire?)
 
 
 def _suff_stats(
@@ -138,19 +139,44 @@ def fit_compounds_em(
     c_track_by_track: dict,
     *,
     max_iter: int = EM_MAX_ITER,
-) -> tuple[dict[tuple[str, str, str, str], tuple[float, float, float]], list[AxleAssignment]]:
-    """Joint EM over compound assignments and per-compound K.
+) -> tuple[
+    dict[tuple[str, str, str, str], tuple[float, float, float]],
+    list[AxleAssignment],
+    dict[str, dict[str, float]],
+]:
+    """Joint EM over compound assignments and a DECOMPOSED K.
 
-    Returns ``(k_by_compound, assignments)`` where ``k_by_compound`` maps
-    ``(car, compound, corner, condition) -> (K, stderr, n_effective)`` and
-    ``assignments`` carries the final per-(session, axle) posteriors.
+    K is structured, not free per bucket:
+
+        K_effective = c_track[track] · K_base[car, corner, cond] · m[car, compound]
+
+    (c_track is already inside the regressor ``x``, so this function fits
+    ``K_base`` per (car, corner, condition) and one scalar multiplier per
+    (car, compound), by responsibility-weighted alternating least squares
+    inside each M-step.) The structure pools statistical strength — every
+    lap of every compound informs K_base, and each compound's m is shared
+    across corners and conditions — and it removes the symmetric fixed
+    point free-bucket fitting suffered from. Identifiability: the
+    lap-weighted geometric mean of m over a car's compounds is 1, so
+    K_base is the car's "average tire" and m the compound's ratio.
+
+    Selection is FORCED: every eligible (session, axle) carries a posterior
+    over the car's compounds (pinned one-hot where labeled/seeded, softmax
+    elsewhere) — there is no unlabeled pool inside a participating car.
+    Sessions whose best fit is still poor are flagged ``poor_fit`` (audit:
+    possible unknown tire) but still assigned softly.
+
+    Returns ``(k_by_compound, assignments, multipliers)`` where
+    ``k_by_compound`` maps ``(car, compound, corner, condition) ->
+    (K, stderr, n_effective)`` (the base·m product, ready for the artifact),
+    and ``multipliers`` maps ``car -> {compound: m}``.
     """
     if laps_for_fit.empty or labels.empty:
-        return {}, []
+        return {}, [], {}
 
     stats = _suff_stats(laps_for_fit, tau_by_car_corner_cond, c_track_by_track)
     if stats.empty:
-        return {}, []
+        return {}, [], {}
     stats["axle"] = stats["corner"].map(_CORNER_AXLE)
 
     label_cols = {"front": "compound_front", "rear": "compound_rear"}
@@ -163,10 +189,10 @@ def fit_compounds_em(
 
     out_k: dict[tuple[str, str, str, str], tuple[float, float, float]] = {}
     assignments: list[AxleAssignment] = []
+    multipliers: dict[str, dict[str, float]] = {}
 
     for car_key, car_stats in stats.groupby("car"):
         car = str(car_key)
-        # Eligibility: ≥2 compounds with ≥MIN_LABELED_SESSIONS pinned sessions.
         pinned_here: dict[str, set] = {}
         for (sid, axle), comp in pinned.items():
             if sid in set(car_stats["session_id"]):
@@ -175,15 +201,10 @@ def fit_compounds_em(
             c for c, sids in pinned_here.items() if len(sids) >= MIN_LABELED_SESSIONS
         )
         if len(compounds) < 2:
-            # Still fit K for whatever labeled compounds exist (no latents).
             compounds = sorted(pinned_here)
             if not compounds:
                 continue
-            fixed_only = True
-        else:
-            fixed_only = False
 
-        # Units: (session, axle) with enough laps.
         unit_lap_counts: dict[tuple[str, str], int] = {
             (str(k[0]), str(k[1])): int(v)  # type: ignore[index]
             for k, v in car_stats.groupby(["session_id", "axle"])["n"].sum().items()
@@ -195,7 +216,7 @@ def fit_compounds_em(
         n_units, n_comp = len(units), len(compounds)
         comp_idx = {c: j for j, c in enumerate(compounds)}
 
-        # Responsibilities: pinned one-hot; unlabeled start uniform.
+        # Forced selection: every unit starts uniform (pinned -> one-hot).
         resp = np.full((n_units, n_comp), 1.0 / n_comp)
         pin_mask = np.zeros(n_units, dtype=bool)
         for u, i in unit_idx.items():
@@ -204,208 +225,188 @@ def fit_compounds_em(
                 resp[i] = 0.0
                 resp[i, comp_idx[comp]] = 1.0
                 pin_mask[i] = True
-            elif fixed_only:
-                # No latents for this car: unlabeled units don't participate.
-                resp[i] = 0.0
 
-        # Index sufficient stats by unit.
         s_unit = car_stats.copy()
         s_unit["unit"] = list(zip(s_unit["session_id"], s_unit["axle"]))
         s_unit = s_unit[s_unit["unit"].isin(unit_idx)]
         s_unit["ui"] = s_unit["unit"].map(unit_idx)
+        buckets = list(s_unit.groupby(["corner", "condition"]))
+        bucket_arrays = []
+        for bkey, grp in buckets:
+            corner, cond = str(bkey[0]), str(bkey[1])  # type: ignore[index]
+            bucket_arrays.append(
+                (
+                    corner,
+                    cond,
+                    grp["ui"].to_numpy(),
+                    grp["sxx"].to_numpy(),
+                    grp["sxy"].to_numpy(),
+                    grp["syy"].to_numpy(),
+                    grp["n"].to_numpy(),
+                )
+            )
 
-        buckets = s_unit.groupby(["corner", "condition"])
-        sigma2: dict[str, float] = {c: 25.0 for c in _CORNER_AXLE}  # start: (5 °C)²
-        k_val: dict[tuple[str, str, str], float] = {}  # (compound, corner, cond) -> K
-
-        def k_for_scoring(comp: str, corner: str, cond: str) -> float | None:
-            """K for likelihood scoring: exact condition, then dry, then any.
-
-            A compound with NO K anywhere for this corner must not be
-            scored at all — treating a missing bucket as zero residual
-            would make "no coverage" look like a perfect fit.
-            """
-            for c2 in (cond, "dry"):
-                k = k_val.get((comp, corner, c2))
-                if k is not None:
-                    return k
-            for (c_comp, c_corner, _c2), k in k_val.items():
-                if c_comp == comp and c_corner == corner:
-                    return k
-            return None
+        sigma2: dict[str, float] = {c: 25.0 for c in _CORNER_AXLE}
+        base: dict[tuple[str, str], float] = {}
+        m = np.ones(n_comp)
+        # Robust weights: selection is forced, but a free unit's INFLUENCE
+        # on (base, m) shrinks as its best-compound fit degrades — a
+        # mid-cluster or unknown-tire session is still assigned (and
+        # flagged poor_fit) without dragging any cluster toward itself.
+        robust_w = np.ones(n_units)
+        n_u_arr = np.array([max(float(unit_lap_counts.get(u, 1)), 1.0) for u in units])
+        temper = np.minimum(1.0, SESSION_EFF_SAMPLES / n_u_arr)[:, None]
+        free = ~pin_mask
 
         prev_ll = -np.inf
         for _ in range(max_iter):
-            # ---- M-step: responsibility-weighted least squares per bucket ----
-            k_val.clear()
-            for bkey, grp in buckets:
-                corner, cond = str(bkey[0]), str(bkey[1])  # type: ignore[index]
-                ui = grp["ui"].to_numpy()
-                for comp, j in comp_idx.items():
-                    w = resp[ui, j]
-                    w_pinned = float(np.sum(w * pin_mask[ui] * grp["n"].to_numpy()))
-                    if not fixed_only and w_pinned < MIN_PINNED_LAPS_PER_BUCKET:
-                        continue
-                    sxx = float(np.sum(w * grp["sxx"].to_numpy()))
-                    if sxx <= 0:
-                        continue
-                    sxy = float(np.sum(w * grp["sxy"].to_numpy()))
-                    k_val[(comp, corner, cond)] = sxy / sxx
-            # Residual variance per corner (pooled over compounds/conds).
+            # ---- M-step: alternating LS on (base, m) ----
+            resp_eff = resp * robust_w[:, None]
+            for _als in range(3):
+                for corner, cond, ui, sxx, sxy, syy, n_arr in bucket_arrays:
+                    num = den = 0.0
+                    for j in range(n_comp):
+                        w = resp_eff[ui, j]
+                        num += m[j] * float(np.sum(w * sxy))
+                        den += m[j] * m[j] * float(np.sum(w * sxx))
+                    if den > 0:
+                        base[(corner, cond)] = num / den
+                for j in range(n_comp):
+                    num = den = 0.0
+                    for corner, cond, ui, sxx, sxy, syy, n_arr in bucket_arrays:
+                        b = base.get((corner, cond))
+                        if b is None:
+                            continue
+                        w = resp_eff[ui, j]
+                        num += b * float(np.sum(w * sxy))
+                        den += b * b * float(np.sum(w * sxx))
+                    if den > 0:
+                        m[j] = num / den
+                # Anchor: lap-weighted geometric mean of m == 1.
+                w_c = np.array(
+                    [max(float(np.sum(resp[:, j] * n_u_arr)), 1e-9) for j in range(n_comp)]
+                )
+                m = np.clip(m, 1e-3, None)
+                g = float(np.exp(np.sum(w_c * np.log(m)) / np.sum(w_c)))
+                if g > 0:
+                    m = m / g
+                    for key in list(base):
+                        base[key] *= g
+
+            def k_for_scoring(j: int, corner: str, cond: str) -> float | None:
+                for c2 in (cond, "dry"):
+                    b = base.get((corner, c2))
+                    if b is not None:
+                        return b * float(m[j])
+                for (c_corner, _c2), b in base.items():
+                    if c_corner == corner:
+                        return b * float(m[j])
+                return None
+
+            # Residual variance per corner from pinned units only (kept
+            # clean of whatever the free units turn out to be).
             for corner in _CORNER_AXLE:
                 num = den = 0.0
-                for bkey, grp in buckets:
-                    c2, cond = str(bkey[0]), str(bkey[1])  # type: ignore[index]
+                for c2, cond, ui, sxx, sxy, syy, n_arr in bucket_arrays:
                     if c2 != corner:
                         continue
-                    ui = grp["ui"].to_numpy()
-                    for comp, j in comp_idx.items():
-                        k = k_val.get((comp, corner, cond))
+                    for j in range(n_comp):
+                        k = k_for_scoring(j, corner, cond)
                         if k is None:
                             continue
-                        w = resp[ui, j]
-                        rss_arr = (
-                            grp["syy"].to_numpy()
-                            - 2 * k * grp["sxy"].to_numpy()
-                            + k * k * grp["sxx"].to_numpy()
-                        )
+                        w = resp[ui, j] * pin_mask[ui]
+                        rss_arr = syy - 2 * k * sxy + k * k * sxx
                         num += float(np.sum(w * rss_arr))
-                        den += float(np.sum(w * grp["n"].to_numpy()))
+                        den += float(np.sum(w * n_arr))
                 if den > 0:
                     sigma2[corner] = max(num / den, SIGMA2_FLOOR)
 
-            # ---- E-step: posteriors for un-pinned units ----
+            # ---- E-step ----
             loglik = np.zeros((n_units, n_comp))
             covered = np.zeros((n_units, n_comp))
-            for bkey, grp in buckets:
-                corner, cond = str(bkey[0]), str(bkey[1])  # type: ignore[index]
-                ui = grp["ui"].to_numpy()
+            for corner, cond, ui, sxx, sxy, syy, n_arr in bucket_arrays:
                 s2 = sigma2[corner]
-                for comp, j in comp_idx.items():
-                    k = k_for_scoring(comp, corner, cond)
+                for j in range(n_comp):
+                    k = k_for_scoring(j, corner, cond)
                     if k is None:
                         continue
-                    rss_arr = (
-                        grp["syy"].to_numpy()
-                        - 2 * k * grp["sxy"].to_numpy()
-                        + k * k * grp["sxx"].to_numpy()
-                    )
+                    rss_arr = syy - 2 * k * sxy + k * k * sxx
                     np.add.at(loglik[:, j], ui, -0.5 * rss_arr / s2)
-                    np.add.at(covered[:, j], ui, grp["n"].to_numpy())
-            # A compound that covers none of a unit's laps is not a candidate.
+                    np.add.at(covered[:, j], ui, n_arr)
             loglik = np.where(covered > 0, loglik, -np.inf)
-            free = ~pin_mask if not fixed_only else np.zeros(n_units, dtype=bool)
             if free.any():
-                n_u = np.array([max(float(unit_lap_counts.get(u, 1)), 1.0) for u in units])
-                temper = np.minimum(1.0, SESSION_EFF_SAMPLES / n_u)[:, None]
                 ll = (loglik * temper)[free]
                 row_max = ll.max(axis=1, keepdims=True)
                 ok_rows = np.isfinite(row_max[:, 0])
-                p = np.zeros_like(ll)
+                p = np.full_like(ll, 1.0 / n_comp)
                 if ok_rows.any():
                     z = np.exp(ll[ok_rows] - row_max[ok_rows])
                     p[ok_rows] = z / z.sum(axis=1, keepdims=True)
                 resp[free] = p
+            # Refresh robust weights for free units from best-fit quality.
+            with np.errstate(invalid="ignore"):
+                best_chi2_iter = np.where(
+                    np.isfinite(loglik).any(axis=1),
+                    -2.0
+                    * np.nanmax(np.where(np.isfinite(loglik), loglik, np.nan), axis=1)
+                    / n_u_arr,
+                    np.inf,
+                )
+            new_w = np.minimum(1.0, OUTLIER_CHI2_PER_LAP / np.maximum(best_chi2_iter, 1e-9))
+            robust_w = np.where(pin_mask, 1.0, new_w)
             total_ll = float(np.sum(np.where(resp > 0, loglik * resp, 0.0)))
             if abs(total_ll - prev_ll) < EM_TOL * (1 + abs(prev_ll)):
                 break
             prev_ll = total_ll
 
-        # Outlier gate: free units whose best cluster still fits badly get
-        # their responsibilities zeroed (unknown compound — stays unlabeled).
-        # The gate's variance comes from PINNED sessions only: the mixture
-        # σ² is inflated by the very outliers we are trying to detect.
-        if not fixed_only:
-            sig_num: dict[str, float] = {c: 0.0 for c in _CORNER_AXLE}
-            sig_den: dict[str, float] = {c: 0.0 for c in _CORNER_AXLE}
-            chi2_num = np.zeros((n_units, n_comp))
-            for bkey, grp in buckets:
-                corner, cond = str(bkey[0]), str(bkey[1])  # type: ignore[index]
-                ui = grp["ui"].to_numpy()
-                for comp, j in comp_idx.items():
-                    k = k_for_scoring(comp, corner, cond)
-                    if k is None:
-                        np.add.at(chi2_num[:, j], ui, np.inf * np.ones(len(ui)))
-                        continue
-                    rss_arr = (
-                        grp["syy"].to_numpy()
-                        - 2 * k * grp["sxy"].to_numpy()
-                        + k * k * grp["sxx"].to_numpy()
-                    )
-                    np.add.at(chi2_num[:, j], ui, rss_arr)
-                    w_pin = resp[ui, j] * pin_mask[ui]
-                    sig_num[corner] += float(np.sum(w_pin * rss_arr))
-                    sig_den[corner] += float(np.sum(w_pin * grp["n"].to_numpy()))
-            sigma2_clean = np.mean(
-                [
-                    max(sig_num[c] / sig_den[c], SIGMA2_FLOOR) if sig_den[c] > 0 else SIGMA2_FLOOR
-                    for c in _CORNER_AXLE
-                ]
-            )
-            n_u_arr = np.array([max(float(unit_lap_counts.get(u, 1)), 1.0) for u in units])
-            best_chi2 = chi2_num.min(axis=1) / (n_u_arr * sigma2_clean)
-            outlier = (~pin_mask) & (best_chi2 > OUTLIER_CHI2_PER_LAP)
-            if outlier.any():
-                resp[outlier] = 0.0
-                # One more M-step so exported K excludes the outliers.
-                k_val.clear()
-                for bkey, grp in buckets:
-                    corner, cond = str(bkey[0]), str(bkey[1])  # type: ignore[index]
-                    ui = grp["ui"].to_numpy()
-                    for comp, j in comp_idx.items():
-                        w = resp[ui, j]
-                        w_pinned = float(np.sum(w * pin_mask[ui] * grp["n"].to_numpy()))
-                        if not fixed_only and w_pinned < MIN_PINNED_LAPS_PER_BUCKET:
-                            continue
-                        sxx = float(np.sum(w * grp["sxx"].to_numpy()))
-                        if sxx > 0:
-                            k_val[(comp, corner, cond)] = float(
-                                np.sum(w * grp["sxy"].to_numpy()) / sxx
-                            )
-
-        # ---- Export K with stderr + effective n ----
-        for bkey, grp in buckets:
-            corner, cond = str(bkey[0]), str(bkey[1])  # type: ignore[index]
-            ui = grp["ui"].to_numpy()
-            for comp, j in comp_idx.items():
-                k = k_val.get((comp, corner, cond))
+        # Poor-fit flag (possible unknown tire): best cluster still fits
+        # badly against pinned-only variance. Selection stays forced — the
+        # flag is for the audit, not an exclusion.
+        chi2_num = np.zeros((n_units, n_comp))
+        for corner, cond, ui, sxx, sxy, syy, n_arr in bucket_arrays:
+            for j in range(n_comp):
+                k = k_for_scoring(j, corner, cond)
                 if k is None:
+                    chi2_num[:, j] += np.inf
                     continue
-                w = resp[ui, j]
-                sxx = float(np.sum(w * grp["sxx"].to_numpy()))
-                n_eff = float(np.sum(w * grp["n"].to_numpy()))
-                if sxx <= 0 or n_eff < MIN_LAPS_PER_AXLE:
-                    continue
-                rss = float(
-                    np.sum(
-                        w
-                        * (
-                            grp["syy"].to_numpy()
-                            - 2 * k * grp["sxy"].to_numpy()
-                            + k * k * grp["sxx"].to_numpy()
-                        )
-                    )
-                )
-                stderr = float(np.sqrt(max(rss, 0.0) / max(n_eff - 1, 1.0) / sxx))
-                out_k[(str(car), comp, corner, cond)] = (k, stderr, n_eff)
+                rss_arr = syy - 2 * k * sxy + k * k * sxx
+                np.add.at(chi2_num[:, j], ui, rss_arr / sigma2[corner])
+        best_chi2 = chi2_num.min(axis=1) / n_u_arr
+        poor = best_chi2 > OUTLIER_CHI2_PER_LAP
 
+        # ---- Export effective K = base·m with stderr + effective n ----
+        for corner, cond, ui, sxx, sxy, syy, n_arr in bucket_arrays:
+            b = base.get((corner, cond))
+            if b is None:
+                continue
+            for comp, j in comp_idx.items():
+                k = b * float(m[j])
+                w = (resp * robust_w[:, None])[ui, j]
+                sxx_w = float(np.sum(w * sxx))
+                n_eff = float(np.sum(w * n_arr))
+                if sxx_w <= 0 or n_eff < MIN_LAPS_PER_AXLE:
+                    continue
+                rss = float(np.sum(w * (syy - 2 * k * sxy + k * k * sxx)))
+                stderr = float(np.sqrt(max(rss, 0.0) / max(n_eff - 1, 1.0) / sxx_w))
+                out_k[(car, comp, corner, cond)] = (k, stderr, n_eff)
+
+        multipliers[car] = {comp: round(float(m[j]), 4) for comp, j in comp_idx.items()}
         for u, i in unit_idx.items():
             j = int(np.argmax(resp[i]))
-            if resp[i].sum() == 0:
-                continue
             assignments.append(
                 AxleAssignment(
                     session_id=u[0],
-                    car=str(car),
+                    car=car,
                     axle=u[1],
                     compound=compounds[j],
                     responsibility=round(float(resp[i, j]), 3),
                     n_laps=unit_lap_counts.get(u, 0),
                     pinned=bool(pin_mask[i]),
+                    poor_fit=bool(poor[i]),
                 )
             )
 
-    return out_k, assignments
+    return out_k, assignments, multipliers
 
 
 def apply_condition_seeds(

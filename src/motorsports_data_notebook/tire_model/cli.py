@@ -249,7 +249,10 @@ def _cmd_infer_compounds(args: argparse.Namespace) -> int:
 
     labels = load_compound_labels(root)
     labels = apply_condition_seeds(labels, laps, load_condition_seeds(root))
-    _, assignments = fit_compounds_em(laps, labels, tau, c_track)
+    _, assignments, multipliers = fit_compounds_em(laps, labels, tau, c_track)
+    print("Fitted compound multipliers (K_effective = c_track × K_base × m):")
+    for car, comps in sorted(multipliers.items()):
+        print(f"  {car}: " + ", ".join(f"{c}×{v}" for c, v in sorted(comps.items())))
     detail = [a for a in assignments if not a.pinned]
 
     sess_meta = pd.concat(
