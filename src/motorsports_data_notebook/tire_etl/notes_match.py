@@ -36,19 +36,18 @@ def infer_date_track_from_filename(path: Path) -> tuple[_date | None, str | None
         except ValueError:
             d = None
     lower = stem.lower()
+    # A filename can contain several track-ish tokens (e.g.
+    # "2025-10-05-Sodegaura Marutai" — track first, event name after).
+    # The LEFTMOST match wins.
+    best_pos: int | None = None
     track: str | None = None
     for canonical in known_canonicals():
         # Strip the suffix ("_2000" etc.) and match the leading token.
         head = canonical.split("_")[0]
-        if head in lower:
+        pos = lower.find(head)
+        if pos >= 0 and (best_pos is None or pos < best_pos):
+            best_pos = pos
             track = canonical
-            break
-    # Alias check (e.g. "kksii" doesn't map to a track token directly).
-    if track is None:
-        for tok in ("tsukuba", "sodegaura", "fuji", "motegi", "marutai"):
-            if tok in lower:
-                track = normalize_track_name(tok)
-                break
     return d, track
 
 
@@ -135,20 +134,44 @@ def match_notes_to_sessions(
     sess_tracks = sessions.column("track_canonical").to_pylist()
     sess_utc = sessions.column("session_start_utc").to_pylist()
 
-    # Group telemetry sessions by (date, track): assignment quality depends
-    # on seeing a day's sessions together (one-to-one anchors + ordering),
-    # not on matching each session in isolation.
-    groups: dict[tuple, list[int]] = {}
-    for i in range(len(sess_ids)):
-        groups.setdefault((sess_dates[i], sess_tracks[i]), []).append(i)
+    sess_cars = (
+        sessions.column("car").to_pylist()
+        if "car" in sessions.column_names
+        else [None] * len(sess_ids)
+    )
 
-    for (sess_date, track_can), idxs in groups.items():
-        candidates = [
+    def _car_compatible(note_car: str | None, sess_car: str | None) -> bool:
+        if not note_car or not sess_car:
+            return False
+        a = note_car.lower().replace(" ", "")
+        b = sess_car.lower().replace(" ", "")
+        return a in b or b in a
+
+    # Group telemetry sessions by (date, track, car): assignment quality
+    # depends on seeing a day's sessions together (one-to-one anchors +
+    # ordering), and multi-car track days must not cross-assign notes.
+    groups: dict[tuple, list[int]] = {}
+    cars_per_daytrack: dict[tuple, set] = {}
+    for i in range(len(sess_ids)):
+        groups.setdefault((sess_dates[i], sess_tracks[i], sess_cars[i]), []).append(i)
+        cars_per_daytrack.setdefault((sess_dates[i], sess_tracks[i]), set()).add(sess_cars[i])
+
+    for (sess_date, track_can, sess_car), idxs in groups.items():
+        in_window = [
             entry
             for entry in note_entries
             if abs((entry[0] - sess_date).days) <= date_tolerance_days
             and (track_can is None or entry[1] == track_can)
         ]
+        # Prefer note files that name this group's car; fall back to
+        # car-less notes. On multi-car days a car-less note may only match
+        # via explicit time anchors — order-alignment across cars would
+        # attribute one car's notes to another's telemetry.
+        candidates = [e for e in in_window if _car_compatible(e[2].data.car, sess_car)]
+        anchors_only = False
+        if not candidates:
+            candidates = [e for e in in_window if not e[2].data.car]
+            anchors_only = len(cars_per_daytrack[(sess_date, track_can)]) > 1
         if not candidates:
             continue
 
@@ -210,6 +233,8 @@ def match_notes_to_sessions(
         for pos, i in enumerate(idxs):
             if i in assigned_sess:
                 prev_c = assigned_sess[i][0]
+                continue
+            if anchors_only:
                 continue
             lo = 0 if prev_c is None else prev_c + 1
             hi = len(candidates) - 1
