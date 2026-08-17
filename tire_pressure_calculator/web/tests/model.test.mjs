@@ -37,6 +37,7 @@ test('parity with Python predictor fixture', () => {
         targetHotPressureBar: inputs.target_hot_pressure_bar,
         coldTireTempC: inputs.cold_tire_temp_c ?? null,
         targetLapTimeS: inputs.target_lap_time_s ?? null,
+        compound: inputs.compound ?? null,
       });
       const label = `${testCase.label}/${corner}`;
       assert.ok(

@@ -83,13 +83,20 @@ public class MainViewModelTests
 
         Assert.Equal(0.0, vm.TempAdjustPercent);
         Assert.Equal(20.0, vm.FrontLeft.CurrentTemp);
-        Assert.Equal(80.0, vm.FrontLeft.TargetHotTemp);
-        Assert.Equal(1.80, vm.RearRight.TargetHotPressure);
         Assert.Equal("dry", vm.SelectedCondition);
         Assert.Equal(5, vm.LapWithinStint);
         Assert.Equal(20.0, vm.AmbientTempC);
         Assert.Null(vm.TrackTempC);
-        Assert.Null(vm.CloudCoverPct);
+        // Forced defaults: neutral sky, typical lap, car-based corner
+        // prefills (the embedded model is loaded by the default ctor).
+        Assert.Equal(50.0, vm.CloudCoverPct);
+        Assert.NotNull(vm.TargetLapTimeS);
+        var model = TirePressureCalculator.Services.Modeling.TireModelLoader
+            .LoadEmbedded(typeof(MainViewModel).Assembly);
+        var fl = model.LookupCornerDefaults(vm.SelectedCar!, "fl", "dry");
+        var rr = model.LookupCornerDefaults(vm.SelectedCar!, "rr", "dry");
+        Assert.Equal(Math.Round(fl!.Value.HotTempC, 1), vm.FrontLeft.TargetHotTemp);
+        Assert.Equal(Math.Round(rr!.Value.HotPressureBar, 2), vm.RearRight.TargetHotPressure);
     }
 
     [Fact]

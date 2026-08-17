@@ -34,7 +34,8 @@ public sealed class CircuitPredictor
         string corner,
         double targetHotPressureBar,
         double? coldTireTempC = null,
-        double? targetLapTimeS = null)
+        double? targetLapTimeS = null,
+        string? compound = null)
     {
         ArgumentNullException.ThrowIfNull(track);
         ArgumentNullException.ThrowIfNull(car);
@@ -46,7 +47,10 @@ public sealed class CircuitPredictor
             throw new ArgumentException(
                 $"track_condition must be dry/damp/wet; got '{condition}'", nameof(condition));
 
+        // One tire on all four corners — the compound applies to every corner.
         var k = _model.LookupK(car, corner, cond);
+        if (compound is not null && _model.LookupCompoundK(car, compound, corner, cond) is KLookup ck)
+            k = ck;
         var tau = _model.LookupTau(car, corner, cond);
         var c = _model.LookupCTrack(track);
         var g2 = _model.LookupG2(track, car, cond);

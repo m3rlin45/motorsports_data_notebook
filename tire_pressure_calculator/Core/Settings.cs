@@ -34,6 +34,8 @@ public class PredictionSettings
     public double? TrackTempC { get; set; }
     public double? CloudCoverPct { get; set; }
     public double? TargetLapTimeS { get; set; }
+    /// <summary>Selected tire compound — one tire on all four corners.</summary>
+    public string? Compound { get; set; }
 }
 
 public class AppSettings
@@ -48,6 +50,13 @@ public class AppSettings
     /// <summary>UI language preference: "auto", "en", or "ja".</summary>
     public string UiLanguage { get; set; } = "auto";
 
+    /// <summary>True when these settings came from storage (vs factory
+    /// defaults). First run prefills the corner targets from the model; a
+    /// returning user's tuned values are left alone until they change the
+    /// selection or hit Reset.</summary>
+    [JsonIgnore]
+    public bool LoadedFromStorage { get; set; }
+
     public static ISettingsStorage Storage { get; set; } = new FileSettingsStorage();
 
     public static AppSettings Load()
@@ -57,7 +66,12 @@ public class AppSettings
             var json = Storage.Read();
             if (!string.IsNullOrEmpty(json))
             {
-                return JsonSerializer.Deserialize(json, SettingsContext.Default.AppSettings) ?? new();
+                var loaded = JsonSerializer.Deserialize(json, SettingsContext.Default.AppSettings);
+                if (loaded is not null)
+                {
+                    loaded.LoadedFromStorage = true;
+                    return loaded;
+                }
             }
         }
         catch { }

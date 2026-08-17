@@ -212,17 +212,22 @@ public class PredictionModeTests
         vm.FrontLeft.TargetHotPressure = 1.7;
         vm.Mode = AppMode.CircuitPrediction;
 
+        // Feed the VM's own (possibly snapped/forced) inputs into the direct
+        // call: the VM always carries a cloud cover, target lap time, and —
+        // for cars with fitted compounds — a forced compound selection.
         var direct = directPredictor.Predict(
             track: "tsukuba_2000",
             car: "KK-SII",
             condition: "dry",
             lapWithinStint: 10,
             ambientTempC: 15.0,
-            trackTempC: null,
-            cloudCoverPct: null,
+            trackTempC: vm.TrackTempC,
+            cloudCoverPct: vm.CloudCoverPct,
             corner: "fl",
             targetHotPressureBar: 1.7,
-            coldTireTempC: 15.0);
+            coldTireTempC: 15.0,
+            targetLapTimeS: vm.TargetLapTimeS,
+            compound: vm.SelectedCompound);
 
         Assert.Equal(direct.PredictedHotTempC, vm.FrontLeft.PredictedHotTempC!.Value, precision: 6);
         // Corner's cold pressure should agree (rounded to 3 decimals).
