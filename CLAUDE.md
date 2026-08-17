@@ -59,11 +59,10 @@ just run-clean             # Reset workspace + start JupyterLab
 # Build JupyterLite site
 just build-lite-full       # Rebuild project wheel + build site
 just build-and-serve-lite  # build-lite-full + serve locally
-
-# Emscripten SDK setup (one-time, needed for rebuilding libxrk Pyodide wheel)
-just setup-emsdk           # Installs emsdk to ~/emsdk
-just build-libxrk-pyodide  # Rebuild libxrk for Pyodide (requires setup-emsdk)
 ```
+
+Note: libxrk/libibt wasm wheels come from PyPI (resolved by micropip in the
+browser) — there is no local cross-compilation step.
 
 ## Bash Command Conventions
 
@@ -219,7 +218,7 @@ Note: Cross-OS NativeAOT is not supported. Windows builds from Linux use trimmed
 
 GitHub Actions workflows:
 - **ci.yml** — Runs on all pushes/PRs to `master`: lint, typecheck, tests, coverage upload
-- **deploy-preview.yml** — On push to `master`: builds Pyodide wheels + JupyterLite site, deploys to preview
+- **deploy-preview.yml** — On push to `master`: builds the JupyterLite site, deploys to preview
 - **deploy-release.yml** — On GitHub Release: same build, deploys to production
 
 ## Branches

@@ -29,7 +29,6 @@ Use `just <task>` for all project tasks:
 - `workspace_template/` - Template Jupyter notebooks (executed during CI)
 - `workspace/` - Local working directory for notebooks (gitignored)
 - `scripts/` - Build and utility scripts
-- `build/libxrk/` - Pyodide wheel build directory
 
 ## Dependencies
 
@@ -68,7 +67,7 @@ When checking GitHub Actions CI failures:
 
 **Be patient with build commands!** The following commands take significant time:
 
-- `just build-lite-full` - **3-5 minutes**: Compiles C++ (libxrk), builds wheels, executes all notebooks
+- `just build-lite-full` - **3-5 minutes**: Builds the project wheel, executes all notebooks, assembles the site
 - `just build-and-serve-lite` - Same as above plus starts a server
 - Notebook execution during builds - Each notebook may take 30-60 seconds
 

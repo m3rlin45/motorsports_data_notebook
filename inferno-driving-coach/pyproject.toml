@@ -21,7 +21,7 @@ dependencies = [
     "mcp>=1.2.0",
     # motorsports-data-notebook deps (bundled directly)
     "numpy>=2.0.0,<3.0.0",
-    "pandas>=2.0.0,<3.0.0",
+    "pandas>=2.0.0,<4.0.0",
     "pyarrow>=18.0.0,<23.0.0",
     "plotly>=6.0.0,<7.0.0",
     "libxrk>=0.12.0",

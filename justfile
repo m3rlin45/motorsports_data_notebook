@@ -90,24 +90,6 @@ tire-web-serve:
     @echo "Open http://localhost:8080/tire_pressure_calculator/web/"
     python3 -m http.server 8080
 
-# Emscripten SDK setup (one-time, needed for building libxrk Pyodide wheel)
-setup-emsdk:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    # pyodide-build needs pip on PATH for xbuildenv install
-    uv pip install pip
-    rm -rf .pyodide-xbuildenv*
-    uv run pyodide xbuildenv install
-    EMSDK_VERSION=$(uv run pyodide config get emscripten_version)
-    [ -d "$HOME/emsdk" ] || git clone https://github.com/emscripten-core/emsdk.git "$HOME/emsdk"
-    pushd "$HOME/emsdk"
-    git config core.autocrlf false
-    git checkout -- .
-    git pull
-    ./emsdk install "$EMSDK_VERSION"
-    ./emsdk activate "$EMSDK_VERSION"
-    popd
-
 # Wheel building
 build-wheel:
     #!/usr/bin/env bash
@@ -117,66 +99,11 @@ build-wheel:
     rm -f pypi/motorsports_data_notebook-*.whl
     cp dist/motorsports_data_notebook-*.whl pypi/
 
-# Download a library source for Pyodide cross-compilation
-_download-pyodide-lib name repo:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    VERSION=$(uv run python -c "import importlib.metadata; print(importlib.metadata.version('{{name}}'))")
-    rm -rf build/{{name}}
-    git clone --depth 1 --branch "v$VERSION" https://github.com/{{repo}}.git build/{{name}}
-
-# Build a library for Pyodide (wasm32)
-_build-pyodide-lib name:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cd build/{{name}}
-    rm -rf .pyodide-xbuildenv*
-    . "$HOME/emsdk/emsdk_env.sh"
-    . "$HOME/.cargo/env"
-    # Install wasm-opt wrapper to strip flags unsupported by emsdk's older binaryen
-    WASM_OPT="$EMSDK/upstream/bin/wasm-opt"
-    [ -f "${WASM_OPT}.real" ] || mv "$WASM_OPT" "${WASM_OPT}.real"
-    sed 's/\r$//' ../../scripts/wasm-opt-wrapper.sh > "$WASM_OPT"
-    chmod +x "$WASM_OPT"
-    export RUSTUP_TOOLCHAIN=nightly
-    export CARGO_BUILD_TARGET=wasm32-unknown-emscripten
-    export RUSTFLAGS="-Zemscripten-wasm-eh"
-    uv pip install --project ../.. pip
-    uv run --project ../.. pyodide build --exports whole_archive
-
-# Copy a built Pyodide wheel to pypi/ (stripping dependencies)
-_copy-pyodide-lib-wheel name:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    rm -f pypi/{{name}}-*.whl
-    uv run python scripts/build_lite_wheel.py build/{{name}}/dist/*.whl
-
-# Build individual libraries for Pyodide
-build-libxrk-pyodide: (_download-pyodide-lib "libxrk" "m3rlin45/libxrk") (_build-pyodide-lib "libxrk") (_copy-pyodide-lib-wheel "libxrk")
-build-libibt-pyodide: (_download-pyodide-lib "libibt" "m3rlin45/libibt") (_build-pyodide-lib "libibt") (_copy-pyodide-lib-wheel "libibt")
-
-# Download a pre-built Pyodide wheel from a GitHub release
-_download-pyodide-lib-release name repo:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    VERSION=$(uv run python -c "import importlib.metadata; print(importlib.metadata.version('{{name}}'))")
-    echo "Downloading {{name}} v$VERSION from {{repo}}..."
-    rm -rf build/{{name}}/dist
-    mkdir -p build/{{name}}/dist
-    gh release download "v$VERSION" -R {{repo}} -p "*pyodide*wasm32.whl" -D build/{{name}}/dist --clobber
-    rm -f pypi/{{name}}-*.whl
-    # If multiple Pyodide wheels exist (e.g. cp312 + cp313), pick the latest
-    WHEEL=$(ls -v build/{{name}}/dist/*.whl | tail -1)
-    uv run python scripts/build_lite_wheel.py "$WHEEL"
-
-# Download pre-built Pyodide wheels for all libraries
-[parallel]
-build-pyodide-libs: (_download-pyodide-lib-release "libxrk" "m3rlin45/libxrk") (_download-pyodide-lib-release "libibt" "m3rlin45/libibt")
-
-_download-pyodide-deps:
-    uv run python scripts/download_pyodide_deps.py
-
 # JupyterLite site building
+# libxrk and libibt wasm wheels are resolved from PyPI by micropip at
+# %pip-install time (both publish pyemscripten wheels); the only locally
+# hosted wheel is the project's own (build-wheel), since
+# motorsports-data-notebook is not published to PyPI.
 _clean-lite-artifacts:
     rm -rf .lite_contents dist
 
@@ -210,13 +137,13 @@ serve-lite:
 
 _prepare-and-execute-lite: _prepare-lite-contents _execute-lite-notebooks
 
-[parallel]
-_build-lite-parallel: build-wheel build-pyodide-libs _download-pyodide-deps _prepare-and-execute-lite
-
-build-lite-full: _clean-lite-artifacts _build-lite-parallel _build-lite-site
+# Sequential on purpose: just's [parallel] has an ETXTBSY race spawning
+# shebang recipes, and build-wheel takes seconds — notebook execution is
+# the long pole either way.
+build-lite-full: _clean-lite-artifacts build-wheel _prepare-and-execute-lite _build-lite-site
 
 build-and-serve-lite: build-lite-full serve-lite
 
 # Cleanup
 clean-build:
-    rm -rf build/ pypi/ dist/
+    rm -rf pypi/ dist/
