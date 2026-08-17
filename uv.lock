@@ -1531,6 +1531,7 @@ version = "0.18.0"
 source = { editable = "." }
 dependencies = [
     { name = "ipywidgets" },
+    { name = "jinja2" },
     { name = "libibt" },
     { name = "libxrk" },
     { name = "numpy" },
@@ -1580,6 +1581,7 @@ requires-dist = [
     { name = "httpx", marker = "extra == 'tire-etl'", specifier = ">=0.27.0,<1.0.0" },
     { name = "ipykernel", marker = "extra == 'app'", specifier = ">=7.1.0,<8.0.0" },
     { name = "ipywidgets", specifier = ">=8.0.0,<9.0.0" },
+    { name = "jinja2", specifier = ">=3.0,<4.0" },
     { name = "jupyterlab", marker = "extra == 'app'", specifier = ">=4.4.10,<5.0.0" },
     { name = "jupyterlite-core", marker = "extra == 'jupyterlite'", specifier = "==0.8.1" },
     { name = "jupyterlite-pyodide-kernel", marker = "extra == 'jupyterlite'", specifier = "==0.8.3" },
