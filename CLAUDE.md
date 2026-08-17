@@ -138,7 +138,7 @@ Run (displays via WSLg on WSL2):
 
 ## Tire Pressure Calculator
 
-The `tire_pressure_calculator/` directory contains the cold tire pressure calculator: a manual Gay-Lussac mode (four FL/FR/RL/RR quadrants: current temp °C + target hot temp °C + target hot pressure bar → cold gauge pressure to set) and a Circuit Prediction mode that predicts per-corner hot temps from the fitted tire warmup model (`data/tire_dataset/tire_model.json`). Two implementations share the same behavior, strings, and settings JSON shape:
+The `tire_pressure_calculator/` directory contains the cold tire pressure calculator: a manual Gay-Lussac mode (four FL/FR/RL/RR quadrants: current temp °C + target hot temp °C + target hot pressure bar → cold gauge pressure to set) and a Circuit Prediction mode that predicts per-corner hot temps from the fitted tire warmup model (`data/tire_dataset/tire_model.json`), with inputs for track, car, tire compound (forced per-car choice — one tire on all four corners), condition, lap, ambient, cloud cover, and target lap time (m:ss.s text), plus car-based prefill of the corner-card targets. Two implementations share the same behavior, strings, and settings JSON shape:
 
 ```
 tire_pressure_calculator/
