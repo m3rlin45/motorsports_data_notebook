@@ -21,7 +21,30 @@ public sealed record TireModelDto(
     [property: JsonPropertyName("c_track_by_track")] IReadOnlyList<CTrackEntryDto> CTrackByTrack,
     [property: JsonPropertyName("g2_typ_by_track_car_cond")] IReadOnlyList<G2EntryDto> G2TypByTrackCarCond,
     [property: JsonPropertyName("lap_time_typ_by_track_car_cond")] IReadOnlyList<LapTimeEntryDto> LapTimeTypByTrackCarCond,
-    [property: JsonPropertyName("g2_lap_time_model")] G2LapTimeModelDto? G2LapTimeModel = null
+    [property: JsonPropertyName("g2_lap_time_model")] G2LapTimeModelDto? G2LapTimeModel = null,
+    [property: JsonPropertyName("K_by_car_compound_corner_cond")] IReadOnlyList<KCompoundEntryDto>? KByCarCompoundCornerCond = null,
+    [property: JsonPropertyName("corner_defaults_by_car_corner_cond")] IReadOnlyList<CornerDefaultsEntryDto>? CornerDefaultsByCarCornerCond = null
+);
+
+// ---- Compound-aware K + UI prefill medians (schema v3 additive) ----
+
+public sealed record KCompoundEntryDto(
+    [property: JsonPropertyName("car")] string Car,
+    [property: JsonPropertyName("compound")] string Compound,
+    [property: JsonPropertyName("corner")] string Corner,
+    [property: JsonPropertyName("condition")] string Condition,
+    [property: JsonPropertyName("value_kelvin_per_g2")] double ValueKelvinPerG2,
+    [property: JsonPropertyName("stderr_kelvin_per_g2")] double StderrKelvinPerG2,
+    [property: JsonPropertyName("n_laps")] int NLaps
+);
+
+public sealed record CornerDefaultsEntryDto(
+    [property: JsonPropertyName("car")] string Car,
+    [property: JsonPropertyName("corner")] string Corner,
+    [property: JsonPropertyName("condition")] string Condition,
+    [property: JsonPropertyName("hot_temp_c")] double HotTempC,
+    [property: JsonPropertyName("hot_pressure_bar")] double HotPressureBar,
+    [property: JsonPropertyName("n_laps_used")] int NLapsUsed
 );
 
 // ---- Target-lap-time feature (schema v3) ----

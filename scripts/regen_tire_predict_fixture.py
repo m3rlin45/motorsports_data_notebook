@@ -134,6 +134,57 @@ CASES: list[tuple[str, dict]] = [
             "target_lap_time_s": 120.0,
         },
     ),
+    # Compound-aware K: the fitted compound replaces the pooled K on every
+    # corner (one tire per run), an unknown compound falls back to pooled,
+    # and the KK-SII's WET compound rides the wet condition chain.
+    (
+        "sodegaura_Inferno_dry_A050",
+        {
+            "track": "sodegaura",
+            "car": "Inferno 86",
+            "lap_within_stint": 5,
+            "track_condition": "dry",
+            "ambient_temp_c": 22.0,
+            "target_hot_pressure_bar": 1.7,
+            "compound": "A050",
+        },
+    ),
+    (
+        "sodegaura_Inferno_dry_A052",
+        {
+            "track": "sodegaura",
+            "car": "Inferno 86",
+            "lap_within_stint": 5,
+            "track_condition": "dry",
+            "ambient_temp_c": 22.0,
+            "target_hot_pressure_bar": 1.7,
+            "compound": "A052",
+        },
+    ),
+    (
+        "sodegaura_Inferno_unknown_compound_pooled",
+        {
+            "track": "sodegaura",
+            "car": "Inferno 86",
+            "lap_within_stint": 5,
+            "track_condition": "dry",
+            "ambient_temp_c": 22.0,
+            "target_hot_pressure_bar": 1.7,
+            "compound": "SLICKS9000",
+        },
+    ),
+    (
+        "tsukuba_KKSII_wet_compound_WET",
+        {
+            "track": "tsukuba_2000",
+            "car": "KK-SII",
+            "lap_within_stint": 10,
+            "track_condition": "wet",
+            "ambient_temp_c": 15.0,
+            "target_hot_pressure_bar": 1.7,
+            "compound": "WET",
+        },
+    ),
 ]
 
 
