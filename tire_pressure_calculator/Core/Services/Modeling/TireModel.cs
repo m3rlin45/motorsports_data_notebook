@@ -130,6 +130,54 @@ public sealed class TireModel
             SourceBucket: "(prior)", FromPrior: true);
     }
 
+    // ---- Compound-aware K (decomposed c_track × base × multiplier) ----
+
+    /// <summary>Distinct compounds fitted for a car, for UI enumeration.
+    /// One tire runs on all four corners — the choice is forced, so an
+    /// empty list means the car predates compound labeling.</summary>
+    public IReadOnlyList<string> AvailableCompounds(string car) =>
+        (Dto.KByCarCompoundCornerCond ?? Array.Empty<KCompoundEntryDto>())
+            .Where(r => r.Car == car).Select(r => r.Compound)
+            .Distinct().OrderBy(s => s).ToList();
+
+    /// <summary>Compound-specific K via the condition chain, or null when
+    /// the artifact has no fitted bucket (caller falls back to pooled K).</summary>
+    public KLookup? LookupCompoundK(string car, string compound, string corner, string condition)
+    {
+        var rows = Dto.KByCarCompoundCornerCond ?? Array.Empty<KCompoundEntryDto>();
+        foreach (var cond in ConditionChain(condition))
+        {
+            var hit = rows.FirstOrDefault(
+                r => r.Car == car && r.Compound == compound
+                     && r.Corner == corner && r.Condition == cond);
+            if (hit is not null)
+            {
+                return new KLookup(hit.ValueKelvinPerG2, hit.StderrKelvinPerG2, hit.NLaps,
+                    SourceBucket: $"({car}, {compound}, {corner}, {cond})", FromPrior: false);
+            }
+        }
+        return null;
+    }
+
+    /// <summary>Steady-state hot temp / hot pressure medians for UI
+    /// prefills, via the condition chain; null when the artifact has no
+    /// entry (caller keeps its static defaults).</summary>
+    public CornerDefaultsLookup? LookupCornerDefaults(string car, string corner, string condition)
+    {
+        var rows = Dto.CornerDefaultsByCarCornerCond ?? Array.Empty<CornerDefaultsEntryDto>();
+        foreach (var cond in ConditionChain(condition))
+        {
+            var hit = rows.FirstOrDefault(
+                r => r.Car == car && r.Corner == corner && r.Condition == cond);
+            if (hit is not null)
+            {
+                return new CornerDefaultsLookup(hit.HotTempC, hit.HotPressureBar, hit.NLapsUsed,
+                    Source: cond == condition ? "exact" : $"fallback({cond})");
+            }
+        }
+        return null;
+    }
+
     public CTrackLookup LookupCTrack(string track)
     {
         var hit = Dto.CTrackByTrack.FirstOrDefault(r => r.TrackCanonical == track);
@@ -275,6 +323,9 @@ public readonly record struct G2Lookup(
 
 public readonly record struct LapTimeLookup(
     double ValueSeconds, int NLapsUsed, string Source);
+
+public readonly record struct CornerDefaultsLookup(
+    double HotTempC, double HotPressureBar, int NLapsUsed, string Source);
 
 public readonly record struct G2PaceScale(
     double Scale, string Source);

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -36,6 +37,7 @@ public class MainViewModel : INotifyPropertyChanged
     private double? _trackTempC;
     private double? _cloudCoverPct;
     private double? _targetLapTimeS;
+    private string? _selectedCompound;
 
     public AppMode Mode
     {
@@ -58,6 +60,8 @@ public class MainViewModel : INotifyPropertyChanged
 
     public ObservableCollection<string> AvailableTracks { get; } = new();
     public ObservableCollection<string> AvailableCars { get; } = new();
+    public ObservableCollection<string> AvailableCompounds { get; } = new();
+    public bool HasCompounds => AvailableCompounds.Count > 0;
     public IReadOnlyList<ConditionOption> AvailableConditions { get; } = new[]
     {
         new ConditionOption("dry", "ConditionDry"),
@@ -80,6 +84,7 @@ public class MainViewModel : INotifyPropertyChanged
     public string T_Ambient => Localizer.Instance["Ambient"];
     public string T_CloudCover => Localizer.Instance["CloudCover"];
     public string T_TargetLapTime => Localizer.Instance["TargetLapTime"];
+    public string T_Compound => Localizer.Instance["Compound"];
     public string T_ResetButton => Localizer.Instance["ResetButton"];
 
     // ---- Language picker ----
@@ -117,6 +122,7 @@ public class MainViewModel : INotifyPropertyChanged
             OnPropertyChanged();
             _settings.Prediction.Track = value;
             _settings.Save();
+            SnapTargetLap();
             RefreshPredictions();
         }
     }
@@ -131,6 +137,9 @@ public class MainViewModel : INotifyPropertyChanged
             OnPropertyChanged();
             _settings.Prediction.Car = value;
             _settings.Save();
+            RefreshCompounds();
+            SnapTargetLap();
+            SnapCornerTargets();
             RefreshPredictions();
         }
     }
@@ -145,6 +154,8 @@ public class MainViewModel : INotifyPropertyChanged
             OnPropertyChanged();
             _settings.Prediction.Condition = value;
             _settings.Save();
+            SnapTargetLap();
+            SnapCornerTargets();
             RefreshPredictions();
         }
     }
@@ -213,7 +224,68 @@ public class MainViewModel : INotifyPropertyChanged
             if (_targetLapTimeS == value) return;
             _targetLapTimeS = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(TargetLapTimeText));
             _settings.Prediction.TargetLapTimeS = value;
+            _settings.Save();
+            RefreshPredictions();
+        }
+    }
+
+    /// <summary>Target lap time as text in the form everyone thinks about
+    /// lap times: "1:05.2" (sub-minute laps as plain "58.4"). Accepts either
+    /// form on input; blank/invalid input snaps back to the selection's
+    /// typical lap.</summary>
+    public string TargetLapTimeText
+    {
+        get => FormatLapTime(_targetLapTimeS);
+        set
+        {
+            var parsed = ParseLapTime(value);
+            if (parsed is null)
+                SnapTargetLap();
+            else
+                TargetLapTimeS = Math.Min(900.0, Math.Max(20.0, parsed.Value));
+            OnPropertyChanged(); // re-render the normalized m:ss form
+        }
+    }
+
+    public static string FormatLapTime(double? seconds)
+    {
+        if (seconds is not double v || !double.IsFinite(v) || v <= 0) return "";
+        if (v < 60) return v.ToString("0.0", CultureInfo.InvariantCulture);
+        var m = (int)(v / 60);
+        var s = v - m * 60;
+        return $"{m}:{s.ToString("00.0", CultureInfo.InvariantCulture)}";
+    }
+
+    public static double? ParseLapTime(string? raw)
+    {
+        var t = raw?.Trim().Replace(',', '.');
+        if (string.IsNullOrEmpty(t)) return null;
+        if (t.Contains(':'))
+        {
+            var parts = t.Split(':', 2);
+            if (int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var m)
+                && double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var s))
+                return m * 60 + s;
+            return null;
+        }
+        return double.TryParse(t, NumberStyles.Float, CultureInfo.InvariantCulture, out var v)
+            ? v : null;
+    }
+
+    /// <summary>Tire compound — a FORCED choice: every run has exactly one
+    /// tire on all four corners, so there is no pooled "default" option; an
+    /// unset selection snaps to the car's first compound.</summary>
+    public string? SelectedCompound
+    {
+        get => _selectedCompound;
+        set
+        {
+            if (_selectedCompound == value) return;
+            _selectedCompound = value;
+            OnPropertyChanged();
+            _settings.Prediction.Compound = value;
             _settings.Save();
             RefreshPredictions();
         }
@@ -295,8 +367,14 @@ public class MainViewModel : INotifyPropertyChanged
         _lapWithinStint = _settings.Prediction.LapWithinStint;
         _ambientTempC = _settings.Prediction.AmbientTempC;
         _trackTempC = _settings.Prediction.TrackTempC;
-        _cloudCoverPct = _settings.Prediction.CloudCoverPct;
+        // Cloud cover always carries a value (50% = neutral sky).
+        _cloudCoverPct = _settings.Prediction.CloudCoverPct ?? 50.0;
         _targetLapTimeS = _settings.Prediction.TargetLapTimeS;
+        _selectedCompound = _settings.Prediction.Compound;
+
+        RefreshCompounds();
+        if (_targetLapTimeS is null) SnapTargetLap();
+        if (!_settings.LoadedFromStorage) SnapCornerTargets();
 
         ResetCommand = new RelayCommand(() =>
         {
@@ -314,8 +392,14 @@ public class MainViewModel : INotifyPropertyChanged
             LapWithinStint = 5;
             AmbientTempC = 20.0;
             TrackTempC = null;
-            CloudCoverPct = null;
-            TargetLapTimeS = null;
+            CloudCoverPct = 50.0;
+            // Forced defaults: first compound, typical lap, car prefills.
+            // The Selected* setters above may have early-returned when the
+            // value didn't change, so snap explicitly.
+            RefreshCompounds();
+            SelectedCompound = AvailableCompounds.FirstOrDefault();
+            SnapTargetLap();
+            SnapCornerTargets();
         });
 
         RefreshPredictions();
@@ -365,6 +449,59 @@ public class MainViewModel : INotifyPropertyChanged
         return vm;
     }
 
+    /// <summary>Compound choices depend on the selected car; snap an unset
+    /// or foreign selection to the car's first compound.</summary>
+    private void RefreshCompounds()
+    {
+        AvailableCompounds.Clear();
+        if (_tireModel is not null && _selectedCar is not null)
+        {
+            foreach (var c in _tireModel.AvailableCompounds(_selectedCar))
+                AvailableCompounds.Add(c);
+        }
+        OnPropertyChanged(nameof(HasCompounds));
+        if (AvailableCompounds.Count > 0
+            && (_selectedCompound is null || !AvailableCompounds.Contains(_selectedCompound)))
+        {
+            SelectedCompound = AvailableCompounds[0];
+        }
+        else if (AvailableCompounds.Count == 0)
+        {
+            SelectedCompound = null;
+        }
+    }
+
+    /// <summary>Target lap time always carries a value: the typical lap for
+    /// the current (track, car, condition) selection.</summary>
+    private void SnapTargetLap()
+    {
+        if (_tireModel is null || _selectedTrack is null || _selectedCar is null) return;
+        var typ = _tireModel.LookupLapTime(_selectedTrack, _selectedCar, _selectedCondition);
+        if (typ.ValueSeconds > 0) TargetLapTimeS = Math.Round(typ.ValueSeconds, 1);
+    }
+
+    /// <summary>Corner-card prefills follow the car: target hot temp and hot
+    /// pressure snap to the model's steady-state medians for the selected
+    /// (car, condition). Buckets missing from the artifact keep whatever the
+    /// fields currently hold.</summary>
+    private void SnapCornerTargets()
+    {
+        if (_tireModel is null || _selectedCar is null) return;
+        foreach (var (corner, vm) in new[]
+                 {
+                     ("fl", FrontLeft), ("fr", FrontRight),
+                     ("rl", RearLeft), ("rr", RearRight),
+                 })
+        {
+            if (_tireModel.LookupCornerDefaults(_selectedCar, corner, _selectedCondition)
+                is CornerDefaultsLookup d)
+            {
+                vm.TargetHotTemp = Math.Round(d.HotTempC, 1);
+                vm.TargetHotPressure = Math.Round(d.HotPressureBar, 2);
+            }
+        }
+    }
+
     /// <summary>
     /// Recompute per-corner predicted hot temps + push into each corner VM
     /// (or clear them in Manual mode so the corner falls back to AdjustedHotTemp).
@@ -399,7 +536,8 @@ public class MainViewModel : INotifyPropertyChanged
                     corner: corner,
                     targetHotPressureBar: vm.TargetHotPressure,
                     coldTireTempC: vm.CurrentTemp,
-                    targetLapTimeS: _targetLapTimeS);
+                    targetLapTimeS: _targetLapTimeS,
+                    compound: _selectedCompound);
                 vm.PredictedHotTempC = prediction.PredictedHotTempC;
             }
             catch (Exception)
