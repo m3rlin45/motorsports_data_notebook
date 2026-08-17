@@ -29,17 +29,8 @@ jobs:
       - name: Install dependencies
         run: uv sync --extra app --extra jupyterlite
 
-      - name: Verify pyodide-build version
-        run: |
-          EXPECTED="0.29.3"
-          ACTUAL=$(uv run python -c "import importlib.metadata; print(importlib.metadata.version('pyodide-build'))")
-          echo "pyodide-build version: $ACTUAL (expected: $EXPECTED)"
-          [ "$ACTUAL" = "$EXPECTED" ] || (echo "ERROR: Wrong pyodide-build version!" && exit 1)
-
       - name: Build wheels and JupyterLite site
         run: just build-lite-full
-        env:
-          GH_TOKEN: ${{ github.token }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

@@ -9,13 +9,13 @@ readme = "README.md"
 requires-python = ">=3.12,<4.0"
 dependencies = [
     "numpy>=2.0.0,<3.0.0",
-    "pandas>=2.0.0,<3.0.0",
+    "pandas>=2.0.0,<4.0.0",
     "pyarrow>=18.0.0,<23.0.0",
     "plotly>=6.0.0,<7.0.0",
-    "libxrk>=0.12.0",
+    "libxrk>=0.13.0",
     "ipywidgets>=8.0.0,<9.0.0",
     "pyyaml>=6.0,<7.0",
-    "libibt>=0.0.4",
+    "libibt>=0.0.5",
 ]
 
 [project.optional-dependencies]
@@ -27,11 +27,8 @@ app = [
     "seaborn>=0.13.2,<0.14.0",
 ]
 jupyterlite = [
-    "jupyterlite-core==0.7.1",
-    "jupyterlite-pyodide-kernel==0.7.0",
-    "pyodide-build==0.29.3",
-    "pyodide-lock==0.1.0a7",
-    "wheel<0.44",
+    "jupyterlite-core==0.8.1",
+    "jupyterlite-pyodide-kernel==0.8.3",
     "nbconvert>=7.0.0",
 ]
 tire-etl = [

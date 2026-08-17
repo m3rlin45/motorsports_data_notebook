@@ -103,18 +103,12 @@ uv sync --extra app --extra jupyterlite
 just build-and-serve-lite
 ```
 
-### Building Pyodide Wheels
+### Pyodide Wheels
 
-To rebuild `libxrk` for Pyodide (after updating the C++ bindings):
-
-```bash
-# Install Emscripten SDK (one time)
-uv sync --extra app --extra jupyterlite
-just setup-emsdk
-
-# Build all wheels and site
-just build-lite-full
-```
+`libxrk` and `libibt` publish Pyodide (wasm) wheels directly to PyPI — there
+is nothing to cross-compile locally. The site build only packages this
+project's own pure-Python wheel; upgrading a parser is a version bump in
+`pyproject.toml` plus `uv lock --upgrade`.
 
 ---
 
