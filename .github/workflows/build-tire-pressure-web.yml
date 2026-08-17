@@ -18,6 +18,9 @@ jobs:
           cp -r tire_pressure_calculator/web/. site/
           rm -rf site/tests
           cp data/tire_dataset/tire_model.json site/
+          # Stamp the service-worker cache version so each deploy busts the
+          # previous one (the repo copy keeps the __BUILD__ placeholder).
+          sed -i "s/__BUILD__/${GITHUB_SHA::12}/" site/sw.js
 
       - name: Upload site artifact
         uses: actions/upload-artifact@v4

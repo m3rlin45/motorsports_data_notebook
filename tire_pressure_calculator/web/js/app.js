@@ -569,3 +569,9 @@ async function init() {
 }
 
 init();
+
+// Offline support is progressive — registration failure (old browser,
+// file:// serve) just means the app needs a network connection.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
