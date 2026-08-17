@@ -350,6 +350,14 @@
                       SelectedItem="{Binding SelectedCar}"
                       HorizontalAlignment="Stretch" />
           </StackPanel>
+          <!-- Tire: forced per-car choice (hidden for cars without fitted
+               compounds — one tire always runs on all four corners). -->
+          <StackPanel Margin="6,4" MinWidth="120" IsVisible="{Binding HasCompounds}">
+            <TextBlock Text="{Binding T_Compound}" FontSize="11" />
+            <ComboBox ItemsSource="{Binding AvailableCompounds}"
+                      SelectedItem="{Binding SelectedCompound}"
+                      HorizontalAlignment="Stretch" />
+          </StackPanel>
           <StackPanel Margin="6,4" MinWidth="120">
             <TextBlock Text="{Binding T_Condition}" FontSize="11" />
             <ComboBox ItemsSource="{Binding AvailableConditions}"
@@ -386,10 +394,9 @@
           </StackPanel>
           <StackPanel Margin="6,4" MinWidth="120">
             <TextBlock Text="{Binding T_TargetLapTime}" FontSize="11" />
-            <NumericUpDown Value="{Binding TargetLapTimeS}"
-                           Minimum="20" Maximum="900" Increment="0.5"
-                           FormatString="F1"
-                           ShowButtonSpinner="True" />
+            <!-- m:ss.s text ("1:05.2"); parse accepts plain seconds too. -->
+            <TextBox Text="{Binding TargetLapTimeText}"
+                     Watermark="1:05.2" />
           </StackPanel>
         </WrapPanel>
       </Border>
