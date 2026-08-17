@@ -390,3 +390,20 @@ select,
 select:focus, .pred-field > input:focus, .adjust-group input:focus, .btn:focus-visible {
   outline: 1px solid var(--accent);
 }
+
+/* Phone-width viewports: the prediction inputs flow into a strict
+   two-column grid (equal columns, full-width controls) instead of the
+   ragged centered flex-wrap. */
+@media (max-width: 640px) {
+  .pred-panel {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 10px;
+  }
+  .pred-panel[hidden] { display: none; }
+  .pred-field,
+  .pred-field:nth-child(-n+2) {
+    margin: 0;
+    min-width: 0;
+  }
+}
