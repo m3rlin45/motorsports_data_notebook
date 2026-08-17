@@ -110,8 +110,9 @@ export function interpClamped(x, xs, ys) {
   return ys[ys.length - 1];
 }
 
-// In-memory wrapper around the parsed tire_model.json (schema v2). Adds the
-// lookup helpers + fallback chains that mirror the Python predictor.
+// In-memory wrapper around the parsed tire_model.json (schema v3; v2
+// artifacts still load). Adds the lookup helpers + fallback chains that
+// mirror the Python predictor.
 export class TireModel {
   constructor(dto) {
     if (dto.schema_version < MIN_SUPPORTED_SCHEMA_VERSION

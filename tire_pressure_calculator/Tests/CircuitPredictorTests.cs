@@ -44,7 +44,8 @@ public class CircuitPredictorTests
                     corner: corner,
                     targetHotPressureBar: c.Inputs.TargetHotPressureBar,
                     coldTireTempC: c.Inputs.ColdTireTempC,
-                    targetLapTimeS: c.Inputs.TargetLapTimeS);
+                    targetLapTimeS: c.Inputs.TargetLapTimeS,
+                    compound: c.Inputs.Compound);
                 var py = c.Corners[corner];
                 Assert.True(
                     Math.Abs(prediction.ColdPressureBar - py.ColdPressureBar) < 1e-3,
@@ -165,7 +166,8 @@ public class CircuitPredictorTests
         [property: System.Text.Json.Serialization.JsonPropertyName("cloud_cover_pct")] double? CloudCoverPct,
         [property: System.Text.Json.Serialization.JsonPropertyName("cold_tire_temp_c")] double? ColdTireTempC,
         [property: System.Text.Json.Serialization.JsonPropertyName("target_hot_pressure_bar")] double TargetHotPressureBar,
-        [property: System.Text.Json.Serialization.JsonPropertyName("target_lap_time_s")] double? TargetLapTimeS = null);
+        [property: System.Text.Json.Serialization.JsonPropertyName("target_lap_time_s")] double? TargetLapTimeS = null,
+        [property: System.Text.Json.Serialization.JsonPropertyName("compound")] string? Compound = null);
 
     private sealed record FixtureCornerOutput(
         [property: System.Text.Json.Serialization.JsonPropertyName("cold_pressure_bar")] double ColdPressureBar,

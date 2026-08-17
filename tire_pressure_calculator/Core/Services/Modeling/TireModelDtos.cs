@@ -3,8 +3,9 @@ using System.Text.Json.Serialization;
 
 namespace TirePressureCalculator.Services.Modeling;
 
-// DTOs mirroring data/tire_dataset/tire_model.json (schema v2).
-// See docs/tire_model.md §2.7 for the schema reference.
+// DTOs mirroring data/tire_dataset/tire_model.json (schema v3; v2
+// artifacts still load). See docs/tire_model.md §2.7 for the schema
+// reference.
 
 public sealed record TireModelDto(
     [property: JsonPropertyName("schema_version")] int SchemaVersion,
