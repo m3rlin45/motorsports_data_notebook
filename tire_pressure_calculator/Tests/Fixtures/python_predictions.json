@@ -462,5 +462,225 @@
         ]
       }
     }
+  },
+  {
+    "label": "sodegaura_Inferno_dry_A050",
+    "inputs": {
+      "track": "sodegaura",
+      "car": "Inferno 86",
+      "lap_within_stint": 5,
+      "track_condition": "dry",
+      "ambient_temp_c": 22.0,
+      "target_hot_pressure_bar": 1.7,
+      "compound": "A050"
+    },
+    "g2_scale": 1.0,
+    "g2_pace_source": null,
+    "corners": {
+      "fl": {
+        "cold_pressure_bar": 1.3827673445286028,
+        "predicted_hot_temp_c": 61.29515757271994,
+        "K_source_bucket": [
+          "Inferno 86",
+          "A050",
+          "fl",
+          "dry"
+        ]
+      },
+      "fr": {
+        "cold_pressure_bar": 1.4047344807463533,
+        "predicted_hot_temp_c": 58.24001681078151,
+        "K_source_bucket": [
+          "Inferno 86",
+          "A050",
+          "fr",
+          "dry"
+        ]
+      },
+      "rl": {
+        "cold_pressure_bar": 1.4159818559441173,
+        "predicted_hot_temp_c": 56.697261906934116,
+        "K_source_bucket": [
+          "Inferno 86",
+          "A050",
+          "rl",
+          "dry"
+        ]
+      },
+      "rr": {
+        "cold_pressure_bar": 1.436162938907425,
+        "predicted_hot_temp_c": 53.96481948633429,
+        "K_source_bucket": [
+          "Inferno 86",
+          "A050",
+          "rr",
+          "dry"
+        ]
+      }
+    }
+  },
+  {
+    "label": "sodegaura_Inferno_dry_A052",
+    "inputs": {
+      "track": "sodegaura",
+      "car": "Inferno 86",
+      "lap_within_stint": 5,
+      "track_condition": "dry",
+      "ambient_temp_c": 22.0,
+      "target_hot_pressure_bar": 1.7,
+      "compound": "A052"
+    },
+    "g2_scale": 1.0,
+    "g2_pace_source": null,
+    "corners": {
+      "fl": {
+        "cold_pressure_bar": 1.4608252330207638,
+        "predicted_hot_temp_c": 50.686487576066654,
+        "K_source_bucket": [
+          "Inferno 86",
+          "A052",
+          "fl",
+          "dry"
+        ]
+      },
+      "fr": {
+        "cold_pressure_bar": 1.477891006816753,
+        "predicted_hot_temp_c": 48.45615531824858,
+        "K_source_bucket": [
+          "Inferno 86",
+          "A052",
+          "fr",
+          "dry"
+        ]
+      },
+      "rl": {
+        "cold_pressure_bar": 1.48659897180318,
+        "predicted_hot_temp_c": 47.329904092503185,
+        "K_source_bucket": [
+          "Inferno 86",
+          "A052",
+          "rl",
+          "dry"
+        ]
+      },
+      "rr": {
+        "cold_pressure_bar": 1.5021731780805632,
+        "predicted_hot_temp_c": 45.33515002119564,
+        "K_source_bucket": [
+          "Inferno 86",
+          "A052",
+          "rr",
+          "dry"
+        ]
+      }
+    }
+  },
+  {
+    "label": "sodegaura_Inferno_unknown_compound_pooled",
+    "inputs": {
+      "track": "sodegaura",
+      "car": "Inferno 86",
+      "lap_within_stint": 5,
+      "track_condition": "dry",
+      "ambient_temp_c": 22.0,
+      "target_hot_pressure_bar": 1.7,
+      "compound": "SLICKS9000"
+    },
+    "g2_scale": 1.0,
+    "g2_pace_source": null,
+    "corners": {
+      "fl": {
+        "cold_pressure_bar": 1.4216805785525888,
+        "predicted_hot_temp_c": 55.92106207883994,
+        "K_source_bucket": [
+          "Inferno 86",
+          "fl",
+          "dry"
+        ]
+      },
+      "fr": {
+        "cold_pressure_bar": 1.4420991095575362,
+        "predicted_hot_temp_c": 53.16968001674779,
+        "K_source_bucket": [
+          "Inferno 86",
+          "fr",
+          "dry"
+        ]
+      },
+      "rl": {
+        "cold_pressure_bar": 1.4743701234856528,
+        "predicted_hot_temp_c": 48.91378198480571,
+        "K_source_bucket": [
+          "Inferno 86",
+          "rl",
+          "dry"
+        ]
+      },
+      "rr": {
+        "cold_pressure_bar": 1.4909342481531764,
+        "predicted_hot_temp_c": 46.772133870390135,
+        "K_source_bucket": [
+          "Inferno 86",
+          "rr",
+          "dry"
+        ]
+      }
+    }
+  },
+  {
+    "label": "tsukuba_KKSII_wet_compound_WET",
+    "inputs": {
+      "track": "tsukuba_2000",
+      "car": "KK-SII",
+      "lap_within_stint": 10,
+      "track_condition": "wet",
+      "ambient_temp_c": 15.0,
+      "target_hot_pressure_bar": 1.7,
+      "compound": "WET"
+    },
+    "g2_scale": 1.0,
+    "g2_pace_source": null,
+    "corners": {
+      "fl": {
+        "cold_pressure_bar": 1.4544865636126576,
+        "predicted_hot_temp_c": 43.82260499763608,
+        "K_source_bucket": [
+          "KK-SII",
+          "WET",
+          "fl",
+          "wet"
+        ]
+      },
+      "fr": {
+        "cold_pressure_bar": 1.4923524121609226,
+        "predicted_hot_temp_c": 39.006898921630935,
+        "K_source_bucket": [
+          "KK-SII",
+          "WET",
+          "fr",
+          "wet"
+        ]
+      },
+      "rl": {
+        "cold_pressure_bar": 1.508800973297157,
+        "predicted_hot_temp_c": 36.960291043740185,
+        "K_source_bucket": [
+          "KK-SII",
+          "WET",
+          "rl",
+          "wet"
+        ]
+      },
+      "rr": {
+        "cold_pressure_bar": 1.5050681728118098,
+        "predicted_hot_temp_c": 37.422386190484254,
+        "K_source_bucket": [
+          "KK-SII",
+          "WET",
+          "rr",
+          "wet"
+        ]
+      }
+    }
   }
 ]
