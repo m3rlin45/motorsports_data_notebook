@@ -8,6 +8,10 @@ Analyze AiM motorsports telemetry data in your browser — no software installat
 
 Upload your `.xrk` or `.xrz` files and start analyzing immediately.
 
+**[Tire Pressure Calculator →](https://tires.inferno.racing/)**
+
+Cold tire pressures from target hot pressure and temperature — manually via Gay-Lussac, or predicted per corner by the fitted tire warmup model (track, car, tire compound, condition, target lap time).
+
 ---
 
 ## How It Works
