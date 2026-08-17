@@ -1,7 +1,7 @@
-# Cold tire pressure model — v0.3 (rain-aware)
+# Cold tire pressure model — compound-aware (schema v3)
 
 A physically-based predictor that takes
-**(track, car, target lap within stint, target hot pressure per corner, expected ambient temp)**
+**(track, car, tire compound, target lap within stint, target lap time, target hot pressure per corner, expected ambient temp)**
 and returns the cold pressure to set, per corner.
 
 > Quickstart: `just tire-build-warmup-table && just tire-predict --track tsukuba_2000 --car KK-SII --lap 5 --ambient 18 --hot-all 1.95`
@@ -168,22 +168,39 @@ samples, the fit returns the prior `τ_sec = 240 s, K = 60 K/G²` with
 ### 2.7 Artifact: `tire_model.json`
 
 The model serializes to a versioned JSON committed under
-`data/tire_dataset/tire_model.json`. Six top-level tables, one per physical
-quantity in the energy balance:
+`data/tire_dataset/tire_model.json` (`schema_version: 3`). Top-level keys:
 
-- `tau_sec_by_car_corner` — 8 entries with stderrs
-- `K_buckets` — 8 entries with stderrs and `from_single_track` flags
+Fitted tables:
+
+- `tau_sec_by_car_corner_cond` — warmup time constants with stderrs
+- `K_buckets` — pooled K per (car, corner, condition) with stderrs and
+  `from_single_track` flags
+- `K_by_car_compound_corner_cond` — compound-specific K (decomposed
+  c_track × base × multiplier products, ready to use; see §2.11)
+- `K_compound_multipliers` — the fitted per-(car, compound) ratios, for audit
 - `c_track_by_track` — per-track surface scalars, Tsukuba marked as anchor
-- `g2_typ_by_track_car` — lookup
-- `lap_time_typ_by_track_car` — lookup
-- `energy_balance` — the `w_road` config + T_road proxy formula
-- `sensor_blacklist_applied` — audit trail of masked (session, corner) pairs
-- `fallback_order_for_K` — declarative fallback chain
+- `g2_typ_by_track_car_cond` — ⟨g²⟩ lookup; each entry may carry a
+  `g2_vs_lap_time` piecewise-linear curve (see §2.10)
+- `lap_time_typ_by_track_car_cond` — typical lap time lookup
+- `corner_defaults_by_car_corner_cond` — steady-state median hot temp +
+  hot pressure, used by the calculators to prefill the corner-card targets
 
-Typical file size: 6–12 KB. Diff-friendly — when new sessions land, the
+Config + provenance:
+
+- `g2_lap_time_model` — pace-scaling method, default exponent, multiplier clamp
+- `energy_balance` — the `w_road` config + T_road proxy formula
+- `gay_lussac`, `conditions`, `corners`, `priors_when_no_fit`,
+  `min_samples_per_bucket` — constants the consumers sanity-check against
+- `fallback_order_for_K`, `fallback_order_for_condition_lookups` —
+  declarative fallback chains
+- `sensor_blacklist_applied` — audit trail of masked (session, corner) pairs
+- `schema_version`, `fit_at_utc`, `model_form`
+
+Typical file size: tens of KB. Diff-friendly — when new sessions land, the
 artifact updates in lockstep and the JSON diff shows reviewers exactly which
-buckets gained samples or changed coefficients. The C# calculator (future
-plan) reads the same file.
+buckets gained samples or changed coefficients. All three calculators read
+this same file: the Python CLI, the C# Avalonia heads (embedded at build),
+and the static web app (fetched at deploy).
 
 ### 2.10 Target lap time (schema v3)
 
@@ -217,31 +234,31 @@ currently *hurts* — that car's heat does not track measured g²
 proportionally (even the oracle underperforms a constant), so leave the
 target blank there until the per-car g² sensitivity is modeled.
 
-### 2.11 Tire compound (per-axle K overrides)
+### 2.11 Tire compound (one tire per run)
 
-The Inferno 86 alternates between tire sets (A052 and RE-71RS through
-2025-2026, sometimes different compounds per axle in the same session),
-and the two heat very differently: session-median implied K separates by
-~45% on the rears (A052 ≈ 39-43, RE-71RS ≈ 59-61 K/G² dry) with
-within-compound spread of ±2-4 vs ±10 for the pooled mix. The pooled K
-splits the difference and mis-predicts both — this was the dominant
-source of the car's dry-rear MAE.
+The Inferno 86 alternates between tire sets (A050, A052, and RE-71RS
+through 2025-2026), and they heat very differently: session-median
+implied K separates by ~45% on the rears (A052 ≈ 39-43, RE-71RS ≈ 59-61
+K/G² dry) with within-compound spread of ±2-4 vs ±10 for the pooled mix.
+The pooled K splits the difference and mis-predicts both — this was the
+dominant source of the car's dry-rear MAE.
 
-Labels come from ``data/tire_dataset/tire_compounds.yaml`` (human-curated
-per-session, per-axle; authoritative) with the notes-extraction compounds
-as fallback; wheel-set names from the notes ("Black wheels") resolve
-through the sidecar's ``wheel_sets`` mapping. Labeled sessions get a
-per-(car, compound, corner, condition) K fitted by closed-form weighted
-least squares with the pooled τ and c_track held fixed
-(``ΔT = K · g²·c_track·warmup_frac``), which stays stable on sparse
-buckets; ``MIN_LAPS_FOR_COMPOUND_K = 10``. The artifact carries these in
+**One tire runs on all four corners, always** — there is no per-axle
+splitting anywhere in the pipeline or the calculators, and no pooled
+"default" choice in the UI: compound selection is forced per run.
+
+Labels come from ``data/tire_dataset/tire_compounds.yaml`` (human-curated,
+one ``compound:`` per session; authoritative) with the notes-extraction
+compounds as fallback; wheel-set names from the notes ("Black wheels")
+resolve through the sidecar's ``wheel_sets`` mapping. The artifact carries
+the fitted per-(car, compound, corner, condition) K products in
 ``K_by_car_compound_corner_cond`` (additive to schema v3 — consumers
 without compound support ignore the table).
 
-Prediction: ``predict_cold_pressure(compound_front=..., compound_rear=...)``
-(CLI ``--compound`` / ``--compound-front`` / ``--compound-rear``) swaps in
-the compound K per axle when a fitted bucket exists (condition chain
-applies); unknown compounds and unlabeled cars keep the pooled K.
+Prediction: ``predict_cold_pressure(compound=...)`` (CLI ``--compound``)
+swaps in the compound K on every corner when a fitted bucket exists
+(condition chain applies); unknown compounds and unlabeled cars keep the
+pooled K.
 
 **Decomposed K with partial supervision**
 (``tire_model/compound_infer.py``): the compound K is not fitted as free
@@ -546,22 +563,22 @@ In rough priority order:
    Stage-1 per-bucket fits is the canonical move. Probably worth doing
    once we have ≥ 3 cars in the dataset; with 2 cars, the Stage-2 prior is
    too narrow to learn much.
-9. **Re-introduce tire compound.** When notes have ≥ 80% compound coverage
-   with consistent normalization (or AIM logger reads compound RFID
-   directly), and we have multiple compounds at the same (car, track) for
-   identifiability, compound can come back as a `K[car, compound, corner]`
-   dimension. v0 explicitly omits it.
+9. ~~**Re-introduce tire compound.**~~ **Done** (v0.19–v0.23): compound is
+   a fitted dimension via the decomposed `c_track × K_base × m[car,
+   compound]` with partial supervision — see §2.11.
+10. **Compound-conditioned pace curves.** The `g2_vs_lap_time` curves pool
+    all compounds per (track, car, condition); once labels are denser they
+    could split per compound.
 
-### v2 — calculator integration
+### v2 — calculator integration (done)
 
-10. **C# calculator integration.** The committed `tire_model.json` is the
-    integration hand-off. A follow-up plan adds:
-    1. A versioned JSON loader on the C# side, sanity-checking
-       `schema_version` and the Gay-Lussac block matches the calculator's
-       own constants.
-    2. UI inputs for track + car + lap + cloud cover.
-    3. Auto-fill of the per-corner cold-pressure fields from the model
-       prediction (still overridable).
+The committed `tire_model.json` was the integration hand-off, and all
+three planned pieces shipped: a versioned loader on the C# side
+(`Core/Services/Modeling/TireModelLoader.cs`, plus the same in
+`web/js/model.js`), prediction-panel inputs (track → car → tire →
+condition → lap → ambient → cloud → target lap time), and model-driven
+prefill of the corner-card targets from
+`corner_defaults_by_car_corner_cond` (still overridable).
 
 ## 6. CLI reference
 
@@ -586,8 +603,7 @@ just tire-predict --track tsukuba_2000 --car KK-SII --lap 5 --ambient 15 \
 just tire-predict --track tsukuba_2000 --car KK-SII --lap 5 --ambient 15 \
                   --hot-all 1.7 --target-lap-time 60
 
-# Predict with the tire compound (per-axle K override; --compound-front /
-# --compound-rear for split setups)
+# Predict with the tire compound (one tire on all four corners)
 just tire-predict --track sodegaura --car "Inferno 86" --lap 5 --ambient 22 \
                   --hot-all 1.9 --compound A052
 
@@ -605,10 +621,16 @@ just tire-predict-validate
 |---|---|
 | `src/motorsports_data_notebook/tire_model/energy_balance.py` | Pure physics functions (T_eff, warmup_curve, Gay-Lussac, T_road proxy, discretized recurrence) |
 | `src/motorsports_data_notebook/tire_model/warmup_table.py` | Data prep + two-pass scipy fit + JSON serializer + sensor audit + blacklist |
+| `src/motorsports_data_notebook/tire_model/sectors.py` | Sector-wise pace model: per-lap sector split + kNN-median `g2_vs_lap_time` curves |
+| `src/motorsports_data_notebook/tire_model/compounds.py` | Compound label loading (sidecar + notes fallback, wheel-set mapping, condition seeds) |
+| `src/motorsports_data_notebook/tire_model/compound_infer.py` | Decomposed compound K: EM with partial supervision, forced selection |
 | `src/motorsports_data_notebook/tire_model/predict.py` | `predict_cold_pressure(...)` and the fallback chain for K / τ / c_track / ⟨g²⟩ |
 | `src/motorsports_data_notebook/tire_model/validate.py` | `tire-predict-validate` (notes-recorded ground truth) and `tire-predict-holdout` (held-out generalization test) |
-| `data/tire_dataset/tire_model.json` | The committed fitted artifact (~6–12 KB, diff-friendly) |
+| `data/tire_dataset/tire_model.json` | The committed fitted artifact (diff-friendly) |
+| `data/tire_dataset/tire_compounds.yaml` | Human-curated compound history: per-session `compound:`, `wheel_sets`, `condition_seeds` |
 | `data/tire_dataset/sensor_blacklist.yaml` | Human-curated list of broken (session, corner) channels |
+| `scripts/regen_tire_predict_fixture.py` | Regenerates the Python-parity fixture pinned by the C# and web test suites |
 | `tests/tire_model/test_energy_balance.py` | Physics functions in isolation |
 | `tests/tire_model/test_warmup_table.py` | Synthetic-data round-trip: known K, τ, c_track → fit → recover |
+| `tests/tire_model/test_compound_infer.py` | EM recovery on synthetic mixtures: pinned labels, latent posteriors, forced selection |
 | `tests/tire_model/test_predict.py` | Fallback chain hits every level with mocked artifacts |
