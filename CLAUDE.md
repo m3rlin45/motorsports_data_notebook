@@ -153,6 +153,7 @@ tire_pressure_calculator/
     js/model.js   # JS port of the modeling layer (pinned to the same parity fixture)
     js/strings.js # Must stay in sync with Core/Localization/strings.json (tested)
     js/app.js     # DOM wiring, localStorage settings (same key/shape as C# AppSettings)
+    sw.js         # Service worker (installable PWA, offline); cache version stamped at deploy
     tests/        # node --test suites
 ```
 
