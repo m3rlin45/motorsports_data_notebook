@@ -47,6 +47,8 @@ public sealed class CircuitPredictor
             throw new ArgumentException(
                 $"track_condition must be dry/damp/wet; got '{condition}'", nameof(condition));
 
+        car = _model.ResolveCar(car);
+
         // One tire on all four corners — the compound applies to every corner.
         var k = _model.LookupK(car, corner, cond);
         if (compound is not null && _model.LookupCompoundK(car, compound, corner, cond) is KLookup ck)

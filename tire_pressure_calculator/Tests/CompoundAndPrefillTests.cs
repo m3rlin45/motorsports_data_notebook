@@ -72,7 +72,7 @@ public class CompoundAndPrefillTests : IDisposable
         Assert.Equal(vm.AvailableCompounds[0], vm.SelectedCompound);
 
         vm.SelectedCompound = "RE-71RS";
-        vm.SelectedCar = "KK-SII";
+        vm.SelectedCar = "FJ";
         // Foreign compound snaps to the new car's first compound.
         Assert.Contains("DRY", vm.AvailableCompounds);
         Assert.Contains("WET", vm.AvailableCompounds);
@@ -99,7 +99,7 @@ public class CompoundAndPrefillTests : IDisposable
         var vm2 = new MainViewModel(Model);
         Assert.Equal(95.0, vm2.FrontLeft.TargetHotTemp); // no snap on load
 
-        vm2.SelectedCar = vm2.SelectedCar == "KK-SII" ? "Inferno 86" : "KK-SII";
+        vm2.SelectedCar = vm2.SelectedCar == "FJ" ? "Inferno 86" : "FJ";
         var d = Model.LookupCornerDefaults(vm2.SelectedCar!, "fl", vm2.SelectedCondition);
         Assert.Equal(Math.Round(d!.Value.HotTempC, 1), vm2.FrontLeft.TargetHotTemp);
     }
@@ -108,7 +108,7 @@ public class CompoundAndPrefillTests : IDisposable
     public void ConditionChange_ResnapsCornerTargets_WetCoolerThanDry()
     {
         var vm = new MainViewModel(Model);
-        vm.SelectedCar = "KK-SII";
+        vm.SelectedCar = "FJ";
         var dryTemp = vm.FrontLeft.TargetHotTemp;
         vm.SelectedCondition = "wet";
         Assert.True(vm.FrontLeft.TargetHotTemp < dryTemp,

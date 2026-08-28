@@ -40,6 +40,12 @@ logger = logging.getLogger(__name__)
 CORNERS = ("fl", "fr", "rl", "rr")
 SCHEMA_VERSION = 3
 
+# Cars pooled under one label for every fitted quantity. KK-F and KK-SII are
+# near-identical FJ-series machines running the same tires, so their laps
+# train a single "FJ" car. The map is emitted into tire_model.json as
+# ``car_aliases`` so predictors keep accepting the raw car names.
+CAR_FIT_ALIASES = {"KK-F": "FJ", "KK-SII": "FJ"}
+
 # Anchored track for the c_track identifiability constraint. Tsukuba has the
 # most coverage across both cars in the current dataset.
 ANCHOR_TRACK = "tsukuba_2000"
@@ -335,7 +341,7 @@ def build_warmup_table(
             ~compound_labels["session_id"].isin(exclude_session_ids)
         ].reset_index(drop=True)
     compound_labels = apply_condition_seeds(
-        compound_labels, laps_for_fit, load_condition_seeds(root)
+        compound_labels, laps_for_fit, alias_condition_seeds(load_condition_seeds(root))
     )
     k_em, em_assignments, compound_multipliers = fit_compounds_em(
         laps_for_fit, compound_labels, tau_by_car_corner_cond, c_track_by_track
@@ -381,8 +387,37 @@ def build_warmup_table(
 # ---------- Data prep ----------
 
 
+def apply_car_aliases(laps: pd.DataFrame) -> pd.DataFrame:
+    """Map aliased car labels (see CAR_FIT_ALIASES) onto their pooled name."""
+    if laps.empty or "car" not in laps.columns:
+        return laps
+    df = laps.copy()
+    df["car"] = df["car"].replace(CAR_FIT_ALIASES)
+    return df
+
+
+def alias_condition_seeds(seeds: dict[str, dict[str, str]]) -> dict[str, dict[str, str]]:
+    """Re-key the sidecar's condition_seeds through CAR_FIT_ALIASES.
+
+    The sidecar records seeds against the raw car name (e.g. "KK-SII");
+    after aliasing the laps carry the pooled label, so the seeds must be
+    pooled the same way for :func:`compound_infer.apply_condition_seeds`
+    to match them.
+    """
+    out: dict[str, dict[str, str]] = {}
+    for car, mapping in seeds.items():
+        key = CAR_FIT_ALIASES.get(car, car)
+        out.setdefault(key, {}).update(mapping)
+    return out
+
+
 def _load_filtered_laps(root: Path) -> pd.DataFrame:
-    """Read laps + sessions, filter to ok + has_tpms + tire_usable."""
+    """Read laps + sessions, filter to ok + has_tpms + tire_usable.
+
+    Car labels are alias-pooled here (see CAR_FIT_ALIASES) so every
+    consumer — the fit, held-out evaluation, sensor audit — sees the
+    pooled car names.
+    """
     laps_files = sorted((laps_dir(root)).glob("*.parquet"))
     sessions_files = sorted((sessions_dir(root)).glob("*.parquet"))
     if not laps_files or not sessions_files:
@@ -398,7 +433,7 @@ def _load_filtered_laps(root: Path) -> pd.DataFrame:
     df = df[df["tire_usable"]].reset_index(drop=True)
     df = df[df["track_canonical"].notna()]
     df = df[df["car"].notna()]
-    out: pd.DataFrame = df.reset_index(drop=True)
+    out: pd.DataFrame = apply_car_aliases(df.reset_index(drop=True))
     return out
 
 
@@ -1023,6 +1058,9 @@ def _assemble_model(
     return {
         "schema_version": SCHEMA_VERSION,
         "fit_at_utc": fit_at,
+        # Raw car label -> pooled fit label. Predictors resolve an input car
+        # through this map before any lookup, so old car names keep working.
+        "car_aliases": dict(CAR_FIT_ALIASES),
         "model_form": (
             "T_hot - T_eff = K[car,corner,cond] * c_track[track] * g2 "
             "* (1 - exp(-t / tau_sec[car,corner,cond]))   "

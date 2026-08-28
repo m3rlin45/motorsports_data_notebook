@@ -55,7 +55,17 @@ public class TireModelTests
     {
         var model = LoadBundled();
         Assert.Contains("Inferno 86", model.AvailableCars);
-        Assert.Contains("KK-SII", model.AvailableCars);
+        Assert.Contains("FJ", model.AvailableCars);
+    }
+
+    [Fact]
+    public void ResolveCar_MapsAliasedNamesToPooledLabel()
+    {
+        var model = LoadBundled();
+        Assert.Equal("FJ", model.ResolveCar("KK-F"));
+        Assert.Equal("FJ", model.ResolveCar("KK-SII"));
+        Assert.Equal("FJ", model.ResolveCar("FJ"));
+        Assert.Equal("Inferno 86", model.ResolveCar("Inferno 86"));
     }
 
     [Fact]
@@ -108,26 +118,26 @@ public class TireModelTests
     // ---------- Lookup helpers ----------
 
     [Fact]
-    public void LookupK_KKSII_FL_Dry_HitsExactBucket()
+    public void LookupK_FJ_FL_Dry_HitsExactBucket()
     {
         var model = LoadBundled();
-        var k = model.LookupK("KK-SII", "fl", "dry");
+        var k = model.LookupK("FJ", "fl", "dry");
         Assert.False(k.FromPrior);
-        Assert.Contains("KK-SII, fl, dry", k.SourceBucket);
+        Assert.Contains("FJ, fl, dry", k.SourceBucket);
         Assert.True(k.ValueKelvinPerG2 > 0);
     }
 
     [Fact]
-    public void LookupK_KKSII_Wet_FallsBackToDampOrDry()
+    public void LookupK_FJ_Wet_FallsBackToDampOrDry()
     {
-        // KK-SII has no wet K bucket in the current artifact (Fuji wet samples
+        // FJ has no wet K bucket in the current artifact (Fuji wet samples
         // didn't meet the τ-fit threshold). Wet should fall through the chain
-        // and produce a (KK-SII, *, damp) or (KK-SII, *, dry) source bucket.
+        // and produce a (FJ, *, damp) or (FJ, *, dry) source bucket.
         var model = LoadBundled();
-        var k = model.LookupK("KK-SII", "fl", "wet");
+        var k = model.LookupK("FJ", "fl", "wet");
         Assert.False(k.FromPrior);
         Assert.True(k.SourceBucket.Contains("damp") || k.SourceBucket.Contains("dry"),
-            $"Expected damp/dry fallback for KK-SII wet; got {k.SourceBucket}");
+            $"Expected damp/dry fallback for FJ wet; got {k.SourceBucket}");
     }
 
     [Fact]
@@ -140,10 +150,10 @@ public class TireModelTests
     }
 
     [Fact]
-    public void LookupTau_KKSII_FL_Dry_IsInPhysicalRange()
+    public void LookupTau_FJ_FL_Dry_IsInPhysicalRange()
     {
         var model = LoadBundled();
-        var tau = model.LookupTau("KK-SII", "fl", "dry");
+        var tau = model.LookupTau("FJ", "fl", "dry");
         Assert.False(tau.FromPrior);
         // Plan says racing-tire τ is typically 150–350 s.
         Assert.InRange(tau.ValueSeconds, 100.0, 500.0);
@@ -168,11 +178,11 @@ public class TireModelTests
     }
 
     [Fact]
-    public void LookupG2_Tsukuba_KKSII_Dry_IsInPhysicalRange()
+    public void LookupG2_Tsukuba_FJ_Dry_IsInPhysicalRange()
     {
         var model = LoadBundled();
-        var g2 = model.LookupG2("tsukuba_2000", "KK-SII", "dry");
-        // KK-SII at Tsukuba on dry runs ~1.0 G² per plan
+        var g2 = model.LookupG2("tsukuba_2000", "FJ", "dry");
+        // FJ at Tsukuba on dry runs ~1.0 G² per plan
         Assert.InRange(g2.Value, 0.5, 1.5);
         Assert.Equal("exact", g2.Source);
     }
@@ -181,7 +191,7 @@ public class TireModelTests
     public void LookupG2_NewTrack_FallsBackToGlobalMean()
     {
         var model = LoadBundled();
-        var g2 = model.LookupG2("zandvoort", "KK-SII", "dry");
+        var g2 = model.LookupG2("zandvoort", "FJ", "dry");
         // No data for zandvoort at all → no track-car, no track-only,
         // chain falls all the way to global.
         Assert.Equal("global", g2.Source);
@@ -189,11 +199,11 @@ public class TireModelTests
     }
 
     [Fact]
-    public void LookupLapTime_Tsukuba_KKSII_Dry_IsInPhysicalRange()
+    public void LookupLapTime_Tsukuba_FJ_Dry_IsInPhysicalRange()
     {
         var model = LoadBundled();
-        var lt = model.LookupLapTime("tsukuba_2000", "KK-SII", "dry");
-        // Tsukuba KK-SII typical lap ~ 60-70 s
+        var lt = model.LookupLapTime("tsukuba_2000", "FJ", "dry");
+        // Tsukuba FJ typical lap ~ 60-70 s
         Assert.InRange(lt.ValueSeconds, 40.0, 90.0);
         Assert.Equal("exact", lt.Source);
     }

@@ -115,7 +115,7 @@ public class PredictionModeTests
         var vm = CreateWithModel();
         Assert.True(vm.TireModelAvailable);
         Assert.Contains("tsukuba_2000", vm.AvailableTracks);
-        Assert.Contains("KK-SII", vm.AvailableCars);
+        Assert.Contains("FJ", vm.AvailableCars);
         Assert.Contains(vm.AvailableConditions, o => o.Value == "dry");
         Assert.Contains(vm.AvailableConditions, o => o.Value == "damp");
         Assert.Contains(vm.AvailableConditions, o => o.Value == "wet");
@@ -127,7 +127,7 @@ public class PredictionModeTests
         var vm = CreateWithModel();
         // Pick a known-dense bucket so the model returns a real number.
         vm.SelectedTrack = "tsukuba_2000";
-        vm.SelectedCar = "KK-SII";
+        vm.SelectedCar = "FJ";
         vm.SelectedCondition = "dry";
         vm.LapWithinStint = 5;
         vm.AmbientTempC = 18.0;
@@ -138,7 +138,7 @@ public class PredictionModeTests
         Assert.True(vm.FrontRight.HasPrediction);
         Assert.True(vm.RearLeft.HasPrediction);
         Assert.True(vm.RearRight.HasPrediction);
-        // Physical sanity: KK-SII at Tsukuba lap 5 dry should warm above ambient.
+        // Physical sanity: FJ at Tsukuba lap 5 dry should warm above ambient.
         Assert.True(vm.FrontLeft.PredictedHotTempC > vm.AmbientTempC);
     }
 
@@ -147,7 +147,7 @@ public class PredictionModeTests
     {
         var vm = CreateWithModel();
         vm.SelectedTrack = "tsukuba_2000";
-        vm.SelectedCar = "KK-SII";
+        vm.SelectedCar = "FJ";
         vm.Mode = AppMode.CircuitPrediction;
         Assert.True(vm.FrontLeft.HasPrediction);
 
@@ -163,7 +163,7 @@ public class PredictionModeTests
     {
         var vm = CreateWithModel();
         vm.SelectedTrack = "tsukuba_2000";
-        vm.SelectedCar = "KK-SII";
+        vm.SelectedCar = "FJ";
         vm.SelectedCondition = "dry";
         vm.AmbientTempC = 18.0;
         vm.Mode = AppMode.CircuitPrediction;
@@ -181,7 +181,7 @@ public class PredictionModeTests
     {
         var vm = CreateWithModel();
         vm.SelectedTrack = "tsukuba_2000";
-        vm.SelectedCar = "KK-SII";
+        vm.SelectedCar = "FJ";
         vm.LapWithinStint = 5;
         vm.AmbientTempC = 15.0;
         vm.Mode = AppMode.CircuitPrediction;
@@ -204,7 +204,7 @@ public class PredictionModeTests
 
         var vm = new MainViewModel(model);
         vm.SelectedTrack = "tsukuba_2000";
-        vm.SelectedCar = "KK-SII";
+        vm.SelectedCar = "FJ";
         vm.SelectedCondition = "dry";
         vm.LapWithinStint = 10;
         vm.AmbientTempC = 15.0;
@@ -217,7 +217,7 @@ public class PredictionModeTests
         // for cars with fitted compounds — a forced compound selection.
         var direct = directPredictor.Predict(
             track: "tsukuba_2000",
-            car: "KK-SII",
+            car: "FJ",
             condition: "dry",
             lapWithinStint: 10,
             ambientTempC: 15.0,

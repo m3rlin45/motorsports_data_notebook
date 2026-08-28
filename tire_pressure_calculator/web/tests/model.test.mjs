@@ -179,16 +179,24 @@ test('interpClamped: linear inside, clamped outside', async () => {
   assert.equal(interpClamped(80, xs, ys), 0.6);  // clamp high
 });
 
+test('car aliases resolve raw names to the pooled label', () => {
+  const model = new TireModel(modelDto);
+  assert.equal(model.resolveCar('KK-F'), 'FJ');
+  assert.equal(model.resolveCar('KK-SII'), 'FJ');
+  assert.equal(model.resolveCar('FJ'), 'FJ');
+  assert.equal(model.resolveCar('Inferno 86'), 'Inferno 86');
+});
+
 test('g2PaceScale: curve ratio anchored at typical, exponent fallback, clamps', () => {
   const model = new TireModel(modelDto);
   const track = model.availableTracks.find(
-    (t) => model.lookupG2PaceCurve(t, 'KK-SII', 'dry') !== null);
-  assert.ok(track, 'expected at least one curve-covered KK-SII bucket');
-  const lapTyp = model.lookupLapTime(track, 'KK-SII', 'dry').valueSeconds;
-  const atTyp = model.g2PaceScale(track, 'KK-SII', 'dry', lapTyp, lapTyp);
+    (t) => model.lookupG2PaceCurve(t, 'FJ', 'dry') !== null);
+  assert.ok(track, 'expected at least one curve-covered FJ bucket');
+  const lapTyp = model.lookupLapTime(track, 'FJ', 'dry').valueSeconds;
+  const atTyp = model.g2PaceScale(track, 'FJ', 'dry', lapTyp, lapTyp);
   assert.equal(atTyp.source, 'curve');
   assert.ok(Math.abs(atTyp.scale - 1.0) < 1e-12);
-  const faster = model.g2PaceScale(track, 'KK-SII', 'dry', lapTyp, lapTyp * 0.95);
+  const faster = model.g2PaceScale(track, 'FJ', 'dry', lapTyp, lapTyp * 0.95);
   assert.ok(faster.scale > 1.0);
   // Unknown bucket -> exponent fallback, extreme target hits the clamp
   const fb = model.g2PaceScale('no_such_track', 'NoSuchCar', 'dry', 100, 10);
@@ -236,15 +244,15 @@ test('compound K overrides pooled K per axle', () => {
 
 test('corner defaults: per-car steady-state medians with condition fallback', () => {
   const model = new TireModel(modelDto);
-  const kk = model.lookupCornerDefaults('KK-SII', 'fl', 'dry');
+  const kk = model.lookupCornerDefaults('FJ', 'fl', 'dry');
   const inferno = model.lookupCornerDefaults('Inferno 86', 'fl', 'dry');
   assert.ok(kk && inferno, 'both cars carry dry FL defaults');
-  assert.ok(inferno.hotTempC > kk.hotTempC, 'Inferno runs hotter than KK-SII');
+  assert.ok(inferno.hotTempC > kk.hotTempC, 'Inferno runs hotter than FJ');
   assert.ok(kk.hotTempC > 20 && kk.hotTempC < 100);
   assert.ok(kk.hotPressureBar > 1.0 && kk.hotPressureBar < 3.0);
   assert.equal(kk.source, 'exact');
-  // Wet KK-SII data exists and is cooler than dry.
-  const wet = model.lookupCornerDefaults('KK-SII', 'fl', 'wet');
+  // Wet FJ data exists and is cooler than dry.
+  const wet = model.lookupCornerDefaults('FJ', 'fl', 'wet');
   assert.ok(wet.hotTempC < kk.hotTempC);
   // Inferno has no wet laps: the condition chain falls back toward dry.
   const infernoWet = model.lookupCornerDefaults('Inferno 86', 'fl', 'wet');

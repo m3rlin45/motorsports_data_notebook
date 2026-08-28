@@ -553,6 +553,9 @@ async function init() {
   if (model !== null) {
     const p = settings.Prediction;
     if (!p.Track || !model.availableTracks.includes(p.Track)) p.Track = model.availableTracks[0] ?? null;
+    // Resolve alias-pooled car names so a car saved before pooling
+    // (e.g. "KK-SII" -> "FJ") lands on its pooled entry, not the default.
+    if (p.Car) p.Car = model.resolveCar(p.Car);
     if (!p.Car || !model.availableCars.includes(p.Car)) p.Car = model.availableCars[0] ?? null;
     fillSelect(els.trackSelect,
       model.availableTracks.map((v) => ({ value: v, label: v })), p.Track);

@@ -247,7 +247,11 @@ def _evaluate_fold(root: Path, holdout_ids: list[str]) -> pd.DataFrame:
     # Drop out-laps from evaluation (same convention as training)
     all_laps = all_laps[all_laps["lap_within_stint"] > 0].reset_index(drop=True)
 
-    labels = apply_condition_seeds(labels, all_laps, load_condition_seeds(root))
+    from .warmup_table import alias_condition_seeds
+
+    labels = apply_condition_seeds(
+        labels, all_laps, alias_condition_seeds(load_condition_seeds(root))
+    )
     label_by_session = {
         r.session_id: r.compound for r in labels.itertuples() if isinstance(r.compound, str)
     }

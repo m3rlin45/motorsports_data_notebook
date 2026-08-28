@@ -185,6 +185,30 @@ CASES: list[tuple[str, dict]] = [
             "compound": "WET",
         },
     ),
+    # Car aliasing: KK-F and KK-SII are pooled as "FJ" at fit time; both raw
+    # names and the pooled label must resolve to the same FJ buckets.
+    (
+        "tsukuba_KKF_alias_dry_lap5",
+        {
+            "track": "tsukuba_2000",
+            "car": "KK-F",
+            "lap_within_stint": 5,
+            "track_condition": "dry",
+            "ambient_temp_c": 18.0,
+            "target_hot_pressure_bar": 1.7,
+        },
+    ),
+    (
+        "tsukuba_FJ_pooled_dry_lap5",
+        {
+            "track": "tsukuba_2000",
+            "car": "FJ",
+            "lap_within_stint": 5,
+            "track_condition": "dry",
+            "ambient_temp_c": 18.0,
+            "target_hot_pressure_bar": 1.7,
+        },
+    ),
 ]
 
 

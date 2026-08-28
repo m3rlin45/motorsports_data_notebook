@@ -361,7 +361,11 @@ public class MainViewModel : INotifyPropertyChanged
         _mode = _tireModel is null ? AppMode.Manual : _settings.Mode;
         _selectedTrack = _settings.Prediction.Track is string t1 && AvailableTracks.Contains(t1) ? t1
             : AvailableTracks.FirstOrDefault();
-        _selectedCar = _settings.Prediction.Car is string c1 && AvailableCars.Contains(c1) ? c1
+        // Resolve alias-pooled car names so a car saved before pooling
+        // (e.g. "KK-SII" -> "FJ") lands on its pooled entry, not the default.
+        var savedCar = _settings.Prediction.Car is string c0 && _tireModel is not null
+            ? _tireModel.ResolveCar(c0) : _settings.Prediction.Car;
+        _selectedCar = savedCar is string c1 && AvailableCars.Contains(c1) ? c1
             : AvailableCars.FirstOrDefault();
         _selectedCondition = _settings.Prediction.Condition;
         _lapWithinStint = _settings.Prediction.LapWithinStint;
