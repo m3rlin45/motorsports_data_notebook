@@ -354,6 +354,10 @@ def predict_cold_pressure(
     """
     model = _model if _model is not None else _load_model(dataset_root)
 
+    # Alias-pooled cars (e.g. KK-F / KK-SII -> FJ): resolve the raw car
+    # name onto the label the model was fitted with.
+    car = model.get("car_aliases", {}).get(car, car)
+
     cond = str(track_condition or "dry").lower()
     if cond not in {"dry", "damp", "wet"}:
         raise ValueError(f"track_condition must be one of dry/damp/wet; got {track_condition!r}")

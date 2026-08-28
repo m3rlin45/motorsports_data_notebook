@@ -13,37 +13,37 @@
     "g2_pace_source": null,
     "corners": {
       "fl": {
-        "cold_pressure_bar": 1.4785250808519224,
-        "predicted_hot_temp_c": 44.01644954417766,
+        "cold_pressure_bar": 1.4779917461383199,
+        "predicted_hot_temp_c": 44.084712837546434,
         "K_source_bucket": [
-          "KK-SII",
+          "FJ",
           "fl",
           "dry"
         ]
       },
       "fr": {
-        "cold_pressure_bar": 1.5093443606657821,
-        "predicted_hot_temp_c": 40.12107284367688,
+        "cold_pressure_bar": 1.5087988370719714,
+        "predicted_hot_temp_c": 40.189191801231125,
         "K_source_bucket": [
-          "KK-SII",
+          "FJ",
           "fr",
           "dry"
         ]
       },
       "rl": {
-        "cold_pressure_bar": 1.4982160445549333,
-        "predicted_hot_temp_c": 41.51654043527597,
+        "cold_pressure_bar": 1.4979372168567613,
+        "predicted_hot_temp_c": 41.55166451548471,
         "K_source_bucket": [
-          "KK-SII",
+          "FJ",
           "rl",
           "dry"
         ]
       },
       "rr": {
-        "cold_pressure_bar": 1.4931491395314156,
-        "predicted_hot_temp_c": 42.15604709341514,
+        "cold_pressure_bar": 1.4928237157678281,
+        "predicted_hot_temp_c": 42.19720847994968,
         "K_source_bucket": [
-          "KK-SII",
+          "FJ",
           "rr",
           "dry"
         ]
@@ -65,37 +65,37 @@
     "g2_pace_source": null,
     "corners": {
       "fl": {
-        "cold_pressure_bar": 1.435059166608208,
-        "predicted_hot_temp_c": 46.351476871168835,
+        "cold_pressure_bar": 1.4336663565170893,
+        "predicted_hot_temp_c": 46.53433056428986,
         "K_source_bucket": [
-          "KK-SII",
+          "FJ",
           "fl",
           "dry"
         ]
       },
       "fr": {
-        "cold_pressure_bar": 1.4783382139829997,
-        "predicted_hot_temp_c": 40.77204486475175,
+        "cold_pressure_bar": 1.4760024592899263,
+        "predicted_hot_temp_c": 41.06818547915256,
         "K_source_bucket": [
-          "KK-SII",
+          "FJ",
           "fr",
           "dry"
         ]
       },
       "rl": {
-        "cold_pressure_bar": 1.4555093010152254,
-        "predicted_hot_temp_c": 43.69058361266861,
+        "cold_pressure_bar": 1.4537534749767484,
+        "predicted_hot_temp_c": 43.91730441099928,
         "K_source_bucket": [
-          "KK-SII",
+          "FJ",
           "rl",
           "dry"
         ]
       },
       "rr": {
-        "cold_pressure_bar": 1.4473443074731756,
-        "predicted_hot_temp_c": 44.74764833019006,
+        "cold_pressure_bar": 1.4464095667437347,
+        "predicted_hot_temp_c": 44.86911281582941,
         "K_source_bucket": [
-          "KK-SII",
+          "FJ",
           "rr",
           "dry"
         ]
@@ -116,37 +116,37 @@
     "g2_pace_source": null,
     "corners": {
       "fl": {
-        "cold_pressure_bar": 1.464252383240789,
-        "predicted_hot_temp_c": 42.56644418045753,
+        "cold_pressure_bar": 1.4528397948927871,
+        "predicted_hot_temp_c": 44.03541162775224,
         "K_source_bucket": [
-          "KK-SII",
+          "FJ",
           "fl",
           "damp"
         ]
       },
       "fr": {
-        "cold_pressure_bar": 1.523635570804839,
-        "predicted_hot_temp_c": 35.13738071395876,
+        "cold_pressure_bar": 1.5066019911483024,
+        "predicted_hot_temp_c": 37.23234340649637,
         "K_source_bucket": [
-          "KK-SII",
+          "FJ",
           "fr",
           "damp"
         ]
       },
       "rl": {
-        "cold_pressure_bar": 1.5093377882890469,
-        "predicted_hot_temp_c": 36.8939500934909,
+        "cold_pressure_bar": 1.4945153738532384,
+        "predicted_hot_temp_c": 38.73623175259408,
         "K_source_bucket": [
-          "KK-SII",
+          "FJ",
           "rl",
           "damp"
         ]
       },
       "rr": {
-        "cold_pressure_bar": 1.5009921262491992,
-        "predicted_hot_temp_c": 37.92854832265855,
+        "cold_pressure_bar": 1.4932672439498202,
+        "predicted_hot_temp_c": 38.89236204037596,
         "K_source_bucket": [
-          "KK-SII",
+          "FJ",
           "rr",
           "damp"
         ]
@@ -167,37 +167,37 @@
     "g2_pace_source": null,
     "corners": {
       "fl": {
-        "cold_pressure_bar": 1.464252383240789,
-        "predicted_hot_temp_c": 42.56644418045753,
+        "cold_pressure_bar": 1.4528397948927871,
+        "predicted_hot_temp_c": 44.03541162775224,
         "K_source_bucket": [
-          "KK-SII",
+          "FJ",
           "fl",
           "damp"
         ]
       },
       "fr": {
-        "cold_pressure_bar": 1.523635570804839,
-        "predicted_hot_temp_c": 35.13738071395876,
+        "cold_pressure_bar": 1.5066019911483024,
+        "predicted_hot_temp_c": 37.23234340649637,
         "K_source_bucket": [
-          "KK-SII",
+          "FJ",
           "fr",
           "damp"
         ]
       },
       "rl": {
-        "cold_pressure_bar": 1.5093377882890469,
-        "predicted_hot_temp_c": 36.8939500934909,
+        "cold_pressure_bar": 1.4945153738532384,
+        "predicted_hot_temp_c": 38.73623175259408,
         "K_source_bucket": [
-          "KK-SII",
+          "FJ",
           "rl",
           "damp"
         ]
       },
       "rr": {
-        "cold_pressure_bar": 1.5009921262491992,
-        "predicted_hot_temp_c": 37.92854832265855,
+        "cold_pressure_bar": 1.4932672439498202,
+        "predicted_hot_temp_c": 38.89236204037596,
         "K_source_bucket": [
-          "KK-SII",
+          "FJ",
           "rr",
           "damp"
         ]
@@ -219,7 +219,7 @@
     "corners": {
       "fl": {
         "cold_pressure_bar": 1.4216805785525888,
-        "predicted_hot_temp_c": 55.92106207883994,
+        "predicted_hot_temp_c": 55.921062078839945,
         "K_source_bucket": [
           "Inferno 86",
           "fl",
@@ -246,7 +246,7 @@
       },
       "rr": {
         "cold_pressure_bar": 1.4909342481531764,
-        "predicted_hot_temp_c": 46.772133870390135,
+        "predicted_hot_temp_c": 46.77213387039014,
         "K_source_bucket": [
           "Inferno 86",
           "rr",
@@ -270,37 +270,37 @@
     "g2_pace_source": null,
     "corners": {
       "fl": {
-        "cold_pressure_bar": 1.4942138227465303,
-        "predicted_hot_temp_c": 46.351476871168835,
+        "cold_pressure_bar": 1.4927871772549675,
+        "predicted_hot_temp_c": 46.53433056428986,
         "K_source_bucket": [
-          "KK-SII",
+          "FJ",
           "fl",
           "dry"
         ]
       },
       "fr": {
-        "cold_pressure_bar": 1.5385442438212125,
-        "predicted_hot_temp_c": 40.77204486475175,
+        "cold_pressure_bar": 1.536151746865944,
+        "predicted_hot_temp_c": 41.06818547915256,
         "K_source_bucket": [
-          "KK-SII",
+          "FJ",
           "fr",
           "dry"
         ]
       },
       "rl": {
-        "cold_pressure_bar": 1.515160750285073,
-        "predicted_hot_temp_c": 43.69058361266861,
+        "cold_pressure_bar": 1.5133622701349552,
+        "predicted_hot_temp_c": 43.91730441099928,
         "K_source_bucket": [
-          "KK-SII",
+          "FJ",
           "rl",
           "dry"
         ]
       },
       "rr": {
-        "cold_pressure_bar": 1.5067974053468949,
-        "predicted_hot_temp_c": 44.74764833019006,
+        "cold_pressure_bar": 1.5058399570515815,
+        "predicted_hot_temp_c": 44.86911281582941,
         "K_source_bucket": [
-          "KK-SII",
+          "FJ",
           "rr",
           "dry"
         ]
@@ -318,41 +318,41 @@
       "target_hot_pressure_bar": 1.7,
       "target_lap_time_s": 60.0
     },
-    "g2_scale": 1.1056696404347284,
+    "g2_scale": 1.1168281497265389,
     "g2_pace_source": "curve",
     "corners": {
       "fl": {
-        "cold_pressure_bar": 1.4602112409182024,
-        "predicted_hot_temp_c": 46.37744013420945,
+        "cold_pressure_bar": 1.4574632534307432,
+        "predicted_hot_temp_c": 46.73474248905154,
         "K_source_bucket": [
-          "KK-SII",
+          "FJ",
           "fl",
           "dry"
         ]
       },
       "fr": {
-        "cold_pressure_bar": 1.4930385831391444,
-        "predicted_hot_temp_c": 42.17002966843974,
+        "cold_pressure_bar": 1.490601304502008,
+        "predicted_hot_temp_c": 42.478598836368406,
         "K_source_bucket": [
-          "KK-SII",
+          "FJ",
           "fr",
           "dry"
         ]
       },
       "rl": {
-        "cold_pressure_bar": 1.4815070034401803,
-        "predicted_hot_temp_c": 43.63532396249591,
+        "cold_pressure_bar": 1.4792398100752986,
+        "predicted_hot_temp_c": 43.92501501281749,
         "K_source_bucket": [
-          "KK-SII",
+          "FJ",
           "rl",
           "dry"
         ]
       },
       "rr": {
-        "cold_pressure_bar": 1.4761494343613224,
-        "predicted_hot_temp_c": 44.32074271499347,
+        "cold_pressure_bar": 1.4737482626259037,
+        "predicted_hot_temp_c": 44.62889928280059,
         "K_source_bucket": [
-          "KK-SII",
+          "FJ",
           "rr",
           "dry"
         ]
@@ -370,41 +370,41 @@
       "target_hot_pressure_bar": 1.7,
       "target_lap_time_s": 68.0
     },
-    "g2_scale": 0.8087146811178814,
+    "g2_scale": 0.8172872079212113,
     "g2_pace_source": "curve",
     "corners": {
       "fl": {
-        "cold_pressure_bar": 1.5118218325126245,
-        "predicted_hot_temp_c": 39.812085855286924,
+        "cold_pressure_bar": 1.5094238646974114,
+        "predicted_hot_temp_c": 40.111147731528945,
         "K_source_bucket": [
-          "KK-SII",
+          "FJ",
           "fl",
           "dry"
         ]
       },
       "fr": {
-        "cold_pressure_bar": 1.5390506638896695,
-        "predicted_hot_temp_c": 36.45587402999496,
+        "cold_pressure_bar": 1.5367865929274163,
+        "predicted_hot_temp_c": 36.73219592127613,
         "K_source_bucket": [
-          "KK-SII",
+          "FJ",
           "fr",
           "dry"
         ]
       },
       "rl": {
-        "cold_pressure_bar": 1.528482224648911,
-        "predicted_hot_temp_c": 37.74995109977631,
+        "cold_pressure_bar": 1.5263959773219624,
+        "predicted_hot_temp_c": 38.00668606838481,
         "K_source_bucket": [
-          "KK-SII",
+          "FJ",
           "rl",
           "dry"
         ]
       },
       "rr": {
-        "cold_pressure_bar": 1.5239119619111166,
-        "predicted_hot_temp_c": 38.31292416822576,
+        "cold_pressure_bar": 1.521830842861874,
+        "predicted_hot_temp_c": 38.56995624730193,
         "K_source_bucket": [
-          "KK-SII",
+          "FJ",
           "rr",
           "dry"
         ]
@@ -422,12 +422,12 @@
       "target_hot_pressure_bar": 1.7,
       "target_lap_time_s": 120.0
     },
-    "g2_scale": 1.2957785953959053,
+    "g2_scale": 1.2979240971194737,
     "g2_pace_source": "exponent",
     "corners": {
       "fl": {
-        "cold_pressure_bar": 1.3884058812275568,
-        "predicted_hot_temp_c": 58.24467886136433,
+        "cold_pressure_bar": 1.387505381984381,
+        "predicted_hot_temp_c": 58.36967152515435,
         "K_source_bucket": [
           "Inferno 86",
           "fl",
@@ -435,8 +435,8 @@
         ]
       },
       "fr": {
-        "cold_pressure_bar": 1.4138397450667637,
-        "predicted_hot_temp_c": 54.75287823275029,
+        "cold_pressure_bar": 1.4130039167471478,
+        "predicted_hot_temp_c": 54.8664588655078,
         "K_source_bucket": [
           "Inferno 86",
           "fr",
@@ -444,8 +444,8 @@
         ]
       },
       "rl": {
-        "cold_pressure_bar": 1.4406082559822826,
-        "predicted_hot_temp_c": 51.15645027111879,
+        "cold_pressure_bar": 1.439842187444142,
+        "predicted_hot_temp_c": 51.25827692595213,
         "K_source_bucket": [
           "Inferno 86",
           "rl",
@@ -453,8 +453,8 @@
         ]
       },
       "rr": {
-        "cold_pressure_bar": 1.4600377695610458,
-        "predicted_hot_temp_c": 48.59506009362264,
+        "cold_pressure_bar": 1.4593234241201727,
+        "predicted_hot_temp_c": 48.688515519024264,
         "K_source_bucket": [
           "Inferno 86",
           "rr",
@@ -478,8 +478,8 @@
     "g2_pace_source": null,
     "corners": {
       "fl": {
-        "cold_pressure_bar": 1.3827673445286028,
-        "predicted_hot_temp_c": 61.29515757271994,
+        "cold_pressure_bar": 1.3828310904635184,
+        "predicted_hot_temp_c": 61.28621043444703,
         "K_source_bucket": [
           "Inferno 86",
           "A050",
@@ -488,8 +488,8 @@
         ]
       },
       "fr": {
-        "cold_pressure_bar": 1.4047344807463533,
-        "predicted_hot_temp_c": 58.24001681078151,
+        "cold_pressure_bar": 1.4047916080846488,
+        "predicted_hot_temp_c": 58.232144432345706,
         "K_source_bucket": [
           "Inferno 86",
           "A050",
@@ -498,8 +498,8 @@
         ]
       },
       "rl": {
-        "cold_pressure_bar": 1.4159818559441173,
-        "predicted_hot_temp_c": 56.697261906934116,
+        "cold_pressure_bar": 1.4160476534317956,
+        "predicted_hot_temp_c": 56.68827900416722,
         "K_source_bucket": [
           "Inferno 86",
           "A050",
@@ -508,8 +508,8 @@
         ]
       },
       "rr": {
-        "cold_pressure_bar": 1.436162938907425,
-        "predicted_hot_temp_c": 53.96481948633429,
+        "cold_pressure_bar": 1.4362258201943794,
+        "predicted_hot_temp_c": 53.95637634421642,
         "K_source_bucket": [
           "Inferno 86",
           "A050",
@@ -534,8 +534,8 @@
     "g2_pace_source": null,
     "corners": {
       "fl": {
-        "cold_pressure_bar": 1.4608252330207638,
-        "predicted_hot_temp_c": 50.686487576066654,
+        "cold_pressure_bar": 1.4605213886629036,
+        "predicted_hot_temp_c": 50.726477429466314,
         "K_source_bucket": [
           "Inferno 86",
           "A052",
@@ -544,8 +544,8 @@
         ]
       },
       "fr": {
-        "cold_pressure_bar": 1.477891006816753,
-        "predicted_hot_temp_c": 48.45615531824858,
+        "cold_pressure_bar": 1.4776047478172596,
+        "predicted_hot_temp_c": 48.493313245207446,
         "K_source_bucket": [
           "Inferno 86",
           "A052",
@@ -554,8 +554,8 @@
         ]
       },
       "rl": {
-        "cold_pressure_bar": 1.48659897180318,
-        "predicted_hot_temp_c": 47.329904092503185,
+        "cold_pressure_bar": 1.486331168081167,
+        "predicted_hot_temp_c": 47.36442311082544,
         "K_source_bucket": [
           "Inferno 86",
           "A052",
@@ -564,8 +564,8 @@
         ]
       },
       "rr": {
-        "cold_pressure_bar": 1.5021731780805632,
-        "predicted_hot_temp_c": 45.33515002119564,
+        "cold_pressure_bar": 1.5019243249724026,
+        "predicted_hot_temp_c": 45.36682804546469,
         "K_source_bucket": [
           "Inferno 86",
           "A052",
@@ -591,7 +591,7 @@
     "corners": {
       "fl": {
         "cold_pressure_bar": 1.4216805785525888,
-        "predicted_hot_temp_c": 55.92106207883994,
+        "predicted_hot_temp_c": 55.921062078839945,
         "K_source_bucket": [
           "Inferno 86",
           "fl",
@@ -618,7 +618,7 @@
       },
       "rr": {
         "cold_pressure_bar": 1.4909342481531764,
-        "predicted_hot_temp_c": 46.772133870390135,
+        "predicted_hot_temp_c": 46.77213387039014,
         "K_source_bucket": [
           "Inferno 86",
           "rr",
@@ -642,43 +642,145 @@
     "g2_pace_source": null,
     "corners": {
       "fl": {
-        "cold_pressure_bar": 1.4544865636126576,
-        "predicted_hot_temp_c": 43.82260499763608,
+        "cold_pressure_bar": 1.4530204674614007,
+        "predicted_hot_temp_c": 44.012049938029,
         "K_source_bucket": [
-          "KK-SII",
+          "FJ",
           "WET",
           "fl",
           "wet"
         ]
       },
       "fr": {
-        "cold_pressure_bar": 1.4923524121609226,
-        "predicted_hot_temp_c": 39.006898921630935,
+        "cold_pressure_bar": 1.4915237056212955,
+        "predicted_hot_temp_c": 39.11072553301028,
         "K_source_bucket": [
-          "KK-SII",
+          "FJ",
           "WET",
           "fr",
           "wet"
         ]
       },
       "rl": {
-        "cold_pressure_bar": 1.508800973297157,
-        "predicted_hot_temp_c": 36.960291043740185,
+        "cold_pressure_bar": 1.5079672022034423,
+        "predicted_hot_temp_c": 37.06338688817888,
         "K_source_bucket": [
-          "KK-SII",
+          "FJ",
           "WET",
           "rl",
           "wet"
         ]
       },
       "rr": {
-        "cold_pressure_bar": 1.5050681728118098,
-        "predicted_hot_temp_c": 37.422386190484254,
+        "cold_pressure_bar": 1.503358417238624,
+        "predicted_hot_temp_c": 37.63450238787332,
         "K_source_bucket": [
-          "KK-SII",
+          "FJ",
           "WET",
           "rr",
           "wet"
+        ]
+      }
+    }
+  },
+  {
+    "label": "tsukuba_KKF_alias_dry_lap5",
+    "inputs": {
+      "track": "tsukuba_2000",
+      "car": "KK-F",
+      "lap_within_stint": 5,
+      "track_condition": "dry",
+      "ambient_temp_c": 18.0,
+      "target_hot_pressure_bar": 1.7
+    },
+    "g2_scale": 1.0,
+    "g2_pace_source": null,
+    "corners": {
+      "fl": {
+        "cold_pressure_bar": 1.4779917461383199,
+        "predicted_hot_temp_c": 44.084712837546434,
+        "K_source_bucket": [
+          "FJ",
+          "fl",
+          "dry"
+        ]
+      },
+      "fr": {
+        "cold_pressure_bar": 1.5087988370719714,
+        "predicted_hot_temp_c": 40.189191801231125,
+        "K_source_bucket": [
+          "FJ",
+          "fr",
+          "dry"
+        ]
+      },
+      "rl": {
+        "cold_pressure_bar": 1.4979372168567613,
+        "predicted_hot_temp_c": 41.55166451548471,
+        "K_source_bucket": [
+          "FJ",
+          "rl",
+          "dry"
+        ]
+      },
+      "rr": {
+        "cold_pressure_bar": 1.4928237157678281,
+        "predicted_hot_temp_c": 42.19720847994968,
+        "K_source_bucket": [
+          "FJ",
+          "rr",
+          "dry"
+        ]
+      }
+    }
+  },
+  {
+    "label": "tsukuba_FJ_pooled_dry_lap5",
+    "inputs": {
+      "track": "tsukuba_2000",
+      "car": "FJ",
+      "lap_within_stint": 5,
+      "track_condition": "dry",
+      "ambient_temp_c": 18.0,
+      "target_hot_pressure_bar": 1.7
+    },
+    "g2_scale": 1.0,
+    "g2_pace_source": null,
+    "corners": {
+      "fl": {
+        "cold_pressure_bar": 1.4779917461383199,
+        "predicted_hot_temp_c": 44.084712837546434,
+        "K_source_bucket": [
+          "FJ",
+          "fl",
+          "dry"
+        ]
+      },
+      "fr": {
+        "cold_pressure_bar": 1.5087988370719714,
+        "predicted_hot_temp_c": 40.189191801231125,
+        "K_source_bucket": [
+          "FJ",
+          "fr",
+          "dry"
+        ]
+      },
+      "rl": {
+        "cold_pressure_bar": 1.4979372168567613,
+        "predicted_hot_temp_c": 41.55166451548471,
+        "K_source_bucket": [
+          "FJ",
+          "rl",
+          "dry"
+        ]
+      },
+      "rr": {
+        "cold_pressure_bar": 1.4928237157678281,
+        "predicted_hot_temp_c": 42.19720847994968,
+        "K_source_bucket": [
+          "FJ",
+          "rr",
+          "dry"
         ]
       }
     }

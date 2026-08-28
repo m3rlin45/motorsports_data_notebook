@@ -187,6 +187,11 @@ Fitted tables:
 
 Config + provenance:
 
+- `car_aliases` — raw car label → pooled fit label (e.g. `KK-F` / `KK-SII`
+  → `FJ`: near-identical FJ-series machines on the same tires train one
+  car). All predictors resolve an input car through this map before any
+  lookup, so raw names keep working; the fitted tables carry only pooled
+  labels.
 - `g2_lap_time_model` — pace-scaling method, default exponent, multiplier clamp
 - `energy_balance` — the `w_road` config + T_road proxy formula
 - `gay_lussac`, `conditions`, `corners`, `priors_when_no_fit`,

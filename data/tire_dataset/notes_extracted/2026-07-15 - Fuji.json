@@ -1,0 +1,39 @@
+{
+  "_cache_key": "95e02946dfbb7823b3df7ae62d86868327773426|745ba5f28ec0515f9e628864b4b32a9c656dc393|claude-opus-4-7",
+  "_source_file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2026-07-15 - Fuji.txt",
+  "_source_sha1": "95e02946dfbb7823b3df7ae62d86868327773426",
+  "_prompt_sha1": "745ba5f28ec0515f9e628864b4b32a9c656dc393",
+  "_model": "claude-opus-4-7",
+  "_extracted_at": "2026-08-28T01:28:38+00:00",
+  "data": {
+    "file_date": null,
+    "track": null,
+    "car": "Orange Car",
+    "sessions": [
+      {
+        "session_index": 1,
+        "start_time_local": null,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": "RE-71RS",
+          "fr": "RE-71RS",
+          "rl": "RE-71RS",
+          "rr": "RE-71RS"
+        },
+        "setup_changes": [],
+        "incidents": [
+          "Interference between rear wheels and suspension"
+        ],
+        "notes": "Orange Car shakedown. RE-71RS tires (used)."
+      }
+    ]
+  }
+}

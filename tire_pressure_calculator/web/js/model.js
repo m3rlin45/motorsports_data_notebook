@@ -129,6 +129,13 @@ export class TireModel {
     return [...new Set(this.dto.tau_sec_by_car_corner_cond.map((r) => r.car))].sort();
   }
 
+  // Resolve an alias-pooled car name (e.g. KK-F / KK-SII -> FJ) onto the
+  // label the model was fitted with. Unknown cars pass through.
+  resolveCar(car) {
+    const aliases = this.dto.car_aliases;
+    return (aliases && Object.prototype.hasOwnProperty.call(aliases, car)) ? aliases[car] : car;
+  }
+
   get availableTracks() {
     // Every track with observed data, not just those with a fitted
     // c_track — thin tracks (e.g. Motegi's 18 Inferno laps) predict via
@@ -372,6 +379,8 @@ export function predictCorner(model, {
   if (cond !== 'dry' && cond !== 'damp' && cond !== 'wet') {
     throw new RangeError(`track_condition must be dry/damp/wet; got '${condition}'`);
   }
+
+  car = model.resolveCar(car);
 
   // One tire on all four corners — the compound applies to every corner.
   let k = model.lookupK(car, corner, cond);

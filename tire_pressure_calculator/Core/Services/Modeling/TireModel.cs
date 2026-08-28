@@ -32,6 +32,11 @@ public sealed class TireModel
     public IReadOnlyList<string> AvailableCars => Dto.TauSecByCarCornerCond
         .Select(r => r.Car).Distinct().OrderBy(s => s).ToList();
 
+    /// <summary>Resolve an alias-pooled car name (e.g. KK-F / KK-SII → FJ)
+    /// onto the label the model was fitted with. Unknown cars pass through.</summary>
+    public string ResolveCar(string car) =>
+        Dto.CarAliases is { } aliases && aliases.TryGetValue(car, out var pooled) ? pooled : car;
+
     // Every track with observed data, not just those with a fitted c_track —
     // thin tracks predict via the c_track prior until enough laps accumulate.
     public IReadOnlyList<string> AvailableTracks => Dto.CTrackByTrack
