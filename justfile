@@ -50,6 +50,16 @@ tire-notes *ARGS:
     uv run python -m motorsports_data_notebook.tire_etl.cli enrich-notes {{ARGS}}
     uv run python -m motorsports_data_notebook.tire_etl.cli match-notes
 
+# Review sessions whose track/laps were reconciled from GPS (wrong dash variant,
+# missing track token, re-split laps) or are still unresolved
+tire-track-audit *ARGS:
+    uv run python -m motorsports_data_notebook.tire_etl.cli audit-tracks {{ARGS}}
+
+# Compare the working-copy manifest with a committed revision by file group
+# (added / removed / regrouped / changed sessions); `--base REV` defaults to `.`
+tire-manifest-diff *ARGS:
+    uv run python -m motorsports_data_notebook.tire_etl.cli manifest-diff {{ARGS}}
+
 # Fetch historical weather for sessions
 tire-weather *ARGS:
     uv run python -m motorsports_data_notebook.tire_etl.cli enrich-weather {{ARGS}}

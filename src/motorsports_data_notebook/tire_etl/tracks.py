@@ -4,6 +4,11 @@ Maintained by hand — when a new track appears in filenames, add it here with
 approximate lat/lon (main straight is fine) and the IANA timezone. Coordinates
 are only used to query Open-Meteo historical weather, so 3 decimal places is
 plenty.
+
+This file only maps *names* to a pooled canonical track id. Which layout of
+a venue was actually driven (and whether the logger's lap beacon was on the
+right start/finish line) is decided from GPS in :mod:`.layouts`, which holds
+the per-venue gate geometry.
 """
 
 from __future__ import annotations
@@ -27,18 +32,22 @@ class TrackInfo:
 # Canonical list. Keys are the lowercased track name tokens as they appear in
 # AIM filenames (e.g. "Tsukuba"). Alias map below handles common variants.
 _TRACKS: dict[str, TrackInfo] = {
+    # Coordinates are the start/finish line as measured from GPS traces in the
+    # dataset (they must stay within ~10 km of layouts.VENUES — tested). The
+    # original Tsukuba/Sodegaura values were 28 km / 9 km off, so weather
+    # fetched before 2026-10 for those venues came from the wrong place.
     "tsukuba_2000": TrackInfo(
         canonical="tsukuba_2000",
         display="Tsukuba Circuit (2000)",
-        lat=36.170,
-        lon=140.218,
+        lat=36.150,
+        lon=139.919,
         timezone="Asia/Tokyo",
     ),
     "sodegaura": TrackInfo(
         canonical="sodegaura",
         display="Sodegaura Forest Raceway",
-        lat=35.412,
-        lon=139.991,
+        lat=35.395,
+        lon=140.088,
         timezone="Asia/Tokyo",
     ),
     "fuji": TrackInfo(
@@ -70,12 +79,12 @@ _TRACKS: dict[str, TrackInfo] = {
         timezone="Asia/Tokyo",
     ),
     "minami": TrackInfo(
-        # "MINAMI" in AIM filenames — appears to be a Japanese regional course.
-        # Coordinates approximate; correct later if weather joins look off.
+        # "MINAMI" / "MINAMI_CHIBA_1" in AIM metadata: Minami Chiba Circuit.
+        # Coordinates measured from the GPS trace (S/F line).
         canonical="minami",
-        display="Minami (TBD)",
-        lat=36.170,
-        lon=140.218,
+        display="Minami Chiba Circuit",
+        lat=35.488,
+        lon=140.251,
         timezone="Asia/Tokyo",
     ),
 }
@@ -85,6 +94,10 @@ _ALIASES: dict[str, str] = {
     "tsukuba": "tsukuba_2000",
     "tsukuba2000": "tsukuba_2000",
     "tc2000": "tsukuba_2000",
+    # Dash variants ("Tsukuba_Car" / "Tsukuba_Bike" in the Venue metadata):
+    # same tarmac, S/F lines within ~2 m of each other.
+    "tsukubacar": "tsukuba_2000",
+    "tsukubabike": "tsukuba_2000",
     "sodegaura": "sodegaura",
     "fuji": "fuji",
     "fujispeedway": "fuji",
@@ -96,7 +109,13 @@ _ALIASES: dict[str, str] = {
     "marutai": "marutai",
     "suzuka": "suzuka",
     "suzukacar": "suzuka",
+    # Suzuka layouts pool under one venue (like Fuji GP/Short, Motegi/East).
+    # Which layout was actually driven is decided from GPS in layouts.py.
+    "suzukawest": "suzuka",
+    "suzukaeast": "suzuka",
     "minami": "minami",
+    "minamichiba": "minami",
+    "minamichiba1": "minami",
 }
 
 

@@ -23,6 +23,8 @@ def test_build_parser_lists_all_subcommands() -> None:
         "enrich-notes",
         "enrich-weather",
         "match-notes",
+        "audit-tracks",
+        "manifest-diff",
         "query",
     }
 

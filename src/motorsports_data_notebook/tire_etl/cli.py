@@ -43,6 +43,7 @@ def _cmd_extract(args: argparse.Namespace) -> int:
     print(
         f"extract: scanned={counts['scanned']} skipped={counts['skipped']}"
         f" extracted={counts['extracted']} errors={counts['errors']}"
+        f" pruned_sessions={counts.get('pruned_sessions', 0)}"
     )
     return 0 if counts["errors"] == 0 else 1
 
@@ -117,6 +118,96 @@ def _cmd_match_notes(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_audit_tracks(args: argparse.Namespace) -> int:
+    """Report sessions whose track/laps were reconciled from GPS, or could not be.
+
+    This is the human-review step after ``extract``: every row here is a
+    file whose filename/dash variant disagreed with the GPS trace
+    (``gps_override``), carried no track at all (``gps``), had its laps
+    re-split at the correct start/finish (``gps_resplit``), could not be
+    verified (``logger_unverified``), or has no canonical track. Exit code 1
+    when any session is still unresolved (null ``track_canonical`` with laps).
+    """
+    import duckdb
+
+    root = args.dataset_root
+    con = duckdb.connect(":memory:")
+    con.execute(f"CREATE VIEW sessions AS SELECT * FROM read_parquet('{root}/sessions/*.parquet')")
+    where = [
+        "(track_resolution <> 'declared' OR lap_source <> 'logger' OR track_canonical IS NULL)"
+    ]
+    if args.since:
+        where.append(f"date >= DATE '{_parse_since(args.since)}'")
+    sql = f"""
+        SELECT date, car, track AS filename_track, venue_meta, layout_id, track_canonical,
+               track_resolution, lap_source, beacon_gate, n_laps_logger, n_laps, status,
+               session_id
+        FROM sessions
+        WHERE {' AND '.join(where)}
+        ORDER BY date, session_id
+    """
+    df = con.execute(sql).fetch_arrow_table().to_pandas()
+    if df.empty:
+        print("audit-tracks: every session's track and laps agree with the GPS trace.")
+        return 0
+    print(df.to_string(index=False))
+    unresolved = df[df["track_canonical"].isna() & (df["n_laps"] > 0)]
+    print(
+        f"\naudit-tracks: {len(df)} reconciled/flagged sessions; "
+        f"{int((df['lap_source'] == 'gps_resplit').sum())} re-split, "
+        f"{int((df['track_resolution'] == 'gps_override').sum())} variant overrides, "
+        f"{int((df['track_resolution'] == 'gps').sum())} tracks supplied by GPS, "
+        f"{len(unresolved)} unresolved (no canonical track but has laps)."
+    )
+    if len(unresolved):
+        print(
+            "Unresolved sessions ran somewhere not in layouts.VENUES — add the venue "
+            "(S/F gate lat/lon) or confirm it is not a circuit (road drive)."
+        )
+        return 1
+    return 0
+
+
+def _cmd_manifest_diff(args: argparse.Namespace) -> int:
+    """Compare the working-copy manifest with a committed revision by file group."""
+    import json
+    import subprocess
+
+    from .dataset import compare_manifests, load_manifest
+    from .paths import manifest_path
+
+    rel = manifest_path(args.dataset_root)
+    try:
+        rel_repo = rel.resolve().relative_to(
+            Path(subprocess.check_output(["sl", "root"], text=True).strip())
+        )
+    except (ValueError, subprocess.CalledProcessError) as e:
+        print(f"manifest-diff: cannot locate the manifest in the sl repo: {e}", file=sys.stderr)
+        return 2
+    base_text = subprocess.check_output(["sl", "cat", "-r", args.base, str(rel_repo)], text=True)
+    base = [json.loads(line) for line in base_text.splitlines() if line.strip()]
+    current = list(load_manifest(args.dataset_root).values())
+    diff = compare_manifests(base, current)
+
+    def _name(p: str) -> str:
+        parts = p.replace("\\", "/").split("/")
+        return "/".join(parts[-2:])
+
+    for kind in ("added", "removed", "regrouped", "changed"):
+        rows = diff[kind]
+        print(f"== {kind}: {len(rows)} file group(s)")
+        for r in rows:
+            files = ", ".join(_name(p) for p in r["paths"])
+            if kind == "changed":
+                print(
+                    f"  status {r['status'][0]} -> {r['status'][1]}, "
+                    f"n_laps {r['n_laps'][0]} -> {r['n_laps'][1]}: {files}"
+                )
+            else:
+                print(f"  {r['status']} n_laps={r['n_laps']}: {files}")
+    return 0
+
+
 def _cmd_query(args: argparse.Namespace) -> int:
     import duckdb
 
@@ -162,6 +253,22 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("match-notes", help="Match parsed notes to sessions")
     _common_args(p)
     p.set_defaults(func=_cmd_match_notes)
+
+    p = sub.add_parser(
+        "audit-tracks",
+        help="List sessions whose track/laps were reconciled from GPS (or are unresolved)",
+    )
+    _common_args(p)
+    p.add_argument("--since", help="YYYY-MM-DD: only sessions on/after this date")
+    p.set_defaults(func=_cmd_audit_tracks)
+
+    p = sub.add_parser(
+        "manifest-diff",
+        help="Compare the working-copy MANIFEST.jsonl with a committed revision by file group",
+    )
+    _common_args(p)
+    p.add_argument("--base", default=".", help="Sapling revision to compare against (default: .)")
+    p.set_defaults(func=_cmd_manifest_diff)
 
     p = sub.add_parser("query", help="Run a DuckDB SQL query over the dataset")
     _common_args(p)

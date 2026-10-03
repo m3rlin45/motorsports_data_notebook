@@ -122,3 +122,79 @@ def test_manifest_sorted_by_date_then_session(tmp_path: Path) -> None:
     sids = [json.loads(line)["session_id"] for line in lines]
     assert dates == ["2026-03-04", "2026-04-04", "2026-04-04"]
     assert sids == ["z", "a", "b"]
+
+
+def test_prune_orphan_sessions_drops_rows_not_in_manifest(tmp_path) -> None:
+    """A regrouped restart pair leaves the old grouping's session_id behind in
+    sessions/laps/timeseries; the manifest (keyed by file) is the truth."""
+    import json
+
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    from motorsports_data_notebook.tire_etl.dataset import prune_orphan_sessions
+
+    root = tmp_path
+    (root / "sessions").mkdir()
+    (root / "laps").mkdir()
+    (root / "timeseries" / "2026-01").mkdir(parents=True)
+    pq.write_table(
+        pa.table({"session_id": ["live", "orphan"], "date": ["2026-01-01", "2026-01-01"]}),
+        root / "sessions" / "2026-01.parquet",
+    )
+    pq.write_table(
+        pa.table({"session_id": ["live", "live", "orphan"], "lap_num": [1, 2, 1]}),
+        root / "laps" / "2026-01.parquet",
+    )
+    pq.write_table(pa.table({"x": [1]}), root / "timeseries" / "2026-01" / "live.parquet")
+    pq.write_table(pa.table({"x": [1]}), root / "timeseries" / "2026-01" / "orphan.parquet")
+    (root / "MANIFEST.jsonl").write_text(
+        json.dumps({"session_id": "live", "xrk_path": "/a.xrk", "date": "2026-01-01"}) + "\n"
+    )
+
+    counts = prune_orphan_sessions(root)
+    assert counts == {"session_rows": 1, "lap_rows": 1, "timeseries_files": 1}
+    assert pq.read_table(root / "sessions" / "2026-01.parquet").column(
+        "session_id"
+    ).to_pylist() == ["live"]
+    assert len(pq.read_table(root / "laps" / "2026-01.parquet")) == 2
+    assert not (root / "timeseries" / "2026-01" / "orphan.parquet").exists()
+    assert (root / "timeseries" / "2026-01" / "live.parquet").exists()
+    # Idempotent.
+    assert prune_orphan_sessions(root) == {"session_rows": 0, "lap_rows": 0, "timeseries_files": 0}
+
+
+def test_anti_join_keeps_incoming_column_order() -> None:
+    """Partitions must share one column order or non-promoting readers fail."""
+    import pyarrow as pa
+
+    from motorsports_data_notebook.tire_etl.dataset import _anti_join_and_concat
+
+    existing = pa.table({"session_id": ["a"], "n_laps": [1], "track": ["x"]})
+    new = pa.table({"session_id": ["b"], "track": ["y"], "layout_id": ["l"], "n_laps": [2]})
+    out = _anti_join_and_concat(existing, new)
+    assert out.schema.names == ["session_id", "track", "layout_id", "n_laps"]
+    assert out.column("layout_id").to_pylist() == [None, "l"]
+
+
+def test_compare_manifests_by_file_group() -> None:
+    from motorsports_data_notebook.tire_etl.dataset import compare_manifests
+
+    base = [
+        {"session_id": "s1", "xrk_path": "/d/a.xrk", "status": "ok", "n_laps": 10},
+        {"session_id": "s2", "xrk_path": "/d/b.xrk", "status": "ok", "n_laps": 5},
+        {"session_id": "s3", "xrk_path": "/d/c.xrk", "status": "ok", "n_laps": 6},
+        {"session_id": "s4", "xrk_path": "/d/gone.xrk", "status": "error", "n_laps": 0},
+    ]
+    current = [
+        {"session_id": "t1", "xrk_path": "/d/a.xrk", "status": "ok", "n_laps": 9},  # changed
+        {"session_id": "t2", "xrk_path": "/d/b.xrk", "status": "ok", "n_laps": 10},  # merged
+        {"session_id": "t2", "xrk_path": "/d/c.xrk", "status": "ok", "n_laps": 10},
+        {"session_id": "t5", "xrk_path": "/d/new.xrk", "status": "ok", "n_laps": 3},  # added
+    ]
+    d = compare_manifests(base, current)
+    assert [r["paths"] for r in d["changed"]] == [["/d/a.xrk"]]
+    assert d["changed"][0]["n_laps"] == (10, 9)
+    assert [r["paths"] for r in d["regrouped"]] == [["/d/b.xrk", "/d/c.xrk"]]
+    assert [r["paths"] for r in d["added"]] == [["/d/new.xrk"]]
+    assert [r["paths"] for r in d["removed"]] == [["/d/gone.xrk"]]

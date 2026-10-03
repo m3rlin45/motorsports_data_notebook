@@ -129,3 +129,22 @@ class TestMergedLogFileOffsets:
         merged = MergedLogFile(logs, offsets_ms=[0, offset_ms])
         stints = assign_stint_ids(merged.laps).to_pylist()
         assert stints == [1, 1, 1, 2, 2, 2]
+
+
+def test_log_end_uses_last_gps_sample_not_last_full_lap() -> None:
+    """libxrk >= 0.13 types the final lap as an in-lap and the loader drops it,
+    so the last *full* lap can end minutes before the recording did. The merge
+    window must be measured from the data end, or restart pairs split."""
+    from motorsports_data_notebook.tire_etl.extract import _log_end_ms
+
+    log = _mk_log("09:00:00", lap_ms=120_000, n_laps=3)  # full laps end at 360 s
+    assert _log_end_ms(log) == 360_000
+    log.channels = {
+        "GPS Speed": pa.table(
+            {
+                "timecodes": pa.array([0, 100_000, 500_000], type=pa.int64()),
+                "GPS Speed": [0.0, 1.0, 0.0],
+            }
+        )
+    }
+    assert _log_end_ms(log) == 500_000

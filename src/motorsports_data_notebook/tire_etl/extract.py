@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -21,6 +21,7 @@ import pyarrow as pa
 from .aggregates import compute_corner_aggregates, compute_lap_dynamics
 from .discovery import SessionCandidate, parse_filename, scan_aim_tree
 from .filters import FilterConfig, apply_filters
+from .layouts import LayoutDetection, apply_layout_correction, detect_layout
 from .stints import assign_stint_ids
 
 if TYPE_CHECKING:
@@ -238,12 +239,58 @@ def _extract_session_datetime_utc(
 MERGE_MAX_GAP_S = 300.0
 
 
+def load_and_correct_session(path: Path) -> tuple["LogFile", LayoutDetection]:
+    """Load one AIM file and reconcile its laps/track with the GPS trace.
+
+    The logger's track *variant* selection decides where the lap beacon sits
+    and what the filename/``Venue`` say; both can be wrong (full Suzuka laps
+    logged as "Suzuka West"). :func:`~.layouts.detect_layout` resolves the
+    layout actually driven from the GPS trace and, when the beacon is not on
+    that layout's start/finish, :func:`~.layouts.apply_layout_correction`
+    rebuilds ``log.laps`` from GPS crossings of the correct line. The
+    detection travels with the log so the session row can record what
+    happened.
+    """
+    from .._util import load_session
+
+    log = load_session(str(path))
+    cand = parse_filename(path)
+    venue_meta = None
+    try:
+        venue_meta = (log.metadata or {}).get("Venue") or None
+    except Exception:  # noqa: BLE001 — metadata is best-effort
+        venue_meta = None
+    det = detect_layout(log, declared_track_raw=cand.track_raw, venue_meta=venue_meta)
+    apply_layout_correction(log, det)
+    return log, det
+
+
+# Channels whose last sample marks the end of the recording (GPS timebase).
+_END_OF_DATA_CHANNELS = ("GPS Speed", "GPS Latitude", "GPS Longitude")
+
+
 def _log_end_ms(log: "LogFile") -> int:
-    """Last lap end time (ms on the file's own clock); 0 if no laps."""
+    """End of the recording in ms on the file's own clock; 0 if nothing usable.
+
+    Uses the last GPS sample when available and falls back to the last lap
+    end. ``log.laps`` holds *full* laps only — libxrk (>= 0.13) types the
+    first/last laps as out/in and the loader drops them — so the last full
+    lap can end minutes before the logger stopped. Merge decisions in
+    :func:`split_group_by_wallclock` must see the real end, or a restart
+    pair whose gap is measured from the in-lap would wrongly split.
+    """
+    end = 0
     laps = log.laps
-    if len(laps) == 0:
-        return 0
-    return int(np.max(laps.column("end_time").to_numpy()))
+    if len(laps) > 0:
+        end = int(np.max(laps.column("end_time").to_numpy()))
+    channels = getattr(log, "channels", None)
+    if isinstance(channels, dict):
+        for name in _END_OF_DATA_CHANNELS:
+            tbl = channels.get(name)
+            if tbl is not None and len(tbl) > 0:
+                end = max(end, int(tbl.column("timecodes")[-1].as_py()))
+                break
+    return end
 
 
 def split_group_by_wallclock(
@@ -407,6 +454,7 @@ def extract_session(
     extractor_version: str | None = None,
     _preloaded_logs: list | None = None,
     _offsets_ms: list[int] | None = None,
+    _preloaded_detections: list[LayoutDetection] | None = None,
 ) -> ExtractResult:
     """Extract one AIM session into session/laps/timeseries tables.
 
@@ -419,15 +467,21 @@ def extract_session(
     delta between file starts). Boundary partial laps (truncated mid-spin)
     are dropped automatically by ``MergedLogFile``.
 
-    ``_preloaded_logs``/``_offsets_ms`` let :func:`extract_all` reuse the
-    logs it already loaded for wall-clock split grouping; external callers
-    should pass paths only.
+    ``_preloaded_logs``/``_offsets_ms``/``_preloaded_detections`` let
+    :func:`run_extract` reuse the logs (and their layout detections) it
+    already loaded for wall-clock split grouping; external callers should
+    pass paths only.
+
+    Track identity and lap boundaries come from
+    :func:`load_and_correct_session`: the GPS trace decides the layout, the
+    filename/``Venue`` only break ties, and laps are re-split when the
+    logger's beacon sat on the wrong start/finish line.
 
     On failure returns an ExtractResult with ``status="error"`` and empty
     data tables — callers still record the attempt in the manifest so we
     don't retry forever.
     """
-    from .._util import MergedLogFile, load_session
+    from .._util import MergedLogFile
     from ..profiles import (
         DEFAULT_CHANNEL_NAMES,
         get_logger_id,
@@ -465,8 +519,16 @@ def extract_session(
     try:
         if _preloaded_logs is not None:
             logs = list(_preloaded_logs)
+            dets = list(_preloaded_detections or [])
+            if len(dets) != len(logs):
+                dets = [
+                    detect_layout(lg, declared_track_raw=cand.track_raw, venue_meta=None)
+                    for lg in logs
+                ]
         else:
-            logs = [load_session(str(p)) for p in paths]
+            loaded = [load_and_correct_session(p) for p in paths]
+            logs = [lg for lg, _ in loaded]
+            dets = [d for _, d in loaded]
     except Exception as e:
         logger.exception("load_session failed for %s", primary_path)
         row = empty_session.set_column(
@@ -485,6 +547,48 @@ def extract_session(
             status="error",
             error_msg=str(e),
         )
+    # GPS-resolved track identity wins over the filename token. run_extract
+    # only merges files whose detected layouts agree, so the file with the
+    # most logger laps stands for the session; disagreement (direct callers)
+    # is logged. ``n_laps_logger`` is the group total.
+    det = max(dets, key=lambda d: d.n_laps_logger)
+    for other in dets:
+        if other.track_canonical != det.track_canonical or other.layout_id != det.layout_id:
+            logger.warning(
+                "%s: merged files disagree on GPS layout (%s vs %s); using the one with most laps",
+                primary_path.name,
+                det.layout_id,
+                other.layout_id,
+            )
+    # A merged row reports the strongest reconciliation any file needed.
+    from .layouts import LAP_SOURCE_RESPLIT, TRACK_RES_GPS_OVERRIDE
+
+    det = replace(
+        det,
+        n_laps_logger=sum(d.n_laps_logger for d in dets),
+        lap_source=(
+            LAP_SOURCE_RESPLIT
+            if any(d.lap_source == LAP_SOURCE_RESPLIT for d in dets)
+            else det.lap_source
+        ),
+        track_resolution=(
+            TRACK_RES_GPS_OVERRIDE
+            if any(d.track_resolution == TRACK_RES_GPS_OVERRIDE for d in dets)
+            else det.track_resolution
+        ),
+    )
+    cand = replace(cand, track_canonical=det.track_canonical)
+    empty_session = _build_empty_session_row(
+        session_id=session_id,
+        path=primary_path,
+        mtime_ns=primary_mtime_ns,
+        file_size=total_file_size,
+        cand=cand,
+        extractor_version=ev,
+        xrk_paths=[str(p) for p in paths],
+        layout=det,
+    )
+
     if len(logs) == 1:
         log = logs[0]
     else:
@@ -641,6 +745,7 @@ def extract_session(
         status=status,
         error_msg=err,
         xrk_paths=[str(p) for p in paths],
+        layout=det,
     )
 
     return ExtractResult(
@@ -676,6 +781,7 @@ def _build_empty_session_row(
     cand: SessionCandidate,
     extractor_version: str,
     xrk_paths: list[str] | None = None,
+    layout: LayoutDetection | None = None,
 ) -> pa.Table:
     return _build_session_row(
         session_id=session_id,
@@ -699,6 +805,7 @@ def _build_empty_session_row(
         status="pending",
         error_msg=None,
         xrk_paths=xrk_paths,
+        layout=layout,
     )
 
 
@@ -723,8 +830,10 @@ def _build_session_row(
     status: str = "ok",
     error_msg: str | None = None,
     xrk_paths: list[str] | None = None,
+    layout: LayoutDetection | None = None,
 ) -> pa.Table:
     paths_list = xrk_paths if xrk_paths is not None else [str(path)]
+    lay = layout
     return pa.table(
         {
             "session_id": [session_id],
@@ -738,6 +847,18 @@ def _build_session_row(
             "car": [cand.car],
             "track": [cand.track_raw],
             "track_canonical": [cand.track_canonical],
+            # GPS layout reconciliation (see layouts.py). ``track_canonical``
+            # above is already the GPS-resolved value; these columns record
+            # how it was reached so misidentified variants can be audited.
+            "venue_meta": pa.array([lay.venue_meta if lay else None], type=pa.string()),
+            "layout_id": pa.array([lay.layout_id if lay else None], type=pa.string()),
+            "track_declared_canonical": pa.array(
+                [lay.declared_track_canonical if lay else None], type=pa.string()
+            ),
+            "track_resolution": pa.array([lay.track_resolution if lay else None], type=pa.string()),
+            "lap_source": pa.array([lay.lap_source if lay else None], type=pa.string()),
+            "beacon_gate": pa.array([lay.beacon_gate if lay else None], type=pa.string()),
+            "n_laps_logger": pa.array([lay.n_laps_logger if lay else None], type=pa.int32()),
             "session_type": [cand.session_type],
             "run_num": pa.array([cand.run_num], type=pa.int32()),
             "logger_id": [logger_id],
@@ -907,6 +1028,41 @@ def _build_laps_table(
     return pa.table(rows).cast(schema)
 
 
+def _split_on_layout(
+    split: list[tuple[list[Path], list, list[int]]],
+    det_by_path: dict[str, LayoutDetection],
+) -> list[tuple[list[Path], list, list[int]]]:
+    """Break wall-clock subgroups further wherever the detected layout changes.
+
+    Filename grouping pools dash variants of one venue ("Suzuka West" +
+    "Suzuka Car" both resolve to ``suzuka``), so a one-lap wrong-variant
+    fragment can sit next to a proper session with consecutive run numbers.
+    Their GPS-detected layouts differ, and merging them would stamp the
+    fragment's layout and beacon on the real session.
+    """
+    out: list[tuple[list[Path], list, list[int]]] = []
+    for sp, sl, so in split:
+        start = 0
+        for i in range(1, len(sp) + 1):
+            if i < len(sp):
+                a = det_by_path[str(sp[i - 1])]
+                b = det_by_path[str(sp[i])]
+                same = a.layout_id == b.layout_id and a.track_canonical == b.track_canonical
+                if same:
+                    continue
+                logger.info(
+                    "layout split: %s (%s) | %s (%s)",
+                    sp[i - 1].name,
+                    a.layout_id,
+                    sp[i].name,
+                    b.layout_id,
+                )
+            base = so[start]
+            out.append((sp[start:i], sl[start:i], [o - base for o in so[start:i]]))
+            start = i
+    return out
+
+
 def run_extract(
     *,
     aim_root: Path,
@@ -929,8 +1085,7 @@ def run_extract(
     its own manifest row (so re-runs detect when any file changed) pointing
     at its (sub)group's session_id.
     """
-    from .._util import load_session
-    from .dataset import load_manifest, upsert_session
+    from .dataset import load_manifest, prune_orphan_sessions, upsert_session
     from .discovery import group_split_sessions
 
     existing = load_manifest(dataset_root)
@@ -971,17 +1126,19 @@ def run_extract(
         # happened to number consecutively; verify wall-clock adjacency
         # before merging. Load failures fall through to extract_session,
         # which retries the load and records the error result uniformly.
-        subgroups: list[tuple[list[Path], list | None, list[int] | None]]
+        subgroups: list[tuple[list[Path], list | None, list[int] | None, list | None]]
         if len(paths) == 1:
-            subgroups = [(paths, None, None)]
+            subgroups = [(paths, None, None, None)]
         else:
             try:
-                logs = [load_session(str(p)) for p in paths]
+                loaded = [load_and_correct_session(p) for p in paths]
             except Exception:
-                subgroups = [(paths, None, None)]
+                subgroups = [(paths, None, None, None)]
             else:
+                logs = [lg for lg, _ in loaded]
+                det_by_path = {str(p): d for p, (_, d) in zip(paths, loaded)}
                 split = split_group_by_wallclock(
-                    paths, logs, track_canonical=group[0].track_canonical
+                    paths, logs, track_canonical=loaded[0][1].track_canonical
                 )
                 if len(split) > 1:
                     logger.info(
@@ -990,11 +1147,19 @@ def run_extract(
                         paths[0].name,
                         len(split),
                     )
-                subgroups = [(sp, sl, so) for sp, sl, so in split]
+                split = _split_on_layout(split, det_by_path)
+                subgroups = [
+                    (sp, sl, so, [det_by_path[str(p)] for p in sp]) for sp, sl, so in split
+                ]
 
         status_by_path: dict[str, str] = {}
-        for sub_paths, sub_logs, sub_offsets in subgroups:
-            result = extract_session(sub_paths, _preloaded_logs=sub_logs, _offsets_ms=sub_offsets)
+        for sub_paths, sub_logs, sub_offsets, sub_dets in subgroups:
+            result = extract_session(
+                sub_paths,
+                _preloaded_logs=sub_logs,
+                _offsets_ms=sub_offsets,
+                _preloaded_detections=sub_dets,
+            )
             if len(sub_paths) == 1:
                 logger.info(
                     "extracted %s status=%s elapsed=%.2fs",
@@ -1027,4 +1192,8 @@ def run_extract(
                 "extractor_version": EXTRACTOR_VERSION,
                 "status": status_by_path.get(str(cand.path), "error"),
             }
+    # Grouping changes leave the previous grouping's rows behind (they are
+    # keyed by a session_id nothing writes any more); drop them.
+    pruned = prune_orphan_sessions(dataset_root)
+    counts["pruned_sessions"] = pruned["session_rows"]
     return counts
