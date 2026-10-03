@@ -362,6 +362,7 @@ def build_warmup_table(
             compound_multipliers,
         )
 
+    _data_through = _data_through_for_fit(laps_for_fit)
     model = _assemble_model(
         tau_by_car_corner_cond=tau_by_car_corner_cond,
         k_by_car_corner_cond=k_by_car_corner_cond,
@@ -375,6 +376,8 @@ def build_warmup_table(
         k_by_compound=k_by_compound,
         compound_multipliers=compound_multipliers,
         corner_defaults=corner_defaults,
+        data_through_date=_data_through[0],
+        data_through_local=_data_through[1],
     )
 
     if write_artifacts:
@@ -1011,6 +1014,37 @@ def _pass2_factor_gains(
 # ---------- Assemble + write artifacts ----------
 
 
+def _data_through_for_fit(laps: "pd.DataFrame") -> tuple[str | None, str | None]:
+    """(date, local datetime) of the newest session that fed the fit.
+
+    Returns ``("2026-10-02", "2026-10-02 14:23 JST")``: the first is the
+    track-local calendar date of the newest session, the second its start time
+    rendered in the track's time zone for display. Both None when no laps.
+    """
+    if laps is None or len(laps) == 0 or "date" not in laps.columns:
+        return None, None
+    df = laps.dropna(subset=["date"])
+    if df.empty:
+        return None, None
+    df = df.assign(_d=df["date"].map(lambda d: str(d)[:10]))
+    newest_date = str(df["_d"].max())
+    local_str: str | None = None
+    if "session_start_utc" in df.columns:
+        from ..tire_etl.tracks import get_track
+
+        newest = df[df["_d"] == newest_date].dropna(subset=["session_start_utc"])
+        if not newest.empty:
+            row = newest.sort_values("session_start_utc").iloc[-1]
+            ts = pd.Timestamp(row["session_start_utc"])
+            if ts.tzinfo is None:
+                ts = ts.tz_localize("UTC")
+            ti = get_track(str(row.get("track_canonical", "")))
+            if ti is not None:
+                ts = ts.tz_convert(ti.timezone)
+            local_str = ts.strftime("%Y-%m-%d %H:%M %Z")
+    return newest_date, local_str
+
+
 def _assemble_model(
     *,
     tau_by_car_corner_cond: dict[tuple[str, str, str], FitParam],
@@ -1025,6 +1059,8 @@ def _assemble_model(
     k_by_compound: dict[tuple[str, str, str, str], "FitParam"] | None = None,
     compound_multipliers: dict[str, dict[str, float]] | None = None,
     corner_defaults: dict[tuple[str, str, str], tuple[float, float, int]] | None = None,
+    data_through_date: str | None = None,
+    data_through_local: str | None = None,
 ) -> dict[str, Any]:
     """Build the in-memory model dict that matches the JSON artifact schema.
 
@@ -1062,6 +1098,12 @@ def _assemble_model(
     return {
         "schema_version": SCHEMA_VERSION,
         "fit_at_utc": fit_at,
+        # Newest session that fed the fit: its track-local calendar date and
+        # a display-ready local start time ("2026-10-02 14:23 JST"). Shown
+        # in the calculators' footer so a user can tell whether the build in
+        # front of them has the latest data.
+        "data_through_date": data_through_date,
+        "data_through_local": data_through_local,
         # Raw car label -> pooled fit label. Predictors resolve an input car
         # through this map before any lookup, so old car names keep working.
         "car_aliases": dict(CAR_FIT_ALIASES),

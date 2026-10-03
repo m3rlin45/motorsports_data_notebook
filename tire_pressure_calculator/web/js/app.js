@@ -120,7 +120,14 @@ const els = {
   cloudLabel: $('cloudLabel'), cloudInput: $('cloudInput'),
   targetLapLabel: $('targetLapLabel'), targetLapInput: $('targetLapInput'),
   compoundLabel: $('compoundLabel'), compoundSelect: $('compoundSelect'),
+  lastUpdated: $('lastUpdated'),
 };
+
+// "Model data: 2026-10-02 14:23 JST": the newest session in the model, so a
+// cached PWA can be told apart from the latest deploy at a glance.
+function renderLastUpdated() {
+  els.lastUpdated.textContent = t('LastUpdatedFormat').replace('{0}', model?.dataThrough ?? '—');
+}
 
 // ---- Corner cards ----
 
@@ -268,6 +275,7 @@ function applyStrings() {
   els.targetLapLabel.textContent = t('TargetLapTime');
   els.compoundLabel.textContent = t('Compound');
   fillCompoundSelects();
+  renderLastUpdated();
 
   fillSelect(els.langSelect, [
     { value: 'auto', label: t('LanguageAuto') },
@@ -549,6 +557,7 @@ async function init() {
 
   model = await loadModel();
   modelLoadSettled = true;
+  renderLastUpdated();
 
   if (model !== null) {
     const p = settings.Prediction;

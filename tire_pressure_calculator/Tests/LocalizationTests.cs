@@ -16,7 +16,7 @@ public class LocalizationTests
         "Track", "Car", "Condition", "LapWithinStint", "Ambient", "CloudCover",
         "ConditionDry", "ConditionDamp", "ConditionWet",
         "TempAdjustZero", "TempAdjustFormat",
-        "PredictedHotPrefix",
+        "PredictedHotPrefix", "LastUpdatedFormat",
     };
 
     [Fact]

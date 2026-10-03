@@ -25,7 +25,9 @@ public sealed record TireModelDto(
     [property: JsonPropertyName("g2_lap_time_model")] G2LapTimeModelDto? G2LapTimeModel = null,
     [property: JsonPropertyName("K_by_car_compound_corner_cond")] IReadOnlyList<KCompoundEntryDto>? KByCarCompoundCornerCond = null,
     [property: JsonPropertyName("corner_defaults_by_car_corner_cond")] IReadOnlyList<CornerDefaultsEntryDto>? CornerDefaultsByCarCornerCond = null,
-    [property: JsonPropertyName("car_aliases")] IReadOnlyDictionary<string, string>? CarAliases = null
+    [property: JsonPropertyName("car_aliases")] IReadOnlyDictionary<string, string>? CarAliases = null,
+    [property: JsonPropertyName("data_through_date")] string? DataThroughDate = null,
+    [property: JsonPropertyName("data_through_local")] string? DataThroughLocal = null
 );
 
 // ---- Compound-aware K + UI prefill medians (schema v3 additive) ----
