@@ -620,6 +620,25 @@ just tire-predict-holdout
 just tire-predict-validate
 ```
 
+### 6.1 Circuit registry and variant reconciliation
+
+The AIM dash's track selection decides where the lap beacon sits and what the
+filename / `Venue` metadata say — and it is often the wrong *variant* of the right
+venue (full Suzuka laps logged as "Suzuka West", full Motegi laps as "Motegi
+East"), or no track at all ("Generic testing"). `tire_etl/layouts.py` is the
+canonical circuit registry: per venue, the start/finish **gate** of every layout
+(measured from GPS) and the set of gates each layout crosses per lap. At extract
+time the GPS trace picks the layout actually driven (most specific layout whose
+gates were all crossed), `track_canonical` is coerced to the venue's pooled id,
+and when the logger's beacon was on another layout's line the laps are re-split
+at the correct start/finish. Layouts of one venue still pool into one model
+bucket (Fuji GP/Short, Motegi/East, Suzuka full/West) — `layout_id` is recorded
+per session so that pooling can be revisited.
+
+```bash
+just tire-track-audit [--since YYYY-MM-DD]   # every session reconciled from GPS, or unresolved
+```
+
 ## 7. Files of interest
 
 | Path | What |

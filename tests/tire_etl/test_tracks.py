@@ -62,3 +62,20 @@ def test_motegi_east_collapses_to_motegi() -> None:
 def test_fuji_gp_sh_alias() -> None:
     """Fuji GP Sh is the shortened GP layout; same venue as fuji."""
     assert normalize_track_name("Fuji GP Sh") == "fuji"
+
+
+def test_dash_variant_aliases_pool_to_venue() -> None:
+    """Dash variants (Venue metadata) collapse to the venue; layouts.py decides
+    which layout was actually driven from GPS."""
+    assert normalize_track_name("Tsukuba_Car") == "tsukuba_2000"
+    assert normalize_track_name("Tsukuba_Bike") == "tsukuba_2000"
+    assert normalize_track_name("Suzuka West") == "suzuka"
+    assert normalize_track_name("Suzuka East") == "suzuka"
+    assert normalize_track_name("MINAMI_CHIBA_1") == "minami"
+
+
+def test_minami_is_minami_chiba() -> None:
+    ti = get_track("minami")
+    assert ti is not None
+    assert 35.4 < ti.lat < 35.6
+    assert 140.2 < ti.lon < 140.3
