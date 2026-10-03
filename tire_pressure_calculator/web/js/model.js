@@ -129,6 +129,18 @@ export class TireModel {
     return [...new Set(this.dto.tau_sec_by_car_corner_cond.map((r) => r.car))].sort();
   }
 
+  // Newest session that fed the fit, for the footer: the display-ready
+  // track-local start time ("2026-10-02 14:23 JST") when the artifact has
+  // it, else its date, else (older artifacts) the fit timestamp's date.
+  get dataThrough() {
+    const local = this.dto.data_through_local;
+    if (typeof local === 'string' && local) return local;
+    const d = this.dto.data_through_date;
+    if (typeof d === 'string' && d) return d.slice(0, 10);
+    const iso = this.dto.fit_at_utc;
+    return typeof iso === 'string' && iso ? iso.slice(0, 10) : null;
+  }
+
   // Resolve an alias-pooled car name (e.g. KK-F / KK-SII -> FJ) onto the
   // label the model was fitted with. Unknown cars pass through.
   resolveCar(car) {

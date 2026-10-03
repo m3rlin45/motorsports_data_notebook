@@ -27,7 +27,8 @@
     "ConditionWet": "Wet",
     "TempAdjustZero": "Temp adjust: 0%",
     "TempAdjustFormat": "Temp adjust: {0}%",
-    "PredictedHotPrefix": "Predicted hot"
+    "PredictedHotPrefix": "Predicted hot",
+    "LastUpdatedFormat": "Model data: {0}"
   },
   "ja": {
     "LanguageLabel": "言語:",
@@ -57,6 +58,7 @@
     "ConditionWet": "ウェット",
     "TempAdjustZero": "温度補正: 0%",
     "TempAdjustFormat": "温度補正: {0}%",
-    "PredictedHotPrefix": "予測温間"
+    "PredictedHotPrefix": "予測温間",
+    "LastUpdatedFormat": "モデルデータ: {0}"
   }
 }

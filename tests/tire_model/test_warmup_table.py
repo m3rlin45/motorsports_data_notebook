@@ -284,3 +284,27 @@ def test_build_corner_defaults_skips_nan_masked_corners() -> None:
 
     assert ("Inferno 86", "fr", "dry") not in out
     assert out[("Inferno 86", "rl", "dry")][0] == pytest.approx(80.0)
+
+
+def test_data_through_is_newest_fitted_session_in_track_local_time() -> None:
+    import datetime as _dt
+
+    import pandas as pd
+
+    from motorsports_data_notebook.tire_model.warmup_table import _data_through_for_fit
+
+    laps = pd.DataFrame(
+        {
+            "date": [_dt.date(2026, 8, 30), _dt.date(2026, 10, 2), _dt.date(2026, 10, 2), None],
+            "session_start_utc": pd.to_datetime(
+                ["2026-08-30T00:00:00Z", "2026-10-02T01:10:00Z", "2026-10-02T05:23:00Z", None],
+                utc=True,
+            ),
+            "track_canonical": ["tsukuba_2000", "suzuka", "suzuka", None],
+        }
+    )
+    date, local = _data_through_for_fit(laps)
+    assert date == "2026-10-02"
+    assert local == "2026-10-02 14:23 JST"
+    assert _data_through_for_fit(pd.DataFrame({"date": []})) == (None, None)
+    assert _data_through_for_fit(pd.DataFrame({"x": [1]})) == (None, None)

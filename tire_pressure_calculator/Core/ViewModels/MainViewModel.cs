@@ -87,6 +87,14 @@ public class MainViewModel : INotifyPropertyChanged
     public string T_Compound => Localizer.Instance["Compound"];
     public string T_ResetButton => Localizer.Instance["ResetButton"];
 
+    /// <summary>
+    /// Footer line: the date and time of the newest session in the embedded
+    /// model, so an installed app can be told apart from the latest release
+    /// at a glance (mirrors the web app's footer).
+    /// </summary>
+    public string LastUpdatedText =>
+        Localizer.Instance.Format("LastUpdatedFormat", _tireModel?.DataThrough ?? "—");
+
     // ---- Language picker ----
 
     public IReadOnlyList<LanguageOption> AvailableLanguages { get; } = new[]

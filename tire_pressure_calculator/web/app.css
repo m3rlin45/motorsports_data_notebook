@@ -312,6 +312,14 @@ body.mode-prediction .f-pred { display: contents; }
 
 /* ---- Bottom bar ---- */
 
+.last-updated {
+  margin: 0;
+  padding: 0 8px 8px;
+  text-align: center;
+  font-size: 11px;
+  opacity: 0.6;
+}
+
 .bottombar {
   display: flex;
   align-items: center;

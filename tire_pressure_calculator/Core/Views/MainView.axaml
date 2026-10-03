@@ -237,7 +237,7 @@
                 VerticalScrollBarVisibility="Hidden">
     <LayoutTransformControl x:Name="RootLayoutTransform">
     <Grid x:Name="RootGrid"
-          RowDefinitions="Auto,Auto,*,*,Auto,Auto" ColumnDefinitions="*,*">
+          RowDefinitions="Auto,Auto,*,*,Auto,Auto,Auto" ColumnDefinitions="*,*">
 
       <!-- ROW 0: Mode toggle + language picker (always visible) -->
       <Border Grid.Row="0" Grid.ColumnSpan="2"
@@ -400,6 +400,12 @@
           </StackPanel>
         </WrapPanel>
       </Border>
+
+      <!-- ROW 6: provenance line — model fit date + build id (see LastUpdatedText) -->
+      <TextBlock Grid.Row="6" Grid.ColumnSpan="2"
+                 Text="{Binding LastUpdatedText}"
+                 FontSize="10" Opacity="0.6"
+                 HorizontalAlignment="Center" Margin="0,2,0,6" />
     </Grid>
     </LayoutTransformControl>
   </ScrollViewer>

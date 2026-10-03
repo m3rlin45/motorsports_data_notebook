@@ -32,6 +32,7 @@ export const STRINGS = {
     TempAdjustZero: 'Temp adjust: 0%',
     TempAdjustFormat: 'Temp adjust: {0}%',
     PredictedHotPrefix: 'Predicted hot',
+    LastUpdatedFormat: 'Model data: {0}',
   },
   ja: {
     LanguageLabel: '言語:',
@@ -62,6 +63,7 @@ export const STRINGS = {
     TempAdjustZero: '温度補正: 0%',
     TempAdjustFormat: '温度補正: {0}%',
     PredictedHotPrefix: '予測温間',
+    LastUpdatedFormat: 'モデルデータ: {0}',
   },
 };
 
