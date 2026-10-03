@@ -45,6 +45,7 @@ class Prediction:
     t_air_c: float
     t_road_c: float
     t_cold_c: float  # temperature the tire is at when you measure/set cold pressure
+    t_start_c: float  # warmup-curve initial condition (== t_cold_c: the tire's temperature now)
     K_source_bucket: tuple[str, ...]
     K_from_prior: bool
     K_n_samples: int
@@ -341,11 +342,13 @@ def predict_cold_pressure(
         carries a fitted compound K for (car, compound, corner, condition)
         it replaces the pooled K; unknown compounds fall back to pooled.
     cold_tire_temp_c
-        Optional temperature the tire is at right *now* when you'll measure
-        or set cold pressure. Defaults to ``ambient_temp_c`` when omitted.
-        Use this when the tire isn't at air temperature — e.g., sitting in
-        a sun-warmed garage, set the night before in cooler air, or pre-heated.
-        Affects the Gay-Lussac inversion only, not the warmup-curve target.
+        Optional temperature the tire is at right *now*, when you set the
+        cold pressure and roll out. Defaults to ``ambient_temp_c`` when
+        omitted. It is used twice, consistently: as the cold side of the
+        Gay-Lussac inversion and as the initial condition of the warmup
+        curve (``T(0) = T_start``). Tires still warm from the previous run
+        reach their hot temperature sooner and end hotter; enter the TPMS
+        reading from the pit lane to capture that.
     track_condition
         One of ``"dry"`` (default), ``"damp"`` (light drizzle, 0.1–1 mm/hr),
         or ``"wet"`` (≥ 1 mm/hr). Picks the condition-specific K, τ_sec,
@@ -386,10 +389,11 @@ def predict_cold_pressure(
         )
     t_eff_c = t_effective_c(t_air_c=ambient_temp_c, t_road_c=t_road_c, w_road=w_road)
 
-    # Cold-side temperature for the Gay-Lussac inversion: defaults to T_air
-    # but lets the caller pin a different "what's the tire currently at?"
-    # value (e.g., garage temp ≠ track ambient).
+    # "What's the tire at right now?" — defaults to T_air (a rested tire
+    # equilibrates to the air, not to the sun-warmed asphalt). Used both as
+    # the Gay-Lussac cold side and as the warmup curve's initial condition.
     t_cold_c = float(cold_tire_temp_c) if cold_tire_temp_c is not None else ambient_temp_c
+    t_start_c = t_cold_c
 
     # Target-lap-time feature: pace sets both time-on-track and tire energy.
     g2_scale = 1.0
@@ -428,6 +432,7 @@ def predict_cold_pressure(
             c_track=c_track,
             g2_typ=g2_typ,
             tau_sec=tau_sec,
+            t_start_c=t_start_c,
         )
         cold = gay_lussac_cold_pressure_bar(
             target_hot_pressure_bar=target_hot,
@@ -453,6 +458,7 @@ def predict_cold_pressure(
             t_air_c=ambient_temp_c,
             t_road_c=t_road_c,
             t_cold_c=t_cold_c,
+            t_start_c=t_start_c,
             K_source_bucket=K_src,
             K_from_prior=K_from_prior,
             K_n_samples=K_n,

@@ -34,12 +34,17 @@ export function tEffectiveC(tAirC, tRoadC, wRoad) {
   return (1 - wRoad) * tAirC + wRoad * tRoadC;
 }
 
-export function warmupCurveC(tSeconds, tEffC, kKelvinPerG2, cTrack, g2Typ, tauSec) {
+// Closed-form warmup from the tire's starting temperature tStartC (default:
+// in equilibrium at tEffC). The start excess decays with the same tau:
+//   T(t) = T_eff + K*c*g2*(1 - e^{-t/tau}) + (T_start - T_eff)*e^{-t/tau}
+export function warmupCurveC(tSeconds, tEffC, kKelvinPerG2, cTrack, g2Typ, tauSec, tStartC = null) {
   if (tauSec <= 0) throw new RangeError(`tau_sec must be > 0; got ${tauSec}`);
   if (tSeconds < 0) throw new RangeError(`t_seconds must be >= 0; got ${tSeconds}`);
-  const warmupFrac = 1 - Math.exp(-tSeconds / tauSec);
+  const decay = Math.exp(-tSeconds / tauSec);
+  const warmupFrac = 1 - decay;
   const deltaTInf = kKelvinPerG2 * cTrack * g2Typ;
-  return tEffC + deltaTInf * warmupFrac;
+  const start = tStartC ?? tEffC;
+  return tEffC + deltaTInf * warmupFrac + (start - tEffC) * decay;
 }
 
 // Invert Gay-Lussac: cold gauge pressure from target hot gauge pressure +
@@ -410,7 +415,10 @@ export function predictCorner(model, {
     ambientTempC, cloudCoverPct, model.sunFactorDefault, model.deltaSunMaxC);
   const tEffC = tEffectiveC(ambientTempC, tRoadC, model.wRoad);
 
+  // "What's the tire at right now?" -- Gay-Lussac cold side AND the warmup
+  // curve's initial condition (a rested tire sits at T_air, not T_eff).
   const tColdC = coldTireTempC ?? ambientTempC;
+  const tStartC = tColdC;
 
   // Target-lap-time feature: pace sets both time-on-track and tire energy.
   let g2Scale = 1.0;
@@ -431,7 +439,8 @@ export function predictCorner(model, {
   const tAtLapNs = lapWithinStint * lapTimeForClockS;
   const warmupFrac = tau.valueSeconds > 0 ? 1 - Math.exp(-tAtLapNs / tau.valueSeconds) : 0;
   const deltaTInf = k.valueKelvinPerG2 * c.value * g2Value;
-  const tHotC = warmupCurveC(tAtLapNs, tEffC, k.valueKelvinPerG2, c.value, g2Value, tau.valueSeconds);
+  const tHotC = warmupCurveC(
+    tAtLapNs, tEffC, k.valueKelvinPerG2, c.value, g2Value, tau.valueSeconds, tStartC);
 
   const coldPressureBar = gayLussacColdPressureBar(
     targetHotPressureBar, tHotC, tColdC, model.pAtmBar);
@@ -453,6 +462,7 @@ export function predictCorner(model, {
     tAirC: ambientTempC,
     tRoadC,
     tColdC,
+    tStartC,
     kSourceBucket: k.sourceBucket,
     kFromPrior: k.fromPrior,
     kNSamples: k.nSamples,

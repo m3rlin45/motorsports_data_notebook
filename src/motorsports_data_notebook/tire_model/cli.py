@@ -64,9 +64,10 @@ def main(argv: list[str] | None = None) -> int:
         "--cold-tire-temp",
         type=float,
         default=None,
-        help="Temperature the tire is at right now when you measure/set cold "
-        "pressure in °C. Defaults to --ambient. Use when the tire isn't at "
-        "current air temperature (sun-warmed garage, set the night before, etc.).",
+        help="Temperature the tire is at right now (°C), when you set the cold "
+        "pressure and roll out. Defaults to --ambient. Used as the Gay-Lussac "
+        "cold side AND as the warmup curve's starting temperature — enter the "
+        "pit-lane TPMS reading when the tires are still warm from the last run.",
     )
     p_predict.add_argument(
         "--cloud-cover",

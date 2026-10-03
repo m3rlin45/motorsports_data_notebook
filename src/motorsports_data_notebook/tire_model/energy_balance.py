@@ -4,9 +4,17 @@ Energy balance:
 
     m·c · dT/dt  =  c_track · α · g²(t)  −  h_air·(T−T_air)  −  h_road·(T−T_road)
 
-Closed-form solution at constant g² ≈ ⟨g²⟩ starting from T = T_eff:
+Closed-form solution at constant g² ≈ ⟨g²⟩ starting from T(0) = T_start:
 
     T_hot(t) − T_eff  =  K · c_track · ⟨g²⟩ · (1 − exp(−t / τ_sec))
+                         + (T_start − T_eff) · exp(−t / τ_sec)
+
+The second term is the decaying memory of the tire's actual temperature at
+the start of the stint. Tires are rarely at T_eff when a run begins (the
+previous run's heat is still in them; measured first-lap TPMS readings sit a
+median ~8 °C above T_eff), so the predictor takes the tire's current
+temperature as the initial condition and the fit anchors every stint on its
+first finite TPMS reading.
 
     with K     = α / (h_air + h_road)        [Kelvin per G²]
          τ_sec = m·c / (h_air + h_road)      [seconds]
@@ -58,13 +66,15 @@ def warmup_curve_c(
     c_track: float,
     g2_typ: float,
     tau_sec: float,
+    t_start_c: float | None = None,
 ) -> float:
     """Predicted tire temperature at on-track time ``t_seconds`` from stint start.
 
     Implements the closed-form solution of the lumped-capacity energy balance
-    with constant ``g² ≈ g2_typ``:
+    with constant ``g² ≈ g2_typ`` starting from ``T(0) = t_start_c``:
 
         T(t) = T_eff + K · c_track · g2_typ · (1 − exp(−t / τ_sec))
+                     + (T_start − T_eff) · exp(−t / τ_sec)
 
     Parameters
     ----------
@@ -80,6 +90,10 @@ def warmup_curve_c(
         Session-average squared total acceleration, units G² (dimensionless).
     tau_sec
         Thermal time constant in seconds. Must be > 0.
+    t_start_c
+        Tire temperature at ``t = 0`` (the stint start). ``None`` means the
+        tire starts in equilibrium with its surroundings (``T_start = T_eff``),
+        which reduces to the v0 closed form.
 
     Returns
     -------
@@ -89,9 +103,11 @@ def warmup_curve_c(
         raise ValueError(f"tau_sec must be > 0; got {tau_sec}")
     if t_seconds < 0:
         raise ValueError(f"t_seconds must be >= 0; got {t_seconds}")
-    warmup_frac = 1.0 - math.exp(-t_seconds / tau_sec)
+    decay = math.exp(-t_seconds / tau_sec)
+    warmup_frac = 1.0 - decay
     delta_t_inf = k_kelvin_per_g2 * c_track * g2_typ
-    return t_eff_c + delta_t_inf * warmup_frac
+    start = t_eff_c if t_start_c is None else t_start_c
+    return t_eff_c + delta_t_inf * warmup_frac + (start - t_eff_c) * decay
 
 
 def gay_lussac_cold_pressure_bar(
@@ -179,9 +195,9 @@ def warmup_recurrence_step_c(
         T_{i+1} = T_eff + (T_i − T_eff) · exp(−Δt/τ)
                         + K · c_track · g²_i · (1 − exp(−Δt/τ))
 
-    Run repeatedly with a constant ``g²`` starting from ``T_0 = T_eff`` to
-    recover :func:`warmup_curve_c` to within float precision (asserted in
-    tests).
+    Run repeatedly with a constant ``g²`` starting from any ``T_0`` to
+    recover :func:`warmup_curve_c` (with ``t_start_c=T_0``) to within float
+    precision (asserted in tests).
 
     Not used at inference in v0 — the closed-form is faster — but useful
     for tests and a future within-lap mode.

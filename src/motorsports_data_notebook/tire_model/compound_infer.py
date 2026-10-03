@@ -87,7 +87,10 @@ def _suff_stats(
     """Per-(session, corner, condition) sufficient statistics.
 
     Columns: session_id, car, corner, condition, sxx, sxy, syy, n where
-    x = g²·c_track·warmup_frac and y = ΔT.
+    x = g²·c_track·(1 − e^{−Δt/τ}) and y = ΔT − (T_start − T_eff)·e^{−Δt/τ},
+    i.e. the known initial-condition term is moved to the response side so
+    the regression through the origin recovers K (see
+    ``warmup_table._compute_stint_anchor``).
     """
     laps = laps_for_fit.copy()
     laps["g2_lap"] = laps["heat_proxy"] / laps["on_track_s"]
@@ -102,19 +105,29 @@ def _suff_stats(
         fp = c_track_by_track.get(str(track))
         return fp.value if fp is not None else 1.0
 
+    from .warmup_table import _anchor_terms
+
     rows = []
     for corner in _CORNER_AXLE:
         delta_col = f"delta_t_{corner}"
-        sub = laps[laps[delta_col].notna()]
+        sub = laps[laps[delta_col].notna()].copy()
+        t_anchor, start_excess = _anchor_terms(sub, corner)
+        sub["_dt"] = sub["t_cum_s"].to_numpy(dtype=float) - t_anchor
+        sub["_excess"] = start_excess
+        sub = sub[sub["_dt"].notna() & (sub["_dt"] > 0) & sub["_excess"].notna()]
         for (sid, car, cond), grp in sub.groupby(["session_id", "car", "condition"]):
             tau_fp = tau_by_car_corner_cond.get(
                 (str(car), corner, str(cond))
             ) or tau_by_car_corner_cond.get((str(car), corner, "dry"))
             if tau_fp is None or tau_fp.value <= 0:
                 continue
-            frac = 1.0 - np.exp(-grp["t_cum_s"].to_numpy() / tau_fp.value)
-            x = grp["g2_lap"].to_numpy() * grp["track_canonical"].map(c_val).to_numpy() * frac
-            y = grp[delta_col].to_numpy(dtype=float)
+            decay = np.exp(-grp["_dt"].to_numpy() / tau_fp.value)
+            x = (
+                grp["g2_lap"].to_numpy()
+                * grp["track_canonical"].map(c_val).to_numpy()
+                * (1.0 - decay)
+            )
+            y = grp[delta_col].to_numpy(dtype=float) - grp["_excess"].to_numpy() * decay
             ok = x > 0
             if not ok.any():
                 continue

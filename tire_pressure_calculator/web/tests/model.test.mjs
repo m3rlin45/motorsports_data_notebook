@@ -142,6 +142,32 @@ test('warmup curve starts at T_eff and saturates at T_eff + K*c*g2', () => {
   assert.throws(() => warmupCurveC(10, tEff, k, c, g2, 0), RangeError);
 });
 
+test('warmup curve starts at the given tire temperature and forgets it with tau', () => {
+  const tEff = 15, k = 60, c = 1.0, g2 = 0.7, tau = 240, tStart = 45;
+  assert.ok(Math.abs(warmupCurveC(0, tEff, k, c, g2, tau, tStart) - tStart) < 1e-12);
+  const asymptote = tEff + k * c * g2;
+  const atTau = warmupCurveC(tau, tEff, k, c, g2, tau, tStart);
+  assert.ok(Math.abs(atTau - (asymptote + (tStart - asymptote) * Math.exp(-1))) < 1e-9);
+  assert.ok(Math.abs(warmupCurveC(tau * 50, tEff, k, c, g2, tau, tStart) - asymptote) < 1e-6);
+  // null start reproduces the T_eff start.
+  assert.equal(warmupCurveC(100, tEff, k, c, g2, tau, null), warmupCurveC(100, tEff, k, c, g2, tau));
+});
+
+test('current tire temp moves the predicted hot temperature by the decayed start excess', () => {
+  const model = new TireModel(modelDto);
+  const common = {
+    track: 'tsukuba_2000', car: 'KK-SII', condition: 'dry', lapWithinStint: 5,
+    ambientTempC: 15.0, cloudCoverPct: 100.0, corner: 'fl', targetHotPressureBar: 1.7,
+  };
+  const base = predictCorner(model, common);
+  const warm = predictCorner(model, { ...common, coldTireTempC: 25.0 });
+  assert.equal(base.tStartC, 15.0);
+  assert.equal(warm.tStartC, 25.0);
+  const decay = Math.exp(-base.tAtLapNs / base.tauSec);
+  assert.ok(Math.abs((warm.predictedHotTempC - base.predictedHotTempC) - 10 * decay) < 1e-9);
+  assert.ok(warm.coldPressureBar > base.coldPressureBar);
+});
+
 test('manual-mode adjusted hot temp matches TireCornerViewModel', () => {
   // Adjustment is applied in Kelvin space, rounded to 0.1 °C.
   assert.equal(adjustedHotTempC(80, 0), 80);

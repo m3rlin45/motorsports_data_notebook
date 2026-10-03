@@ -278,6 +278,7 @@ def build_warmup_table(
     laps = _compute_stint_clock(laps)
     blacklist_pairs = load_sensor_blacklist(root)
     laps, blacklist_applied = _apply_blacklist(laps, blacklist_pairs)
+    laps = _compute_stint_anchor(laps)
     laps = _compute_delta_t(laps)
 
     lap_time_lookup = _build_lap_time_typ(laps)
@@ -505,6 +506,57 @@ def _compute_stint_clock(laps: pd.DataFrame) -> pd.DataFrame:
     return df.reset_index(drop=True)
 
 
+def _compute_stint_anchor(laps: pd.DataFrame) -> pd.DataFrame:
+    """Per (session, stint, corner): the first finite TPMS reading of the stint.
+
+    Adds ``t_anchor_{c}`` (on-track seconds, same clock as ``t_cum_s``) and
+    ``t_start_{c}`` (°C). The warmup curve is integrated from that point:
+    ``T(t) = T_eff + K·c·g²·(1 − e^{−(t−t_a)/τ}) + (T_a − T_eff)·e^{−(t−t_a)/τ}``.
+
+    Candidates in order: the first lap's start reading (t_a = 0), its end
+    reading (t_a = on_track_s), then the next lap's start/end, and so on —
+    TPMS channels are NaN for the first samples of nearly every session
+    (stale-prefix masking in the ETL), so the anchor is often a few seconds
+    to one lap in. Laps at or before the anchor cannot be scored and are
+    dropped by the fit.
+    """
+    df = laps.sort_values(["session_id", "stint_id", "lap_num"]).copy()
+    for c in CORNERS:
+        df[f"t_anchor_{c}"] = np.nan
+        df[f"t_start_{c}"] = np.nan
+    for (_sid, _stint), grp in df.groupby(["session_id", "stint_id"], sort=False):
+        for c in CORNERS:
+            start_col, end_col = f"tpms_temp_{c}_start", f"tpms_temp_{c}_end"
+            anchor: tuple[float, float] | None = None
+            for row in grp.itertuples(index=False):
+                t_end = float(getattr(row, "t_cum_s"))
+                t_begin = max(t_end - float(getattr(row, "on_track_s")), 0.0)
+                t_s = getattr(row, start_col, np.nan) if start_col in grp.columns else np.nan
+                t_e = getattr(row, end_col, np.nan)
+                if pd.notna(t_s):
+                    anchor = (t_begin, float(t_s))
+                    break
+                if pd.notna(t_e):
+                    anchor = (t_end, float(t_e))
+                    break
+            if anchor is not None:
+                df.loc[grp.index, f"t_anchor_{c}"] = anchor[0]
+                df.loc[grp.index, f"t_start_{c}"] = anchor[1]
+    return df.reset_index(drop=True)
+
+
+def _anchor_terms(df: pd.DataFrame, corner: str) -> tuple[np.ndarray, np.ndarray]:
+    """``(t_anchor, start_excess)`` arrays for ``corner``; the excess is
+    ``T_start − T_eff``. Frames without anchor columns (synthetic tests,
+    legacy callers) get the v0 behaviour: anchor at t = 0 with T_start = T_eff."""
+    n = len(df)
+    if f"t_anchor_{corner}" not in df.columns or f"t_start_{corner}" not in df.columns:
+        return np.zeros(n), np.zeros(n)
+    t_a = df[f"t_anchor_{corner}"].to_numpy(dtype=float)
+    excess = df[f"t_start_{corner}"].to_numpy(dtype=float) - df["t_eff_c"].to_numpy(dtype=float)
+    return t_a, excess
+
+
 def detect_suspect_corners(laps: pd.DataFrame) -> pd.DataFrame:
     """Return a DataFrame of (session, corner) pairs whose TPMS temperature
     looks stuck/broken (std below threshold over ≥ N usable laps).
@@ -595,7 +647,7 @@ def _apply_blacklist(
     *,
     warn_on_unknown: bool = True,
 ) -> tuple[pd.DataFrame, list[dict]]:
-    """NaN out tpms_temp_{c}_end for each (session_id, corner) in the blacklist.
+    """NaN out tpms_temp_{c}_end / _start for each (session_id, corner) in the blacklist.
 
     Returns ``(laps_with_nans, applied_records)`` where ``applied_records``
     is what was actually masked (for the artifact's audit trail).
@@ -623,6 +675,9 @@ def _apply_blacklist(
             }
         )
         df.loc[mask, col] = np.nan
+        start_col = f"tpms_temp_{corner}_start"
+        if start_col in df.columns:
+            df.loc[mask, start_col] = np.nan
     if applied:
         logger.info(
             "Applied user-confirmed sensor blacklist: %d (session, corner) channels masked",
@@ -772,8 +827,12 @@ def _laps_for_fit(
     laps: pd.DataFrame,
     g2_lookup: dict[tuple[str, str, str], tuple[float, int]],
 ) -> pd.DataFrame:
-    """Drop out-laps and rows without a valid t_eff, g², or known condition."""
-    df = laps[laps["lap_within_stint"] > 0].copy()
+    """Drop rows without a valid t_eff, g², or known condition.
+
+    The first lap of a stint is kept: with the stint anchored on its first
+    finite TPMS reading it is a legitimate warmup observation (the fit drops
+    per-corner rows at or before the anchor itself)."""
+    df = laps.copy()
     df = df[df["t_eff_c"].notna()]
     df = df[df["t_cum_s"] > 0]
     df = df[df["condition"] != "unknown"]
@@ -815,9 +874,11 @@ def _pass1_fit_tau_and_gains(
     """Fit τ_sec[car, corner, condition] jointly across that car's (track) buckets
     in the given condition.
 
-    The closed-form warmup model uses **per-lap g²** as a known feature:
-    ``ΔT_i = (K · c_track) · g²_i · (1 - exp(-t_i / τ))``, where g²_i is
-    ``heat_proxy_i / on_track_s_i`` for lap i. The fitted "gain" per bucket
+    The closed-form warmup model uses **per-lap g²** as a known feature and
+    the stint's first finite TPMS reading as the initial condition:
+    ``ΔT_i = (K · c_track) · g²_i · (1 - exp(-Δt_i / τ)) + (T_a − T_eff) · exp(-Δt_i / τ)``,
+    with ``Δt_i = t_i − t_a`` and g²_i = ``heat_proxy_i / on_track_s_i`` for
+    lap i (see :func:`_compute_stint_anchor`). The fitted "gain" per bucket
     is therefore ``K · c_track`` (no ⟨g²⟩ factor); Pass 2 decomposes it
     into the per-car K and per-track c_track without the prior division
     by a bucket statistic. Laps with higher actual g² get a higher
@@ -842,21 +903,31 @@ def _pass1_fit_tau_and_gains(
     # FR / FL MAE more than it helped RL / RR, so leave it as future work
     # gated on a chassis-aware load-transfer model.
     car_df["g2_lap"] = car_df["heat_proxy"] / car_df["on_track_s"]
-    car_df = car_df[car_df["g2_lap"].notna() & (car_df["g2_lap"] > 0)]
+    t_anchor, start_excess = _anchor_terms(car_df, corner)
+    car_df["_dt"] = car_df["t_cum_s"].to_numpy(dtype=float) - t_anchor
+    car_df["_excess"] = start_excess
+    car_df = car_df[
+        car_df["g2_lap"].notna()
+        & (car_df["g2_lap"] > 0)
+        & car_df["_dt"].notna()
+        & (car_df["_dt"] > 0)
+        & car_df["_excess"].notna()
+    ]
     if car_df.empty:
         return (FitParam(PRIOR_TAU_SEC, 0.0, 0, from_prior=True), {})
 
     # Build per-bucket arrays
-    buckets: list[tuple[str, np.ndarray, np.ndarray, np.ndarray]] = []
+    buckets: list[tuple[str, np.ndarray, np.ndarray, np.ndarray, np.ndarray]] = []
     for track, grp in car_df.groupby("track_canonical"):
         if len(grp) < MIN_LAPS_FOR_TAU_FIT:
             continue
         buckets.append(
             (
                 str(track),
-                grp["t_cum_s"].to_numpy(),
+                grp["_dt"].to_numpy(),
                 grp[delta_col].to_numpy(),
                 grp["g2_lap"].to_numpy(),
+                grp["_excess"].to_numpy(),
             )
         )
 
@@ -868,6 +939,7 @@ def _pass1_fit_tau_and_gains(
     all_t = np.concatenate([b[1] for b in buckets])
     all_y = np.concatenate([b[2] for b in buckets])
     all_g2 = np.concatenate([b[3] for b in buckets])
+    all_excess = np.concatenate([b[4] for b in buckets])
     bucket_idx = np.concatenate([np.full(len(b[1]), i, dtype=int) for i, b in enumerate(buckets)])
 
     def model(_x: np.ndarray, *params: float) -> np.ndarray:
@@ -875,7 +947,8 @@ def _pass1_fit_tau_and_gains(
         # where Kc_b = K[car, corner, cond] · c_track[track of bucket b]
         tau = params[0]
         Kc = np.array(params[1:])
-        out: np.ndarray = Kc[bucket_idx] * all_g2 * (1.0 - np.exp(-all_t / tau))
+        decay = np.exp(-all_t / tau)
+        out: np.ndarray = Kc[bucket_idx] * all_g2 * (1.0 - decay) + all_excess * decay
         return out
 
     # Initial Kc guess: ΔT_∞ / typical g² ≈ 40 / 0.5 ≈ 80 K/G²
@@ -897,7 +970,7 @@ def _pass1_fit_tau_and_gains(
     tau_fit = FitParam(float(popt[0]), float(perr[0]), int(len(all_t)))
 
     per_bucket: dict[str, FitParam] = {}
-    for i, (track, _t, _y, _g2) in enumerate(buckets):
+    for i, (track, _t, _y, _g2, _ex) in enumerate(buckets):
         per_bucket[track] = FitParam(
             value=float(popt[1 + i]),
             stderr=float(perr[1 + i]),
@@ -1109,8 +1182,11 @@ def _assemble_model(
         "car_aliases": dict(CAR_FIT_ALIASES),
         "model_form": (
             "T_hot - T_eff = K[car,corner,cond] * c_track[track] * g2 "
-            "* (1 - exp(-t / tau_sec[car,corner,cond]))   "
-            "where T_eff = (1-w_road)*T_air + w_road*T_road, t = N * lap_time_s, "
+            "* (1 - exp(-t / tau_sec[car,corner,cond])) "
+            "+ (T_start - T_eff) * exp(-t / tau_sec[car,corner,cond])   "
+            "where T_start = the tire's temperature at roll-out (fit: first finite "
+            "TPMS reading of the stint; predict: the entered current tire temp, "
+            "default T_air), T_eff = (1-w_road)*T_air + w_road*T_road, t = N * lap_time_s, "
             "g2 = g2_typ[track,car,cond] * clamp((lap_time_typ_s / target_lap_time_s)"
             "^g2_lap_time_exponent) when a target lap time is given, else g2_typ"
         ),
@@ -1136,6 +1212,10 @@ def _assemble_model(
         "energy_balance": {
             "w_road": W_ROAD,
             "w_road_fitted": False,
+            "initial_condition": {
+                "fit": "first finite TPMS reading of the stint (t_anchor, T_start)",
+                "predict": "cold_tire_temp_c (the tire's current temperature), default T_air",
+            },
             "t_road_proxy": {
                 "formula": "T_air + delta_sun_max_c * (1 - cloud_cover/100) * sun_factor",
                 "delta_sun_max_c": DELTA_SUN_MAX_C,

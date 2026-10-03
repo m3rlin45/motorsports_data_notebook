@@ -195,6 +195,30 @@ public class PredictionModeTests
     }
 
     [Fact]
+    public void PredictionMode_CurrentTempEdit_RerunsPrediction()
+    {
+        // "Current °C" is the warmup curve's initial condition: editing it in
+        // prediction mode must re-run the predictor, and a warmer start must
+        // end the lap hotter (the start excess decays with τ).
+        var model = TireModelLoader.LoadEmbedded(typeof(TireModel).Assembly);
+        var vm = new MainViewModel(model);
+        vm.SelectedTrack = "tsukuba_2000";
+        vm.SelectedCar = "FJ";
+        vm.SelectedCondition = "dry";
+        vm.LapWithinStint = 5;
+        vm.AmbientTempC = 15.0;
+        vm.FrontLeft.CurrentTemp = 15.0;
+        vm.Mode = AppMode.CircuitPrediction;
+        var coldStart = vm.FrontLeft.PredictedHotTempC!.Value;
+
+        vm.FrontLeft.CurrentTemp = 40.0;
+        var warmStart = vm.FrontLeft.PredictedHotTempC!.Value;
+
+        Assert.True(warmStart > coldStart, $"warm start {warmStart} should exceed cold start {coldStart}");
+        Assert.True(warmStart - coldStart < 25.0, "start excess must have partly decayed by lap 5");
+    }
+
+    [Fact]
     public void PredictionMode_CrossCheck_ColdPressureMatchesPredictorOutput()
     {
         // The MainVM should drive corner.PredictedHotTempC from the same

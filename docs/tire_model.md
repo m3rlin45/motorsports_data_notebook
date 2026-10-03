@@ -79,11 +79,23 @@ sun_factor` from Open-Meteo cloud cover → fall back to `T_road = T_air`.
 
 Approximating `g²(t)` by its session average `⟨g²⟩` (good within a stint for
 a consistent driver), the linear ODE has a closed-form solution starting
-from `T_0 = T_eff`:
+from the tire's actual temperature `T_start` at roll-out:
 
 ```
 T_hot(t) − T_eff  =  K · c_track · ⟨g²⟩ · (1 − exp(−t / τ_sec))
+                     + (T_start − T_eff) · exp(−t / τ_sec)
 ```
+
+The second term is the decaying memory of where the tire started. v0 assumed
+`T_start = T_eff` (a cold tire in equilibrium with its surroundings). That is
+only true for the first run of a day: at the start of the first full lap the
+TPMS reads a median +11 °C above T_eff on the FJ and +18 °C on the Inferno 86
+across all dry stints (the previous run's heat is still in the carcass, plus
+whatever the out-lap added). Fitting the v0 form to warm starts forced τ short
+(the optimizer explains a warm start as a fast warm-up) and left a bias that
+depended on how long the car had been parked. **The fit now anchors every
+stint on its first finite TPMS reading, and the predictor starts the curve
+from the entered current tire temperature** (§2.6, §2.4).
 
 with:
 
@@ -125,6 +137,14 @@ so round-trip is bit-identical within float rounding. **Note `T_cold` uses
 pits aren't being cooled by hot asphalt; they equilibrate to whatever air
 they're sitting in.
 
+The calculators' per-corner **"Current °C"** field (`cold_tire_temp_c` in the
+Python API) overrides `T_cold`, and the same number is the warmup curve's
+`T_start`: it answers one question, "what is this tire at right now?", and is
+used consistently on both sides. Entering the pit-lane TPMS reading when the
+tires are still warm from the previous run both raises the predicted hot
+temperature (less warm-up left to do) and lowers the cold pressure to set. When
+the field is left blank the predictor uses `T_air` for both.
+
 ### 2.5 Parameter pooling
 
 | Param            | Physics                                  | Pooled over                       | Count   | Notes |
@@ -149,12 +169,23 @@ data lookups.
 Two-pass non-linear least squares using `scipy.optimize.curve_fit` against
 per-lap aggregates from `laps.parquet`:
 
+0. **Stint anchor.** For each (session, stint, corner) the first finite TPMS
+   reading becomes the initial condition `(t_a, T_start)`: the first full
+   lap's start reading (t_a = 0) when it exists, otherwise that lap's end
+   reading, and so on (TPMS channels are NaN for the first samples of nearly
+   every session). Laps at or before the anchor are not scored; the first
+   full lap *is* scored when the anchor sits at its start.
+
 1. **Pass 1 — `τ_sec[car, corner]` + per-bucket gains.** For each (car, corner),
    select that car's (track) buckets with ≥ 30 lap samples. Fit jointly across
-   them: `δT_i = gain_{bucket(i)} · (1 − exp(−t_i / τ_sec))` with a shared
-   `τ_sec[car, corner]` and bucket-specific `gain_b = K · c_track · ⟨g²⟩`.
-   KK-SII FL τ is fit jointly from Tsukuba (326 laps) + Fuji (71 laps) data —
-   precisely the cross-circuit shrinkage we want.
+   them: `δT_i = gain_{bucket(i)} · g²_i · (1 − exp(−Δt_i / τ_sec)) + (T_start − T_eff) · exp(−Δt_i / τ_sec)`
+   with `Δt_i = t_i − t_a`, per-lap `g²_i = heat_proxy_i / on_track_s_i`, a
+   shared `τ_sec[car, corner]` and bucket-specific `gain_b = K · c_track`.
+   KK-SII FL τ is fit jointly from Tsukuba + Fuji + Suzuka data —
+   precisely the cross-circuit shrinkage we want. The anchor term is known
+   per lap, so it adds no parameters; it roughly doubles the fitted τ
+   (FJ 215–247 s → 408–571 s, Inferno 86 248–312 s → 432–552 s) and raises K
+   by 5–15 %, because warm starts no longer masquerade as fast warm-ups.
 
 2. **Pass 2 — factor `gain_b` into `K[car, corner] × c_track[track]`.** Divide
    out ⟨g²⟩ (a lookup) and use alternating least squares in log-space, with
@@ -398,9 +429,12 @@ recurring failure across **2 Tsukuba sessions on 2026-03-22**.
   86 (4 sessions) are too sparse to safely exclude from.
 - **Session picking.** For each eligible bucket, the first 2 session_ids
   in sort order are held out. Deterministic, reproducible.
-- **Lap filtering.** Out-laps (`lap_within_stint == 0`) are excluded since
-  they're cold-start points, not warmup-curve observations. Same convention
-  as training.
+- **Lap filtering.** The first full lap of each stint
+  (`lap_within_stint == 0`) is not scored, so numbers stay comparable with
+  the v0 reports; the stint's first finite TPMS reading is the initial
+  condition for every scored lap — the same information a driver supplies
+  as "Current °C" at roll-out. Laps at or before a corner's anchor are
+  skipped.
 - **Blacklist applied.** Confirmed broken sensors are masked in both
   training and evaluation — we don't grade the model against channels we
   already know are broken.
@@ -424,7 +458,33 @@ An MAE of 4 °C → ~0.10 bar (~1.5 psi).
 
 ## 4. Results
 
-### 4.1 Headline (held-out, pooled, 236 (lap × corner) points)
+### 4.0 Effect of the measured initial condition (3-fold CV, 1447 (lap × corner) points, dataset through 2026-10-02)
+
+Same folds, same laps, same code apart from the stint anchor
+(`just tire-predict-holdout --n-folds 3`):
+
+| Corner | v0 form (T_start = T_eff) MAE / bias | anchored MAE / bias |
+|---|---|---|
+| FL | 4.68 / −0.47 °C | **4.16** / −0.23 °C |
+| FR | 4.34 / −1.92 °C | **3.99** / −1.92 °C |
+| RL | 4.82 / −2.76 °C | **4.05** / −2.22 °C |
+| RR | 4.00 / −2.42 °C | **3.36** / −1.81 °C |
+
+Per car: FJ 3.59 / 3.66 / 3.39 / 2.84 → 2.95 / 3.16 / 2.78 / 2.00 °C;
+Inferno 86 5.76 / 5.14 / 6.60 / 5.38 → 5.37 / 4.98 / 5.63 / 4.98 °C. Damp
+sessions improve most (FL 7.7 → 5.8 °C). The remaining Inferno error is
+concentrated in a few long Sodegaura/Fuji sessions that both forms
+over-predict by 5–7 °C. Note that the anchor in this evaluation is the TPMS
+reading at the start of the first full lap, i.e. after the out-lap; a
+pit-lane reading entered by the driver carries a little less information.
+
+A state-space refit of the same energy balance on the 1 Hz timeseries
+(speed-dependent cooling, g²·v drive, rolling term, load-transfer corner
+split, dropping c_track) was evaluated alongside this change; only the
+measured initial condition and a per-car pressure–temperature gain survived
+held-out testing, so the other ideas were not adopted.
+
+### 4.1 Headline (v0.20 held-out, pooled, 236 (lap × corner) points — pre-anchor)
 
 | Corner | MAE | RMSE | mean bias | n |
 |---|---|---|---|---|
@@ -556,11 +616,11 @@ In rough priority order:
 
 7. **Within-lap fitting.** Use the per-sample `timeseries/*.parquet` data
    (already committed) to fit the discretized ODE step-by-step instead of
-   the per-lap aggregate closed-form. The same K and τ values come out but
-   with much smaller stderr because we use ~thousands of samples per
-   session instead of one number per lap. Also opens the door to within-lap
-   T_hot predictions ("what's my FL temp at t=180 s into lap 3?"). The
-   discretized recurrence is already implemented and tested in
+   the per-lap aggregate closed-form. Tested offline (2026-10): under the
+   same assumptions it does **not** beat the per-lap closed form at
+   predicting end-of-lap temperatures, so it is only worth doing for
+   within-lap T_hot predictions ("what's my FL temp at t=180 s into lap
+   3?"). The discretized recurrence is already implemented and tested in
    `energy_balance.py`.
 8. **Hierarchical / Bayesian partial pooling.** Sparse (car, corner) buckets
    would benefit from shrinking toward a global mean — Motegi Inferno 86
