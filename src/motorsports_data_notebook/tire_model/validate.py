@@ -24,11 +24,19 @@ import pyarrow.parquet as pq
 
 from ..tire_etl.paths import default_dataset_root, laps_dir, sessions_dir
 from .energy_balance import (
+    P_ATM_BAR,
+    T_ZERO_C_TO_K,
     t_effective_c,
     t_road_proxy_c,
     warmup_curve_c,
 )
-from .predict import CORNERS, predict_cold_pressure
+from .predict import (
+    CORNERS,
+    _g2_pace_scale,
+    _lookup_g2,
+    _lookup_lap_time,
+    predict_cold_pressure,
+)
 from .warmup_table import (
     CORNERS as _WT_CORNERS,
     W_ROAD,
@@ -146,16 +154,97 @@ def run_validation(dataset_root: Path | None = None) -> int:
 # ---------- Held-out (true generalization) validation ----------
 
 
+def _load_sessions_and_laps(root: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
+    sessions = pd.concat(
+        [pq.read_table(f).to_pandas() for f in sorted(sessions_dir(root).glob("*.parquet"))],
+        ignore_index=True,
+    )
+    laps = pd.concat(
+        [pq.read_table(f).to_pandas() for f in sorted(laps_dir(root).glob("*.parquet"))],
+        ignore_index=True,
+    )
+    return sessions, laps
+
+
+def _collect_holdout_frame(
+    root: Path,
+    *,
+    n_per_bucket: int,
+    min_bucket_size: int,
+    n_folds: int,
+    inputs: str = "calculator",
+    quiet: bool = False,
+) -> tuple[pd.DataFrame | None, int]:
+    """Run the k-fold holdout and return ``(residual rows, n session×fold
+    holdouts)``. ``None`` rows means no bucket could be held out."""
+    sessions, laps = _load_sessions_and_laps(root)
+    session_condition = _session_conditions(root)
+    fold_frames: list[pd.DataFrame] = []
+    total_holdouts = 0
+    for fold in range(max(1, n_folds)):
+        holdout_ids = _pick_holdout_sessions(
+            sessions,
+            laps,
+            n_per_bucket=n_per_bucket,
+            min_bucket_size=min_bucket_size,
+            fold=fold,
+            session_condition=session_condition,
+        )
+        if not holdout_ids:
+            if fold == 0:
+                print("No (track, car) bucket has enough sessions to hold out cleanly.")
+                return None, 0
+            # No more buckets have unused sessions for this fold; stop.
+            break
+        if not quiet:
+            by_cond = pd.Series([session_condition.get(s, "?") for s in holdout_ids]).value_counts()
+            cond_txt = ", ".join(f"{k} {v}" for k, v in by_cond.items())
+            print(
+                f"Fold {fold + 1}/{n_folds}: holding out {len(holdout_ids)} sessions ({cond_txt})"
+                if n_folds > 1
+                else f"Holding out {len(holdout_ids)} sessions ({cond_txt}; "
+                f"{n_per_bucket} per (track, car, condition) bucket, min bucket size = "
+                f"{min_bucket_size} dry / 3 rain)"
+            )
+        fold_df = _evaluate_fold(root, holdout_ids, inputs=inputs)
+        if not fold_df.empty:
+            fold_df["fold"] = fold
+            fold_frames.append(fold_df)
+        total_holdouts += len(holdout_ids)
+    if not fold_frames:
+        return pd.DataFrame(), total_holdouts
+    return pd.concat(fold_frames, ignore_index=True), total_holdouts
+
+
+def _session_conditions(root: Path) -> dict[str, str]:
+    """Per-session track condition (dry/damp/wet/unknown) from the same
+    weather classification the fit uses (see ``warmup_table._attach_weather``)."""
+    from .warmup_table import _attach_weather, _load_filtered_laps, _load_weather
+
+    laps = _attach_weather(_load_filtered_laps(root), _load_weather(root))
+    first = laps.drop_duplicates("session_id")
+    return dict(zip(first["session_id"], first["condition"]))
+
+
 def _pick_holdout_sessions(
     sessions: pd.DataFrame,
     laps: pd.DataFrame,
     n_per_bucket: int = 2,
     min_bucket_size: int = 10,
     fold: int = 0,
+    *,
+    session_condition: dict[str, str] | None = None,
+    rain_min_bucket_size: int = 3,
 ) -> list[str]:
-    """Pick deterministic held-out session_ids from each (track, car) bucket
-    that has enough sessions to afford excluding ``n_per_bucket`` without
-    breaking the fit.
+    """Pick deterministic held-out session_ids, stratified by condition.
+
+    Buckets are ``(track, car, condition)`` when ``session_condition`` is
+    given (the production path), else ``(track, car)``. Dry buckets need
+    ``min_bucket_size`` sessions to be eligible; damp/wet buckets are far
+    smaller, so they use ``rain_min_bucket_size`` — without that, no rain
+    session would ever be held out and the rain numbers would be whatever
+    happened to fall into the dry slices. Sessions with ``unknown``
+    condition are never held out (they are excluded from training too).
 
     Sessions are sorted by session_id (stable hash) within each bucket and
     ``fold`` selects which contiguous slice of size ``n_per_bucket`` to hold
@@ -173,11 +262,21 @@ def _pick_holdout_sessions(
     ok = ok.merge(usable_per_session, on="session_id", how="left")
     ok = ok[ok["n_usable_laps"].fillna(0) >= 3]
 
+    if session_condition is not None:
+        ok = ok.assign(_cond=ok["session_id"].map(session_condition).fillna("unknown"))
+        ok = ok[ok["_cond"] != "unknown"]
+        keys = ["track_canonical", "car", "_cond"]
+    else:
+        ok = ok.assign(_cond="dry")
+        keys = ["track_canonical", "car"]
+
     held_out: list[str] = []
     start = fold * n_per_bucket
     stop = start + n_per_bucket
-    for (track, car), grp in ok.groupby(["track_canonical", "car"]):
-        if len(grp) < min_bucket_size:
+    for key, grp in ok.groupby(keys):
+        cond = key[2] if len(key) == 3 else "dry"
+        needed = min_bucket_size if cond == "dry" else rain_min_bucket_size
+        if len(grp) < needed:
             continue
         ordered = sorted(grp["session_id"].tolist())
         if start >= len(ordered):
@@ -186,9 +285,56 @@ def _pick_holdout_sessions(
     return held_out
 
 
-def _evaluate_fold(root: Path, holdout_ids: list[str]) -> pd.DataFrame:
+INPUT_MODES = ("calculator", "oracle")
+
+
+def _calculator_lap_inputs(
+    model: dict,
+    track: str,
+    car: str,
+    condition: str,
+    lap_within_stint: int,
+    session_lap_time_s: float,
+) -> tuple[float, float, float]:
+    """What the calculator would feed the warmup curve for this lap.
+
+    The driver enters the track, car, condition, the lap number N and a
+    target lap time; we stand in the session's own median lap time for the
+    target (a driver knows their pace to a few seconds). Returns
+    ``(g2, t_seconds, g2_scale)``: the bucket's ⟨g²⟩ scaled along the pace
+    curve, and the clock ``N × target`` for the end of lap N
+    (``lap_within_stint`` is 0-based, so N = lap_within_stint + 1).
+    """
+    lap_time_typ_s, _n, _src = _lookup_lap_time(model, track, car, condition)
+    g2_typ, _n2, _src2 = _lookup_g2(model, track, car, condition)
+    scale, _pace_src = _g2_pace_scale(
+        model, track, car, condition, lap_time_typ_s, session_lap_time_s
+    )
+    t_seconds = float(lap_within_stint + 1) * float(session_lap_time_s)
+    return g2_typ * scale, t_seconds, scale
+
+
+def _evaluate_fold(
+    root: Path,
+    holdout_ids: list[str],
+    *,
+    inputs: str = "calculator",
+) -> pd.DataFrame:
     """Train a model excluding ``holdout_ids`` and return per-(lap, corner)
-    residual rows for the held-out sessions."""
+    residual rows for the held-out sessions.
+
+    ``inputs`` decides what the warmup curve is fed:
+
+    - ``"calculator"`` (default): only what the calculator has — the
+      bucket's ⟨g²⟩ scaled by the pace curve at the session's median lap
+      time, the clock ``N × lap time``, and the start temperature the
+      driver types in (stood in by the stint's first finite TPMS reading).
+    - ``"oracle"``: the lap's own measured g², its actual cumulative
+      on-track time and the measured anchor — the thermal model's accuracy
+      given the real driving, an upper bound on what the calculator can do.
+    """
+    if inputs not in INPUT_MODES:
+        raise ValueError(f"inputs must be one of {INPUT_MODES}; got {inputs!r}")
     model = build_warmup_table(root, exclude_session_ids=set(holdout_ids), write_artifacts=False)
 
     # Build per-(track, car) lookups from the held-out model
@@ -260,6 +406,8 @@ def _evaluate_fold(root: Path, holdout_ids: list[str]) -> pd.DataFrame:
     label_by_session = {
         r.session_id: r.compound for r in labels.itertuples() if isinstance(r.compound, str)
     }
+    session_lap_time = all_laps.groupby("session_id")["on_track_s"].median().to_dict()
+    gamma_by_car = _fit_pressure_gain_by_car(root, exclude_session_ids=set(holdout_ids))
 
     # Per-lap predictions. Per-lap g² (heat_proxy / on_track_s) is the
     # held-out lap's actual driving intensity; falls back to the bucket
@@ -289,6 +437,17 @@ def _evaluate_fold(root: Path, holdout_ids: list[str]) -> pd.DataFrame:
             g2 = g2_lookup.get((track, car, cond)) or g2_lookup.get((track, car, "dry"))
         if g2 is None:
             continue
+        g2_scale = 1.0
+        t_pred_s = t_cum_s
+        if inputs == "calculator":
+            g2, t_pred_s, g2_scale = _calculator_lap_inputs(
+                model,
+                track,
+                car,
+                cond,
+                int(lap["lap_within_stint"]),
+                float(session_lap_time.get(lap["session_id"], lap["on_track_s"])),
+            )
         c_track = c_track_lookup.get(track, 1.0)
         session_compound = label_by_session.get(lap["session_id"])
         for c in CORNERS:
@@ -309,15 +468,36 @@ def _evaluate_fold(root: Path, holdout_ids: list[str]) -> pd.DataFrame:
             t_start = lap.get(f"t_start_{c}")
             if pd.isna(t_anchor) or pd.isna(t_start) or t_cum_s <= float(t_anchor):
                 continue
+            if inputs == "calculator":
+                # The driver's typed start temperature applies at roll-out
+                # (t = 0); the first TPMS reading stands in for what they
+                # would have typed.
+                t_from_start = t_pred_s
+                t_start_used = float(t_start)
+            else:
+                t_from_start = t_cum_s - float(t_anchor)
+                t_start_used = float(t_start)
             t_hot_pred = warmup_curve_c(
-                t_seconds=t_cum_s - float(t_anchor),
+                t_seconds=t_from_start,
                 t_eff_c=t_eff,
                 k_kelvin_per_g2=K,
                 c_track=c_track,
                 g2_typ=g2,
                 tau_sec=tau,
-                t_start_c=float(t_start),
+                t_start_c=t_start_used,
             )
+            # Pressure domain: what the driver actually gets. Push the
+            # predicted hot temperature through the same constant-volume
+            # step the calculators use, from the pressure/temperature at
+            # the stint anchor, and compare with the TPMS hot pressure.
+            p_anchor = lap.get(f"p_start_{c}")
+            p_obs = lap.get(f"tpms_press_{c}_end")
+            p_pred = p_pred_gamma = float("nan")
+            gamma_car = float(gamma_by_car.get(car, 1.0))
+            if pd.notna(p_anchor) and pd.notna(p_obs) and float(t_start) > -273.15:
+                ratio = (t_hot_pred + T_ZERO_C_TO_K) / (float(t_start) + T_ZERO_C_TO_K)
+                p_pred = (float(p_anchor) + P_ATM_BAR) * ratio - P_ATM_BAR
+                p_pred_gamma = (float(p_anchor) + P_ATM_BAR) * ratio**gamma_car - P_ATM_BAR
             rows.append(
                 {
                     "session_id": lap["session_id"],
@@ -329,20 +509,77 @@ def _evaluate_fold(root: Path, holdout_ids: list[str]) -> pd.DataFrame:
                     "lap_within_stint": int(lap["lap_within_stint"]),
                     "t_cum_s": t_cum_s,
                     "t_anchor_s": float(t_anchor),
-                    "t_start_c": float(t_start),
+                    "t_start_c": t_start_used,
+                    "inputs": inputs,
+                    "g2_used": g2,
+                    "g2_scale": g2_scale,
+                    "t_used_s": t_from_start,
                     "corner": c,
                     "T_hot_pred_c": t_hot_pred,
                     "T_hot_obs_c": float(obs),
                     "resid_c": t_hot_pred - float(obs),
+                    "P_anchor_bar": float(p_anchor) if pd.notna(p_anchor) else float("nan"),
+                    "P_hot_obs_bar": float(p_obs) if pd.notna(p_obs) else float("nan"),
+                    "P_hot_pred_bar": p_pred,
+                    "resid_bar": p_pred - float(p_obs) if pd.notna(p_obs) else float("nan"),
+                    "gamma_car": gamma_car,
+                    "resid_bar_gamma": (
+                        p_pred_gamma - float(p_obs) if pd.notna(p_obs) else float("nan")
+                    ),
                 }
             )
     return pd.DataFrame(rows)
 
 
+def _fit_pressure_gain_by_car(root: Path, *, exclude_session_ids: set[str]) -> dict[str, float]:
+    """Per-car exponent γ in P_abs ∝ T_abs^γ, fitted on the training sessions.
+
+    Constant-volume ideal gas says γ = 1 for the true gas temperature, but
+    the TPMS temperature is read at the valve and runs warmer than the mean
+    cavity gas, so the pressure rises less than the temperature implies.
+    Fitted on exactly the quantity the evaluation applies it to: the ratio
+    from the stint anchor (first finite reading) to each later lap end,
+    slope through the origin of ln(P_end/P_anchor) on ln(T_end/T_anchor).
+    """
+    from .warmup_table import _compute_stint_anchor, _compute_stint_clock, _load_filtered_laps
+
+    laps = _load_filtered_laps(root)
+    laps = laps[~laps["session_id"].isin(exclude_session_ids)]
+    laps = _compute_stint_anchor(_compute_stint_clock(laps))
+    out: dict[str, float] = {}
+    for car, grp in laps.groupby("car"):
+        xs: list[np.ndarray] = []
+        ys: list[np.ndarray] = []
+        for c in CORNERS:
+            t_e = grp[f"tpms_temp_{c}_end"].to_numpy(dtype=float) + T_ZERO_C_TO_K
+            t_a = grp[f"t_start_{c}"].to_numpy(dtype=float) + T_ZERO_C_TO_K
+            p_e = grp[f"tpms_press_{c}_end"].to_numpy(dtype=float) + P_ATM_BAR
+            p_a = grp[f"p_start_{c}"].to_numpy(dtype=float) + P_ATM_BAR
+            after = grp["t_cum_s"].to_numpy(dtype=float) > grp[f"t_anchor_{c}"].to_numpy(
+                dtype=float
+            )
+            ok = np.isfinite(t_e) & np.isfinite(t_a) & np.isfinite(p_e) & np.isfinite(p_a) & after
+            ok &= (p_e > 0.3) & (p_a > 0.3) & (np.abs(t_e - t_a) > 2)
+            xs.append(np.log(t_e[ok] / t_a[ok]))
+            ys.append(np.log(p_e[ok] / p_a[ok]))
+        x = np.concatenate(xs)
+        y = np.concatenate(ys)
+        if len(x) >= 20 and float(np.sum(x * x)) > 0:
+            out[str(car)] = float(np.sum(x * y) / np.sum(x * x))
+        else:
+            out[str(car)] = 1.0
+    return out
+
+
 def _print_corner_table(label: str, frame: pd.DataFrame) -> None:
     if frame.empty:
         return
+    has_p = "resid_bar" in frame.columns and frame["resid_bar"].notna().any()
     print(f"\n=== {label} ({len(frame)} (lap × corner) points) ===")
+    if has_p:
+        print(
+            "         temperature                                 hot pressure, calculator (γ=1)   with per-car γ"
+        )
     for c in CORNERS:
         sub = frame[frame["corner"] == c]
         if sub.empty:
@@ -350,10 +587,19 @@ def _print_corner_table(label: str, frame: pd.DataFrame) -> None:
         mae = float(sub["resid_c"].abs().mean())
         rmse = float(np.sqrt((sub["resid_c"] ** 2).mean()))
         bias = float(sub["resid_c"].mean())
-        print(
+        line = (
             f"  {c.upper():>3}   MAE = {mae:>5.2f} °C   RMSE = {rmse:>5.2f} °C   "
             f"mean bias = {bias:+.2f} °C    n = {len(sub)}"
         )
+        if has_p:
+            pb = sub["resid_bar"].dropna()
+            pg = sub["resid_bar_gamma"].dropna()
+            if not pb.empty:
+                line += (
+                    f"   |  MAE = {pb.abs().mean():.3f} bar  bias = {pb.mean():+.3f} bar"
+                    f"   |  MAE = {pg.abs().mean():.3f} bar  bias = {pg.mean():+.3f} bar"
+                )
+        print(line)
 
 
 def _print_summary(df: pd.DataFrame, *, summary_label: str = "Held-out") -> None:
@@ -370,8 +616,13 @@ def run_holdout_validation(
     n_per_bucket: int = 2,
     min_bucket_size: int = 10,
     n_folds: int = 1,
+    inputs: str = "calculator",
 ) -> int:
     """Train on all-minus-held-out, predict per-lap T_hot for held-out sessions.
+
+    ``inputs``: see :func:`_evaluate_fold`. The default
+    scores what the calculator would have told the driver; ``inputs="oracle"``
+    scores the thermal model with the lap's real g² and clock.
 
     With ``n_folds == 1`` (default) this is a single deterministic holdout
     — the legacy behavior. With ``n_folds > 1`` it sweeps disjoint
@@ -382,48 +633,33 @@ def run_holdout_validation(
     revisions (e.g. tiny per-bucket holdouts).
     """
     root = Path(dataset_root) if dataset_root else default_dataset_root()
-    sessions = pd.concat(
-        [pq.read_table(f).to_pandas() for f in sorted(sessions_dir(root).glob("*.parquet"))],
-        ignore_index=True,
+    df, total_holdouts = _collect_holdout_frame(
+        root,
+        n_per_bucket=n_per_bucket,
+        min_bucket_size=min_bucket_size,
+        n_folds=n_folds,
+        inputs=inputs,
     )
-    laps = pd.concat(
-        [pq.read_table(f).to_pandas() for f in sorted(laps_dir(root).glob("*.parquet"))],
-        ignore_index=True,
-    )
-
-    fold_frames: list[pd.DataFrame] = []
-    total_holdouts = 0
-    for fold in range(max(1, n_folds)):
-        holdout_ids = _pick_holdout_sessions(
-            sessions,
-            laps,
-            n_per_bucket=n_per_bucket,
-            min_bucket_size=min_bucket_size,
-            fold=fold,
-        )
-        if not holdout_ids:
-            if fold == 0:
-                print("No (track, car) bucket has enough sessions to hold out cleanly.")
-                return 1
-            # No more buckets have unused sessions for this fold; stop.
-            break
-        print(
-            f"Fold {fold + 1}/{n_folds}: holding out {len(holdout_ids)} sessions"
-            if n_folds > 1
-            else f"Holding out {len(holdout_ids)} sessions "
-            f"({n_per_bucket} per bucket, min bucket size = {min_bucket_size})"
-        )
-        fold_df = _evaluate_fold(root, holdout_ids)
-        if not fold_df.empty:
-            fold_df["fold"] = fold
-            fold_frames.append(fold_df)
-        total_holdouts += len(holdout_ids)
-
-    if not fold_frames:
+    if df is None:
+        return 1
+    if df.empty:
         print("No predictable laps in any held-out fold.")
         return 0
-    df = pd.concat(fold_frames, ignore_index=True)
+    print(
+        f"inputs: {inputs}"
+        + (
+            " (bucket g² at the session's pace, N × lap time, typed-in start temperature)"
+            if inputs == "calculator"
+            else " (measured g², clock, anchor)"
+        )
+    )
 
+    if "gamma_car" in df.columns:
+        gam = df.drop_duplicates("car")[["car", "gamma_car"]]
+        print(
+            "pressure gain γ (P_abs ∝ T_abs^γ, fitted on training sessions; the calculators use 1): "
+            + ", ".join(f"{r.car} {r.gamma_car:.3f}" for r in gam.itertuples())
+        )
     label = "Held-out" if n_folds <= 1 else f"{n_folds}-fold CV"
     if n_folds > 1:
         unique_sessions = df["session_id"].nunique()

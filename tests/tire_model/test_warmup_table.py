@@ -130,6 +130,64 @@ def test_pass1_recovers_tau_and_gain_from_warm_starts() -> None:
     assert tau_naive.value < 0.8 * tau_true
 
 
+def test_pass1_tau_upper_bounds_tau_inside_the_fit_and_refits_gain() -> None:
+    """Rain buckets are fitted with τ ≤ τ_dry as a bound *inside* curve_fit, so
+    the gain is estimated consistently with the bound (unlike a post-hoc clip,
+    which leaves a gain that was fitted jointly with a longer τ)."""
+    K_true, tau_true, g2, t_air = 60.0, 600.0, 0.9, 20.0
+    rows: list[dict] = []
+    for sess in range(8):
+        t_cum = 0.0
+        for lap in range(0, 6):  # short stints: never reach the plateau
+            t_cum += 60.0
+            temp = t_air + K_true * g2 * (1 - math.exp(-t_cum / tau_true))
+            rows.append(
+                {
+                    "session_id": f"s{sess}",
+                    "track_canonical": "track_x",
+                    "car": "CarA",
+                    "stint_id": 1,
+                    "lap_num": lap + 1,
+                    "lap_within_stint": lap,
+                    "on_track_s": 60.0,
+                    "t_cum_s": t_cum,
+                    "heat_proxy": g2 * 60.0,
+                    "condition": "damp",
+                    "t_eff_c": t_air,
+                    "tpms_temp_fl_end": temp,
+                    "delta_t_fl": temp - t_air,
+                    "t_anchor_fl": 0.0,
+                    "t_start_fl": t_air,
+                }
+            )
+    laps = pd.DataFrame(rows)
+    free_tau, free_gain = wt._pass1_fit_tau_and_gains(laps, "CarA", "fl", "damp")
+    bound_tau, bound_gain = wt._pass1_fit_tau_and_gains(laps, "CarA", "fl", "damp", tau_upper=300.0)
+    assert free_tau.value == pytest.approx(tau_true, rel=0.05)
+    assert bound_tau.value <= 300.0 + 1e-6
+    # With τ forced short, the gain must come down to match the same early
+    # temperatures: a clip that kept the free gain would over-predict.
+    assert bound_gain["track_x"].value < free_gain["track_x"].value
+    # Both fits still track the observed range (the bound trades asymptote
+    # for speed; a post-hoc clip of τ with the free gain would sit ~5 °C high).
+    t = 360.0
+    truth = t_air + K_true * g2 * (1 - math.exp(-t / tau_true))
+    for tau_fp, gain in ((free_tau, free_gain), (bound_tau, bound_gain)):
+        pred = t_air + gain["track_x"].value * g2 * (1 - math.exp(-t / tau_fp.value))
+        assert pred == pytest.approx(truth, abs=2.0)
+    clipped = t_air + free_gain["track_x"].value * g2 * (1 - math.exp(-t / 300.0))
+    assert clipped - truth > 3.0
+
+
+def test_rain_tau_upper_is_dry_tau_only_for_rain_buckets() -> None:
+    taus = {("CarA", "fl", "dry"): wt.FitParam(300.0, 1.0, 100)}
+    assert wt._rain_tau_upper(taus, "CarA", "fl", "dry") is None
+    assert wt._rain_tau_upper(taus, "CarA", "fl", "damp") == 300.0
+    assert wt._rain_tau_upper(taus, "CarA", "fr", "damp") is None  # no dry fit
+    taus[("CarA", "fl", "dry")] = wt.FitParam(240.0, 0.0, 0, from_prior=True)
+    assert wt._rain_tau_upper(taus, "CarA", "fl", "wet") is None  # dry is a prior
+
+
 def test_compute_stint_anchor_prefers_first_lap_start_then_falls_back() -> None:
     laps = pd.DataFrame(
         [

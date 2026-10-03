@@ -23,6 +23,20 @@ def _add_dataset_root_arg(p: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_inputs_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument(
+        "--inputs",
+        choices=("calculator", "oracle"),
+        default="calculator",
+        help=(
+            "calculator (default): predict each held-out lap from what the calculator has — "
+            "bucket g2 scaled by the pace curve at the session's median lap time, clock = "
+            "N x lap time, the typed-in start temperature. oracle: the lap's measured g2, "
+            "actual clock and measured anchor (thermal-model accuracy given the real driving)."
+        ),
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="tire-model", description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -171,6 +185,7 @@ def main(argv: list[str] | None = None) -> int:
             "(single deterministic holdout, legacy behavior)."
         ),
     )
+    _add_inputs_args(p_holdout)
 
     args = parser.parse_args(argv)
 
@@ -406,6 +421,7 @@ def _cmd_holdout(args: argparse.Namespace) -> int:
         n_per_bucket=args.n_per_bucket,
         min_bucket_size=args.min_bucket_size,
         n_folds=args.n_folds,
+        inputs=args.inputs,
     )
 
 

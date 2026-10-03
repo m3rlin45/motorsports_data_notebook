@@ -74,7 +74,7 @@ public class CircuitPredictorTests
     // ---------- Targeted unit tests mirroring predict.py tests ----------
 
     [Fact]
-    public void Predict_WetWithNoWetData_FallsBackToDamp()
+    public void Predict_Wet_ResolvesThroughTheConditionChain()
     {
         var p = LoadPredictor();
         var result = p.Predict(
@@ -87,8 +87,11 @@ public class CircuitPredictorTests
             cloudCoverPct: 100.0,
             corner: "fl",
             targetHotPressureBar: 1.7);
-        // No (KK-SII, fl, wet) entry exists → chain falls back to damp.
-        Assert.Contains("damp", result.KSourceBucket);
+        // Rain buckets are fitted on their own when they have enough sessions
+        // and fall back through wet → damp → dry otherwise; either way the
+        // lookup must land on a fitted (FJ, fl, *) bucket, never a prior.
+        Assert.Contains("(FJ, fl,", result.KSourceBucket);
+        Assert.False(result.KFromPrior);
     }
 
     [Fact]

@@ -33,6 +33,7 @@ from ..tire_etl.paths import (
     sessions_dir,
     weather_dir,
 )
+from . import wetness as _wetness
 from .energy_balance import t_effective_c, t_road_proxy_c
 
 logger = logging.getLogger(__name__)
@@ -103,17 +104,14 @@ G2_SCALE_MULTIPLIER_CLAMP = (0.4, 2.5)
 # compound buckets stay stable. Unlabeled sessions keep the pooled K.
 MIN_LAPS_FOR_COMPOUND_K = 10
 
-# Damp/wet τ should physically be ≤ the dry τ (faster cooling in rain). When a
-# rain bucket fits a τ_sec much larger than the same (car, corner)'s dry τ,
-# the fit is almost certainly picking up warmup-interrupted short stints
-# rather than real thermal physics. Cap to this multiple of dry τ and flag.
-MAX_WET_TAU_VS_DRY_RATIO = 1.5
-
-# Damp/wet K should physically be ≤ dry K (less friction, less heat). Cap to
-# this multiple of the same (car, corner)'s dry K when the fit comes back
-# higher. 1.2 gives a small upside band — empirical sweet spot in v0.3
-# held-out validation. A hard 1.0 cap under-predicts; uncapped over-predicts.
-MAX_WET_K_VS_DRY_RATIO = 1.2
+# Rain thermal parameters are fitted per condition (dry / damp / wet) with
+# the one bound the physics supports placed inside the fit: rain only adds
+# cooling (evaporation off the tread, conduction into a wet, cold surface),
+# so τ_rain ≤ τ_dry for any tire; K = α/h is left free because a rain
+# compound has a different hysteresis α. A rain bucket is fitted on its own
+# only when it has enough independent sessions; otherwise the predictors'
+# wet → damp → dry fallback chain resolves it to the dry parameters.
+MIN_SESSIONS_FOR_RAIN_FIT = 3
 
 # Per-(session, corner) sensor sanity check: flag stuck/broken TPMS channels so
 # the fit doesn't learn from them. Pure heuristic — easy to tune later.
@@ -128,90 +126,15 @@ CONDITION_DAMP_MAX_PRECIP_MM_HR = 1.0
 CONDITIONS = ("dry", "damp", "wet")
 DEFAULT_CONDITION = "dry"  # used at inference when caller doesn't supply one
 
-
-def _clip_wet_tau_to_dry_ratio(
-    tau_by_car_corner_cond: dict[tuple[str, str, str], "FitParam"],
-) -> dict[tuple[str, str, str], "FitParam"]:
-    """Cap damp/wet τ_sec at MAX_WET_TAU_VS_DRY_RATIO × the same (car, corner)'s
-    dry τ. Marks any clipped entry with ``from_prior=True``.
-
-    Physically, rain ⇒ more cooling ⇒ smaller τ; a damp/wet τ that's much
-    larger than dry is the fit's way of saying "the stint was too short to
-    actually see warmup complete, so I extrapolate that τ is huge". Clipping
-    keeps such buckets from blowing up predictions at long stints.
-    """
-    out = dict(tau_by_car_corner_cond)
-    for (car, corner, cond), fp in tau_by_car_corner_cond.items():
-        if cond == "dry":
-            continue
-        dry_fp = tau_by_car_corner_cond.get((car, corner, "dry"))
-        if dry_fp is None:
-            continue
-        cap = MAX_WET_TAU_VS_DRY_RATIO * dry_fp.value
-        if fp.value > cap and not fp.from_prior:
-            logger.warning(
-                "Clipping τ_sec[%s, %s, %s] = %.0f s → %.0f s "
-                "(dry τ = %.0f s, ratio cap = %.1f×). Likely warmup-incomplete "
-                "buckets — investigate data quality.",
-                car,
-                corner,
-                cond,
-                fp.value,
-                cap,
-                dry_fp.value,
-                MAX_WET_TAU_VS_DRY_RATIO,
-            )
-            out[(car, corner, cond)] = FitParam(
-                value=cap,
-                stderr=fp.stderr,
-                n_samples=fp.n_samples,
-                from_prior=True,
-            )
-    return out
-
-
-def _clip_wet_k_to_dry_ratio(
-    k_by_car_corner_cond: dict[tuple[str, str, str], "FitParam"],
-) -> dict[tuple[str, str, str], "FitParam"]:
-    """Cap damp/wet K at MAX_WET_K_VS_DRY_RATIO × same (car, corner)'s dry K.
-
-    Physically, rain ⇒ lower μ ⇒ less heat per G² ⇒ K should drop. A fitted
-    K[damp] > K[dry] is the optimizer compensating for some unmodeled effect
-    (often a too-large fitted τ that drives a low warmup_frac, which then
-    needs a big K to match the observed temps). Clipping prevents that
-    chain from blowing up rain predictions.
-    """
-    out = dict(k_by_car_corner_cond)
-    for (car, corner, cond), fp in k_by_car_corner_cond.items():
-        if cond == "dry":
-            continue
-        dry_fp = k_by_car_corner_cond.get((car, corner, "dry"))
-        if dry_fp is None:
-            continue
-        cap = MAX_WET_K_VS_DRY_RATIO * dry_fp.value
-        if fp.value > cap and not fp.from_prior:
-            logger.warning(
-                "Clipping K[%s, %s, %s] = %.1f K/G² → %.1f K/G² "
-                "(dry K = %.1f, ratio cap = %.1f×).",
-                car,
-                corner,
-                cond,
-                fp.value,
-                cap,
-                dry_fp.value,
-                MAX_WET_K_VS_DRY_RATIO,
-            )
-            out[(car, corner, cond)] = FitParam(
-                value=cap,
-                stderr=fp.stderr,
-                n_samples=fp.n_samples,
-                from_prior=True,
-            )
-    return out
+# ---------- Condition classification (from Open-Meteo precipitation) ----------
 
 
 def classify_condition(precipitation_mm_hr: float | None) -> str:
-    """Map precipitation rate to a categorical condition.
+    """Legacy: map a precipitation rate to a categorical condition.
+
+    Production classifies from the surface water balance instead
+    (:mod:`.wetness`, see :func:`_attach_weather`); this stays as the
+    documented rain-rate convention behind the category names.
 
     - dry    : precipitation < 0.1 mm/hr  (effectively no rain)
     - damp   : 0.1 ≤ precipitation < 1.0  (trace to light drizzle)
@@ -253,6 +176,9 @@ def build_warmup_table(
     exclude_session_ids
         If given, drop these session_ids from training. Used by held-out
         validation to avoid evaluating the model on its own training data.
+    Rain conditions are fitted on their own (τ_rain ≤ τ_dry bounded inside
+    the fit, K free) when they have ``MIN_SESSIONS_FOR_RAIN_FIT`` sessions
+    in a (car, track) bucket; otherwise they fall back to dry at prediction.
     write_artifacts
         If False (used by held-out validation), skip writing
         ``tire_model.json`` and ``warmup_table.parquet`` — return the in-memory
@@ -296,10 +222,17 @@ def build_warmup_table(
     bucket_n_samples: dict[tuple[str, str, str, str], int] = {}
 
     seen_conditions = sorted(set(laps_for_fit["condition"]))
+    # Dry first: its τ is the upper bound for the rain buckets.
+    seen_conditions = [c for c in seen_conditions if c == "dry"] + [
+        c for c in seen_conditions if c != "dry"
+    ]
     for car in sorted(set(laps_for_fit["car"])):
         for corner in CORNERS:
             for cond in seen_conditions:
-                tau, per_bucket_gain = _pass1_fit_tau_and_gains(laps_for_fit, car, corner, cond)
+                tau_upper = _rain_tau_upper(tau_by_car_corner_cond, car, corner, cond)
+                tau, per_bucket_gain = _pass1_fit_tau_and_gains(
+                    laps_for_fit, car, corner, cond, tau_upper=tau_upper
+                )
                 if tau.n_samples == 0 and not per_bucket_gain:
                     # Skip empty (car, corner, condition) combos — no data at all
                     continue
@@ -310,20 +243,11 @@ def build_warmup_table(
                         laps_for_fit, car, track, corner, cond
                     )
 
-    # Sanity-clip rain-condition τ to a sane multiple of dry τ. Sparse wet/damp
-    # buckets can fit pathologically large τ when stints are short and the
-    # warmup-curve fit is undersampled; this cap prevents that from silently
-    # producing wildly wrong predictions. Clipped entries keep their stderr
-    # and get `from_prior=True` so the user sees the override.
-    tau_by_car_corner_cond = _clip_wet_tau_to_dry_ratio(tau_by_car_corner_cond)
-
     k_by_car_corner_cond, c_track_by_track = _pass2_factor_gains(
         bucket_gains=bucket_gains,
         g2_lookup=g2_lookup,
         anchor_track=ANCHOR_TRACK,
     )
-    # Same physical-prior clip on K (rain ⇒ less heat ⇒ K ≤ dry K).
-    k_by_car_corner_cond = _clip_wet_k_to_dry_ratio(k_by_car_corner_cond)
 
     # Compound-aware K: multi-task fit with partial supervision. The
     # compound-assignment task is supervised where labels exist (sidecar +
@@ -447,7 +371,15 @@ def _load_filtered_laps(root: Path) -> pd.DataFrame:
 
 def _load_weather(root: Path) -> pd.DataFrame:
     """Load all weather parquets into a single DataFrame keyed by (track, ts_utc)."""
-    cols = ["track_canonical", "ts_utc", "temperature_2m", "cloud_cover", "precipitation"]
+    cols = [
+        "track_canonical",
+        "ts_utc",
+        "temperature_2m",
+        "cloud_cover",
+        "precipitation",
+        "relative_humidity_2m",
+        "wind_speed_10m",
+    ]
     rows: list[pd.DataFrame] = []
     wx_root = weather_dir(root)
     if not wx_root.exists():
@@ -459,6 +391,9 @@ def _load_weather(root: Path) -> pd.DataFrame:
         for f in sorted(track_dir.glob("*.parquet")):
             wx = pq.read_table(f).to_pandas()
             wx["track_canonical"] = track_dir.name
+            for c in cols:
+                if c not in wx.columns:
+                    wx[c] = np.nan
             rows.append(wx[cols])
     if not rows:
         return pd.DataFrame(columns=cols)
@@ -466,18 +401,25 @@ def _load_weather(root: Path) -> pd.DataFrame:
 
 
 def _attach_weather(laps: pd.DataFrame, weather: pd.DataFrame) -> pd.DataFrame:
-    """Join hourly weather onto laps via floor-to-hour on session_start_utc.
+    """Join hourly weather onto laps and derive the track condition.
 
-    Adds three columns: ``t_air_c``, ``cloud_cover``, ``precipitation``
-    (mm/hr). Also derives ``condition`` from precipitation via
-    :func:`classify_condition` — used as a model dimension.
+    ``t_air_c`` and ``cloud_cover`` are the instantaneous values of the hour
+    containing the session start; ``precipitation`` (mm/hr, start hour,
+    preceding-hour sum) is kept for reference. ``condition`` comes from the
+    surface water balance in :mod:`.wetness`: the film depth on the track at
+    roll-out and over the run (``track_wetness_start_mm``,
+    ``track_wetness_run_max_mm``), classified by :func:`wetness.classify_wetness`.
     """
     if weather.empty:
         laps["t_air_c"] = np.nan
         laps["cloud_cover"] = np.nan
         laps["precipitation"] = np.nan
+        laps["track_wetness_start_mm"] = np.nan
+        laps["track_wetness_run_max_mm"] = np.nan
         laps["condition"] = "unknown"
         return laps
+    from .wetness import classify_wetness, session_wetness, surface_water_series
+
     laps = laps.copy()
     starts = pd.to_datetime(laps["session_start_utc"], utc=True)
     laps["_hour_key"] = starts.dt.strftime("%Y-%m-%dT%H:00")
@@ -492,7 +434,28 @@ def _attach_weather(laps: pd.DataFrame, weather: pd.DataFrame) -> pd.DataFrame:
     # Fill T_air with historical-median by track when weather is missing.
     median_t_air = out.groupby("track_canonical")["t_air_c"].transform("median")
     out["t_air_c"] = out["t_air_c"].fillna(median_t_air)
-    out["condition"] = out["precipitation"].apply(classify_condition)
+
+    # Expected track wetness per session from the surface water balance.
+    depth_by_track = {
+        str(track): surface_water_series(grp) for track, grp in weather.groupby("track_canonical")
+    }
+    duration = out.groupby("session_id")["on_track_s"].sum()
+    feats: dict[str, dict[str, float]] = {}
+    for sid, grp in out.groupby("session_id"):
+        track = str(grp["track_canonical"].iloc[0])
+        series = depth_by_track.get(track, pd.Series(dtype=float))
+        feats[str(sid)] = session_wetness(
+            series,
+            pd.Timestamp(grp["session_start_utc"].iloc[0]),
+            float(duration.get(sid, 0.0)),
+        )
+    out["track_wetness_start_mm"] = out["session_id"].map(
+        lambda s: feats.get(str(s), {}).get("depth_start_mm", np.nan)
+    )
+    out["track_wetness_run_max_mm"] = out["session_id"].map(
+        lambda s: feats.get(str(s), {}).get("depth_run_max_mm", np.nan)
+    )
+    out["condition"] = out["track_wetness_run_max_mm"].apply(classify_wetness)
     return out
 
 
@@ -509,8 +472,9 @@ def _compute_stint_clock(laps: pd.DataFrame) -> pd.DataFrame:
 def _compute_stint_anchor(laps: pd.DataFrame) -> pd.DataFrame:
     """Per (session, stint, corner): the first finite TPMS reading of the stint.
 
-    Adds ``t_anchor_{c}`` (on-track seconds, same clock as ``t_cum_s``) and
-    ``t_start_{c}`` (°C). The warmup curve is integrated from that point:
+    Adds ``t_anchor_{c}`` (on-track seconds, same clock as ``t_cum_s``),
+    ``t_start_{c}`` (°C) and ``p_start_{c}`` (gauge bar at the same reading,
+    for the pressure-domain evaluation). The warmup curve is integrated from that point:
     ``T(t) = T_eff + K·c·g²·(1 − e^{−(t−t_a)/τ}) + (T_a − T_eff)·e^{−(t−t_a)/τ}``.
 
     Candidates in order: the first lap's start reading (t_a = 0), its end
@@ -524,24 +488,31 @@ def _compute_stint_anchor(laps: pd.DataFrame) -> pd.DataFrame:
     for c in CORNERS:
         df[f"t_anchor_{c}"] = np.nan
         df[f"t_start_{c}"] = np.nan
+        df[f"p_start_{c}"] = np.nan
     for (_sid, _stint), grp in df.groupby(["session_id", "stint_id"], sort=False):
         for c in CORNERS:
             start_col, end_col = f"tpms_temp_{c}_start", f"tpms_temp_{c}_end"
-            anchor: tuple[float, float] | None = None
+            p_start_col, p_end_col = f"tpms_press_{c}_start", f"tpms_press_{c}_end"
+            anchor: tuple[float, float, float] | None = None
             for row in grp.itertuples(index=False):
                 t_end = float(getattr(row, "t_cum_s"))
                 t_begin = max(t_end - float(getattr(row, "on_track_s")), 0.0)
                 t_s = getattr(row, start_col, np.nan) if start_col in grp.columns else np.nan
                 t_e = getattr(row, end_col, np.nan)
                 if pd.notna(t_s):
-                    anchor = (t_begin, float(t_s))
+                    p_s = (
+                        getattr(row, p_start_col, np.nan) if p_start_col in grp.columns else np.nan
+                    )
+                    anchor = (t_begin, float(t_s), float(p_s) if pd.notna(p_s) else np.nan)
                     break
                 if pd.notna(t_e):
-                    anchor = (t_end, float(t_e))
+                    p_e = getattr(row, p_end_col, np.nan) if p_end_col in grp.columns else np.nan
+                    anchor = (t_end, float(t_e), float(p_e) if pd.notna(p_e) else np.nan)
                     break
             if anchor is not None:
                 df.loc[grp.index, f"t_anchor_{c}"] = anchor[0]
                 df.loc[grp.index, f"t_start_{c}"] = anchor[1]
+                df.loc[grp.index, f"p_start_{c}"] = anchor[2]
     return df.reset_index(drop=True)
 
 
@@ -869,7 +840,12 @@ def _bucket_sample_count(
 
 
 def _pass1_fit_tau_and_gains(
-    laps_for_fit: pd.DataFrame, car: str, corner: str, condition: str
+    laps_for_fit: pd.DataFrame,
+    car: str,
+    corner: str,
+    condition: str,
+    *,
+    tau_upper: float | None = None,
 ) -> tuple[FitParam, dict[str, FitParam]]:
     """Fit τ_sec[car, corner, condition] jointly across that car's (track) buckets
     in the given condition.
@@ -884,6 +860,10 @@ def _pass1_fit_tau_and_gains(
     by a bucket statistic. Laps with higher actual g² get a higher
     asymptote, which matches the field observation that on-pace laps run
     hotter than the bucket median.
+
+    ``tau_upper`` bounds τ from above *inside* the fit (used for rain
+    buckets: τ_rain ≤ τ_dry), so the gains are estimated consistently with
+    the bound rather than clipped afterwards.
 
     Returns (tau_FitParam, {track: gain_FitParam}). Buckets with fewer than
     ``MIN_LAPS_FOR_TAU_FIT`` lap samples are excluded from this pass; they get
@@ -921,6 +901,8 @@ def _pass1_fit_tau_and_gains(
     for track, grp in car_df.groupby("track_canonical"):
         if len(grp) < MIN_LAPS_FOR_TAU_FIT:
             continue
+        if condition != "dry" and grp["session_id"].nunique() < MIN_SESSIONS_FOR_RAIN_FIT:
+            continue  # one rainy day cannot carry its own τ/K; fall back to dry
         buckets.append(
             (
                 str(track),
@@ -952,9 +934,10 @@ def _pass1_fit_tau_and_gains(
         return out
 
     # Initial Kc guess: ΔT_∞ / typical g² ≈ 40 / 0.5 ≈ 80 K/G²
-    p0 = [PRIOR_TAU_SEC] + [PRIOR_K_KELVIN_PER_G2] * n_buckets
+    tau_hi = 1200.0 if tau_upper is None else max(61.0, min(1200.0, float(tau_upper)))
+    p0 = [min(PRIOR_TAU_SEC, 0.9 * tau_hi)] + [PRIOR_K_KELVIN_PER_G2] * n_buckets
     bounds_lower = [60.0] + [0.0] * n_buckets
-    bounds_upper = [1200.0] + [500.0] * n_buckets
+    bounds_upper = [tau_hi] + [500.0] * n_buckets
 
     try:
         popt, pcov = scipy.optimize.curve_fit(
@@ -977,6 +960,22 @@ def _pass1_fit_tau_and_gains(
             n_samples=int(len(buckets[i][1])),
         )
     return tau_fit, per_bucket
+
+
+def _rain_tau_upper(
+    tau_by_car_corner_cond: dict[tuple[str, str, str], FitParam],
+    car: str,
+    corner: str,
+    condition: str,
+) -> float | None:
+    """τ_rain ≤ τ_dry (physics: rain only adds cooling). None for dry or when
+    the dry τ is itself a prior."""
+    if condition == "dry":
+        return None
+    dry = tau_by_car_corner_cond.get((car, corner, "dry"))
+    if dry is None or dry.from_prior:
+        return None
+    return dry.value
 
 
 # ---------- Pass 2: factor per-bucket gains into K × c_track ----------
@@ -1222,19 +1221,44 @@ def _assemble_model(
                 "sun_factor_default": SUN_FACTOR_DEFAULT,
             },
         },
+        "rain_thermal": {
+            "method": (
+                "tau/K fitted per condition; tau_rain <= tau_dry bounded inside the fit "
+                "(rain only adds cooling), K free (a rain compound has its own hysteresis). "
+                "Rain buckets with fewer sessions fall back to dry via the condition chain."
+            ),
+            "min_sessions_for_rain_fit": MIN_SESSIONS_FOR_RAIN_FIT,
+        },
         "conditions": {
             "values": list(CONDITIONS),
             "default": DEFAULT_CONDITION,
             "classification": {
-                "from_field": "precipitation_mm_hr",
+                "from_field": "track_wetness_run_max_mm",
+                "method": "surface water balance over the hourly weather (tire_model/wetness.py)",
+                "formula": (
+                    "d(t+1h) = clamp(d(t) + P - E, 0, surface_storage_mm); "
+                    "E = evap_coeff * VPD(T_surface, RH) * (1 + 0.54 * wind_m_s), "
+                    "T_surface = T_air + surface_sun_excess_c * (1 - cloud/100); "
+                    "P is Open-Meteo's preceding-hour precipitation"
+                ),
+                "params": {
+                    "surface_storage_mm": _wetness.SURFACE_STORAGE_MM,
+                    "evap_coeff_mm_per_h_kpa": _wetness.EVAP_COEFF_MM_PER_H_KPA,
+                    "wind_factor_per_m_s": _wetness.WIND_FACTOR_PER_M_S,
+                    "surface_sun_excess_c": _wetness.SURFACE_SUN_EXCESS_C,
+                },
                 "thresholds": {
+                    "damp_min_mm": _wetness.DAMP_FILM_MM,
+                    "wet_min_mm": _wetness.WET_FILM_MM,
+                },
+                "rule": (
+                    "max film depth over the run < damp_min → dry; ≥ damp_min → damp; "
+                    "≥ wet_min → wet; no weather coverage → unknown (excluded from training)"
+                ),
+                "legacy_precipitation_rule_mm_hr": {
                     "dry_max": CONDITION_DRY_MAX_PRECIP_MM_HR,
                     "damp_max": CONDITION_DAMP_MAX_PRECIP_MM_HR,
                 },
-                "rule": (
-                    "p < dry_max → dry; dry_max ≤ p < damp_max → damp; "
-                    "p ≥ damp_max → wet; missing → unknown (excluded from training)"
-                ),
             },
         },
         "corners": list(CORNERS),
