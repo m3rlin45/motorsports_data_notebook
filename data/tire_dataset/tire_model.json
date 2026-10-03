@@ -1,13 +1,13 @@
 {
   "schema_version": 3,
-  "fit_at_utc": "2026-10-03T01:38:21+00:00",
+  "fit_at_utc": "2026-10-03T07:30:58+00:00",
   "data_through_date": "2026-10-02",
   "data_through_local": "2026-10-02 15:04 JST",
   "car_aliases": {
     "KK-F": "FJ",
     "KK-SII": "FJ"
   },
-  "model_form": "T_hot - T_eff = K[car,corner,cond] * c_track[track] * g2 * (1 - exp(-t / tau_sec[car,corner,cond]))   where T_eff = (1-w_road)*T_air + w_road*T_road, t = N * lap_time_s, g2 = g2_typ[track,car,cond] * clamp((lap_time_typ_s / target_lap_time_s)^g2_lap_time_exponent) when a target lap time is given, else g2_typ",
+  "model_form": "T_hot - T_eff = K[car,corner,cond] * c_track[track] * g2 * (1 - exp(-t / tau_sec[car,corner,cond])) + (T_start - T_eff) * exp(-t / tau_sec[car,corner,cond])   where T_start = the tire's temperature at roll-out (fit: first finite TPMS reading of the stint; predict: the entered current tire temp, default T_air), T_eff = (1-w_road)*T_air + w_road*T_road, t = N * lap_time_s, g2 = g2_typ[track,car,cond] * clamp((lap_time_typ_s / target_lap_time_s)^g2_lap_time_exponent) when a target lap time is given, else g2_typ",
   "g2_lap_time_model": {
     "method": "sector_knn_median_curve",
     "formula": "g2 = g2_typ * interp(target_lap_time_s, g2_vs_lap_time) / interp(lap_time_typ_s, g2_vs_lap_time); buckets without a curve fall back to g2_typ * (lap_time_typ_s / target_lap_time_s) ** default_exponent. The multiplier is clamped either way.",
@@ -25,6 +25,10 @@
   "energy_balance": {
     "w_road": 0.2,
     "w_road_fitted": false,
+    "initial_condition": {
+      "fit": "first finite TPMS reading of the stint (t_anchor, T_start)",
+      "predict": "cold_tire_temp_c (the tire's current temperature), default T_air"
+    },
     "t_road_proxy": {
       "formula": "T_air + delta_sun_max_c * (1 - cloud_cover/100) * sun_factor",
       "delta_sun_max_c": 10.0,
@@ -64,144 +68,144 @@
       "car": "FJ",
       "corner": "fl",
       "condition": "damp",
-      "value_seconds": 190.51775213198712,
-      "stderr_seconds": 44.510458345860215,
-      "n_samples_used": 78,
-      "from_prior": false
+      "value_seconds": 612.675091682506,
+      "stderr_seconds": 557.9298829228853,
+      "n_samples_used": 88,
+      "from_prior": true
     },
     {
       "car": "FJ",
       "corner": "fl",
       "condition": "dry",
-      "value_seconds": 222.2186578612406,
-      "stderr_seconds": 7.5333978054672075,
-      "n_samples_used": 525,
+      "value_seconds": 408.45006112167073,
+      "stderr_seconds": 20.071602447057362,
+      "n_samples_used": 577,
       "from_prior": false
     },
     {
       "car": "FJ",
       "corner": "fr",
       "condition": "damp",
-      "value_seconds": 209.2054015333372,
-      "stderr_seconds": 47.2645894247021,
-      "n_samples_used": 96,
-      "from_prior": false
+      "value_seconds": 713.7964468078562,
+      "stderr_seconds": 409.1078558575849,
+      "n_samples_used": 108,
+      "from_prior": true
     },
     {
       "car": "FJ",
       "corner": "fr",
       "condition": "dry",
-      "value_seconds": 215.32426843554384,
-      "stderr_seconds": 8.981574813776628,
-      "n_samples_used": 557,
+      "value_seconds": 475.8642978719041,
+      "stderr_seconds": 32.1047141925993,
+      "n_samples_used": 604,
       "from_prior": false
     },
     {
       "car": "FJ",
       "corner": "rl",
       "condition": "damp",
-      "value_seconds": 204.3301364228342,
-      "stderr_seconds": 54.83794422694102,
-      "n_samples_used": 96,
-      "from_prior": false
+      "value_seconds": 795.7749907775938,
+      "stderr_seconds": 434.5656569277095,
+      "n_samples_used": 108,
+      "from_prior": true
     },
     {
       "car": "FJ",
       "corner": "rl",
       "condition": "dry",
-      "value_seconds": 247.2135826773288,
-      "stderr_seconds": 8.424919573539707,
-      "n_samples_used": 525,
+      "value_seconds": 530.5166605183958,
+      "stderr_seconds": 27.510321149684067,
+      "n_samples_used": 575,
       "from_prior": false
     },
     {
       "car": "FJ",
       "corner": "rr",
       "condition": "damp",
-      "value_seconds": 217.4335215603605,
-      "stderr_seconds": 45.955937601455595,
-      "n_samples_used": 96,
-      "from_prior": false
+      "value_seconds": 856.4714194167738,
+      "stderr_seconds": 415.9020404562533,
+      "n_samples_used": 108,
+      "from_prior": true
     },
     {
       "car": "FJ",
       "corner": "rr",
       "condition": "dry",
-      "value_seconds": 241.3492832495622,
-      "stderr_seconds": 7.699126023973477,
-      "n_samples_used": 519,
+      "value_seconds": 570.9809462778492,
+      "stderr_seconds": 27.67686092161865,
+      "n_samples_used": 567,
       "from_prior": false
     },
     {
       "car": "Inferno 86",
       "corner": "fl",
       "condition": "damp",
-      "value_seconds": 355.07123026141466,
-      "stderr_seconds": 15.756230064830621,
-      "n_samples_used": 258,
+      "value_seconds": 573.0218565491801,
+      "stderr_seconds": 31.290122258997872,
+      "n_samples_used": 276,
       "from_prior": false
     },
     {
       "car": "Inferno 86",
       "corner": "fl",
       "condition": "dry",
-      "value_seconds": 259.2761215208505,
-      "stderr_seconds": 11.204809378273012,
-      "n_samples_used": 317,
+      "value_seconds": 442.0516568924584,
+      "stderr_seconds": 21.826984330304676,
+      "n_samples_used": 350,
       "from_prior": false
     },
     {
       "car": "Inferno 86",
       "corner": "fr",
       "condition": "damp",
-      "value_seconds": 295.5599448001448,
-      "stderr_seconds": 13.87677822026593,
-      "n_samples_used": 258,
+      "value_seconds": 507.1081723533642,
+      "stderr_seconds": 29.665102337430884,
+      "n_samples_used": 276,
       "from_prior": false
     },
     {
       "car": "Inferno 86",
       "corner": "fr",
       "condition": "dry",
-      "value_seconds": 248.26866810508145,
-      "stderr_seconds": 11.284510484293424,
-      "n_samples_used": 317,
+      "value_seconds": 431.69251157069965,
+      "stderr_seconds": 27.523979412265582,
+      "n_samples_used": 350,
       "from_prior": false
     },
     {
       "car": "Inferno 86",
       "corner": "rl",
       "condition": "damp",
-      "value_seconds": 467.38980889112406,
-      "stderr_seconds": 23.934050098952465,
-      "n_samples_used": 258,
+      "value_seconds": 828.714421809392,
+      "stderr_seconds": 47.50969371023101,
+      "n_samples_used": 275,
       "from_prior": true
     },
     {
       "car": "Inferno 86",
       "corner": "rl",
       "condition": "dry",
-      "value_seconds": 311.593205927416,
-      "stderr_seconds": 13.397934071428255,
-      "n_samples_used": 306,
+      "value_seconds": 552.4762812062613,
+      "stderr_seconds": 23.192193954436668,
+      "n_samples_used": 336,
       "from_prior": false
     },
     {
       "car": "Inferno 86",
       "corner": "rr",
       "condition": "damp",
-      "value_seconds": 442.69835852347785,
-      "stderr_seconds": 20.697453877545353,
-      "n_samples_used": 258,
+      "value_seconds": 764.4933780770002,
+      "stderr_seconds": 42.71867588951995,
+      "n_samples_used": 276,
       "from_prior": false
     },
     {
       "car": "Inferno 86",
       "corner": "rr",
       "condition": "dry",
-      "value_seconds": 308.39408685940333,
-      "stderr_seconds": 12.877155249666275,
-      "n_samples_used": 317,
+      "value_seconds": 529.954500391728,
+      "stderr_seconds": 22.6745620422177,
+      "n_samples_used": 350,
       "from_prior": false
     }
   ],
@@ -212,10 +216,10 @@
         "corner": "fl",
         "condition": "damp"
       },
-      "value_kelvin_per_g2": 22.7445202424856,
+      "value_kelvin_per_g2": 37.36240061039379,
       "stderr_kelvin_per_g2": 0.0,
-      "n_samples": 78,
-      "from_prior": false,
+      "n_samples": 88,
+      "from_prior": true,
       "from_single_track": true
     },
     {
@@ -224,9 +228,9 @@
         "corner": "fl",
         "condition": "dry"
       },
-      "value_kelvin_per_g2": 28.736793943180192,
-      "stderr_kelvin_per_g2": 1.0504717331918048,
-      "n_samples": 525,
+      "value_kelvin_per_g2": 31.13533384199483,
+      "stderr_kelvin_per_g2": 1.0076286803847243,
+      "n_samples": 577,
       "from_prior": false,
       "from_single_track": false
     },
@@ -236,10 +240,10 @@
         "corner": "fr",
         "condition": "damp"
       },
-      "value_kelvin_per_g2": 21.45924087753158,
+      "value_kelvin_per_g2": 32.660464293349925,
       "stderr_kelvin_per_g2": 0.0,
-      "n_samples": 96,
-      "from_prior": false,
+      "n_samples": 108,
+      "from_prior": true,
       "from_single_track": true
     },
     {
@@ -248,9 +252,9 @@
         "corner": "fr",
         "condition": "dry"
       },
-      "value_kelvin_per_g2": 24.327281852235497,
-      "stderr_kelvin_per_g2": 0.39669670582398947,
-      "n_samples": 557,
+      "value_kelvin_per_g2": 27.217053577791603,
+      "stderr_kelvin_per_g2": 0.15415901037129642,
+      "n_samples": 604,
       "from_prior": false,
       "from_single_track": false
     },
@@ -260,10 +264,10 @@
         "corner": "rl",
         "condition": "damp"
       },
-      "value_kelvin_per_g2": 20.723420367242753,
+      "value_kelvin_per_g2": 37.02485413787361,
       "stderr_kelvin_per_g2": 0.0,
-      "n_samples": 96,
-      "from_prior": false,
+      "n_samples": 108,
+      "from_prior": true,
       "from_single_track": true
     },
     {
@@ -272,9 +276,9 @@
         "corner": "rl",
         "condition": "dry"
       },
-      "value_kelvin_per_g2": 27.17203952938115,
-      "stderr_kelvin_per_g2": 0.5701237092575379,
-      "n_samples": 525,
+      "value_kelvin_per_g2": 30.854045114894674,
+      "stderr_kelvin_per_g2": 1.2104443319539302,
+      "n_samples": 575,
       "from_prior": false,
       "from_single_track": false
     },
@@ -284,10 +288,10 @@
         "corner": "rr",
         "condition": "damp"
       },
-      "value_kelvin_per_g2": 20.058248943248188,
+      "value_kelvin_per_g2": 38.27865887215949,
       "stderr_kelvin_per_g2": 0.0,
-      "n_samples": 96,
-      "from_prior": false,
+      "n_samples": 108,
+      "from_prior": true,
       "from_single_track": true
     },
     {
@@ -296,9 +300,9 @@
         "corner": "rr",
         "condition": "dry"
       },
-      "value_kelvin_per_g2": 27.198108846909122,
-      "stderr_kelvin_per_g2": 1.4991060601976736,
-      "n_samples": 519,
+      "value_kelvin_per_g2": 31.89888239346624,
+      "stderr_kelvin_per_g2": 1.4324314715161615,
+      "n_samples": 567,
       "from_prior": false,
       "from_single_track": false
     },
@@ -308,9 +312,9 @@
         "corner": "fl",
         "condition": "damp"
       },
-      "value_kelvin_per_g2": 68.2673587065225,
-      "stderr_kelvin_per_g2": 9.93642760183309,
-      "n_samples": 258,
+      "value_kelvin_per_g2": 70.77526441488868,
+      "stderr_kelvin_per_g2": 10.78556523233877,
+      "n_samples": 276,
       "from_prior": false,
       "from_single_track": false
     },
@@ -320,9 +324,9 @@
         "corner": "fl",
         "condition": "dry"
       },
-      "value_kelvin_per_g2": 57.2170199496882,
-      "stderr_kelvin_per_g2": 3.5410115107211793,
-      "n_samples": 317,
+      "value_kelvin_per_g2": 59.56829771455904,
+      "stderr_kelvin_per_g2": 3.9495723998486,
+      "n_samples": 350,
       "from_prior": false,
       "from_single_track": false
     },
@@ -332,10 +336,10 @@
         "corner": "fr",
         "condition": "damp"
       },
-      "value_kelvin_per_g2": 60.14459001165478,
-      "stderr_kelvin_per_g2": 5.3888100153903755,
-      "n_samples": 258,
-      "from_prior": false,
+      "value_kelvin_per_g2": 61.885759998005774,
+      "stderr_kelvin_per_g2": 6.317567787997862,
+      "n_samples": 276,
+      "from_prior": true,
       "from_single_track": false
     },
     {
@@ -344,9 +348,9 @@
         "corner": "fr",
         "condition": "dry"
       },
-      "value_kelvin_per_g2": 51.29846282775314,
-      "stderr_kelvin_per_g2": 3.030697298183661,
-      "n_samples": 317,
+      "value_kelvin_per_g2": 51.57146666500481,
+      "stderr_kelvin_per_g2": 5.705491068097598,
+      "n_samples": 350,
       "from_prior": false,
       "from_single_track": false
     },
@@ -356,9 +360,9 @@
         "corner": "rl",
         "condition": "damp"
       },
-      "value_kelvin_per_g2": 58.66333132474735,
-      "stderr_kelvin_per_g2": 11.674220543388234,
-      "n_samples": 258,
+      "value_kelvin_per_g2": 62.08407636302742,
+      "stderr_kelvin_per_g2": 12.945240811168128,
+      "n_samples": 275,
       "from_prior": true,
       "from_single_track": false
     },
@@ -368,9 +372,9 @@
         "corner": "rl",
         "condition": "dry"
       },
-      "value_kelvin_per_g2": 48.886109437289456,
-      "stderr_kelvin_per_g2": 9.94312709458134,
-      "n_samples": 306,
+      "value_kelvin_per_g2": 51.73673030252285,
+      "stderr_kelvin_per_g2": 10.5790013983812,
+      "n_samples": 336,
       "from_prior": false,
       "from_single_track": false
     },
@@ -380,9 +384,9 @@
         "corner": "rr",
         "condition": "damp"
       },
-      "value_kelvin_per_g2": 53.371367647793654,
-      "stderr_kelvin_per_g2": 7.233890610221156,
-      "n_samples": 258,
+      "value_kelvin_per_g2": 56.18974504661916,
+      "stderr_kelvin_per_g2": 8.057262952348836,
+      "n_samples": 276,
       "from_prior": true,
       "from_single_track": false
     },
@@ -392,9 +396,9 @@
         "corner": "rr",
         "condition": "dry"
       },
-      "value_kelvin_per_g2": 44.47613970649471,
-      "stderr_kelvin_per_g2": 9.537339189132418,
-      "n_samples": 317,
+      "value_kelvin_per_g2": 46.8247875388493,
+      "stderr_kelvin_per_g2": 10.006730550351815,
+      "n_samples": 350,
       "from_prior": false,
       "from_single_track": false
     }
@@ -402,22 +406,22 @@
   "c_track_by_track": [
     {
       "track_canonical": "fuji",
-      "value": 1.428755438763406,
-      "stderr": 0.08372092870984013,
+      "value": 1.3796826316199187,
+      "stderr": 0.07588454014016957,
       "n_buckets_used": 11,
       "anchor": false
     },
     {
       "track_canonical": "sodegaura",
-      "value": 1.105562567790434,
-      "stderr": 0.15538412858618794,
+      "value": 1.1066563715561613,
+      "stderr": 0.17290985299492162,
       "n_buckets_used": 8,
       "anchor": false
     },
     {
       "track_canonical": "suzuka",
-      "value": 1.067902979097046,
-      "stderr": 0.04086312748804662,
+      "value": 1.0330827657253405,
+      "stderr": 0.03308416243822459,
       "n_buckets_used": 4,
       "anchor": false
     },
@@ -832,17 +836,17 @@
     {
       "car": "Inferno 86",
       "compound": "A050",
-      "multiplier": 1.0059
+      "multiplier": 0.9903
     },
     {
       "car": "Inferno 86",
       "compound": "A052",
-      "multiplier": 0.9066
+      "multiplier": 0.9043
     },
     {
       "car": "Inferno 86",
       "compound": "RE-71RS",
-      "multiplier": 1.2304
+      "multiplier": 1.2186
     }
   ],
   "K_by_car_compound_corner_cond": [
@@ -851,396 +855,396 @@
       "compound": "DRY",
       "corner": "fl",
       "condition": "damp",
-      "value_kelvin_per_g2": 24.261921410127087,
-      "stderr_kelvin_per_g2": 1.1913690151763174,
+      "value_kelvin_per_g2": 33.379068967265965,
+      "stderr_kelvin_per_g2": 1.5374975100517565,
+      "n_laps": 45
+    },
+    {
+      "car": "FJ",
+      "compound": "DRY",
+      "corner": "fl",
+      "condition": "dry",
+      "value_kelvin_per_g2": 31.796238007339287,
+      "stderr_kelvin_per_g2": 0.18708118809523183,
+      "n_laps": 577
+    },
+    {
+      "car": "FJ",
+      "compound": "DRY",
+      "corner": "fr",
+      "condition": "damp",
+      "value_kelvin_per_g2": 31.987003377722008,
+      "stderr_kelvin_per_g2": 1.4095809050568773,
+      "n_laps": 55
+    },
+    {
+      "car": "FJ",
+      "compound": "DRY",
+      "corner": "fr",
+      "condition": "dry",
+      "value_kelvin_per_g2": 27.168992431690874,
+      "stderr_kelvin_per_g2": 0.19829979080305865,
+      "n_laps": 604
+    },
+    {
+      "car": "FJ",
+      "compound": "DRY",
+      "corner": "rl",
+      "condition": "damp",
+      "value_kelvin_per_g2": 33.58581730889732,
+      "stderr_kelvin_per_g2": 1.7361645794599112,
+      "n_laps": 55
+    },
+    {
+      "car": "FJ",
+      "compound": "DRY",
+      "corner": "rl",
+      "condition": "dry",
+      "value_kelvin_per_g2": 31.787393776171047,
+      "stderr_kelvin_per_g2": 0.184533452320524,
+      "n_laps": 575
+    },
+    {
+      "car": "FJ",
+      "compound": "DRY",
+      "corner": "rr",
+      "condition": "damp",
+      "value_kelvin_per_g2": 33.8604858828687,
+      "stderr_kelvin_per_g2": 1.391417640335447,
+      "n_laps": 55
+    },
+    {
+      "car": "FJ",
+      "compound": "DRY",
+      "corner": "rr",
+      "condition": "dry",
+      "value_kelvin_per_g2": 30.7921270712222,
+      "stderr_kelvin_per_g2": 0.16160937005421688,
+      "n_laps": 567
+    },
+    {
+      "car": "FJ",
+      "compound": "WET",
+      "corner": "fl",
+      "condition": "damp",
+      "value_kelvin_per_g2": 33.379068967271245,
+      "stderr_kelvin_per_g2": 1.5374975100508401,
+      "n_laps": 45
+    },
+    {
+      "car": "FJ",
+      "compound": "WET",
+      "corner": "fl",
+      "condition": "wet",
+      "value_kelvin_per_g2": 27.23108192192964,
+      "stderr_kelvin_per_g2": 0.7216428094307066,
       "n_laps": 39
     },
     {
       "car": "FJ",
-      "compound": "DRY",
-      "corner": "fl",
-      "condition": "dry",
-      "value_kelvin_per_g2": 29.238893198019273,
-      "stderr_kelvin_per_g2": 0.1713703150053394,
-      "n_laps": 525
-    },
-    {
-      "car": "FJ",
-      "compound": "DRY",
+      "compound": "WET",
       "corner": "fr",
       "condition": "damp",
-      "value_kelvin_per_g2": 22.805669260612536,
-      "stderr_kelvin_per_g2": 1.0977977402155379,
-      "n_laps": 48
-    },
-    {
-      "car": "FJ",
-      "compound": "DRY",
-      "corner": "fr",
-      "condition": "dry",
-      "value_kelvin_per_g2": 24.11105888310019,
-      "stderr_kelvin_per_g2": 0.17077733086673033,
-      "n_laps": 557
-    },
-    {
-      "car": "FJ",
-      "compound": "DRY",
-      "corner": "rl",
-      "condition": "damp",
-      "value_kelvin_per_g2": 22.248826264121384,
-      "stderr_kelvin_per_g2": 1.3488409967123443,
-      "n_laps": 48
-    },
-    {
-      "car": "FJ",
-      "compound": "DRY",
-      "corner": "rl",
-      "condition": "dry",
-      "value_kelvin_per_g2": 27.578772077135405,
-      "stderr_kelvin_per_g2": 0.16298054993610323,
-      "n_laps": 525
-    },
-    {
-      "car": "FJ",
-      "compound": "DRY",
-      "corner": "rr",
-      "condition": "damp",
-      "value_kelvin_per_g2": 21.543512140663196,
-      "stderr_kelvin_per_g2": 1.0708603832363657,
-      "n_laps": 48
-    },
-    {
-      "car": "FJ",
-      "compound": "DRY",
-      "corner": "rr",
-      "condition": "dry",
-      "value_kelvin_per_g2": 26.032115659683722,
-      "stderr_kelvin_per_g2": 0.14915165753028878,
-      "n_laps": 519
+      "value_kelvin_per_g2": 31.987003377727063,
+      "stderr_kelvin_per_g2": 1.4095809050550847,
+      "n_laps": 55
     },
     {
       "car": "FJ",
       "compound": "WET",
-      "corner": "fl",
-      "condition": "damp",
-      "value_kelvin_per_g2": 24.261921410127087,
-      "stderr_kelvin_per_g2": 1.1913690151763174,
+      "corner": "fr",
+      "condition": "wet",
+      "value_kelvin_per_g2": 22.66021929505069,
+      "stderr_kelvin_per_g2": 0.64571146136872,
       "n_laps": 39
     },
     {
       "car": "FJ",
       "compound": "WET",
-      "corner": "fl",
-      "condition": "wet",
-      "value_kelvin_per_g2": 25.92320648352462,
-      "stderr_kelvin_per_g2": 0.9463416499355086,
-      "n_laps": 33
-    },
-    {
-      "car": "FJ",
-      "compound": "WET",
-      "corner": "fr",
-      "condition": "damp",
-      "value_kelvin_per_g2": 22.805669260612536,
-      "stderr_kelvin_per_g2": 1.0977977402155379,
-      "n_laps": 48
-    },
-    {
-      "car": "FJ",
-      "compound": "WET",
-      "corner": "fr",
-      "condition": "wet",
-      "value_kelvin_per_g2": 20.719528768462297,
-      "stderr_kelvin_per_g2": 0.8576244200174225,
-      "n_laps": 33
-    },
-    {
-      "car": "FJ",
-      "compound": "WET",
       "corner": "rl",
       "condition": "damp",
-      "value_kelvin_per_g2": 22.248826264121384,
-      "stderr_kelvin_per_g2": 1.3488409967123443,
-      "n_laps": 48
+      "value_kelvin_per_g2": 33.58581730890263,
+      "stderr_kelvin_per_g2": 1.7361645794587977,
+      "n_laps": 55
     },
     {
       "car": "FJ",
       "compound": "WET",
       "corner": "rl",
       "condition": "wet",
-      "value_kelvin_per_g2": 18.580758825763496,
-      "stderr_kelvin_per_g2": 1.0257271372951557,
-      "n_laps": 33
+      "value_kelvin_per_g2": 19.377675482509716,
+      "stderr_kelvin_per_g2": 0.7760529510060392,
+      "n_laps": 39
     },
     {
       "car": "FJ",
       "compound": "WET",
       "corner": "rr",
       "condition": "damp",
-      "value_kelvin_per_g2": 21.543512140663196,
-      "stderr_kelvin_per_g2": 1.0708603832363657,
-      "n_laps": 48
+      "value_kelvin_per_g2": 33.86048588287405,
+      "stderr_kelvin_per_g2": 1.3914176403330731,
+      "n_laps": 55
     },
     {
       "car": "FJ",
       "compound": "WET",
       "corner": "rr",
       "condition": "wet",
-      "value_kelvin_per_g2": 18.723359884280274,
-      "stderr_kelvin_per_g2": 0.8872453740569428,
-      "n_laps": 22
+      "value_kelvin_per_g2": 21.077745619251534,
+      "stderr_kelvin_per_g2": 0.41320685803638113,
+      "n_laps": 26
     },
     {
       "car": "Inferno 86",
       "compound": "A050",
       "corner": "fl",
       "condition": "damp",
-      "value_kelvin_per_g2": 67.571158886185,
-      "stderr_kelvin_per_g2": 1.3271407017202546,
-      "n_laps": 66
+      "value_kelvin_per_g2": 68.86056960841516,
+      "stderr_kelvin_per_g2": 1.3669947406775576,
+      "n_laps": 69
     },
     {
       "car": "Inferno 86",
       "compound": "A050",
       "corner": "fl",
       "condition": "dry",
-      "value_kelvin_per_g2": 59.14733016148671,
-      "stderr_kelvin_per_g2": 0.6383376145136681,
-      "n_laps": 135
+      "value_kelvin_per_g2": 60.895121590462864,
+      "stderr_kelvin_per_g2": 0.5996550044265831,
+      "n_laps": 147
     },
     {
       "car": "Inferno 86",
       "compound": "A050",
       "corner": "fr",
       "condition": "damp",
-      "value_kelvin_per_g2": 59.462944823004335,
-      "stderr_kelvin_per_g2": 1.2511038282865754,
-      "n_laps": 66
+      "value_kelvin_per_g2": 60.18620161394241,
+      "stderr_kelvin_per_g2": 1.2787904627347197,
+      "n_laps": 69
     },
     {
       "car": "Inferno 86",
       "compound": "A050",
       "corner": "fr",
       "condition": "dry",
-      "value_kelvin_per_g2": 53.3530853096684,
-      "stderr_kelvin_per_g2": 0.5896437886126914,
-      "n_laps": 135
+      "value_kelvin_per_g2": 54.42278249262648,
+      "stderr_kelvin_per_g2": 0.5359541745972496,
+      "n_laps": 147
     },
     {
       "car": "Inferno 86",
       "compound": "A050",
       "corner": "rl",
       "condition": "damp",
-      "value_kelvin_per_g2": 62.51330899681237,
-      "stderr_kelvin_per_g2": 1.2295995960146955,
-      "n_laps": 66
+      "value_kelvin_per_g2": 66.48366869359027,
+      "stderr_kelvin_per_g2": 1.392141052534447,
+      "n_laps": 69
     },
     {
       "car": "Inferno 86",
       "compound": "A050",
       "corner": "rl",
       "condition": "dry",
-      "value_kelvin_per_g2": 56.238922932591706,
-      "stderr_kelvin_per_g2": 0.7403106138543768,
-      "n_laps": 128
-    },
-    {
-      "car": "Inferno 86",
-      "compound": "A050",
-      "corner": "rr",
-      "condition": "damp",
-      "value_kelvin_per_g2": 57.46081133040902,
-      "stderr_kelvin_per_g2": 1.0926679700751132,
-      "n_laps": 66
-    },
-    {
-      "car": "Inferno 86",
-      "compound": "A050",
-      "corner": "rr",
-      "condition": "dry",
-      "value_kelvin_per_g2": 51.30426696343057,
-      "stderr_kelvin_per_g2": 0.5776956430599267,
-      "n_laps": 135
-    },
-    {
-      "car": "Inferno 86",
-      "compound": "A052",
-      "corner": "fl",
-      "condition": "damp",
-      "value_kelvin_per_g2": 60.89840902389689,
-      "stderr_kelvin_per_g2": 0.8072049511215211,
+      "value_kelvin_per_g2": 58.54430694067482,
+      "stderr_kelvin_per_g2": 0.6770049579023762,
       "n_laps": 138
     },
     {
       "car": "Inferno 86",
+      "compound": "A050",
+      "corner": "rr",
+      "condition": "damp",
+      "value_kelvin_per_g2": 59.890200059299495,
+      "stderr_kelvin_per_g2": 1.1922904221945883,
+      "n_laps": 69
+    },
+    {
+      "car": "Inferno 86",
+      "compound": "A050",
+      "corner": "rr",
+      "condition": "dry",
+      "value_kelvin_per_g2": 53.035765254728965,
+      "stderr_kelvin_per_g2": 0.5214171519945411,
+      "n_laps": 147
+    },
+    {
+      "car": "Inferno 86",
+      "compound": "A052",
+      "corner": "fl",
+      "condition": "damp",
+      "value_kelvin_per_g2": 62.879462785791574,
+      "stderr_kelvin_per_g2": 0.8191785644314549,
+      "n_laps": 147
+    },
+    {
+      "car": "Inferno 86",
       "compound": "A052",
       "corner": "fl",
       "condition": "dry",
-      "value_kelvin_per_g2": 53.306445593344996,
-      "stderr_kelvin_per_g2": 0.7165725826371453,
-      "n_laps": 133
+      "value_kelvin_per_g2": 55.605879440994784,
+      "stderr_kelvin_per_g2": 0.8509946439916024,
+      "n_laps": 134
     },
     {
       "car": "Inferno 86",
       "compound": "A052",
       "corner": "fr",
       "condition": "damp",
-      "value_kelvin_per_g2": 53.59089284965761,
-      "stderr_kelvin_per_g2": 0.8001586035239453,
-      "n_laps": 138
+      "value_kelvin_per_g2": 54.95853499503372,
+      "stderr_kelvin_per_g2": 0.8214240083986365,
+      "n_laps": 147
     },
     {
       "car": "Inferno 86",
       "compound": "A052",
       "corner": "fr",
       "condition": "dry",
-      "value_kelvin_per_g2": 48.084390817505074,
-      "stderr_kelvin_per_g2": 0.5937670090304057,
-      "n_laps": 133
+      "value_kelvin_per_g2": 49.69571622634586,
+      "stderr_kelvin_per_g2": 1.0775027502739913,
+      "n_laps": 134
     },
     {
       "car": "Inferno 86",
       "compound": "A052",
       "corner": "rl",
       "condition": "damp",
-      "value_kelvin_per_g2": 56.34002914079768,
-      "stderr_kelvin_per_g2": 0.8728815600910057,
-      "n_laps": 138
+      "value_kelvin_per_g2": 60.709015264529995,
+      "stderr_kelvin_per_g2": 0.8479327008076014,
+      "n_laps": 146
     },
     {
       "car": "Inferno 86",
       "compound": "A052",
       "corner": "rl",
       "condition": "dry",
-      "value_kelvin_per_g2": 50.68524779308767,
-      "stderr_kelvin_per_g2": 0.784722547388929,
-      "n_laps": 131
+      "value_kelvin_per_g2": 53.45925237810193,
+      "stderr_kelvin_per_g2": 0.9663474740663414,
+      "n_laps": 130
     },
     {
       "car": "Inferno 86",
       "compound": "A052",
       "corner": "rr",
       "condition": "damp",
-      "value_kelvin_per_g2": 51.78647294089325,
-      "stderr_kelvin_per_g2": 0.6715764644782451,
-      "n_laps": 138
+      "value_kelvin_per_g2": 54.68824360991235,
+      "stderr_kelvin_per_g2": 0.6196637134144515,
+      "n_laps": 147
     },
     {
       "car": "Inferno 86",
       "compound": "A052",
       "corner": "rr",
       "condition": "dry",
-      "value_kelvin_per_g2": 46.23789625204981,
-      "stderr_kelvin_per_g2": 0.7221665459933531,
-      "n_laps": 133
+      "value_kelvin_per_g2": 48.42917284325177,
+      "stderr_kelvin_per_g2": 0.8859090256472547,
+      "n_laps": 134
     },
     {
       "car": "Inferno 86",
       "compound": "RE-71RS",
       "corner": "fl",
       "condition": "damp",
-      "value_kelvin_per_g2": 82.6490724474247,
-      "stderr_kelvin_per_g2": 1.3490287603847175,
-      "n_laps": 59
+      "value_kelvin_per_g2": 84.7323596825629,
+      "stderr_kelvin_per_g2": 1.5129905983841394,
+      "n_laps": 66
     },
     {
       "car": "Inferno 86",
       "compound": "RE-71RS",
       "corner": "fl",
       "condition": "dry",
-      "value_kelvin_per_g2": 72.34553996361778,
-      "stderr_kelvin_per_g2": 1.1567130947904696,
-      "n_laps": 54
+      "value_kelvin_per_g2": 74.93094197242809,
+      "stderr_kelvin_per_g2": 1.04830421674926,
+      "n_laps": 77
     },
     {
       "car": "Inferno 86",
       "compound": "RE-71RS",
       "corner": "fl",
       "condition": "wet",
-      "value_kelvin_per_g2": 54.93494387868879,
-      "stderr_kelvin_per_g2": 1.7505224313636096,
-      "n_laps": 9
+      "value_kelvin_per_g2": 57.65696890764641,
+      "stderr_kelvin_per_g2": 1.1279139828308669,
+      "n_laps": 10
     },
     {
       "car": "Inferno 86",
       "compound": "RE-71RS",
       "corner": "fr",
       "condition": "damp",
-      "value_kelvin_per_g2": 72.73158127851038,
-      "stderr_kelvin_per_g2": 0.9885432427245999,
-      "n_laps": 59
+      "value_kelvin_per_g2": 74.05862182203907,
+      "stderr_kelvin_per_g2": 1.0175624896091742,
+      "n_laps": 66
     },
     {
       "car": "Inferno 86",
       "compound": "RE-71RS",
       "corner": "fr",
       "condition": "dry",
-      "value_kelvin_per_g2": 65.25836001243955,
-      "stderr_kelvin_per_g2": 1.1837770701714614,
-      "n_laps": 54
+      "value_kelvin_per_g2": 66.96678240267674,
+      "stderr_kelvin_per_g2": 1.0217633079237538,
+      "n_laps": 77
     },
     {
       "car": "Inferno 86",
       "compound": "RE-71RS",
       "corner": "fr",
       "condition": "wet",
-      "value_kelvin_per_g2": 53.6687330660187,
-      "stderr_kelvin_per_g2": 1.7571450359457366,
-      "n_laps": 9
+      "value_kelvin_per_g2": 54.08228705534124,
+      "stderr_kelvin_per_g2": 0.9577973544614836,
+      "n_laps": 10
     },
     {
       "car": "Inferno 86",
       "compound": "RE-71RS",
       "corner": "rl",
       "condition": "damp",
-      "value_kelvin_per_g2": 76.46260755877199,
-      "stderr_kelvin_per_g2": 1.6951374528521335,
-      "n_laps": 59
+      "value_kelvin_per_g2": 81.80760282402912,
+      "stderr_kelvin_per_g2": 1.8564296786079373,
+      "n_laps": 66
     },
     {
       "car": "Inferno 86",
       "compound": "RE-71RS",
       "corner": "rl",
       "condition": "dry",
-      "value_kelvin_per_g2": 68.78814707988107,
-      "stderr_kelvin_per_g2": 1.5085259557046062,
-      "n_laps": 54
+      "value_kelvin_per_g2": 72.03828404662816,
+      "stderr_kelvin_per_g2": 1.202159708184739,
+      "n_laps": 76
     },
     {
       "car": "Inferno 86",
       "compound": "RE-71RS",
       "corner": "rl",
       "condition": "wet",
-      "value_kelvin_per_g2": 54.00900455510663,
-      "stderr_kelvin_per_g2": 1.6938817689029286,
-      "n_laps": 9
+      "value_kelvin_per_g2": 56.49334521007936,
+      "stderr_kelvin_per_g2": 0.6272398167920883,
+      "n_laps": 10
     },
     {
       "car": "Inferno 86",
       "compound": "RE-71RS",
       "corner": "rr",
       "condition": "damp",
-      "value_kelvin_per_g2": 70.28268919486793,
-      "stderr_kelvin_per_g2": 1.0605324253266344,
-      "n_laps": 59
+      "value_kelvin_per_g2": 73.69439436447915,
+      "stderr_kelvin_per_g2": 1.1984652583692408,
+      "n_laps": 66
     },
     {
       "car": "Inferno 86",
       "compound": "RE-71RS",
       "corner": "rr",
       "condition": "dry",
-      "value_kelvin_per_g2": 62.75236575807072,
-      "stderr_kelvin_per_g2": 1.5314232994835215,
-      "n_laps": 54
+      "value_kelvin_per_g2": 65.26006919719835,
+      "stderr_kelvin_per_g2": 1.1375488136435181,
+      "n_laps": 77
     },
     {
       "car": "Inferno 86",
       "compound": "RE-71RS",
       "corner": "rr",
       "condition": "wet",
-      "value_kelvin_per_g2": 51.382030407357504,
-      "stderr_kelvin_per_g2": 1.778064509139017,
-      "n_laps": 9
+      "value_kelvin_per_g2": 52.5110843520796,
+      "stderr_kelvin_per_g2": 0.5889800691437915,
+      "n_laps": 10
     }
   ],
   "corner_defaults_by_car_corner_cond": [

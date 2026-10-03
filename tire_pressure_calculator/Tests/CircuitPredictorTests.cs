@@ -92,7 +92,7 @@ public class CircuitPredictorTests
     }
 
     [Fact]
-    public void Predict_ColdTireTempOverride_OnlyMovesGayLussacColdSide()
+    public void Predict_ColdTireTempOverride_IsTheWarmupStartAndGayLussacColdSide()
     {
         var p = LoadPredictor();
         var noOverride = p.Predict(
@@ -107,12 +107,16 @@ public class CircuitPredictorTests
             corner: "fl", targetHotPressureBar: 1.7,
             coldTireTempC: 25.0);
 
-        // T_eff and predicted hot temp must not change.
+        // T_eff is an ambient property and must not change.
         Assert.Equal(noOverride.TEffC, warmTire.TEffC, precision: 9);
-        Assert.Equal(noOverride.PredictedHotTempC, warmTire.PredictedHotTempC, precision: 9);
-        // T_cold differs.
+        // The current tire temp is both the cold side and the warmup start.
         Assert.Equal(15.0, noOverride.TColdC, precision: 9);
+        Assert.Equal(15.0, noOverride.TStartC, precision: 9);
         Assert.Equal(25.0, warmTire.TColdC, precision: 9);
+        Assert.Equal(25.0, warmTire.TStartC, precision: 9);
+        // A warmer start ends the lap hotter by the decayed start excess.
+        double decay = Math.Exp(-noOverride.TAtLapNs / noOverride.TauSec);
+        Assert.Equal(10.0 * decay, warmTire.PredictedHotTempC - noOverride.PredictedHotTempC, precision: 9);
         // Higher T_cold → higher recommended cold pressure (P/T const).
         Assert.True(warmTire.ColdPressureBar > noOverride.ColdPressureBar);
     }

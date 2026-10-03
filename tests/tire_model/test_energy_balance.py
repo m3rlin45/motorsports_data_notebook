@@ -105,6 +105,25 @@ def test_warmup_curve_at_one_tau_reaches_63_percent() -> None:
     assert t == pytest.approx(expected)
 
 
+def test_warmup_curve_starts_at_t_start_and_forgets_it_with_tau() -> None:
+    """With a start temperature the curve begins there and the start excess
+    decays with the same τ as the warmup: at t = τ, 63 % of the gap to the
+    asymptote has closed regardless of where the tire started."""
+    kw = dict(t_eff_c=20.0, k_kelvin_per_g2=50.0, c_track=1.0, g2_typ=0.8, tau_sec=240.0)
+    assert warmup_curve_c(t_seconds=0.0, t_start_c=45.0, **kw) == pytest.approx(45.0)
+    at_tau = warmup_curve_c(t_seconds=240.0, t_start_c=45.0, **kw)
+    asymptote = 20.0 + 50.0 * 0.8
+    expected = asymptote + (45.0 - asymptote) * math.exp(-1.0)
+    assert at_tau == pytest.approx(expected)
+    # Far out, the start is forgotten.
+    far = warmup_curve_c(t_seconds=240.0 * 50, t_start_c=45.0, **kw)
+    assert far == pytest.approx(asymptote, abs=1e-6)
+    # t_start_c=None reproduces the v0 closed form (start at T_eff).
+    assert warmup_curve_c(t_seconds=120.0, **kw) == pytest.approx(
+        warmup_curve_c(t_seconds=120.0, t_start_c=20.0, **kw)
+    )
+
+
 def test_warmup_curve_rejects_invalid_tau_or_time() -> None:
     with pytest.raises(ValueError):
         warmup_curve_c(

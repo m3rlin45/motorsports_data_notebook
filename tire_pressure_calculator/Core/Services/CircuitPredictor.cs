@@ -66,7 +66,10 @@ public sealed class CircuitPredictor
             deltaSunMaxC: _model.DeltaSunMaxC);
         double tEffC = EnergyBalance.TEffectiveC(ambientTempC, tRoadC, _model.WRoad);
 
+        // "What's the tire at right now?" — Gay-Lussac cold side AND the
+        // warmup curve's initial condition (a rested tire sits at T_air).
         double tColdC = coldTireTempC ?? ambientTempC;
+        double tStartC = tColdC;
 
         // Target-lap-time feature: pace sets both time-on-track and tire energy.
         double g2Scale = 1.0;
@@ -96,7 +99,8 @@ public sealed class CircuitPredictor
             kKelvinPerG2: k.ValueKelvinPerG2,
             cTrack: c.Value,
             g2Typ: g2Value,
-            tauSec: tau.ValueSeconds);
+            tauSec: tau.ValueSeconds,
+            tStartC: tStartC);
 
         double cold = EnergyBalance.GayLussacColdPressureBar(
             targetHotPressureBar: targetHotPressureBar,
@@ -121,6 +125,7 @@ public sealed class CircuitPredictor
             TAirC: ambientTempC,
             TRoadC: tRoadC,
             TColdC: tColdC,
+            TStartC: tStartC,
             KSourceBucket: k.SourceBucket,
             KFromPrior: k.FromPrior,
             KNSamples: k.NSamples,
@@ -147,6 +152,7 @@ public sealed record CornerPrediction(
     double TAirC,
     double TRoadC,
     double TColdC,
+    double TStartC,
     string KSourceBucket,
     bool KFromPrior,
     int KNSamples,

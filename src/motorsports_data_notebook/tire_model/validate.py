@@ -225,6 +225,7 @@ def _evaluate_fold(root: Path, holdout_ids: list[str]) -> pd.DataFrame:
         _apply_blacklist,
         _attach_weather,
         _compute_delta_t,
+        _compute_stint_anchor,
         _compute_stint_clock,
         _load_filtered_laps,
         _load_weather,
@@ -243,8 +244,12 @@ def _evaluate_fold(root: Path, holdout_ids: list[str]) -> pd.DataFrame:
     # subset, so most blacklist entries won't match — silence that noise.
     blacklist_pairs = load_sensor_blacklist(root)
     all_laps, _ = _apply_blacklist(all_laps, blacklist_pairs, warn_on_unknown=False)
+    all_laps = _compute_stint_anchor(all_laps)
     all_laps = _compute_delta_t(all_laps)
-    # Drop out-laps from evaluation (same convention as training)
+    # Score laps after the first full lap of the stint (same convention as
+    # the v0 report, so numbers stay comparable). The stint's first finite
+    # TPMS reading is the warmup curve's initial condition — the same
+    # information a driver supplies as "current tire temp" at roll-out.
     all_laps = all_laps[all_laps["lap_within_stint"] > 0].reset_index(drop=True)
 
     from .warmup_table import alias_condition_seeds
@@ -300,13 +305,18 @@ def _evaluate_fold(root: Path, holdout_ids: list[str]) -> pd.DataFrame:
             obs = lap.get(f"tpms_temp_{c}_end")
             if pd.isna(obs):
                 continue
+            t_anchor = lap.get(f"t_anchor_{c}")
+            t_start = lap.get(f"t_start_{c}")
+            if pd.isna(t_anchor) or pd.isna(t_start) or t_cum_s <= float(t_anchor):
+                continue
             t_hot_pred = warmup_curve_c(
-                t_seconds=t_cum_s,
+                t_seconds=t_cum_s - float(t_anchor),
                 t_eff_c=t_eff,
                 k_kelvin_per_g2=K,
                 c_track=c_track,
                 g2_typ=g2,
                 tau_sec=tau,
+                t_start_c=float(t_start),
             )
             rows.append(
                 {
@@ -318,6 +328,8 @@ def _evaluate_fold(root: Path, holdout_ids: list[str]) -> pd.DataFrame:
                     "stint_id": int(lap["stint_id"]),
                     "lap_within_stint": int(lap["lap_within_stint"]),
                     "t_cum_s": t_cum_s,
+                    "t_anchor_s": float(t_anchor),
+                    "t_start_c": float(t_start),
                     "corner": c,
                     "T_hot_pred_c": t_hot_pred,
                     "T_hot_obs_c": float(obs),

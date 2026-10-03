@@ -27,21 +27,30 @@ public static class EnergyBalance
         return (1.0 - wRoad) * tAirC + wRoad * tRoadC;
     }
 
+    /// <summary>
+    /// Closed-form warmup from the tire's starting temperature
+    /// <paramref name="tStartC"/> (null: in equilibrium at <paramref name="tEffC"/>).
+    /// The start excess decays with the same τ as the warmup:
+    /// T(t) = T_eff + K·c·g²·(1 − e^{−t/τ}) + (T_start − T_eff)·e^{−t/τ}.
+    /// </summary>
     public static double WarmupCurveC(
         double tSeconds,
         double tEffC,
         double kKelvinPerG2,
         double cTrack,
         double g2Typ,
-        double tauSec)
+        double tauSec,
+        double? tStartC = null)
     {
         if (tauSec <= 0.0)
             throw new ArgumentOutOfRangeException(nameof(tauSec), tauSec, "tau_sec must be > 0");
         if (tSeconds < 0.0)
             throw new ArgumentOutOfRangeException(nameof(tSeconds), tSeconds, "t_seconds must be >= 0");
-        double warmupFrac = 1.0 - Math.Exp(-tSeconds / tauSec);
+        double decay = Math.Exp(-tSeconds / tauSec);
+        double warmupFrac = 1.0 - decay;
         double deltaTInf = kKelvinPerG2 * cTrack * g2Typ;
-        return tEffC + deltaTInf * warmupFrac;
+        double start = tStartC ?? tEffC;
+        return tEffC + deltaTInf * warmupFrac + (start - tEffC) * decay;
     }
 
     /// <summary>

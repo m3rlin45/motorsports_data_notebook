@@ -447,15 +447,15 @@ public class MainViewModel : INotifyPropertyChanged
             s.TargetHotTemp = vm.TargetHotTemp;
             s.TargetHotPressure = vm.TargetHotPressure;
             _settings.Save();
-            // Per-corner target hot pressure change should refresh predictions
-            // (the predicted T_hot is independent of target hot pressure, but
-            // the cold pressure displayed is a function of it — covered by the
-            // corner VM's own ColdPressure recompute).
-            if (e.PropertyName == nameof(TireCornerViewModel.TargetHotPressure)
+            // The corner's current tire temperature is the warmup curve's
+            // initial condition, so editing it changes the predicted hot
+            // temperature — re-run the predictor. (Target hot pressure only
+            // enters the cold-pressure step, which the corner VM recomputes
+            // itself.)
+            if (e.PropertyName == nameof(TireCornerViewModel.CurrentTemp)
                 && IsPredictionMode)
             {
-                // Nothing extra to do — the corner already re-renders cold pressure
-                // because PredictedHotTempC is unchanged.
+                RefreshPredictions();
             }
         };
         return vm;

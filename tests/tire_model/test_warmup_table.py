@@ -85,6 +85,98 @@ def _synth_laps(
     return pd.DataFrame(rows)
 
 
+def test_pass1_recovers_tau_and_gain_from_warm_starts() -> None:
+    """Stints that start warm (previous run's heat still in the tire) must
+    not bias τ short: with the stint anchor in the frame, Pass 1 recovers
+    both τ and K·c_track from data generated with a +25 °C start excess."""
+    K_true, tau_true, c_t, g2, t_air = 60.0, 250.0, 1.0, 0.9, 20.0
+    rng = np.random.default_rng(7)
+    rows: list[dict] = []
+    for sess in range(12):
+        start_excess = 25.0 if sess % 2 else 0.0  # alternate warm / cold starts
+        t_cum = 0.0
+        for lap in range(0, 12):
+            t_cum += 60.0
+            decay = math.exp(-t_cum / tau_true)
+            temp = t_air + K_true * c_t * g2 * (1 - decay) + start_excess * decay
+            rows.append(
+                {
+                    "session_id": f"s{sess}",
+                    "track_canonical": "track_x",
+                    "car": "CarA",
+                    "stint_id": 1,
+                    "lap_num": lap + 1,
+                    "lap_within_stint": lap,
+                    "on_track_s": 60.0,
+                    "t_cum_s": t_cum,
+                    "heat_proxy": g2 * 60.0,
+                    "condition": "dry",
+                    "t_eff_c": t_air,
+                    "tpms_temp_fl_end": temp + rng.normal(0.0, 0.3),
+                    "delta_t_fl": temp + rng.normal(0.0, 0.3) - t_air,
+                    "t_anchor_fl": 0.0,
+                    "t_start_fl": t_air + start_excess,
+                }
+            )
+    laps_for_fit = pd.DataFrame(rows)
+    tau_fit, gains = wt._pass1_fit_tau_and_gains(laps_for_fit, "CarA", "fl", "dry")
+    assert tau_fit.value == pytest.approx(tau_true, rel=0.05)
+    assert gains["track_x"].value == pytest.approx(K_true * c_t, rel=0.05)
+
+    # Without the anchor columns the same data fits the v0 form, which has
+    # to explain the warm starts as a fast warmup: τ comes out biased short.
+    naive = laps_for_fit.drop(columns=["t_anchor_fl", "t_start_fl"])
+    tau_naive, _ = wt._pass1_fit_tau_and_gains(naive, "CarA", "fl", "dry")
+    assert tau_naive.value < 0.8 * tau_true
+
+
+def test_compute_stint_anchor_prefers_first_lap_start_then_falls_back() -> None:
+    laps = pd.DataFrame(
+        [
+            # stint 1: first lap start reading is stale (NaN) -> anchor on its end
+            {
+                "session_id": "s",
+                "stint_id": 1,
+                "lap_num": 1,
+                "on_track_s": 60.0,
+                "t_cum_s": 60.0,
+                "tpms_temp_fl_start": np.nan,
+                "tpms_temp_fl_end": 31.0,
+            },
+            {
+                "session_id": "s",
+                "stint_id": 1,
+                "lap_num": 2,
+                "on_track_s": 60.0,
+                "t_cum_s": 120.0,
+                "tpms_temp_fl_start": 31.5,
+                "tpms_temp_fl_end": 38.0,
+            },
+            # stint 2: start reading present -> anchor at t = 0
+            {
+                "session_id": "s",
+                "stint_id": 2,
+                "lap_num": 3,
+                "on_track_s": 60.0,
+                "t_cum_s": 60.0,
+                "tpms_temp_fl_start": 44.0,
+                "tpms_temp_fl_end": 50.0,
+            },
+        ]
+    )
+    for c in ("fr", "rl", "rr"):
+        laps[f"tpms_temp_{c}_start"] = np.nan
+        laps[f"tpms_temp_{c}_end"] = np.nan
+    out = wt._compute_stint_anchor(laps)
+    s1 = out[out.stint_id == 1]
+    assert (s1["t_anchor_fl"] == 60.0).all()
+    assert (s1["t_start_fl"] == 31.0).all()
+    s2 = out[out.stint_id == 2]
+    assert (s2["t_anchor_fl"] == 0.0).all()
+    assert (s2["t_start_fl"] == 44.0).all()
+    assert out["t_anchor_rr"].isna().all()
+
+
 def test_pass1_recovers_tau_sec_per_car_corner() -> None:
     """Pass 1 should recover τ_sec[car, corner] from synthetic data."""
     K_true = {

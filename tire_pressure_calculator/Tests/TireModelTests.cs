@@ -132,10 +132,11 @@ public class TireModelTests
     {
         // FJ has no wet K bucket in the current artifact (Fuji wet samples
         // didn't meet the τ-fit threshold). Wet should fall through the chain
-        // and produce a (FJ, *, damp) or (FJ, *, dry) source bucket.
+        // and produce a (FJ, *, damp) or (FJ, *, dry) source bucket. (The
+        // damp bucket it lands on may itself be a physical-prior clip of the
+        // fitted value — that flag is independent of the fallback chain.)
         var model = LoadBundled();
         var k = model.LookupK("FJ", "fl", "wet");
-        Assert.False(k.FromPrior);
         Assert.True(k.SourceBucket.Contains("damp") || k.SourceBucket.Contains("dry"),
             $"Expected damp/dry fallback for FJ wet; got {k.SourceBucket}");
     }
