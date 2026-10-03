@@ -424,8 +424,12 @@ def _load_filtered_laps(root: Path) -> pd.DataFrame:
         raise FileNotFoundError(
             f"No laps/sessions parquets under {root}. Run `just tire-refresh` first."
         )
-    laps = pa.concat_tables([pq.read_table(f) for f in laps_files]).to_pandas()
-    sessions = pa.concat_tables([pq.read_table(f) for f in sessions_files]).to_pandas()
+    laps = pa.concat_tables(
+        [pq.read_table(f) for f in laps_files], promote_options="default"
+    ).to_pandas()
+    sessions = pa.concat_tables(
+        [pq.read_table(f) for f in sessions_files], promote_options="default"
+    ).to_pandas()
 
     sessions_keep = sessions[(sessions["status"] == "ok") & sessions["has_tpms"]]
     cols_from_sessions = ["session_id", "track_canonical", "car", "session_start_utc", "date"]
