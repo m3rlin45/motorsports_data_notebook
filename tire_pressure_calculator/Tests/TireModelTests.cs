@@ -128,17 +128,15 @@ public class TireModelTests
     }
 
     [Fact]
-    public void LookupK_FJ_Wet_FallsBackToDampOrDry()
+    public void LookupK_FJ_Wet_ResolvesToAFittedBucketThroughTheChain()
     {
-        // FJ has no wet K bucket in the current artifact (Fuji wet samples
-        // didn't meet the τ-fit threshold). Wet should fall through the chain
-        // and produce a (FJ, *, damp) or (FJ, *, dry) source bucket. (The
-        // damp bucket it lands on may itself be a physical-prior clip of the
-        // fitted value — that flag is independent of the fallback chain.)
+        // Rain τ/K are fitted per condition when a (car, track) rain bucket has
+        // enough sessions, else the lookup walks wet → damp → dry. Either way a
+        // wet FJ lookup must land on a fitted (FJ, fl, *) bucket, never a prior.
         var model = LoadBundled();
         var k = model.LookupK("FJ", "fl", "wet");
-        Assert.True(k.SourceBucket.Contains("damp") || k.SourceBucket.Contains("dry"),
-            $"Expected damp/dry fallback for FJ wet; got {k.SourceBucket}");
+        Assert.False(k.FromPrior);
+        Assert.StartsWith("(FJ, fl,", k.SourceBucket);
     }
 
     [Fact]

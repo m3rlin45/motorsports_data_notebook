@@ -73,9 +73,11 @@ public class CompoundAndPrefillTests : IDisposable
 
         vm.SelectedCompound = "RE-71RS";
         vm.SelectedCar = "FJ";
-        // Foreign compound snaps to the new car's first compound.
+        // Foreign compound snaps to the new car's first compound. (Thermal
+        // parameters are fitted on dry laps only, so the FJ's rain tire has
+        // no fitted compound K and is not enumerated — rain inherits dry.)
         Assert.Contains("DRY", vm.AvailableCompounds);
-        Assert.Contains("WET", vm.AvailableCompounds);
+        Assert.DoesNotContain("RE-71RS", vm.AvailableCompounds);
         Assert.Equal(vm.AvailableCompounds[0], vm.SelectedCompound);
     }
 

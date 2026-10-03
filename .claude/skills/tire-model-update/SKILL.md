@@ -174,12 +174,27 @@ otherwise leave the file alone (it has needed no entry so far) and list any
 ```bash
 cd /home/m3rlin45/code/motorsports_data_notebook && just tire-build-warmup-table 2>&1 | grep -v "^DEBUG" | tail -25
 cd /home/m3rlin45/code/motorsports_data_notebook && just tire-predict-holdout --n-folds 5 2>&1 | tail -40
+cd /home/m3rlin45/code/motorsports_data_notebook && just tire-predict-holdout --n-folds 5 --inputs oracle 2>&1 | tail -40
 cd /home/m3rlin45/code/motorsports_data_notebook && just tire-predict-validate 2>&1 | tail -20
 ```
 
+**Rain buckets.** Damp and wet τ/K are fitted per condition with
+τ_rain ≤ τ_dry bounded inside the fit, and only when a (car, track) rain
+bucket has ≥ 3 sessions; thinner buckets fall back to dry at prediction.
+The holdout prints a per-condition table — quote the wet row alongside dry,
+and say when a rain bucket newly crosses the 3-session threshold (its
+predictions switch from dry-inherited to fitted).
+
+The first holdout scores what the calculator would have told the driver
+(bucket ⟨g²⟩ at the session's pace, N × lap time, typed-in start temperature);
+the `--inputs oracle` run scores the thermal model with the lap's real g² and
+clock. Quote the calculator numbers as the headline and the oracle numbers as
+the ceiling; a growing gap between them means the inputs (pace curve,
+typical lap time) are drifting, not the physics.
+
 Record for the commit message: per-car hot-temp MAE from the 5-fold CV, the
-notes-validation MAE in bar, and any bucket that moved from prior to fitted (or
-back). Compare against the previous dataset commit message
+notes-validation MAE in bar, and any bucket that moved from prior to fitted
+(or back). Compare against the previous dataset commit message
 (`sl log -r 'last(desc("tire dataset:"))' --template '{desc}\n'`). A jump of more
 than ~1 °C MAE on a car with lots of data is a red flag — look at which new
 sessions dominate the new laps before committing. When the extractor version

@@ -215,6 +215,7 @@ Fitted tables:
 - `lap_time_typ_by_track_car_cond` — typical lap time lookup
 - `corner_defaults_by_car_corner_cond` — steady-state median hot temp +
   hot pressure, used by the calculators to prefill the corner-card targets
+- `rain_thermal` — how rain τ/K are fitted (τ bound, session minimum; §2.9)
 
 Config + provenance:
 
@@ -332,24 +333,53 @@ rear bias collapsing from ≈−5 °C to −0.7/−1.5 °C.
 
 ### 2.9 Track condition (rain)
 
-v0.3 adds a `condition` dimension to K, τ_sec, ⟨g²⟩, and lap_time_typ. The
-condition is **derived from weather data**, not from run-notes:
+v0.3 added a `condition` dimension derived from weather data, not run-notes.
+Since 2026-10 the category is the **expected wetness of the track surface**,
+not the rain rate of one hour (`tire_model/wetness.py`):
 
-- `dry`: precipitation < 0.1 mm/hr
-- `damp`: 0.1 ≤ precipitation < 1.0 mm/hr
-- `wet`: precipitation ≥ 1.0 mm/hr
-- `unknown`: no weather data (excluded from training)
+- Open-Meteo's hourly `precipitation` is the sum of the *preceding* hour, so
+  the old "precipitation of the hour containing the session start" rule
+  attributed showers that had ended before roll-out to the run (Tsukuba
+  2025-07-26: 0.6 mm fell 13:00–14:00 JST, the car rolled out at 14:08 on a
+  38 °C clear afternoon and ran 46 laps with the fronts at 90 °C; the rule
+  said damp). It also called a trace of grid-cell drizzle "damp" regardless
+  of whether the asphalt could possibly be wet.
+- Instead we integrate a surface water balance over the hourly series:
+  `d(t+1h) = clamp(d(t) + P − E, 0, 1 mm)`, with `E` a bulk evaporation rate
+  from the vapour-pressure deficit between the sun-warmed surface
+  (`T_air + 10·(1 − cloud/100)`, the same proxy as T_road) and the air, times
+  a Penman-style wind factor. The clamp says a track holds about a
+  millimetre before the rest runs off, and that a dry track has forgotten
+  earlier rain. 0.6 mm evaporates in ~20 min at 38 °C / 36 % RH and takes
+  hours at 10 °C under cloud.
+- A session's class comes from the maximum film depth over the hours that
+  overlap the run: `dry` < 0.05 mm ≤ `damp` < 0.5 mm ≤ `wet`; `unknown`
+  when the weather series does not cover the session (excluded from
+  training). The per-session depths are kept on the laps frame as
+  `track_wetness_start_mm` / `track_wetness_run_max_mm` for a future
+  continuous rain-cooling factor.
+- The evaporation coefficient (0.2 mm/h per kPa) and storage depth are
+  physical priors. Against the dry model's per-session residuals the water
+  balance separates sessions in the physically expected direction
+  (film present → over-predicted by ≈ +1 °C, dry → ≈ −1 °C) and explains
+  about twice the session-level variance of the old labels, which is still
+  little: most session-level error is compound and track structure, not
+  rain. Weather explains little either way; the point of the change is to
+  stop putting dry sessions in the rain buckets.
 
-Physically, more cooling (rain on the tire) means **larger `h_air + h_road`**,
-so both `K = α/(h_air+h_road)` and `τ = m·c/(h_air+h_road)` should **drop**
-in damp/wet — the tire reaches equilibrium faster *and* at a lower steady
-state. ⟨g²⟩ also drops naturally because drivers go slower in rain (it's a
-data lookup, not a fitted param).
+The condition's definition for the *user* is unchanged: at prediction time
+they say how wet the track is.
 
-`c_track` stays per-track (no condition dimension) — surface character is a
-property of the venue. The condition's effect lives in K and ⟨g²⟩.
-
-**Inference-time fallback chain** (when the requested condition has no fit):
+**Where the condition enters.** ⟨g²⟩, lap_time_typ and the corner defaults
+are per condition (drivers go slower and pull less g in the rain; those are
+data lookups, not fitted parameters). **τ and K are fitted per condition**,
+with the one bound the physics supports placed inside the Pass 1 fit:
+rain only adds cooling (evaporation off the tread, conduction into a wet,
+cold surface), so `τ_rain ≤ τ_dry` for any tire; `K = α/h` is left free
+because a rain compound has its own hysteresis α. A rain (car, track)
+bucket is fitted on its own only when it has ≥ 3 sessions and ≥ 30 laps
+(`MIN_SESSIONS_FOR_RAIN_FIT`, `MIN_LAPS_FOR_TAU_FIT`); otherwise the
+predictors' fallback chain resolves it to dry:
 
 ```
 wet  → damp → dry      (physically closest neighbors)
@@ -357,29 +387,32 @@ damp → dry
 dry  → dry
 ```
 
-**Fit dataset breakdown** (with the v0.3 weather classification):
+**History of this choice (2026-10).** With the old start-hour rain labels
+the rain buckets were a mix of dry and wet days, an independent rain fit
+predicted held-out rain sessions *worse* than reusing the dry parameters,
+and v0.3's post-hoc clips (1.5× τ, 1.2× K) replaced one parameter after
+the fit without refitting the other. Rain inherited dry for one release.
+Once the condition came from the surface water balance above, the wet
+class became coherent and the independent fit won on 21 held-out rain
+sessions (wet bias +3.9 °C → −0.4 °C; with calculator inputs wet MAE
+4.6 → 3.8 °C, FJ 4.5 → 2.8). The fitted wet gains are 0.6–0.95× dry with
+τ at the dry bound — less heat per unit g² in the rain, as expected. The
+clips are gone; the τ bound inside the fit replaces them.
 
-| Condition | Sessions | Usable laps | Notes |
+**Fit dataset breakdown** (wetness classification, dataset through
+2026-10-02):
+
+| Condition | Sessions (FJ / Inferno 86) | Usable laps | Notes |
 |---|---|---|---|
-| dry | 69 | ~677 | both cars, all 4 tracks |
-| damp | 30 | ~212 | both cars, all 4 tracks |
-| wet | 8 | ~34 | mostly KK-SII at Fuji 2026-02-25 |
-| unknown | 46 | excluded | no weather data |
+| dry | 53 / 46 | 1096 | all tracks |
+| damp | 6 / 1 | 109 | a transition state: partial film, mostly early morning after overnight rain |
+| wet | 14 / 8 | 212 | saturated film; Tsukuba 2025-10-25, 2025-12-14, 2026-04-04, 2026-09-26, Fuji 2026-02-25, Sodegaura 2026-02-07 |
+| unknown | — | excluded | no weather coverage |
 
-**Physical-prior clips** to guard against pathological sparse-data fits:
-
-- `τ_sec[damp/wet]` is clipped to ≤ 1.5 × `τ_sec[dry]` (faster cooling)
-- `K[damp/wet]` is clipped to ≤ 1.2 × `K[dry]` (less heat per G²)
-
-Clipped parameters are flagged with `from_prior=True` in the artifact.
-Without these clips, Inferno 86 damp K and τ were 1.5-3× the dry values —
-the optimizer compensating for warmup-incomplete short stints rather than
-real thermal physics. The 1.2× / 1.5× ratios are physical priors; the
-exact thresholds are empirical and easy to tune.
-
-**Known limitation**: KK-SII wet predictions are conservative (the model
-under-predicts hot temp slightly, so cold pressure recommendations skew
-higher than strictly needed). The safer error direction.
+**Known limitation**: damp is thin (7 sessions) and the Inferno's wet
+buckets are small (6 sessions); where a bucket falls back to dry the
+prediction over-reads the hot temperature in the rain by a few degrees,
+which skews the cold-pressure recommendation slightly low.
 
 ### 2.8 Sensor blacklist (human-curated)
 
@@ -423,12 +456,18 @@ recurring failure across **2 Tsukuba sessions on 2026-03-22**.
 
 ### 3.2 Held-out test design
 
-- **Bucket selection.** Only (track, car) buckets with ≥ 10 sessions are
-  eligible (Tsukuba KK-SII: 34, Sodegaura Inferno 86: 30, Fuji Inferno 86:
-  21, Fuji KK-SII: 11). Tsukuba Inferno 86 (7 sessions) and Motegi Inferno
-  86 (4 sessions) are too sparse to safely exclude from.
-- **Session picking.** For each eligible bucket, the first 2 session_ids
-  in sort order are held out. Deterministic, reproducible.
+- **Bucket selection, stratified by condition.** Buckets are
+  (track, car, condition). Dry buckets need ≥ 10 sessions to be eligible;
+  damp and wet buckets are far smaller and need ≥ 3, otherwise no rain
+  session would ever be held out and the rain numbers would be whatever
+  happened to fall into the dry slices (before 2026-10 that was 3 damp
+  sessions out of 30 held out). Sessions with unknown condition (no weather)
+  are never held out; they are excluded from training too.
+- **Session picking.** Within each eligible bucket the session_ids are
+  sorted and `--n-folds` disjoint slices of `--n-per-bucket` are swept
+  through them, so k-fold CV evaluates every session once until a bucket
+  runs out. Deterministic, reproducible. The per-fold line prints how many
+  dry / damp / wet sessions are held out.
 - **Lap filtering.** The first full lap of each stint
   (`lap_within_stint == 0`) is not scored, so numbers stay comparable with
   the v0 reports; the stint's first finite TPMS reading is the initial
@@ -438,13 +477,39 @@ recurring failure across **2 Tsukuba sessions on 2026-03-22**.
 - **Blacklist applied.** Confirmed broken sensors are masked in both
   training and evaluation — we don't grade the model against channels we
   already know are broken.
+- **Inputs: calculator or oracle.** By default (`--inputs calculator`) each
+  held-out lap is predicted from what the calculator has: the fold model's
+  ⟨g²⟩ scaled along the pace curve at the session's median lap time (the
+  target a driver would enter), the clock `N × lap time`, and the start
+  temperature the driver types in, stood in by the stint's first TPMS
+  reading (the start fields are always filled in practice; leaving them
+  blank was measured at +1.2 °C MAE and dropped as an option).
+  `--inputs oracle` instead feeds the lap's own
+  measured g², its actual cumulative on-track time and the measured anchor:
+  that is the thermal model's accuracy given the real driving, an upper
+  bound on what the calculator can deliver. Numbers quoted before 2026-10
+  in this document are oracle numbers.
 - **Metric.** Per-corner per-lap **T_hot residual** (predicted minus
   observed end-of-lap TPMS temperature). MAE, RMSE, and mean signed bias
   reported per corner. T_hot is the right metric because everything
   downstream (Gay-Lussac, cold pressure) is a deterministic transform of
   it — predict T_hot well and the cold pressure is right.
 
-### 3.3 What MAE in T_hot translates to in cold pressure
+### 3.3 Pressure is what matters: the hot-pressure residual
+
+The holdout also scores every lap in the pressure domain, which is what the
+driver actually gets. From the pressure and temperature at the stint anchor
+it pushes the predicted hot temperature through the same constant-volume
+step the calculators use and compares the implied hot pressure with the
+TPMS hot pressure, in bar. Two columns are printed: as the calculators
+compute it today (γ = 1) and with a per-car gain γ in `P_abs ∝ T_abs^γ`
+fitted on the training sessions. γ is below 1 on both cars (TPMS reads the
+valve, which runs warmer than the mean cavity gas), so the γ = 1 step
+over-states the pressure rise and the per-car γ removes a systematic bias.
+Fitting γ into the calculators is the natural next step; the holdout
+already reports what it would buy.
+
+### 3.4 What MAE in T_hot translates to in cold pressure
 
 For target hot 1.9 bar (gauge), air 18 °C, T_hot ≈ 50–60 °C, the Gay-Lussac
 inversion has
@@ -674,7 +739,7 @@ just tire-predict --track sodegaura --car "Inferno 86" --lap 5 --ambient 22 \
 
 # Held-out validation (train without N sessions per bucket, report per-corner T_hot residuals)
 just tire-predict-holdout
-# (--n-per-bucket 2 --min-bucket-size 10)
+# (--n-per-bucket 2 --min-bucket-size 10 --n-folds 3 --inputs calculator|oracle)
 
 # Validate against notes-recorded cold pressures (consistency check, not held-out)
 just tire-predict-validate
@@ -709,7 +774,7 @@ just tire-track-audit [--since YYYY-MM-DD]   # every session reconciled from GPS
 | `src/motorsports_data_notebook/tire_model/compounds.py` | Compound label loading (sidecar + notes fallback, wheel-set mapping, condition seeds) |
 | `src/motorsports_data_notebook/tire_model/compound_infer.py` | Decomposed compound K: EM with partial supervision, forced selection |
 | `src/motorsports_data_notebook/tire_model/predict.py` | `predict_cold_pressure(...)` and the fallback chain for K / τ / c_track / ⟨g²⟩ |
-| `src/motorsports_data_notebook/tire_model/validate.py` | `tire-predict-validate` (notes-recorded ground truth) and `tire-predict-holdout` (held-out generalization test) |
+| `src/motorsports_data_notebook/tire_model/validate.py` | `tire-predict-validate` (notes-recorded ground truth), `tire-predict-holdout` (held-out generalization test, temperature and pressure domains) |
 | `data/tire_dataset/tire_model.json` | The committed fitted artifact (diff-friendly) |
 | `data/tire_dataset/tire_compounds.yaml` | Human-curated compound history: per-session `compound:`, `wheel_sets`, `condition_seeds` |
 | `data/tire_dataset/sensor_blacklist.yaml` | Human-curated list of broken (session, corner) channels |

@@ -9,7 +9,10 @@ from __future__ import annotations
 
 import pandas as pd
 
-from motorsports_data_notebook.tire_model.validate import _pick_holdout_sessions
+from motorsports_data_notebook.tire_model.validate import (
+    _calculator_lap_inputs,
+    _pick_holdout_sessions,
+)
 
 
 def _make_sessions(rows: list[dict]) -> pd.DataFrame:
@@ -151,3 +154,81 @@ def test_picker_fold_index_returns_disjoint_slices() -> None:
 
     # Asking for fold 5 (past the end) returns nothing — bucket exhausted.
     assert _pick_holdout_sessions(sessions, laps, n_per_bucket=2, min_bucket_size=10, fold=5) == []
+
+
+def test_picker_stratifies_by_condition_with_a_smaller_rain_threshold() -> None:
+    """With session conditions, buckets are (track, car, condition): the 12
+    dry sessions need min_bucket_size, the 4 damp sessions only need the
+    rain threshold, and unknown-condition sessions are never held out."""
+    dry = [f"dry_{i:02d}" for i in range(12)]
+    damp = [f"damp_{i:02d}" for i in range(4)]
+    unk = ["unk_00", "unk_01", "unk_02"]
+    sids = dry + damp + unk
+    sessions = _make_sessions(
+        [{"session_id": sid, "track_canonical": "tsukuba_2000", "car": "CarA"} for sid in sids]
+    )
+    laps = _make_laps_with_usable_per_session({sid: 8 for sid in sids})
+    cond = {**{s: "dry" for s in dry}, **{s: "damp" for s in damp}, **{s: "unknown" for s in unk}}
+    out = _pick_holdout_sessions(
+        sessions, laps, n_per_bucket=2, min_bucket_size=10, session_condition=cond
+    )
+    assert out == sorted(damp)[:2] + sorted(dry)[:2]
+    # fold 1 takes the next slice of each bucket; fold 2 exhausts the damp bucket
+    out1 = _pick_holdout_sessions(
+        sessions, laps, n_per_bucket=2, min_bucket_size=10, fold=1, session_condition=cond
+    )
+    assert out1 == sorted(damp)[2:4] + sorted(dry)[2:4]
+    out2 = _pick_holdout_sessions(
+        sessions, laps, n_per_bucket=2, min_bucket_size=10, fold=2, session_condition=cond
+    )
+    assert out2 == sorted(dry)[4:6]
+    # Without conditions the legacy (track, car) behaviour is unchanged.
+    legacy = _pick_holdout_sessions(sessions, laps, n_per_bucket=2, min_bucket_size=10)
+    assert legacy == sorted(sids)[:2]
+
+
+def test_calculator_lap_inputs_use_bucket_g2_pace_scaled_and_lap_clock() -> None:
+    """The calculator never sees the lap's own g² or clock: it gets the
+    bucket ⟨g²⟩ scaled along the pace curve at the entered target lap time
+    and t = N × target for the end of lap N."""
+    model = {
+        "g2_typ_by_track_car_cond": [
+            {
+                "track_canonical": "t",
+                "car": "c",
+                "condition": "dry",
+                "g2_typ": 0.8,
+                "n_laps_used": 50,
+                "g2_vs_lap_time": {"lap_time_s": [60.0, 70.0], "g2": [1.0, 0.5]},
+            },
+        ],
+        "lap_time_typ_by_track_car_cond": [
+            {
+                "track_canonical": "t",
+                "car": "c",
+                "condition": "dry",
+                "lap_time_typ_s": 65.0,
+                "n_laps_used": 50,
+            },
+        ],
+        "g2_lap_time_model": {
+            "default_exponent": 3.0,
+            "multiplier_clamp": {"min": 0.4, "max": 2.5},
+        },
+    }
+    # At the typical lap time the scale is 1 and the clock is N laps long.
+    g2, t, scale = _calculator_lap_inputs(
+        model, "t", "c", "dry", lap_within_stint=4, session_lap_time_s=65.0
+    )
+    assert scale == 1.0 and g2 == 0.8 and t == 5 * 65.0
+    # A faster session scales g² up along the curve (0.75 at 65 s → 1.0 at 60 s).
+    g2_fast, t_fast, scale_fast = _calculator_lap_inputs(
+        model, "t", "c", "dry", lap_within_stint=0, session_lap_time_s=60.0
+    )
+    assert scale_fast == 1.0 / 0.75 and t_fast == 60.0
+    assert g2_fast > g2
+    # Rain condition without its own bucket falls back to dry.
+    g2_wet, _, _ = _calculator_lap_inputs(
+        model, "t", "c", "wet", lap_within_stint=0, session_lap_time_s=65.0
+    )
+    assert g2_wet == 0.8
