@@ -5,6 +5,21 @@ namespace TirePressureCalculator.Tests;
 public class MainViewModelTests
 {
     [Fact]
+    public void LastUpdatedText_ShowsDateOfNewestData()
+    {
+        var model = TirePressureCalculator.Services.Modeling.TireModelLoader.LoadEmbedded(
+            typeof(TirePressureCalculator.Services.Modeling.TireModel).Assembly);
+        var vm = new MainViewModel(model);
+
+        Assert.NotNull(model.DataThrough);
+        Assert.Matches(@"^\d{4}-\d{2}-\d{2} \d{2}:\d{2} ", model.DataThrough);
+        Assert.Contains(model.DataThrough!, vm.LastUpdatedText);
+
+        var noModel = new MainViewModel((TirePressureCalculator.Services.Modeling.TireModel?)null);
+        Assert.Contains("—", noModel.LastUpdatedText);
+    }
+
+    [Fact]
     public void Constructor_CreatesFourCorners()
     {
         var vm = new MainViewModel();

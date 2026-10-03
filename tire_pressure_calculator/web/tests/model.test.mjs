@@ -261,3 +261,15 @@ test('corner defaults: per-car steady-state medians with condition fallback', ()
   // Unknown car -> null (caller keeps its static defaults).
   assert.equal(model.lookupCornerDefaults('NoSuchCar', 'fl', 'dry'), null);
 });
+
+test('dataThrough prefers the local time, then the date, then the fit date', () => {
+  const model = new TireModel(modelDto);
+  assert.equal(model.dataThrough, modelDto.data_through_local);
+  assert.match(model.dataThrough, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2} /);
+  const dateOnly = new TireModel({ ...modelDto, data_through_local: undefined });
+  assert.equal(dateOnly.dataThrough, modelDto.data_through_date);
+  const legacy = new TireModel({ ...modelDto, data_through_local: undefined, data_through_date: undefined });
+  assert.equal(legacy.dataThrough, modelDto.fit_at_utc.slice(0, 10));
+  const bare = new TireModel({ ...legacy.dto, fit_at_utc: undefined });
+  assert.equal(bare.dataThrough, null);
+});

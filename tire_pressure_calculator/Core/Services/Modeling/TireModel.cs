@@ -29,6 +29,17 @@ public sealed class TireModel
         Dto = dto;
     }
 
+    /// <summary>
+    /// Newest session that fed the fit, for the footer: the display-ready
+    /// track-local start time ("2026-10-02 14:23 JST") when the artifact has
+    /// it, else its date, else (older artifacts) the fit timestamp's date.
+    /// </summary>
+    public string? DataThrough =>
+        !string.IsNullOrEmpty(Dto.DataThroughLocal) ? Dto.DataThroughLocal
+        : Dto.DataThroughDate is { Length: >= 10 } d ? d[..10]
+        : Dto.FitAtUtc is { Length: >= 10 } iso ? iso[..10]
+        : null;
+
     public IReadOnlyList<string> AvailableCars => Dto.TauSecByCarCornerCond
         .Select(r => r.Car).Distinct().OrderBy(s => s).ToList();
 
