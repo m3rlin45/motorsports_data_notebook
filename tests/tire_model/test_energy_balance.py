@@ -14,6 +14,7 @@ from motorsports_data_notebook.tire_model.energy_balance import (
     t_road_proxy_c,
     warmup_curve_c,
     warmup_recurrence_step_c,
+    warmup_two_stage_c,
 )
 
 # ---------- t_effective_c ----------
@@ -220,3 +221,29 @@ def test_p_atm_constant_matches_csharp() -> None:
     # tire_pressure_calculator/Core/ViewModels/TireCornerViewModel.cs:79
     # uses a +1.0 / -1.0 bar atmospheric offset.
     assert P_ATM_BAR == 1.0
+
+
+def test_two_stage_warmup_matches_piecewise_recurrence_and_reduces_without_outlap() -> None:
+    kw = dict(t_eff_c=18.0, k_kelvin_per_g2=40.0, c_track=1.0, tau_sec=300.0)
+    t_after, t_hot = warmup_two_stage_c(
+        t_outlap_s=90.0, g2_outlap=0.3, t_flying_s=240.0, g2_flying=0.9, t_start_c=24.0, **kw
+    )
+    # Reference: step the recurrence 1 s at a time with the same piecewise g².
+    t = 24.0
+    for _ in range(90):
+        t = warmup_recurrence_step_c(t_current_c=t, g2_current=0.3, dt_seconds=1.0, **kw)
+    assert t_after == pytest.approx(t, abs=1e-9)
+    for _ in range(240):
+        t = warmup_recurrence_step_c(t_current_c=t, g2_current=0.9, dt_seconds=1.0, **kw)
+    assert t_hot == pytest.approx(t, abs=1e-9)
+    # No out-lap: identical to the single-segment curve from the start temp.
+    _, single = warmup_two_stage_c(
+        t_outlap_s=0.0, g2_outlap=0.0, t_flying_s=240.0, g2_flying=0.9, t_start_c=24.0, **kw
+    )
+    assert single == pytest.approx(
+        warmup_curve_c(t_seconds=240.0, g2_typ=0.9, t_start_c=24.0, **kw)
+    )
+    # A gentle out-lap (equilibrium 18 + 40·0.3 = 30 °C) from a 24 °C tire
+    # heats it, so lap N ends hotter than if the flying laps started at 24.
+    assert 24.0 < t_after < 30.0
+    assert t_hot > single

@@ -1,4 +1,4 @@
-# Cold tire pressure model — compound-aware (schema v3)
+# Cold tire pressure model — compound-aware, out-lap-aware (schema v4)
 
 A physically-based predictor that takes
 **(track, car, tire compound, target lap within stint, target lap time, target hot pressure per corner, expected ambient temp)**
@@ -105,6 +105,38 @@ with:
   constant**: how fast the tire approaches its steady state. Property of
   `(car, corner)`.
 - `t` = on-track seconds since stint start.
+
+### 2.2b The out-lap (schema v4)
+
+The stint does not start at the first flying lap. It starts when the car
+leaves the pits: the driver has just set the cold pressures and read the
+TPMS, then drives an out-lap that is slower and gentler than a flying lap
+(g² about 0.3–0.6 versus 0.6–1.0) and whose length is not a lap time (pit
+exit to the first start/finish crossing, often with a grid or pit-lane wait
+first). Since schema v3 of the dataset the ETL keeps that out-lap
+(`lap_type = "out"`, lap 0) and the model treats it as its own segment:
+
+- **Fit.** The stint anchor is the out-lap's first valid TPMS reading — the
+  pit-exit temperature and the cold pressure actually set — placed on a
+  *rolling-time* clock (`moving_s`, time above 5 km/h; the grid wait is not
+  warm-up time). The out-lap is an ordinary Pass 1 observation with its own
+  measured g² and rolling time. Stints whose recording started mid-track
+  (no pit exit) keep the previous first-lap anchor (`anchor_kind`).
+- **Predict.** `outlap_typ_by_track_car_cond` carries the bucket's median
+  out-lap rolling time and g². The predictor integrates that segment first
+  from the typed current tire temperature, then `N` flying laps at the
+  pace-scaled ⟨g²⟩ from the temperature at the end of the out-lap
+  (`energy_balance.warmup_two_stage_c`). `lap_within_stint = N` therefore
+  means the N-th flying lap, as before. `--no-outlap` and `--outlap-time-s`
+  override it; artifacts without the table behave as pre-v0.26.
+- **Evaluate.** The holdout's calculator inputs start from the pit-exit
+  reading and include the bucket out-lap, and the pressure-domain residual
+  is measured from the cold pressure actually set.
+
+Before this the loader dropped the real out-lap and the ETL mis-flagged the
+first *flying* lap of each stint as the out-lap and excluded it, so the model
+never saw either, the stint clock started one lap late, and the typed pit
+temperature was applied as if it were the temperature after the out-lap.
 
 ### 2.3 Why on-track seconds, not laps
 
@@ -215,6 +247,9 @@ Fitted tables:
 - `lap_time_typ_by_track_car_cond` — typical lap time lookup
 - `corner_defaults_by_car_corner_cond` — steady-state median hot temp +
   hot pressure, used by the calculators to prefill the corner-card targets
+- `outlap_typ_by_track_car_cond` — typical out-lap rolling time and g² per
+  bucket (schema v4, §2.2b); consumers without it treat the out-lap as
+  zero-length
 - `rain_thermal` — how rain τ/K are fitted (τ bound, session minimum; §2.9)
 
 Config + provenance:
@@ -480,10 +515,12 @@ recurring failure across **2 Tsukuba sessions on 2026-03-22**.
 - **Inputs: calculator or oracle.** By default (`--inputs calculator`) each
   held-out lap is predicted from what the calculator has: the fold model's
   ⟨g²⟩ scaled along the pace curve at the session's median lap time (the
-  target a driver would enter), the clock `N × lap time`, and the start
-  temperature the driver types in, stood in by the stint's first TPMS
-  reading (the start fields are always filled in practice; leaving them
-  blank was measured at +1.2 °C MAE and dropped as an option).
+  target a driver would enter), the bucket's typical out-lap followed by
+  the clock `N × lap time`, and the start temperature the driver types in,
+  stood in by the out-lap's first valid TPMS reading at pit exit (the
+  start fields are always filled in practice; leaving them blank was
+  measured at +1.2 °C MAE and dropped as an option). Stints without a
+  pit-exit out-lap anchor on their first lap as before.
   `--inputs oracle` instead feeds the lap's own
   measured g², its actual cumulative on-track time and the measured anchor:
   that is the thermal model's accuracy given the real driving, an upper
@@ -723,6 +760,7 @@ just tire-build-warmup-table
 just tire-predict --track tsukuba_2000 --car KK-SII --lap 5 --ambient 18 --hot-all 1.95
 # (per-corner: --hot-fl 1.95 --hot-fr 1.95 --hot-rl 1.90 --hot-rr 1.90)
 # (optional: --track-temp 35 --cloud-cover 30 --g2-typ 0.85 --lap-time-s 70)
+# (out-lap: --outlap-time-s 90 to override the bucket's typical out-lap, --no-outlap to skip it)
 
 # Predict per-corner cold pressures, with rain condition
 just tire-predict --track tsukuba_2000 --car KK-SII --lap 5 --ambient 15 \

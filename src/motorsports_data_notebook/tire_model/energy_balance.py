@@ -110,6 +110,51 @@ def warmup_curve_c(
     return t_eff_c + delta_t_inf * warmup_frac + (start - t_eff_c) * decay
 
 
+def warmup_two_stage_c(
+    *,
+    t_outlap_s: float,
+    g2_outlap: float,
+    t_flying_s: float,
+    g2_flying: float,
+    t_eff_c: float,
+    k_kelvin_per_g2: float,
+    c_track: float,
+    tau_sec: float,
+    t_start_c: float,
+) -> tuple[float, float]:
+    """Warm-up from pit exit: an out-lap segment, then the flying laps.
+
+    The out-lap is slower and gentler than a flying lap (lower g²) and its
+    rolling time is not a lap time, so it is integrated as its own
+    constant-g² segment from the pit-exit temperature ``t_start_c``; the
+    flying laps then continue from the temperature at the end of the
+    out-lap. Exact for piecewise-constant g² (each segment is
+    :func:`warmup_curve_c`).
+
+    Returns ``(T_after_outlap, T_hot)`` in °C. ``t_outlap_s = 0`` reduces to
+    the single-segment curve.
+    """
+    t_after_out = warmup_curve_c(
+        t_seconds=max(0.0, t_outlap_s),
+        t_eff_c=t_eff_c,
+        k_kelvin_per_g2=k_kelvin_per_g2,
+        c_track=c_track,
+        g2_typ=g2_outlap,
+        tau_sec=tau_sec,
+        t_start_c=t_start_c,
+    )
+    t_hot = warmup_curve_c(
+        t_seconds=max(0.0, t_flying_s),
+        t_eff_c=t_eff_c,
+        k_kelvin_per_g2=k_kelvin_per_g2,
+        c_track=c_track,
+        g2_typ=g2_flying,
+        tau_sec=tau_sec,
+        t_start_c=t_after_out,
+    )
+    return t_after_out, t_hot
+
+
 def gay_lussac_cold_pressure_bar(
     *,
     target_hot_pressure_bar: float,

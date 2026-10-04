@@ -54,6 +54,29 @@ public static class EnergyBalance
     }
 
     /// <summary>
+    /// Warm-up from pit exit: the out-lap (gentler, its own rolling time) from
+    /// <paramref name="tStartC"/>, then the flying laps from the temperature at
+    /// the end of the out-lap. Exact for piecewise-constant g².
+    /// </summary>
+    public static (double TAfterOutlapC, double THotC) WarmupTwoStageC(
+        double tOutlapS,
+        double g2Outlap,
+        double tFlyingS,
+        double g2Flying,
+        double tEffC,
+        double kKelvinPerG2,
+        double cTrack,
+        double tauSec,
+        double tStartC)
+    {
+        double tAfterOut = WarmupCurveC(
+            Math.Max(0.0, tOutlapS), tEffC, kKelvinPerG2, cTrack, g2Outlap, tauSec, tStartC);
+        double tHot = WarmupCurveC(
+            Math.Max(0.0, tFlyingS), tEffC, kKelvinPerG2, cTrack, g2Flying, tauSec, tAfterOut);
+        return (tAfterOut, tHot);
+    }
+
+    /// <summary>
     /// Invert Gay-Lussac to compute cold pressure from target hot pressure +
     /// hot/cold temperatures. Matches the convention used by the Python
     /// predictor and by the manual calculator (gauge ↔ absolute via +1 bar).

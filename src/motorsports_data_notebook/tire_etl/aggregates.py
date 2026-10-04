@@ -31,6 +31,11 @@ class CornerTireAggregates:
     surf_mean: float
     surf_min: float
     surf_max: float
+    # Lap-relative time (s) of the first valid temperature / pressure sample.
+    # On an out-lap this says when the TPMS woke up relative to the lap
+    # start, so the pit-exit reading can be placed on the stint clock.
+    temp_first_valid_s: float = float("nan")
+    press_first_valid_s: float = float("nan")
 
 
 def _safe_stats(arr: np.ndarray) -> tuple[float, float, float, float, float]:
@@ -87,6 +92,13 @@ def compute_corner_aggregates(lap_ts: pa.Table, corner: str) -> CornerTireAggreg
     s_start, s_end, s_min, s_max, s_mean = _safe_stats(surf)  # noqa: F841
     rise = _rise_rate_per_min(t, press)
 
+    def _first_valid_t(values: np.ndarray) -> float:
+        ok = ~np.isnan(values) & ~np.isnan(t)
+        return float(t[ok][0]) if ok.any() else float("nan")
+
+    temp_first_valid_s = _first_valid_t(temp)
+    press_first_valid_s = _first_valid_t(press)
+
     return CornerTireAggregates(
         press_start=p_start,
         press_end=p_end,
@@ -102,6 +114,8 @@ def compute_corner_aggregates(lap_ts: pa.Table, corner: str) -> CornerTireAggreg
         surf_mean=s_mean,
         surf_min=s_min,
         surf_max=s_max,
+        temp_first_valid_s=temp_first_valid_s,
+        press_first_valid_s=press_first_valid_s,
     )
 
 
@@ -156,6 +170,17 @@ def compute_lap_dynamics(lap_ts: pa.Table) -> dict[str, float]:
         finite_t = t[~np.isnan(t)]
         if finite_t.size >= 2:
             on_track_s = float(finite_t.max() - finite_t.min())
+    # Time actually rolling (> 5 km/h). Equals on_track_s for a flying lap;
+    # for an out-lap it excludes the grid / pit-lane wait before the car
+    # moves, which must not count as warm-up time. speed_kmh_first tells
+    # whether the lap started from standstill (a pit exit) or mid-track.
+    moving_s = float("nan")
+    speed_kmh_first = float("nan")
+    if t.size >= 2 and not np.all(np.isnan(speed)):
+        dt_m = np.diff(t, prepend=t[0])
+        dt_m = np.where(np.isnan(dt_m), 0.0, dt_m)
+        moving_s = float(np.sum(np.where(np.nan_to_num(speed, nan=0.0) > 5.0, dt_m, 0.0)))
+        speed_kmh_first = float(speed_valid[0]) if speed_valid.size else float("nan")
     distance_m = _col_or_nan(lap_ts, "distance_m", n)
     dist_val = (
         float(np.nanmax(distance_m))
@@ -177,5 +202,7 @@ def compute_lap_dynamics(lap_ts: pa.Table) -> dict[str, float]:
         "heat_proxy_rl": heat_proxy_corner["rl"],
         "heat_proxy_rr": heat_proxy_corner["rr"],
         "on_track_s": on_track_s,
+        "moving_s": moving_s,
+        "speed_kmh_first": speed_kmh_first,
         "distance_m": dist_val,
     }

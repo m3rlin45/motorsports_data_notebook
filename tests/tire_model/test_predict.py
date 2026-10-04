@@ -752,3 +752,63 @@ def test_compound_k_condition_chain_falls_back_to_dry() -> None:
         _model=model,
     )
     assert p["fl"].K_source_bucket == ("ToyCar", "A052", "fl", "dry")
+
+
+def test_predict_integrates_the_outlap_first_when_the_artifact_has_one() -> None:
+    """With an out-lap table, lap N is preceded by the bucket's typical
+    out-lap from the typed start temperature; --no-outlap and a missing
+    table reproduce the single-segment behaviour."""
+    model = _minimal_model()
+    base = predict_cold_pressure(
+        track="track_a",
+        car="ToyCar",
+        lap_within_stint=3,
+        target_hot_pressure_bar={c: 1.95 for c in CORNERS},
+        ambient_temp_c=15.0,
+        _model=model,
+    )["fl"]
+    assert base.outlap_time_s == 0.0 and base.outlap_source is None
+    model2 = dict(model)
+    model2["outlap_typ_by_track_car_cond"] = [
+        {
+            "track_canonical": "track_a",
+            "car": "ToyCar",
+            "condition": "dry",
+            "outlap_moving_s": 90.0,
+            "outlap_g2": 0.3,
+            "n_laps_used": 12,
+        },
+    ]
+    with_out = predict_cold_pressure(
+        track="track_a",
+        car="ToyCar",
+        lap_within_stint=3,
+        target_hot_pressure_bar={c: 1.95 for c in CORNERS},
+        ambient_temp_c=15.0,
+        _model=model2,
+    )["fl"]
+    assert with_out.outlap_time_s == 90.0 and with_out.outlap_g2 == 0.3
+    assert with_out.outlap_source == "exact"
+    assert with_out.t_after_outlap_c is not None and with_out.t_after_outlap_c > with_out.t_start_c
+    assert with_out.predicted_hot_temp_c > base.predicted_hot_temp_c
+    assert with_out.cold_pressure_bar < base.cold_pressure_bar
+    without = predict_cold_pressure(
+        track="track_a",
+        car="ToyCar",
+        lap_within_stint=3,
+        target_hot_pressure_bar={c: 1.95 for c in CORNERS},
+        ambient_temp_c=15.0,
+        _model=model2,
+        include_outlap=False,
+    )["fl"]
+    assert without.predicted_hot_temp_c == pytest.approx(base.predicted_hot_temp_c)
+    overridden = predict_cold_pressure(
+        track="track_a",
+        car="ToyCar",
+        lap_within_stint=3,
+        target_hot_pressure_bar={c: 1.95 for c in CORNERS},
+        ambient_temp_c=15.0,
+        _model=model2,
+        outlap_time_s=0.0,
+    )["fl"]
+    assert overridden.predicted_hot_temp_c == pytest.approx(base.predicted_hot_temp_c)

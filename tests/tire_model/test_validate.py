@@ -189,8 +189,9 @@ def test_picker_stratifies_by_condition_with_a_smaller_rain_threshold() -> None:
 
 def test_calculator_lap_inputs_use_bucket_g2_pace_scaled_and_lap_clock() -> None:
     """The calculator never sees the lap's own g² or clock: it gets the
-    bucket ⟨g²⟩ scaled along the pace curve at the entered target lap time
-    and t = N × target for the end of lap N."""
+    bucket ⟨g²⟩ scaled along the pace curve at the entered target lap time,
+    t = N × target for flying lap N, and the bucket's typical out-lap when
+    the stint is anchored at pit exit."""
     model = {
         "g2_typ_by_track_car_cond": [
             {
@@ -211,24 +212,38 @@ def test_calculator_lap_inputs_use_bucket_g2_pace_scaled_and_lap_clock() -> None
                 "n_laps_used": 50,
             },
         ],
+        "outlap_typ_by_track_car_cond": [
+            {
+                "track_canonical": "t",
+                "car": "c",
+                "condition": "dry",
+                "outlap_moving_s": 80.0,
+                "outlap_g2": 0.4,
+                "n_laps_used": 20,
+            },
+        ],
         "g2_lap_time_model": {
             "default_exponent": 3.0,
             "multiplier_clamp": {"min": 0.4, "max": 2.5},
         },
     }
-    # At the typical lap time the scale is 1 and the clock is N laps long.
-    g2, t, scale = _calculator_lap_inputs(
-        model, "t", "c", "dry", lap_within_stint=4, session_lap_time_s=65.0
+    # At the typical lap time the scale is 1 and the flying clock is N laps long.
+    g2, t, scale, out_s, out_g2 = _calculator_lap_inputs(
+        model, "t", "c", "dry", 5, 65.0, with_outlap=True
     )
     assert scale == 1.0 and g2 == 0.8 and t == 5 * 65.0
+    assert out_s == 80.0 and out_g2 == 0.4
     # A faster session scales g² up along the curve (0.75 at 65 s → 1.0 at 60 s).
-    g2_fast, t_fast, scale_fast = _calculator_lap_inputs(
-        model, "t", "c", "dry", lap_within_stint=0, session_lap_time_s=60.0
+    g2_fast, t_fast, scale_fast, _, _ = _calculator_lap_inputs(
+        model, "t", "c", "dry", 1, 60.0, with_outlap=True
     )
     assert scale_fast == 1.0 / 0.75 and t_fast == 60.0
     assert g2_fast > g2
+    # No pit-exit anchor: no out-lap segment.
+    _, _, _, out0, g0 = _calculator_lap_inputs(model, "t", "c", "dry", 1, 65.0, with_outlap=False)
+    assert out0 == 0.0 and g0 == 0.0
     # Rain condition without its own bucket falls back to dry.
-    g2_wet, _, _ = _calculator_lap_inputs(
-        model, "t", "c", "wet", lap_within_stint=0, session_lap_time_s=65.0
+    g2_wet, _, _, out_w, _ = _calculator_lap_inputs(
+        model, "t", "c", "wet", 1, 65.0, with_outlap=True
     )
-    assert g2_wet == 0.8
+    assert g2_wet == 0.8 and out_w == 80.0

@@ -158,3 +158,17 @@ class TestCleanLaps:
         result = clean_laps(laps)
         # Only lap 0 exists, would be removed — fallback returns original
         assert len(result) == 1
+
+
+def test_clean_laps_keeps_lap_zero_when_asked() -> None:
+    """AIM numbers the out-lap 0; the tire ETL keeps it, the notebooks drop it."""
+    laps = pa.table(
+        {
+            "num": [0, 1, 2],
+            "start_time": [0, 85000, 150000],
+            "end_time": [85000, 150000, 215000],
+            "lap_type": ["out", "full", "full"],
+        }
+    )
+    assert clean_laps(laps).column("num").to_pylist() == [1, 2]
+    assert clean_laps(laps, drop_lap_zero=False).column("num").to_pylist() == [0, 1, 2]

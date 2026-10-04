@@ -163,7 +163,8 @@ test('current tire temp moves the predicted hot temperature by the decayed start
   const warm = predictCorner(model, { ...common, coldTireTempC: 25.0 });
   assert.equal(base.tStartC, 15.0);
   assert.equal(warm.tStartC, 25.0);
-  const decay = Math.exp(-base.tAtLapNs / base.tauSec);
+  // The start excess decays over the out-lap segment plus the flying laps.
+  const decay = Math.exp(-(base.outlapTimeS + base.tAtLapNs) / base.tauSec);
   assert.ok(Math.abs((warm.predictedHotTempC - base.predictedHotTempC) - 10 * decay) < 1e-9);
   assert.ok(warm.coldPressureBar > base.coldPressureBar);
 });

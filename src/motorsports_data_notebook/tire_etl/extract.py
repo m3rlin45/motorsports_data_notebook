@@ -111,24 +111,41 @@ def mask_stale_session_prefix(ts: pa.Table) -> pa.Table:
 
     Operates session-wide (across every lap in this timeseries), because
     the sensor wake-up only happens once per physical run, not on every
-    lap. Each of the eight TPMS channels (4 corners × press/temp) wakes
-    up independently and is masked independently — different corners
-    can have different stale-prefix lengths and that's OK.
+    lap. The decision is made **per corner**: a corner's pressure and
+    temperature come from one module in one radio packet, so the first
+    change on *either* stream proves the module is awake, and from that
+    sample on the other stream's (possibly still constant — the values are
+    quantised to 1 °C / 0.03 bar) reading is a real reading. Both streams
+    are therefore unmasked from the earlier of their two first-change
+    points. Different corners still wake independently.
     """
     new_table = ts
     for c in CORNERS:
-        for chan_name in (f"tpms_press_{c}_bar", f"tpms_temp_{c}_c"):
-            if chan_name not in new_table.schema.names:
+        names = [
+            n for n in (f"tpms_press_{c}_bar", f"tpms_temp_{c}_c") if n in new_table.schema.names
+        ]
+        if not names:
+            continue
+        arrays = {
+            n: new_table.column(new_table.schema.get_field_index(n))
+            .to_numpy(zero_copy_only=False)
+            .astype(np.float64)
+            for n in names
+        }
+        stale = {n: _stale_prefix_len(a) for n, a in arrays.items()}
+        # A stream that never changes (stale_len == its length) cannot
+        # vouch for the module; take the earliest *real* change.
+        proven = [v for n, v in stale.items() if v < arrays[n].size]
+        corner_stale = min(proven) if proven else max(stale.values())
+        for n in names:
+            if corner_stale == 0:
                 continue
-            idx = new_table.schema.get_field_index(chan_name)
+            idx = new_table.schema.get_field_index(n)
             field = new_table.schema.field(idx)
-            arr = new_table.column(idx).to_numpy(zero_copy_only=False).astype(np.float64)
-            stale_len = _stale_prefix_len(arr)
-            if stale_len == 0:
-                continue
-            arr[:stale_len] = np.nan
+            arr = arrays[n]
+            arr[:corner_stale] = np.nan
             new_col = pa.array(arr.astype(field.type.to_pandas_dtype()), type=field.type)
-            new_table = new_table.set_column(idx, chan_name, new_col)
+            new_table = new_table.set_column(idx, n, new_col)
     return new_table
 
 
@@ -253,7 +270,11 @@ def load_and_correct_session(path: Path) -> tuple["LogFile", LayoutDetection]:
     """
     from .._util import load_session
 
-    log = load_session(str(path))
+    # Keep the out-lap (pit exit to the first start/finish crossing) and the
+    # in-lap: the out-lap's first valid TPMS reading is the stint's starting
+    # temperature for the tire model. Notebook analysis keeps the default
+    # (full laps only).
+    log = load_session(str(path), lap_types=("full", "out", "in"))
     cand = parse_filename(path)
     venue_meta = None
     try:
@@ -273,9 +294,10 @@ def _log_end_ms(log: "LogFile") -> int:
     """End of the recording in ms on the file's own clock; 0 if nothing usable.
 
     Uses the last GPS sample when available and falls back to the last lap
-    end. ``log.laps`` holds *full* laps only — libxrk (>= 0.13) types the
-    first/last laps as out/in and the loader drops them — so the last full
-    lap can end minutes before the logger stopped. Merge decisions in
+    end. libxrk (>= 0.13) types the first/last laps as out/in; the tire ETL
+    keeps them, but older extractions and the notebook loader drop them, so
+    the last lap in the table can end minutes before the logger stopped.
+    Merge decisions in
     :func:`split_group_by_wallclock` must see the real end, or a restart
     pair whose gap is measured from the in-lap would wrongly split.
     """
@@ -656,6 +678,11 @@ def extract_session(
     lap_nums = laps_table.column("num").to_pylist()
     starts = laps_table.column("start_time").to_numpy().astype(np.int64)
     ends = laps_table.column("end_time").to_numpy().astype(np.int64)
+    lap_types = (
+        [str(x) for x in laps_table.column("lap_type").to_pylist()]
+        if "lap_type" in laps_table.column_names
+        else ["full"] * len(lap_nums)
+    )
     stint_ids = assign_stint_ids(laps_table).to_numpy().astype(np.int16)
 
     ts_parts: list[pa.Table] = []
@@ -715,7 +742,13 @@ def extract_session(
         lap_ends_ms=ends.tolist(),
         stint_ids=stint_ids.tolist(),
         timeseries=timeseries,
+        lap_types=lap_types,
     )
+
+    # A pit exit is a new stint whatever the gap: the tire's starting
+    # temperature is re-measured there. Re-split stints at every from-pit
+    # out-lap and carry the new ids onto the timeseries.
+    laps_rows, timeseries = _restint_at_pit_exits(laps_rows, timeseries)
 
     # Apply filters.
     laps_rows = apply_filters(laps_rows, FilterConfig())
@@ -755,6 +788,43 @@ def extract_session(
         status=status,
         error_msg=err,
     )
+
+
+def _restint_at_pit_exits(laps_rows: pa.Table, timeseries: pa.Table) -> tuple[pa.Table, pa.Table]:
+    """Start a new stint at each out-lap that left the pits.
+
+    :func:`assign_stint_ids` splits stints on long gaps only; a short pit
+    visit (tyre pressures, a quick check) keeps the stint id although the
+    tire cooled and its temperature was read again at pit exit. Stint ids
+    stay 1-based and monotonic; the timeseries ``stint_id`` column follows
+    the lap table.
+    """
+    if len(laps_rows) == 0 or "outlap_from_pit" not in laps_rows.column_names:
+        return laps_rows, timeseries
+    lap_nums = laps_rows.column("lap_num").to_pylist()
+    old = laps_rows.column("stint_id").to_pylist()
+    from_pit = laps_rows.column("outlap_from_pit").to_pylist()
+    order = sorted(range(len(lap_nums)), key=lambda i: lap_nums[i])
+    new = [0] * len(lap_nums)
+    cur = 0
+    prev_old = None
+    for i in order:
+        if prev_old is None or old[i] != prev_old or from_pit[i]:
+            if prev_old is not None or cur == 0:
+                cur += 1
+        new[i] = cur
+        prev_old = old[i]
+    if new == old:
+        return laps_rows, timeseries
+    idx = laps_rows.schema.get_field_index("stint_id")
+    laps_rows = laps_rows.set_column(idx, "stint_id", pa.array(new, type=pa.int16()))
+    by_lap = dict(zip(lap_nums, new))
+    ts_laps = timeseries.column("lap_num").to_pylist()
+    ts_idx = timeseries.schema.get_field_index("stint_id")
+    timeseries = timeseries.set_column(
+        ts_idx, "stint_id", pa.array([by_lap.get(ln, 1) for ln in ts_laps], type=pa.int16())
+    )
+    return laps_rows, timeseries
 
 
 def _estimate_ts_rate(ts: pa.Table) -> float:
@@ -888,14 +958,27 @@ def _build_laps_table(
     lap_ends_ms: list[int],
     stint_ids: list[int],
     timeseries: pa.Table,
+    lap_types: list[str] | None = None,
 ) -> pa.Table:
+    """Per-lap summary rows.
+
+    ``lap_types`` (libxrk's ``full`` / ``out`` / ``in``) sets ``is_outlap`` /
+    ``is_inlap`` directly. Without it (legacy callers) the last lap of a
+    stint is an in-lap when it is > 1.2× the stint median; no lap is an
+    out-lap — the first *full* lap of a stint is a flying lap and used to
+    be mis-flagged as the out-lap before the real out-lap was retained.
+    """
+    if lap_types is None:
+        lap_types = ["full"] * len(lap_nums)
     rows: dict[str, list] = {
         "session_id": [],
         "lap_num": [],
         "stint_id": [],
         "lap_time_s": [],
+        "lap_type": [],
         "is_outlap": [],
         "is_inlap": [],
+        "outlap_from_pit": [],
         "speed_kmh_mean": [],
         "speed_kmh_max": [],
         "brake_mean": [],
@@ -909,6 +992,8 @@ def _build_laps_table(
         "heat_proxy_rl": [],
         "heat_proxy_rr": [],
         "on_track_s": [],
+        "moving_s": [],
+        "speed_kmh_first": [],
         "distance_m": [],
     }
     for c in CORNERS:
@@ -916,17 +1001,14 @@ def _build_laps_table(
             rows[f"tpms_press_{c}_{stat}"] = []
             rows[f"tpms_temp_{c}_{stat}"] = []
         rows[f"tpms_press_{c}_rise_bar_per_min"] = []
+        rows[f"tpms_temp_{c}_first_valid_s"] = []
+        rows[f"tpms_press_{c}_first_valid_s"] = []
         for stat in ("mean", "min", "max"):
             rows[f"surf_temp_{c}_{stat}"] = []
 
     lap_num_col = timeseries.column("lap_num").to_numpy()
 
-    # Per-stint first-lap detection (out-laps).
-    stint_first_lap: dict[int, int] = {}
-    for i, s in enumerate(stint_ids):
-        if s not in stint_first_lap or lap_nums[i] < stint_first_lap[s]:
-            stint_first_lap[s] = lap_nums[i]
-    # Per-stint last-lap detection (potential in-lap).
+    # Per-stint last-lap detection (potential in-lap, legacy heuristic).
     stint_last_lap: dict[int, int] = {}
     for i, s in enumerate(stint_ids):
         if s not in stint_last_lap or lap_nums[i] > stint_last_lap[s]:
@@ -947,14 +1029,25 @@ def _build_laps_table(
         rows["lap_num"].append(ln)
         rows["stint_id"].append(stint_ids[i])
         rows["lap_time_s"].append(lap_times_s[i])
-        rows["is_outlap"].append(ln == stint_first_lap.get(stint_ids[i]))
-        # In-lap: last lap of stint AND lap_time > 1.2 * stint median
-        is_inlap = ln == stint_last_lap.get(stint_ids[i]) and lap_times_s[
-            i
-        ] > 1.2 * stint_median.get(stint_ids[i], float("inf"))
+        rows["lap_type"].append(lap_types[i])
+        is_outlap = lap_types[i] == "out"
+        rows["is_outlap"].append(is_outlap)
+        # In-lap: typed by the logger, else the legacy heuristic — last lap
+        # of the stint AND lap_time > 1.2 × stint median.
+        is_inlap = lap_types[i] == "in" or (
+            ln == stint_last_lap.get(stint_ids[i])
+            and lap_times_s[i] > 1.2 * stint_median.get(stint_ids[i], float("inf"))
+        )
         rows["is_inlap"].append(is_inlap)
 
         dyn = compute_lap_dynamics(lap_ts)
+        # An out-lap that begins below pit-lane speed started from standstill
+        # (a real pit exit); one that begins at speed is a file that started
+        # mid-track and must not be used as a stint's starting temperature.
+        first_speed = dyn.get("speed_kmh_first", float("nan"))
+        rows["outlap_from_pit"].append(
+            bool(is_outlap and not np.isnan(first_speed) and first_speed < 30.0)
+        )
         for k in (
             "speed_kmh_mean",
             "speed_kmh_max",
@@ -969,6 +1062,8 @@ def _build_laps_table(
             "heat_proxy_rl",
             "heat_proxy_rr",
             "on_track_s",
+            "moving_s",
+            "speed_kmh_first",
             "distance_m",
         ):
             rows[k].append(dyn[k])
@@ -986,6 +1081,8 @@ def _build_laps_table(
             rows[f"tpms_temp_{c}_min"].append(agg.temp_min)
             rows[f"tpms_temp_{c}_max"].append(agg.temp_max)
             rows[f"tpms_temp_{c}_mean"].append(agg.temp_mean)
+            rows[f"tpms_temp_{c}_first_valid_s"].append(agg.temp_first_valid_s)
+            rows[f"tpms_press_{c}_first_valid_s"].append(agg.press_first_valid_s)
             rows[f"surf_temp_{c}_mean"].append(agg.surf_mean)
             rows[f"surf_temp_{c}_min"].append(agg.surf_min)
             rows[f"surf_temp_{c}_max"].append(agg.surf_max)
@@ -997,8 +1094,10 @@ def _build_laps_table(
         pa.field("lap_num", pa.int16()),
         pa.field("stint_id", pa.int16()),
         pa.field("lap_time_s", pa.float32()),
+        pa.field("lap_type", pa.string()),
         pa.field("is_outlap", pa.bool_()),
         pa.field("is_inlap", pa.bool_()),
+        pa.field("outlap_from_pit", pa.bool_()),
         pa.field("speed_kmh_mean", pa.float32()),
         pa.field("speed_kmh_max", pa.float32()),
         pa.field("brake_mean", pa.float32()),
@@ -1012,6 +1111,8 @@ def _build_laps_table(
         pa.field("heat_proxy_rl", pa.float32()),
         pa.field("heat_proxy_rr", pa.float32()),
         pa.field("on_track_s", pa.float32()),
+        pa.field("moving_s", pa.float32()),
+        pa.field("speed_kmh_first", pa.float32()),
         pa.field("distance_m", pa.float32()),
     ]
     for c in CORNERS:
@@ -1019,6 +1120,8 @@ def _build_laps_table(
             schema_fields.append(pa.field(f"tpms_press_{c}_{stat}", pa.float32()))
             schema_fields.append(pa.field(f"tpms_temp_{c}_{stat}", pa.float32()))
         schema_fields.append(pa.field(f"tpms_press_{c}_rise_bar_per_min", pa.float32()))
+        schema_fields.append(pa.field(f"tpms_temp_{c}_first_valid_s", pa.float32()))
+        schema_fields.append(pa.field(f"tpms_press_{c}_first_valid_s", pa.float32()))
         for stat in ("mean", "min", "max"):
             schema_fields.append(pa.field(f"surf_temp_{c}_{stat}", pa.float32()))
     schema = pa.schema(schema_fields)

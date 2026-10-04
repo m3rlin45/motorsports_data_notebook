@@ -35,7 +35,9 @@ public sealed class CircuitPredictor
         double targetHotPressureBar,
         double? coldTireTempC = null,
         double? targetLapTimeS = null,
-        string? compound = null)
+        string? compound = null,
+        bool includeOutlap = true,
+        double? outlapTimeS = null)
     {
         ArgumentNullException.ThrowIfNull(track);
         ArgumentNullException.ThrowIfNull(car);
@@ -88,17 +90,39 @@ public sealed class CircuitPredictor
             lapTimeForClockS = target;
         }
 
+        // Time at the end of flying lap N; the out-lap is a separate segment.
         double tAtLapNs = (double)lapWithinStint * lapTimeForClockS;
+        double outlapS = 0.0;
+        double outlapG2 = 0.0;
+        string? outlapSource = null;
+        if (includeOutlap)
+        {
+            if (_model.LookupOutlap(track, car, cond) is OutlapLookup o)
+            {
+                outlapS = o.MovingSeconds;
+                outlapG2 = o.G2;
+                outlapSource = o.Source;
+            }
+            if (outlapTimeS is double ov)
+            {
+                if (ov < 0)
+                    throw new ArgumentOutOfRangeException(nameof(outlapTimeS), ov, "outlap time must be >= 0");
+                outlapS = ov;
+                outlapSource = (outlapSource ?? "none") + "+override";
+            }
+        }
         double warmupFrac = tau.ValueSeconds > 0
             ? 1.0 - Math.Exp(-tAtLapNs / tau.ValueSeconds)
             : 0.0;
         double deltaTInf = k.ValueKelvinPerG2 * c.Value * g2Value;
-        double tHotC = EnergyBalance.WarmupCurveC(
-            tSeconds: tAtLapNs,
+        var (tAfterOutlapC, tHotC) = EnergyBalance.WarmupTwoStageC(
+            tOutlapS: outlapS,
+            g2Outlap: outlapG2,
+            tFlyingS: tAtLapNs,
+            g2Flying: g2Value,
             tEffC: tEffC,
             kKelvinPerG2: k.ValueKelvinPerG2,
             cTrack: c.Value,
-            g2Typ: g2Value,
             tauSec: tau.ValueSeconds,
             tStartC: tStartC);
 
@@ -131,7 +155,11 @@ public sealed class CircuitPredictor
             KNSamples: k.NSamples,
             TargetLapTimeS: targetLapTimeS,
             G2Scale: g2Scale,
-            G2PaceSource: g2PaceSource);
+            G2PaceSource: g2PaceSource,
+            OutlapTimeS: outlapS,
+            OutlapG2: outlapG2,
+            OutlapSource: outlapSource,
+            TAfterOutlapC: tAfterOutlapC);
     }
 }
 
@@ -158,4 +186,8 @@ public sealed record CornerPrediction(
     int KNSamples,
     double? TargetLapTimeS = null,
     double G2Scale = 1.0,
-    string? G2PaceSource = null);
+    string? G2PaceSource = null,
+    double OutlapTimeS = 0.0,
+    double OutlapG2 = 0.0,
+    string? OutlapSource = null,
+    double? TAfterOutlapC = null);

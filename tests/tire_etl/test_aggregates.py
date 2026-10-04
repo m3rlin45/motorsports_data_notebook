@@ -86,3 +86,22 @@ def test_lap_dynamics_heat_proxy_increases_with_lat_g() -> None:
     assert d_hi["heat_proxy"] > d_low["heat_proxy"] * 3.5
     assert d_low["speed_kmh_mean"] == 100.0
     assert d_low["throttle_mean"] == 80.0
+
+
+def test_lap_dynamics_moving_time_excludes_standstill() -> None:
+    """An out-lap that waits on the grid before rolling: on_track_s spans the
+    whole lap, moving_s only the rolling part, speed_kmh_first is the pit speed."""
+    import numpy as np
+    import pyarrow as pa
+    from motorsports_data_notebook.tire_etl.aggregates import compute_lap_dynamics
+
+    t = np.arange(0, 100, 1.0)
+    speed = np.where(t < 40, 0.0, 80.0)
+    speed[40:45] = 15.0  # rolling out of the pit lane
+    lap = pa.table(
+        {"t_lap_s": t, "speed_kmh": speed, "lat_g": np.zeros_like(t), "long_g": np.zeros_like(t)}
+    )
+    dyn = compute_lap_dynamics(lap)
+    assert dyn["on_track_s"] == 99.0
+    assert 59.0 <= dyn["moving_s"] <= 61.0
+    assert dyn["speed_kmh_first"] == 0.0

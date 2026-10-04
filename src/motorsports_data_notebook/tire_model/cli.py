@@ -84,6 +84,17 @@ def main(argv: list[str] | None = None) -> int:
         "pit-lane TPMS reading when the tires are still warm from the last run.",
     )
     p_predict.add_argument(
+        "--no-outlap",
+        action="store_true",
+        help="Skip the out-lap segment (pre-v0.26 behaviour: the clock starts at the first flying lap).",
+    )
+    p_predict.add_argument(
+        "--outlap-time-s",
+        type=float,
+        default=None,
+        help="Override the out-lap rolling time in seconds (default: the bucket's typical out-lap).",
+    )
+    p_predict.add_argument(
         "--cloud-cover",
         type=float,
         default=None,
@@ -339,6 +350,8 @@ def _cmd_predict(args: argparse.Namespace) -> int:
         target_hot_pressure_bar=targets,
         ambient_temp_c=args.ambient,
         cold_tire_temp_c=args.cold_tire_temp,
+        include_outlap=not args.no_outlap,
+        outlap_time_s=args.outlap_time_s,
         track_condition=args.condition,
         track_temp_c=args.track_temp,
         cloud_cover_pct=args.cloud_cover,

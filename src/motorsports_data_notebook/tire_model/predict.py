@@ -16,6 +16,7 @@ from typing import Any, Iterable
 
 from ..tire_etl.paths import default_dataset_root
 from .energy_balance import (
+    warmup_two_stage_c,
     P_ATM_BAR,
     T_ZERO_C_TO_K,
     gay_lussac_cold_pressure_bar,
@@ -56,6 +57,11 @@ class Prediction:
     target_lap_time_s: float | None = None
     g2_scale: float = 1.0  # multiplier applied to g2_typ (1.0 when no target given)
     g2_pace_source: str | None = None  # "curve" | "exponent" | None (no target)
+    # ---- Out-lap segment (v0.26): integrated first, from t_start_c ----
+    outlap_time_s: float = 0.0
+    outlap_g2: float = 0.0
+    outlap_source: str | None = None
+    t_after_outlap_c: float | None = None
 
 
 def _load_model(dataset_root: Path | None) -> dict[str, Any]:
@@ -282,6 +288,45 @@ def _g2_pace_scale(
     return min(hi, max(lo, scale)), "exponent"
 
 
+def _lookup_outlap(
+    model: dict[str, Any], track: str, car: str, condition: str
+) -> tuple[float, float, int, str] | None:
+    """Typical out-lap ``(moving_s, g2, n, source)`` for the bucket, walking
+    the condition chain, then (track, car) pooled, then (track) pooled.
+    ``None`` when the artifact has no out-lap table or no data for the
+    track (the out-lap is then treated as zero-length)."""
+    table = model.get("outlap_typ_by_track_car_cond") or []
+    for cond in _condition_chain(condition):
+        for r in table:
+            if r["track_canonical"] == track and r["car"] == car and r["condition"] == cond:
+                tag = "exact" if cond == condition else f"fallback({cond})"
+                return (
+                    float(r["outlap_moving_s"]),
+                    float(r["outlap_g2"]),
+                    int(r["n_laps_used"]),
+                    tag,
+                )
+    same_tc = [r for r in table if r["track_canonical"] == track and r["car"] == car]
+    if same_tc:
+        n = sum(int(r["n_laps_used"]) for r in same_tc)
+        return (
+            float(sum(r["outlap_moving_s"] for r in same_tc) / len(same_tc)),
+            float(sum(r["outlap_g2"] for r in same_tc) / len(same_tc)),
+            n,
+            "track_car_pooled",
+        )
+    same_t = [r for r in table if r["track_canonical"] == track]
+    if same_t:
+        n = sum(int(r["n_laps_used"]) for r in same_t)
+        return (
+            float(sum(r["outlap_moving_s"] for r in same_t) / len(same_t)),
+            float(sum(r["outlap_g2"] for r in same_t) / len(same_t)),
+            n,
+            "track_pooled",
+        )
+    return None
+
+
 def _lookup_lap_time(
     model: dict[str, Any], track: str, car: str, condition: str
 ) -> tuple[float, int, str]:
@@ -319,10 +364,19 @@ def predict_cold_pressure(
     lap_time_typ_override_s: float | None = None,
     target_lap_time_s: float | None = None,
     compound: str | None = None,
+    include_outlap: bool = True,
+    outlap_time_s: float | None = None,
     dataset_root: Path | None = None,
     _model: dict[str, Any] | None = None,
 ) -> dict[str, Prediction]:
     """Predict per-corner cold pressure for a target lap.
+
+    ``lap_within_stint`` counts flying laps: N = 1 is the first full lap
+    after the out-lap. The out-lap (pit exit to the first start/finish
+    crossing) is integrated first, from ``cold_tire_temp_c``, using the
+    bucket's typical out-lap rolling time and g² (``include_outlap``;
+    ``outlap_time_s`` overrides the duration). Pre-v0.26 artifacts carry no
+    out-lap table and behave as before.
 
     Parameters
     ----------
@@ -407,8 +461,21 @@ def predict_cold_pressure(
         g2_typ = g2_typ * g2_scale
         lap_time_for_clock_s = target
 
-    # Time at end of lap N
+    # Time at end of flying lap N (the out-lap is a separate segment)
     t_at_lap_n_s = float(lap_within_stint) * lap_time_for_clock_s
+
+    out_time_s = 0.0
+    out_g2 = 0.0
+    out_src: str | None = None
+    if include_outlap:
+        hit_out = _lookup_outlap(model, track, car, cond)
+        if hit_out is not None:
+            out_time_s, out_g2, _out_n, out_src = hit_out
+        if outlap_time_s is not None:
+            if float(outlap_time_s) < 0:
+                raise ValueError(f"outlap_time_s must be >= 0; got {outlap_time_s!r}")
+            out_time_s = float(outlap_time_s)
+            out_src = (out_src or "none") + "+override"
 
     out: dict[str, Prediction] = {}
     for corner in CORNERS:
@@ -425,12 +492,14 @@ def predict_cold_pressure(
 
         warmup_frac = 1.0 - math.exp(-t_at_lap_n_s / tau_sec) if tau_sec > 0 else 0.0
         delta_t_inf = K * c_track * g2_typ
-        t_hot_c = warmup_curve_c(
-            t_seconds=t_at_lap_n_s,
+        t_after_out_c, t_hot_c = warmup_two_stage_c(
+            t_outlap_s=out_time_s,
+            g2_outlap=out_g2,
+            t_flying_s=t_at_lap_n_s,
+            g2_flying=g2_typ,
             t_eff_c=t_eff_c,
             k_kelvin_per_g2=K,
             c_track=c_track,
-            g2_typ=g2_typ,
             tau_sec=tau_sec,
             t_start_c=t_start_c,
         )
@@ -468,6 +537,10 @@ def predict_cold_pressure(
             target_lap_time_s=(float(target_lap_time_s) if target_lap_time_s is not None else None),
             g2_scale=g2_scale,
             g2_pace_source=g2_pace_source,
+            outlap_time_s=out_time_s,
+            outlap_g2=out_g2,
+            outlap_source=out_src,
+            t_after_outlap_c=t_after_out_c,
         )
     return out
 

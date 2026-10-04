@@ -22,6 +22,7 @@ public sealed record TireModelDto(
     [property: JsonPropertyName("c_track_by_track")] IReadOnlyList<CTrackEntryDto> CTrackByTrack,
     [property: JsonPropertyName("g2_typ_by_track_car_cond")] IReadOnlyList<G2EntryDto> G2TypByTrackCarCond,
     [property: JsonPropertyName("lap_time_typ_by_track_car_cond")] IReadOnlyList<LapTimeEntryDto> LapTimeTypByTrackCarCond,
+    [property: JsonPropertyName("outlap_typ_by_track_car_cond")] IReadOnlyList<OutlapEntryDto>? OutlapTypByTrackCarCond = null,
     [property: JsonPropertyName("g2_lap_time_model")] G2LapTimeModelDto? G2LapTimeModel = null,
     [property: JsonPropertyName("K_by_car_compound_corner_cond")] IReadOnlyList<KCompoundEntryDto>? KByCarCompoundCornerCond = null,
     [property: JsonPropertyName("corner_defaults_by_car_corner_cond")] IReadOnlyList<CornerDefaultsEntryDto>? CornerDefaultsByCarCornerCond = null,
@@ -142,6 +143,15 @@ public sealed record G2EntryDto(
     [property: JsonPropertyName("g2_typ")] double G2Typ,
     [property: JsonPropertyName("n_laps_used")] int NLapsUsed,
     [property: JsonPropertyName("g2_vs_lap_time")] G2CurveDto? G2VsLapTime = null
+);
+
+public sealed record OutlapEntryDto(
+    [property: JsonPropertyName("track_canonical")] string TrackCanonical,
+    [property: JsonPropertyName("car")] string Car,
+    [property: JsonPropertyName("condition")] string Condition,
+    [property: JsonPropertyName("outlap_moving_s")] double OutlapMovingS,
+    [property: JsonPropertyName("outlap_g2")] double OutlapG2,
+    [property: JsonPropertyName("n_laps_used")] int NLapsUsed
 );
 
 public sealed record LapTimeEntryDto(
