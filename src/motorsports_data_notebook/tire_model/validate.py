@@ -289,6 +289,18 @@ def _pick_holdout_sessions(
 
 
 INPUT_MODES = ("calculator", "oracle")
+
+
+def _as_float(v: object) -> float:
+    if v is None:
+        return float("nan")
+    try:
+        f = float(v)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return float("nan")
+    return f if np.isfinite(f) else float("nan")
+
+
 # Stand-in for the target lap time a driver enters: the session's p25
 # flying lap (drivers are optimistic about their pace).
 TARGET_LAP_TIME_QUANTILE = 0.25
@@ -506,7 +518,6 @@ def _evaluate_fold(
         ):
             if np.isfinite(mv) and mv > 0 and np.isfinite(hp):
                 stint_outlap[(str(sid_o), int(stint_o))] = (float(t_end), float(hp / mv))
-    gamma_by_car = _fit_pressure_gain_by_car(root, exclude_session_ids=set(holdout_ids))
 
     # Per-lap predictions. Per-lap g² (heat_proxy / on_track_s) is the
     # held-out lap's actual driving intensity; falls back to the bucket
@@ -551,7 +562,9 @@ def _evaluate_fold(
             tau = tau_lookup.get((car, c, cond)) or tau_lookup.get((car, c, "dry"))
             if K is None or tau is None:
                 continue
-            obs = lap.get(f"tpms_temp_{c}_end")
+            # Observable: the pressure-implied gas temperature at lap end
+            # (falls back to the TPMS temperature only without anchors).
+            obs = lap.get(f"t_gas_{c}_end", lap.get(f"tpms_temp_{c}_end"))
             if pd.isna(obs):
                 continue
             t_anchor = lap.get(f"t_anchor_{c}")
@@ -629,12 +642,10 @@ def _evaluate_fold(
             # the stint anchor, and compare with the TPMS hot pressure.
             p_anchor = lap.get(f"p_start_{c}")
             p_obs = lap.get(f"tpms_press_{c}_end")
-            p_pred = p_pred_gamma = float("nan")
-            gamma_car = float(gamma_by_car.get(car, 1.0))
+            p_pred = float("nan")
             if pd.notna(p_anchor) and pd.notna(p_obs) and float(t_start) > -273.15:
                 ratio = (t_hot_pred + T_ZERO_C_TO_K) / (float(t_start) + T_ZERO_C_TO_K)
                 p_pred = (float(p_anchor) + P_ATM_BAR) * ratio - P_ATM_BAR
-                p_pred_gamma = (float(p_anchor) + P_ATM_BAR) * ratio**gamma_car - P_ATM_BAR
             rows.append(
                 {
                     "session_id": lap["session_id"],
@@ -660,53 +671,10 @@ def _evaluate_fold(
                     "P_hot_obs_bar": float(p_obs) if pd.notna(p_obs) else float("nan"),
                     "P_hot_pred_bar": p_pred,
                     "resid_bar": p_pred - float(p_obs) if pd.notna(p_obs) else float("nan"),
-                    "gamma_car": gamma_car,
-                    "resid_bar_gamma": (
-                        p_pred_gamma - float(p_obs) if pd.notna(p_obs) else float("nan")
-                    ),
+                    "T_tpms_obs_c": _as_float(lap.get(f"tpms_temp_{c}_end")),
                 }
             )
     return pd.DataFrame(rows)
-
-
-def _fit_pressure_gain_by_car(root: Path, *, exclude_session_ids: set[str]) -> dict[str, float]:
-    """Per-car exponent γ in P_abs ∝ T_abs^γ, fitted on the training sessions.
-
-    Constant-volume ideal gas says γ = 1 for the true gas temperature, but
-    the TPMS temperature is read at the valve and runs warmer than the mean
-    cavity gas, so the pressure rises less than the temperature implies.
-    Fitted on exactly the quantity the evaluation applies it to: the ratio
-    from the stint anchor (first finite reading) to each later lap end,
-    slope through the origin of ln(P_end/P_anchor) on ln(T_end/T_anchor).
-    """
-    from .warmup_table import _compute_stint_anchor, _compute_stint_clock, _load_filtered_laps
-
-    laps = _load_filtered_laps(root)
-    laps = laps[~laps["session_id"].isin(exclude_session_ids)]
-    laps = _compute_stint_anchor(_compute_stint_clock(laps))
-    out: dict[str, float] = {}
-    for car, grp in laps.groupby("car"):
-        xs: list[np.ndarray] = []
-        ys: list[np.ndarray] = []
-        for c in CORNERS:
-            t_e = grp[f"tpms_temp_{c}_end"].to_numpy(dtype=float) + T_ZERO_C_TO_K
-            t_a = grp[f"t_start_{c}"].to_numpy(dtype=float) + T_ZERO_C_TO_K
-            p_e = grp[f"tpms_press_{c}_end"].to_numpy(dtype=float) + P_ATM_BAR
-            p_a = grp[f"p_start_{c}"].to_numpy(dtype=float) + P_ATM_BAR
-            after = grp["t_cum_s"].to_numpy(dtype=float) > grp[f"t_anchor_{c}"].to_numpy(
-                dtype=float
-            )
-            ok = np.isfinite(t_e) & np.isfinite(t_a) & np.isfinite(p_e) & np.isfinite(p_a) & after
-            ok &= (p_e > 0.3) & (p_a > 0.3) & (np.abs(t_e - t_a) > 2)
-            xs.append(np.log(t_e[ok] / t_a[ok]))
-            ys.append(np.log(p_e[ok] / p_a[ok]))
-        x = np.concatenate(xs)
-        y = np.concatenate(ys)
-        if len(x) >= 20 and float(np.sum(x * x)) > 0:
-            out[str(car)] = float(np.sum(x * y) / np.sum(x * x))
-        else:
-            out[str(car)] = 1.0
-    return out
 
 
 def _print_corner_table(label: str, frame: pd.DataFrame) -> None:
@@ -716,7 +684,7 @@ def _print_corner_table(label: str, frame: pd.DataFrame) -> None:
     print(f"\n=== {label} ({len(frame)} (lap × corner) points) ===")
     if has_p:
         print(
-            "         temperature                                 hot pressure, calculator (γ=1)   with per-car γ"
+            "         gas temperature (pressure-implied)                hot pressure (gas-law ratio from pit exit)"
         )
     for c in CORNERS:
         sub = frame[frame["corner"] == c]
@@ -731,12 +699,8 @@ def _print_corner_table(label: str, frame: pd.DataFrame) -> None:
         )
         if has_p:
             pb = sub["resid_bar"].dropna()
-            pg = sub["resid_bar_gamma"].dropna()
             if not pb.empty:
-                line += (
-                    f"   |  MAE = {pb.abs().mean():.3f} bar  bias = {pb.mean():+.3f} bar"
-                    f"   |  MAE = {pg.abs().mean():.3f} bar  bias = {pg.mean():+.3f} bar"
-                )
+                line += f"   |  MAE = {pb.abs().mean():.3f} bar  bias = {pb.mean():+.3f} bar"
         print(line)
 
 
@@ -792,12 +756,6 @@ def run_holdout_validation(
         )
     )
 
-    if "gamma_car" in df.columns:
-        gam = df.drop_duplicates("car")[["car", "gamma_car"]]
-        print(
-            "pressure gain γ (P_abs ∝ T_abs^γ, fitted on training sessions; the calculators use 1): "
-            + ", ".join(f"{r.car} {r.gamma_car:.3f}" for r in gam.itertuples())
-        )
     label = "Held-out" if n_folds <= 1 else f"{n_folds}-fold CV"
     if n_folds > 1:
         unique_sessions = df["session_id"].nunique()

@@ -34,7 +34,7 @@ from ..tire_etl.paths import (
     weather_dir,
 )
 from . import wetness as _wetness
-from .energy_balance import t_effective_c, t_road_proxy_c
+from .energy_balance import P_ATM_BAR, T_ZERO_C_TO_K, t_effective_c, t_road_proxy_c
 
 logger = logging.getLogger(__name__)
 
@@ -62,16 +62,14 @@ PRIOR_K_KELVIN_PER_G2 = 60.0
 PRIOR_C_TRACK = 1.0
 
 # Percentile (0–100) of per-lap heat_proxy/on_track_s used as the bucket's
-# representative ⟨g²⟩. The median underweights fast on-pace laps because
-# `tire_usable` already drops out-laps + in-laps + slow laps (> 1.40×
-# session-best), but still keeps mid-pace and recovery laps that pull the
-# centre of mass down vs. the asymptote a hot lap actually reaches. CV
-# diagnostic on the 5-fold residuals shows per-lap g² (relative to bucket
-# median) is the single biggest univariate signal in unexplained residual
-# variance (R² ≈ 0.065, β ≈ −44 K/(g²·s)/s), so shifting the
-# representative up reduces under-prediction on fast laps without
-# changing the structural model.
-G2_TYP_PERCENTILE = 75.0
+# representative ⟨g²⟩. This was 75 while the fit target was the TPMS
+# temperature: the sensor lags the gas by 2–3 min, which depressed the
+# fitted K, and a hot ⟨g²⟩ compensated so the predicted pressures came out
+# unbiased. With the pressure-implied gas temperature as the observable
+# (2026-10) K is honest and the 75th percentile over-predicted held-out hot
+# pressure by +0.015 bar, so the representative is the median; pace enters
+# through the entered target lap time and the sector curve instead.
+G2_TYP_PERCENTILE = 50.0
 
 # Bucket-size thresholds
 MIN_LAPS_FOR_TAU_FIT = 30  # per (car, track, corner) bucket to participate in Pass 1
@@ -726,8 +724,36 @@ def _apply_blacklist(
     return df, applied
 
 
+def gas_temperature_c(
+    t_anchor_c: np.ndarray, p_anchor_bar: np.ndarray, p_bar: np.ndarray
+) -> np.ndarray:
+    """Cavity-gas temperature implied by pressure, from an anchor state.
+
+    Constant-volume ideal gas: ``T_gas_K = T_anchor_K · P_abs / P_anchor_abs``.
+    The anchor is the stint's pit-exit reading, where the tire has rested
+    long enough for the separate temperature measurement and the gas to
+    agree. The pressure channel responds to the tread within seconds while
+    the valve-mounted TPMS temperature lags it by 2–3 minutes, and pressure
+    is what the calculator predicts — so this, not the TPMS temperature, is
+    the model's observable (2026-10). NaN where any input is missing.
+    """
+    t_k = np.asarray(t_anchor_c, dtype=float) + T_ZERO_C_TO_K
+    p_a = np.asarray(p_anchor_bar, dtype=float) + P_ATM_BAR
+    p = np.asarray(p_bar, dtype=float) + P_ATM_BAR
+    with np.errstate(invalid="ignore", divide="ignore"):
+        out = t_k * p / p_a - T_ZERO_C_TO_K
+    ok = np.isfinite(t_k) & np.isfinite(p_a) & np.isfinite(p) & (p_a > 0.3) & (p > 0.3)
+    out = np.where(ok, out, np.nan)
+    return np.asarray(out, dtype=float)
+
+
 def _compute_delta_t(laps: pd.DataFrame) -> pd.DataFrame:
-    """Compute T_road proxy and δT per corner = tpms_temp_{c}_end − T_eff."""
+    """Compute T_road proxy, the pressure-implied gas temperature at lap end
+    (``t_gas_{c}_end``) and the regression target
+    ``delta_t_{c} = t_gas_{c}_end − T_eff``.
+
+    Falls back to the TPMS end temperature for frames without anchor
+    pressures (synthetic tests, pre-schema-v3 data)."""
     df = laps.copy()
     df["t_road_c"] = [
         (
@@ -752,7 +778,15 @@ def _compute_delta_t(laps: pd.DataFrame) -> pd.DataFrame:
     ]
     for c in CORNERS:
         col = f"tpms_temp_{c}_end"
-        df[f"delta_t_{c}"] = df[col] - df["t_eff_c"]
+        if f"p_start_{c}" in df.columns and f"tpms_press_{c}_end" in df.columns:
+            df[f"t_gas_{c}_end"] = gas_temperature_c(
+                df[f"t_start_{c}"].to_numpy(dtype=float),
+                df[f"p_start_{c}"].to_numpy(dtype=float),
+                df[f"tpms_press_{c}_end"].to_numpy(dtype=float),
+            )
+        else:
+            df[f"t_gas_{c}_end"] = df[col]
+        df[f"delta_t_{c}"] = df[f"t_gas_{c}_end"] - df["t_eff_c"]
     return df
 
 
@@ -878,8 +912,10 @@ def _build_corner_defaults(
     """Median steady-state hot temp/pressure per (car, corner, condition).
 
     UI prefill values: what this car's tires actually settle at once warm
-    (``lap_within_stint >= min_lap_within_stint``). Blacklisted corners are
-    already NaN-masked upstream, so they drop out of the medians.
+    (``lap_within_stint >= min_lap_within_stint``). The hot temperature is
+    the pressure-implied gas temperature (the model's observable), not the
+    TPMS display. Blacklisted corners are already NaN-masked upstream, so
+    they drop out of the medians.
 
     Returns ``{(car, corner, condition): (hot_temp_c, hot_pressure_bar, n)}``.
     """
@@ -888,11 +924,12 @@ def _build_corner_defaults(
     out: dict[tuple[str, str, str], tuple[float, float, int]] = {}
     for (car, cond), grp in steady.groupby(["car", "condition"]):
         for c in CORNERS:
-            paired = grp[[f"tpms_temp_{c}_end", f"tpms_press_{c}_mean"]].dropna()
+            temp_col = f"t_gas_{c}_end" if f"t_gas_{c}_end" in grp.columns else f"tpms_temp_{c}_end"
+            paired = grp[[temp_col, f"tpms_press_{c}_mean"]].dropna()
             if len(paired) < min_laps:
                 continue
             out[(str(car), c, str(cond))] = (
-                float(paired[f"tpms_temp_{c}_end"].median()),
+                float(paired[temp_col].median()),
                 float(paired[f"tpms_press_{c}_mean"].median()),
                 int(len(paired)),
             )
@@ -1288,7 +1325,9 @@ def _assemble_model(
         "model_form": (
             "T_hot - T_eff = K[car,corner,cond] * c_track[track] * g2 "
             "* (1 - exp(-t / tau_sec[car,corner,cond])) "
-            "+ (T_start - T_eff) * exp(-t / tau_sec[car,corner,cond]), integrated in two "
+            "+ (T_start - T_eff) * exp(-t / tau_sec[car,corner,cond]), where T is the "
+            "pressure-implied cavity-gas temperature T_K = T_start_K * P_abs / P_start_abs "
+            "(so P_hot_abs = P_start_abs * T_hot_K / T_start_K exactly), integrated in two "
             "segments: the out-lap (outlap_moving_s at outlap_g2) from T_start = the pit-exit "
             "tire temperature (fit: first valid TPMS reading of the out-lap; predict: the "
             "entered current tire temp, default T_air), then N flying laps (t = N * lap_time_s) "
@@ -1318,9 +1357,14 @@ def _assemble_model(
         "energy_balance": {
             "w_road": W_ROAD,
             "w_road_fitted": False,
+            "observable": (
+                "pressure-implied cavity-gas temperature: T_gas_K = T_start_K * P_abs / "
+                "P_start_abs from the stint's pit-exit (T, P). The TPMS temperature lags "
+                "the gas by 2-3 min and is used only as the initial condition."
+            ),
             "initial_condition": {
-                "fit": "first finite TPMS reading of the stint (t_anchor, T_start)",
-                "predict": "cold_tire_temp_c (the tire's current temperature), default T_air",
+                "fit": "first valid TPMS reading of the out-lap at pit exit (t_anchor, T_start, P_start)",
+                "predict": "cold_tire_temp_c (a separate measurement at standstill), default T_air",
             },
             "t_road_proxy": {
                 "formula": "T_air + delta_sun_max_c * (1 - cloud_cover/100) * sun_factor",

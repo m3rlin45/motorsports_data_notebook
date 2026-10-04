@@ -106,6 +106,37 @@ with:
   `(car, corner)`.
 - `t` = on-track seconds since stint start.
 
+### 2.2a The observable: pressure-implied gas temperature (2026-10)
+
+The equations above are written in "tire temperature", but what the model
+is fitted to and predicts is the **cavity-gas temperature implied by the
+TPMS pressure**, converted with the constant-volume gas law from the
+stint's pit-exit reading:
+
+```
+T_gas_K  =  T_start_K · P_abs / P_start_abs
+```
+
+Two reasons. The pressure channel responds to the tread within seconds,
+while the valve-mounted TPMS temperature sensor lags the gas by a median
+125–140 s (a first-order lag of ≈ 180 s at 1 Hz on 83 stints): from pit
+exit the gas is +3.8 °C at the end of flying lap 1 and +11 °C at lap 3
+where the TPMS shows +1 and +5. Fitted to the TPMS temperature the model
+absorbed that lag into τ (≈ 650 s) and over-predicted the first three laps
+by +2.7 °C. And pressure is what the driver sets and what the calculator
+outputs: with the gas temperature as the state, the hot pressure is exactly
+`P_start_abs · T_hot_K / T_start_K`, with no empirical gain to correct.
+
+The TPMS temperature is used for one thing only: the **initial condition**.
+At pit exit the tire has rested, the separate measurement the driver types
+and the gas agree, and that reading together with the set pressure defines
+the anchor state. The predicted "hot temperature" the calculators display
+is therefore a gas temperature and reads lower than the dash early in a
+stint; the hot *pressure* is the number to trust. Pressure is reported in
+0.03 bar steps (≈ 3.6 K of gas temperature at 2.5 bar absolute), so the
+per-lap target is noisier than the TPMS temperature; the 1 Hz stale-prefix
+mask and per-corner wake rule (§2.8) keep the anchor clean.
+
 ### 2.2b The out-lap (schema v4)
 
 The stint does not start at the first flying lap. It starts when the car
@@ -551,17 +582,15 @@ recurring failure across **2 Tsukuba sessions on 2026-03-22**.
 
 ### 3.3 Pressure is what matters: the hot-pressure residual
 
-The holdout also scores every lap in the pressure domain, which is what the
-driver actually gets. From the pressure and temperature at the stint anchor
-it pushes the predicted hot temperature through the same constant-volume
-step the calculators use and compares the implied hot pressure with the
-TPMS hot pressure, in bar. Two columns are printed: as the calculators
-compute it today (γ = 1) and with a per-car gain γ in `P_abs ∝ T_abs^γ`
-fitted on the training sessions. γ is below 1 on both cars (TPMS reads the
-valve, which runs warmer than the mean cavity gas), so the γ = 1 step
-over-states the pressure rise and the per-car γ removes a systematic bias.
-Fitting γ into the calculators is the natural next step; the holdout
-already reports what it would buy.
+The holdout scores every lap in two domains. The temperature residual is in
+the model's observable, the pressure-implied gas temperature (§2.2a). The
+pressure residual is the predicted hot pressure, `P_start_abs · T_hot_K /
+T_start_K` from the pit-exit anchor — exactly the step the calculators
+apply — minus the TPMS hot pressure, in bar. Because the observable is the
+gas temperature the two are the same information in different units; the
+pressure one is what the driver gets. (An empirical pressure gain γ was
+evaluated while the target was the TPMS temperature; with the gas
+temperature as observable it is 1 by construction and was removed.)
 
 ### 3.4 What MAE in T_hot translates to in cold pressure
 
@@ -733,14 +762,25 @@ In rough priority order:
 
 ### v1 — bigger architecture changes
 
-7. **Within-lap fitting.** Use the per-sample `timeseries/*.parquet` data
-   (already committed) to fit the discretized ODE step-by-step instead of
-   the per-lap aggregate closed-form. Tested offline (2026-10): under the
-   same assumptions it does **not** beat the per-lap closed form at
-   predicting end-of-lap temperatures, so it is only worth doing for
-   within-lap T_hot predictions ("what's my FL temp at t=180 s into lap
-   3?"). The discretized recurrence is already implemented and tested in
-   `energy_balance.py`.
+7. **Per-second fitting on pressure (next).** Fit the discretized ODE at
+   1 Hz against the pressure-implied gas temperature instead of the
+   per-lap closed form. Tested offline against the TPMS temperature
+   (2026-10) it bought nothing, because that observable lags the gas by
+   2–3 min and the within-lap detail was sensor dynamics. Against pressure
+   it should: the 0.03 bar quantisation becomes information (the *time* a
+   rising pressure crosses each step locates it to a fraction of a step,
+   where one lap-end sample cannot), the pit-exit anchor pressure becomes a
+   per-stint nuisance parameter with a half-step prior instead of a
+   whole-stint offset the fit absorbs into K, and measured g²(t) through
+   the lap identifies τ and K from the lap's shape. It is also the only
+   framework where a tread-to-gas lag, the out-lap and warm starts can be
+   fitted as what they are. The scratch harness from the 2026-10 state-space
+   experiment (1 Hz per-stint arrays with the moving mask and anchors, exact
+   vectorised recurrence, ~5 min per two-car fit) is the starting point;
+   production would be a `tire_model/statespace.py` replacing Pass 1 with the
+   same artifact tables out. Decision rule: adopt if the every-session
+   holdout's hot-pressure MAE beats the per-lap gas-target fit, with the
+   Inferno 86 (0.064 bar on the TPMS target) as the bucket to watch.
 8. **Hierarchical / Bayesian partial pooling.** Sparse (car, corner) buckets
    would benefit from shrinking toward a global mean — Motegi Inferno 86
    has only 18 usable laps. NumPyro Stage-2 partial pooling over scipy
