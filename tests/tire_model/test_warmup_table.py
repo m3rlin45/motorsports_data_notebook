@@ -584,3 +584,31 @@ def test_rolling_clock_and_flying_lookups_exclude_outlap_wait() -> None:
     assert g2[("t", "FJ", "dry")][0] == pytest.approx(0.95)
     out = wt._build_outlap_typ(laps)
     assert out[("t", "FJ", "dry")] == (90.0, pytest.approx(0.3), 1)
+
+
+def test_delta_t_targets_the_pressure_implied_gas_temperature() -> None:
+    """The model's observable is the gas temperature implied by pressure
+    from the pit-exit (T, P); the TPMS end temperature is only a fallback
+    when no anchor pressure exists."""
+    laps = pd.DataFrame(
+        {
+            "t_air_c": [20.0, 20.0],
+            "cloud_cover": [100.0, 100.0],
+            "t_start_fl": [25.0, 25.0],
+            "p_start_fl": [1.5, np.nan],
+            "tpms_press_fl_end": [1.75, 1.75],
+            "tpms_temp_fl_end": [40.0, 40.0],
+        }
+    )
+    for c in ("fr", "rl", "rr"):
+        laps[f"t_start_{c}"] = np.nan
+        laps[f"p_start_{c}"] = np.nan
+        laps[f"tpms_press_{c}_end"] = np.nan
+        laps[f"tpms_temp_{c}_end"] = np.nan
+    out = wt._compute_delta_t(laps)
+    t_gas = (25.0 + 273.15) * 2.75 / 2.5 - 273.15  # pressure rose 10%
+    assert out["t_gas_fl_end"].iloc[0] == pytest.approx(t_gas)
+    assert out["delta_t_fl"].iloc[0] == pytest.approx(t_gas - out["t_eff_c"].iloc[0])
+    assert np.isnan(out["t_gas_fl_end"].iloc[1])  # no anchor pressure -> no target
+    g = wt.gas_temperature_c(np.array([25.0]), np.array([1.5]), np.array([1.5]))
+    assert g[0] == pytest.approx(25.0)  # unchanged pressure -> anchor temperature
