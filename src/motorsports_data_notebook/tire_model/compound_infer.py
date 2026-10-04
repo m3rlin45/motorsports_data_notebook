@@ -29,6 +29,8 @@ Ground rules:
 
 from __future__ import annotations
 
+import math
+
 import logging
 from dataclasses import dataclass
 
@@ -65,6 +67,26 @@ EM_TOL = 1e-4
 # is the whole session, and all four corners' laps vote on one posterior.
 _AXLE_CORNERS = {"all": ("fl", "fr", "rl", "rr")}
 _CORNER_AXLE = {c: a for a, cs in _AXLE_CORNERS.items() for c in cs}
+
+
+# Set-pressure prior: teams run different compounds at different cold
+# pressures (Inferno 86: A050 at 1.24–1.41 bar, A052 / RE-71RS at 1.5–2.7).
+# Per (car, compound) a Gaussian on the session's pit-exit pressure is fitted
+# from the labeled sessions and multiplied into the E-step for free units.
+PRESSURE_PRIOR_MIN_SESSIONS = 3
+PRESSURE_PRIOR_MIN_SD_BAR = 0.12
+
+
+def _session_set_pressure(laps: pd.DataFrame) -> dict[str, float]:
+    """Median pit-exit (anchor) pressure per session over corners and stints,
+    bar gauge; empty when the frame carries no anchor pressures."""
+    cols = [f"p_start_{c}" for c in _CORNER_AXLE if f"p_start_{c}" in laps.columns]
+    if not cols:
+        return {}
+    st = laps.drop_duplicates(["session_id", "stint_id"]) if "stint_id" in laps.columns else laps
+    per = st[cols].median(axis=1)
+    out = st.assign(_p=per).groupby("session_id")["_p"].median().dropna()
+    return {str(k): float(v) for k, v in out.items()}
 
 
 @dataclass(frozen=True)
@@ -154,12 +176,19 @@ def fit_compounds_em(
     c_track_by_track: dict,
     *,
     max_iter: int = EM_MAX_ITER,
+    pressure_prior: bool = True,
 ) -> tuple[
     dict[tuple[str, str, str, str], tuple[float, float, float]],
     list[AxleAssignment],
     dict[str, dict[str, float]],
 ]:
     """Joint EM over compound assignments and a DECOMPOSED K.
+
+    ``pressure_prior``: multiply the E-step by a per-(car, compound)
+    Gaussian on the session's set (pit-exit) pressure, fitted from the
+    labeled sessions when every compound has ≥ PRESSURE_PRIOR_MIN_SESSIONS
+    of them — teams run compounds at characteristic pressures, which the
+    thermal likelihood alone cannot see.
 
     K is structured, not free per bucket:
 
@@ -193,6 +222,7 @@ def fit_compounds_em(
     if stats.empty:
         return {}, [], {}
     stats["axle"] = stats["corner"].map(_CORNER_AXLE)
+    sess_press = _session_set_pressure(laps_for_fit) if pressure_prior else {}
 
     pinned: dict[tuple[str, str], str] = {}
     for r in labels.itertuples():
@@ -257,6 +287,26 @@ def fit_compounds_em(
                     grp["n"].to_numpy(),
                 )
             )
+
+        # Set-pressure log-prior per unit (zero when unavailable).
+        logprior = np.zeros((n_units, n_comp))
+        if sess_press:
+            mu_sd: dict[str, tuple[float, float]] = {}
+            for comp in compounds:
+                vals = [sess_press[s] for s in pinned_here.get(comp, set()) if s in sess_press]
+                if len(vals) >= PRESSURE_PRIOR_MIN_SESSIONS:
+                    mu_sd[comp] = (
+                        float(np.mean(vals)),
+                        max(float(np.std(vals, ddof=1)), PRESSURE_PRIOR_MIN_SD_BAR),
+                    )
+            if len(mu_sd) == n_comp:
+                for u, i in unit_idx.items():
+                    p_u = sess_press.get(u[0])
+                    if p_u is None:
+                        continue
+                    for comp, j in comp_idx.items():
+                        mu, sd = mu_sd[comp]
+                        logprior[i, j] = -0.5 * ((p_u - mu) / sd) ** 2 - math.log(sd)
 
         sigma2: dict[str, float] = {c: 25.0 for c in _CORNER_AXLE}
         base: dict[tuple[str, str], float] = {}
@@ -347,7 +397,7 @@ def fit_compounds_em(
                     np.add.at(covered[:, j], ui, n_arr)
             loglik = np.where(covered > 0, loglik, -np.inf)
             if free.any():
-                ll = (loglik * temper)[free]
+                ll = (loglik * temper)[free] + logprior[free]
                 row_max = ll.max(axis=1, keepdims=True)
                 ok_rows = np.isfinite(row_max[:, 0])
                 p = np.full_like(ll, 1.0 / n_comp)
