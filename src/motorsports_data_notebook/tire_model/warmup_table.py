@@ -111,6 +111,12 @@ MIN_LAPS_FOR_COMPOUND_K = 10
 # wet → damp → dry fallback chain resolves it to the dry parameters.
 MIN_SESSIONS_FOR_RAIN_FIT = 3
 
+# How tau/K are fitted: "per_lap" = the closed form on lap-end gas temperatures
+# (Pass 1); "per_second" = the 1 Hz recurrence on the pressure-implied gas
+# temperature (tire_model/statespace.py). Both feed Pass 2 and the artifact.
+FIT_METHODS = ("per_lap", "per_second")
+DEFAULT_FIT_METHOD = "per_second"
+
 # Per-(session, corner) sensor sanity check: flag stuck/broken TPMS channels so
 # the fit doesn't learn from them. Pure heuristic — easy to tune later.
 BROKEN_CORNER_STD_THRESHOLD_C = 1.0  # std(temp) across session's tire-usable laps
@@ -166,8 +172,11 @@ def build_warmup_table(
     rebuild: bool = False,
     exclude_session_ids: set[str] | None = None,
     write_artifacts: bool = True,
+    fit_method: str = DEFAULT_FIT_METHOD,
 ) -> dict[str, Any]:
     """Fit the energy-balance model and write both artifacts.
+
+    ``fit_method``: see ``FIT_METHODS``.
 
     Parameters
     ----------
@@ -221,27 +230,36 @@ def build_warmup_table(
     bucket_gains: dict[tuple[str, str, str, str], FitParam] = {}
     bucket_n_samples: dict[tuple[str, str, str, str], int] = {}
 
+    if fit_method not in FIT_METHODS:
+        raise ValueError(f"fit_method must be one of {FIT_METHODS}; got {fit_method!r}")
     seen_conditions = sorted(set(laps_for_fit["condition"]))
     # Dry first: its τ is the upper bound for the rain buckets.
     seen_conditions = [c for c in seen_conditions if c == "dry"] + [
         c for c in seen_conditions if c != "dry"
     ]
-    for car in sorted(set(laps_for_fit["car"])):
-        for corner in CORNERS:
-            for cond in seen_conditions:
-                tau_upper = _rain_tau_upper(tau_by_car_corner_cond, car, corner, cond)
-                tau, per_bucket_gain = _pass1_fit_tau_and_gains(
-                    laps_for_fit, car, corner, cond, tau_upper=tau_upper
-                )
-                if tau.n_samples == 0 and not per_bucket_gain:
-                    # Skip empty (car, corner, condition) combos — no data at all
-                    continue
-                tau_by_car_corner_cond[(car, corner, cond)] = tau
-                for track, gain in per_bucket_gain.items():
-                    bucket_gains[(car, track, corner, cond)] = gain
-                    bucket_n_samples[(car, track, corner, cond)] = _bucket_sample_count(
-                        laps_for_fit, car, track, corner, cond
+    if fit_method == "per_second":
+        from .statespace import fit_tau_and_gains as _fit_per_second
+
+        tau_by_car_corner_cond, bucket_gains, bucket_n_samples = _fit_per_second(
+            root, laps_for_fit, anchor_track=ANCHOR_TRACK, min_laps_for_fit=MIN_LAPS_FOR_K_BUCKET
+        )
+    else:
+        for car in sorted(set(laps_for_fit["car"])):
+            for corner in CORNERS:
+                for cond in seen_conditions:
+                    tau_upper = _rain_tau_upper(tau_by_car_corner_cond, car, corner, cond)
+                    tau, per_bucket_gain = _pass1_fit_tau_and_gains(
+                        laps_for_fit, car, corner, cond, tau_upper=tau_upper
                     )
+                    if tau.n_samples == 0 and not per_bucket_gain:
+                        # Skip empty (car, corner, condition) combos — no data at all
+                        continue
+                    tau_by_car_corner_cond[(car, corner, cond)] = tau
+                    for track, gain in per_bucket_gain.items():
+                        bucket_gains[(car, track, corner, cond)] = gain
+                        bucket_n_samples[(car, track, corner, cond)] = _bucket_sample_count(
+                            laps_for_fit, car, track, corner, cond
+                        )
 
     k_by_car_corner_cond, c_track_by_track = _pass2_factor_gains(
         bucket_gains=bucket_gains,
@@ -304,6 +322,7 @@ def build_warmup_table(
         data_through_date=_data_through[0],
         data_through_local=_data_through[1],
         outlap_lookup=outlap_lookup,
+        fit_method=fit_method,
     )
 
     if write_artifacts:
@@ -1276,6 +1295,7 @@ def _assemble_model(
     data_through_date: str | None = None,
     data_through_local: str | None = None,
     outlap_lookup: dict[tuple[str, str, str], tuple[float, float, int]] | None = None,
+    fit_method: str = DEFAULT_FIT_METHOD,
 ) -> dict[str, Any]:
     """Build the in-memory model dict that matches the JSON artifact schema.
 
@@ -1322,6 +1342,7 @@ def _assemble_model(
         # Raw car label -> pooled fit label. Predictors resolve an input car
         # through this map before any lookup, so old car names keep working.
         "car_aliases": dict(CAR_FIT_ALIASES),
+        "fit_method": fit_method,
         "model_form": (
             "T_hot - T_eff = K[car,corner,cond] * c_track[track] * g2 "
             "* (1 - exp(-t / tau_sec[car,corner,cond])) "
