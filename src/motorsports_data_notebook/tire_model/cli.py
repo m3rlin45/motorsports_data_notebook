@@ -235,6 +235,7 @@ def _cmd_infer_compounds(args: argparse.Namespace) -> int:
         _attach_weather,
         _build_g2_typ,
         _compute_delta_t,
+        _compute_stint_anchor,
         _compute_stint_clock,
         _laps_for_fit,
         _load_filtered_laps,
@@ -260,6 +261,7 @@ def _cmd_infer_compounds(args: argparse.Namespace) -> int:
     laps = _attach_weather(laps, _load_weather(root))
     laps = _compute_stint_clock(laps)
     laps, _ = _apply_blacklist(laps, load_sensor_blacklist(root), warn_on_unknown=False)
+    laps = _compute_stint_anchor(laps)  # anchors carry the set pressure the EM prior uses
     laps = _compute_delta_t(laps)
     laps = _laps_for_fit(laps, _build_g2_typ(laps))
 

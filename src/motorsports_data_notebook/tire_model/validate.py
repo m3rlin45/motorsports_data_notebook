@@ -181,6 +181,7 @@ def _collect_holdout_frame(
     holdouts)``. ``None`` rows means no bucket could be held out."""
     sessions, laps = _load_sessions_and_laps(root)
     session_condition = _session_conditions(root)
+    inferred_labels = _inferred_compound_labels(root)
     fold_frames: list[pd.DataFrame] = []
     total_holdouts = 0
     for fold in range(max(1, n_folds)):
@@ -208,7 +209,7 @@ def _collect_holdout_frame(
                 f"{n_per_bucket} per (track, car, condition) bucket, min bucket size = "
                 f"{min_bucket_size} dry / 3 rain)"
             )
-        fold_df = _evaluate_fold(root, holdout_ids, inputs=inputs)
+        fold_df = _evaluate_fold(root, holdout_ids, inputs=inputs, inferred_labels=inferred_labels)
         if not fold_df.empty:
             fold_df["fold"] = fold
             fold_frames.append(fold_df)
@@ -288,6 +289,60 @@ def _pick_holdout_sessions(
 
 
 INPUT_MODES = ("calculator", "oracle")
+# Stand-in for the target lap time a driver enters: the session's p25
+# flying lap (drivers are optimistic about their pace).
+TARGET_LAP_TIME_QUANTILE = 0.25
+
+
+def _inferred_compound_labels(root: Path) -> dict[str, str]:
+    """Compound per session from the compound EM run on the full dataset:
+    human/seed labels where present, else the argmax of the inferred
+    posterior (majority across a session's axle units). Used by the holdout
+    as the tire a driver would have selected on unlabeled sessions."""
+    from collections import defaultdict
+
+    from .compound_infer import apply_condition_seeds, fit_compounds_em
+    from .compounds import load_compound_labels, load_condition_seeds
+    from .warmup_table import (
+        FitParam,
+        _apply_blacklist,
+        _attach_weather,
+        _build_g2_typ,
+        _compute_delta_t,
+        _compute_stint_anchor,
+        _compute_stint_clock,
+        _laps_for_fit,
+        _load_filtered_laps,
+        _load_weather,
+        alias_condition_seeds,
+        load_sensor_blacklist,
+    )
+
+    model = build_warmup_table(root, write_artifacts=False)
+    tau = {
+        (d["car"], d["corner"], d["condition"]): FitParam(
+            d["value_seconds"], d["stderr_seconds"], d["n_samples_used"], d["from_prior"]
+        )
+        for d in model["tau_sec_by_car_corner_cond"]
+    }
+    c_track = {
+        d["track_canonical"]: FitParam(d["value"], d["stderr"], d["n_buckets_used"])
+        for d in model["c_track_by_track"]
+    }
+    laps = _attach_weather(_load_filtered_laps(root), _load_weather(root))
+    laps = _compute_stint_clock(laps)
+    laps, _ = _apply_blacklist(laps, load_sensor_blacklist(root), warn_on_unknown=False)
+    laps = _compute_stint_anchor(laps)
+    laps = _compute_delta_t(laps)
+    laps = _laps_for_fit(laps, _build_g2_typ(laps))
+    labels = apply_condition_seeds(
+        load_compound_labels(root), laps, alias_condition_seeds(load_condition_seeds(root))
+    )
+    _, assignments, _ = fit_compounds_em(laps, labels, tau, c_track)
+    votes: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
+    for a in assignments:
+        votes[a.session_id][a.compound] += a.responsibility * max(a.n_laps, 1)
+    return {sid: max(c.items(), key=lambda kv: kv[1])[0] for sid, c in votes.items() if c}
 
 
 def _calculator_lap_inputs(
@@ -330,6 +385,7 @@ def _evaluate_fold(
     holdout_ids: list[str],
     *,
     inputs: str = "calculator",
+    inferred_labels: dict[str, str] | None = None,
 ) -> pd.DataFrame:
     """Train a model excluding ``holdout_ids`` and return per-(lap, corner)
     residual rows for the held-out sessions.
@@ -426,8 +482,17 @@ def _evaluate_fold(
     label_by_session = {
         r.session_id: r.compound for r in labels.itertuples() if isinstance(r.compound, str)
     }
+    # The driver always selects the tire. For sessions without a human or
+    # seed label, stand in the EM's inferred compound (fitted once on the
+    # full dataset) for what they would have selected.
+    for sid, comp in (inferred_labels or {}).items():
+        label_by_session.setdefault(sid, comp)
     flying_only = all_laps[~all_laps["_is_out"]] if "_is_out" in all_laps.columns else all_laps
-    session_lap_time = flying_only.groupby("session_id")["on_track_s"].median().to_dict()
+    # The target lap time a driver enters: people are optimistic, so stand
+    # in the session's 25th-percentile flying lap rather than the median.
+    session_lap_time = (
+        flying_only.groupby("session_id")["on_track_s"].quantile(TARGET_LAP_TIME_QUANTILE).to_dict()
+    )
     # Measured out-lap per stint for the oracle: (rolling-clock end, g²).
     stint_outlap: dict[tuple[str, int], tuple[float, float]] = {}
     if "_is_out" in all_laps_full.columns and "moving_s" in all_laps_full.columns:

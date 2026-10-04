@@ -153,3 +153,48 @@ class TestApplyConditionSeeds:
         )
         out = apply_condition_seeds(labels, laps, {"KK-SII": {"dry": "DRY"}})
         assert len(out) == 1 and out.iloc[0].compound_front == "WET"
+
+
+def test_set_pressure_prior_resolves_a_thermally_ambiguous_session() -> None:
+    """Compounds are run at characteristic cold pressures. A noisy session
+    whose heat sits between the two toy clusters is called HARD on the
+    thermal evidence alone; its 1.30 bar set pressure says SOFT, and with
+    the labeled sessions' pressures as a prior the EM follows the pressure.
+    (SOFT / HARD are the toy fixture's compound names, nothing more.)"""
+
+    def with_pressure(df: pd.DataFrame, p: float) -> pd.DataFrame:
+        df = df.copy()
+        df["stint_id"] = 1
+        for c in CORNERS:
+            df[f"p_start_{c}"] = p
+        return df
+
+    noise = 5.0
+    laps = pd.concat(
+        [
+            with_pressure(_session_laps("soft1", 30.0, noise=noise), 1.30),
+            with_pressure(_session_laps("soft2", 30.0, noise=noise), 1.26),
+            with_pressure(_session_laps("soft3", 30.0, noise=noise), 1.35),
+            with_pressure(_session_laps("hard1", 60.0, noise=noise), 1.90),
+            with_pressure(_session_laps("hard2", 60.0, noise=noise), 1.95),
+            with_pressure(_session_laps("hard3", 60.0, noise=noise), 2.05),
+            with_pressure(_session_laps("ambiguous", 50.0, noise=noise), 1.30),
+        ],
+        ignore_index=True,
+    )
+    labels = _labels(
+        {
+            "soft1": "SOFT",
+            "soft2": "SOFT",
+            "soft3": "SOFT",
+            "hard1": "HARD",
+            "hard2": "HARD",
+            "hard3": "HARD",
+        }
+    )
+    _, without, _ = fit_compounds_em(laps, labels, TAU, C_TRACK, pressure_prior=False)
+    _, with_prior, _ = fit_compounds_em(laps, labels, TAU, C_TRACK)
+    amb_without = next(a for a in without if a.session_id == "ambiguous")
+    amb_with = next(a for a in with_prior if a.session_id == "ambiguous")
+    assert amb_without.compound == "HARD"
+    assert amb_with.compound == "SOFT" and amb_with.responsibility > 0.9

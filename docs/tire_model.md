@@ -361,6 +361,15 @@ Soft assignments are training-only; held-out evaluation uses human/seed
 labels exclusively. ``just tire-model infer-compounds`` audits every
 latent assignment for human review.
 
+**Set-pressure prior (2026-10).** Compounds are run at characteristic cold
+pressures (Inferno 86: A050 at 1.24–1.41 bar, A052 and RE-71RS at 1.5–2.7),
+which the thermal likelihood cannot see. The EM therefore multiplies the
+E-step by a per-(car, compound) Gaussian on the session's pit-exit pressure,
+fitted from the labeled sessions when every compound of the car has ≥ 3 of
+them (`PRESSURE_PRIOR_MIN_SESSIONS`, σ floored at 0.12 bar). This settles
+the A050 sessions outright; A052 versus RE-71RS overlap in pressure and stay
+a thermal question.
+
 Held-out CV, fleet pooled MAE at v0.20: FL 4.22 / FR 4.21 / RL 4.61 /
 RR 4.18 °C with pooled bias within ±0.75 °C — versus FL 4.95 / FR 4.01 /
 RL 5.63 / RR 4.70 before the compound era (v0.17), with the Inferno's
@@ -509,14 +518,22 @@ recurring failure across **2 Tsukuba sessions on 2026-03-22**.
   condition for every scored lap — the same information a driver supplies
   as "Current °C" at roll-out. Laps at or before a corner's anchor are
   skipped.
+- **Compound.** The driver always selects the tire, so held-out sessions
+  use the human or seed label where one exists and otherwise the compound
+  the EM infers for that session on the full dataset (argmax, laps- and
+  responsibility-weighted across axles). The inference uses the session's
+  own temperatures and set pressure, so for unlabeled sessions this is a
+  mild leak in exchange for standing in what the driver knew.
 - **Blacklist applied.** Confirmed broken sensors are masked in both
   training and evaluation — we don't grade the model against channels we
   already know are broken.
 - **Inputs: calculator or oracle.** By default (`--inputs calculator`) each
   held-out lap is predicted from what the calculator has: the fold model's
   ⟨g²⟩ scaled along the pace curve at the session's median lap time (the
-  target a driver would enter), the bucket's typical out-lap followed by
-  the clock `N × lap time`, and the start temperature the driver types in,
+  target a driver would enter — the session's **25th-percentile** flying lap,
+  since drivers are optimistic about their pace), the bucket's typical
+  out-lap followed by the clock `N × lap time`, and the start temperature
+  the driver types in (a separate measurement at standstill, not the dash),
   stood in by the out-lap's first valid TPMS reading at pit exit (the
   start fields are always filled in practice; leaving them blank was
   measured at +1.2 °C MAE and dropped as an option). Stints without a
