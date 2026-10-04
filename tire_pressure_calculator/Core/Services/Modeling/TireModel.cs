@@ -13,7 +13,7 @@ public sealed class TireModel
 {
     // v3 adds the target-lap-time feature; v2 artifacts still load (the
     // pace scaling then always uses the exponent fallback defaults).
-    public const int SupportedSchemaVersion = 3;
+    public const int SupportedSchemaVersion = 4;
     public const int MinSupportedSchemaVersion = 2;
 
     public TireModelDto Dto { get; }
@@ -296,6 +296,41 @@ public sealed class TireModel
         return new G2PaceScale(Math.Min(clampMax, Math.Max(clampMin, scale)), "exponent");
     }
 
+    /// <summary>
+    /// Typical out-lap (pit exit to the first start/finish crossing): rolling
+    /// seconds and g², integrated first from the typed pit-exit temperature.
+    /// Null when the artifact predates the table or has nothing for the track
+    /// (the out-lap is then zero-length — pre-v0.26 behaviour).
+    /// </summary>
+    public OutlapLookup? LookupOutlap(string track, string car, string condition)
+    {
+        var rows = Dto.OutlapTypByTrackCarCond;
+        if (rows is null || rows.Count == 0) return null;
+        foreach (var cond in ConditionChain(condition))
+        {
+            var hit = rows.FirstOrDefault(
+                r => r.TrackCanonical == track && r.Car == car && r.Condition == cond);
+            if (hit is not null)
+            {
+                var tag = cond == condition ? "exact" : $"fallback({cond})";
+                return new OutlapLookup(hit.OutlapMovingS, hit.OutlapG2, hit.NLapsUsed, tag);
+            }
+        }
+        var sameTC = rows.Where(r => r.TrackCanonical == track && r.Car == car).ToList();
+        if (sameTC.Count > 0)
+        {
+            return new OutlapLookup(sameTC.Average(r => r.OutlapMovingS), sameTC.Average(r => r.OutlapG2),
+                sameTC.Sum(r => r.NLapsUsed), "track_car_pooled");
+        }
+        var sameT = rows.Where(r => r.TrackCanonical == track).ToList();
+        if (sameT.Count > 0)
+        {
+            return new OutlapLookup(sameT.Average(r => r.OutlapMovingS), sameT.Average(r => r.OutlapG2),
+                sameT.Sum(r => r.NLapsUsed), "track_pooled");
+        }
+        return null;
+    }
+
     public LapTimeLookup LookupLapTime(string track, string car, string condition)
     {
         foreach (var cond in ConditionChain(condition))
@@ -324,6 +359,9 @@ public sealed class TireModel
         return new LapTimeLookup(90.0, 0, "global");
     }
 }
+
+public readonly record struct OutlapLookup(
+    double MovingSeconds, double G2, int NLapsUsed, string Source);
 
 public readonly record struct TauLookup(
     double ValueSeconds, double StderrSeconds, string SourceBucket, bool FromPrior);

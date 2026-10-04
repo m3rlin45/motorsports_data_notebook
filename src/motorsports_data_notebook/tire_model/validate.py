@@ -29,12 +29,14 @@ from .energy_balance import (
     t_effective_c,
     t_road_proxy_c,
     warmup_curve_c,
+    warmup_two_stage_c,
 )
 from .predict import (
     CORNERS,
     _g2_pace_scale,
     _lookup_g2,
     _lookup_lap_time,
+    _lookup_outlap,
     predict_cold_pressure,
 )
 from .warmup_table import (
@@ -293,25 +295,34 @@ def _calculator_lap_inputs(
     track: str,
     car: str,
     condition: str,
-    lap_within_stint: int,
+    flying_lap_n: int,
     session_lap_time_s: float,
-) -> tuple[float, float, float]:
+    *,
+    with_outlap: bool,
+) -> tuple[float, float, float, float, float]:
     """What the calculator would feed the warmup curve for this lap.
 
-    The driver enters the track, car, condition, the lap number N and a
-    target lap time; we stand in the session's own median lap time for the
-    target (a driver knows their pace to a few seconds). Returns
-    ``(g2, t_seconds, g2_scale)``: the bucket's ⟨g²⟩ scaled along the pace
-    curve, and the clock ``N × target`` for the end of lap N
-    (``lap_within_stint`` is 0-based, so N = lap_within_stint + 1).
+    The driver enters the track, car, condition, the flying-lap number N and
+    a target lap time; we stand in the session's own median lap time for
+    the target (a driver knows their pace to a few seconds). Returns
+    ``(g2, t_flying_s, g2_scale, outlap_s, outlap_g2)``: the bucket's ⟨g²⟩
+    scaled along the pace curve, the flying clock ``N × target``, and the
+    bucket's typical out-lap segment (zero when ``with_outlap`` is False —
+    the stint's anchor was not a pit exit, so the clock starts at the first
+    flying lap as before).
     """
     lap_time_typ_s, _n, _src = _lookup_lap_time(model, track, car, condition)
     g2_typ, _n2, _src2 = _lookup_g2(model, track, car, condition)
     scale, _pace_src = _g2_pace_scale(
         model, track, car, condition, lap_time_typ_s, session_lap_time_s
     )
-    t_seconds = float(lap_within_stint + 1) * float(session_lap_time_s)
-    return g2_typ * scale, t_seconds, scale
+    t_flying_s = float(flying_lap_n) * float(session_lap_time_s)
+    out_s, out_g2 = 0.0, 0.0
+    if with_outlap:
+        hit = _lookup_outlap(model, track, car, condition)
+        if hit is not None:
+            out_s, out_g2 = hit[0], hit[1]
+    return g2_typ * scale, t_flying_s, scale, out_s, out_g2
 
 
 def _evaluate_fold(
@@ -326,12 +337,15 @@ def _evaluate_fold(
     ``inputs`` decides what the warmup curve is fed:
 
     - ``"calculator"`` (default): only what the calculator has — the
-      bucket's ⟨g²⟩ scaled by the pace curve at the session's median lap
-      time, the clock ``N × lap time``, and the start temperature the
-      driver types in (stood in by the stint's first finite TPMS reading).
-    - ``"oracle"``: the lap's own measured g², its actual cumulative
-      on-track time and the measured anchor — the thermal model's accuracy
-      given the real driving, an upper bound on what the calculator can do.
+      bucket's typical out-lap (rolling time, g²) integrated from the
+      pit-exit reading the driver types in (stood in by the out-lap's first
+      valid TPMS reading), then the bucket's ⟨g²⟩ scaled by the pace curve
+      at the session's median lap time for ``N × lap time`` of flying laps.
+      Stints without a usable pit-exit out-lap anchor on their first lap as
+      before (``anchor_kind == "first_lap"``).
+    - ``"oracle"``: the measured out-lap and the lap's own measured g² and
+      clock from the same anchor — the thermal model's accuracy given the
+      real driving, an upper bound on what the calculator can do.
     """
     if inputs not in INPUT_MODES:
         raise ValueError(f"inputs must be one of {INPUT_MODES}; got {inputs!r}")
@@ -392,10 +406,16 @@ def _evaluate_fold(
     all_laps, _ = _apply_blacklist(all_laps, blacklist_pairs, warn_on_unknown=False)
     all_laps = _compute_stint_anchor(all_laps)
     all_laps = _compute_delta_t(all_laps)
-    # Score laps after the first full lap of the stint (same convention as
-    # the v0 report, so numbers stay comparable). The stint's first finite
-    # TPMS reading is the warmup curve's initial condition — the same
-    # information a driver supplies as "current tire temp" at roll-out.
+    # Score the flying laps (the out-lap, lap_within_stint 0 when present, is
+    # the anchor's own lap). With pit-exit anchors N = lap_within_stint is
+    # the calculator's lap number; for first-lap anchors the first scored
+    # lap is the one after the anchor lap, as in the v0 reports.
+    all_laps["_is_out"] = (
+        all_laps["is_outlap"].fillna(False).astype(bool)
+        if "is_outlap" in all_laps.columns
+        else False
+    )
+    all_laps_full = all_laps.copy()
     all_laps = all_laps[all_laps["lap_within_stint"] > 0].reset_index(drop=True)
 
     from .warmup_table import alias_condition_seeds
@@ -406,7 +426,21 @@ def _evaluate_fold(
     label_by_session = {
         r.session_id: r.compound for r in labels.itertuples() if isinstance(r.compound, str)
     }
-    session_lap_time = all_laps.groupby("session_id")["on_track_s"].median().to_dict()
+    flying_only = all_laps[~all_laps["_is_out"]] if "_is_out" in all_laps.columns else all_laps
+    session_lap_time = flying_only.groupby("session_id")["on_track_s"].median().to_dict()
+    # Measured out-lap per stint for the oracle: (rolling-clock end, g²).
+    stint_outlap: dict[tuple[str, int], tuple[float, float]] = {}
+    if "_is_out" in all_laps_full.columns and "moving_s" in all_laps_full.columns:
+        outs = all_laps_full[all_laps_full["_is_out"]]
+        for sid_o, stint_o, mv, hp, t_end in zip(
+            outs["session_id"].tolist(),
+            outs["stint_id"].tolist(),
+            outs["moving_s"].to_numpy(dtype=float),
+            outs["heat_proxy"].to_numpy(dtype=float),
+            outs["t_cum_s"].to_numpy(dtype=float),
+        ):
+            if np.isfinite(mv) and mv > 0 and np.isfinite(hp):
+                stint_outlap[(str(sid_o), int(stint_o))] = (float(t_end), float(hp / mv))
     gamma_by_car = _fit_pressure_gain_by_car(root, exclude_session_ids=set(holdout_ids))
 
     # Per-lap predictions. Per-lap g² (heat_proxy / on_track_s) is the
@@ -439,15 +473,6 @@ def _evaluate_fold(
             continue
         g2_scale = 1.0
         t_pred_s = t_cum_s
-        if inputs == "calculator":
-            g2, t_pred_s, g2_scale = _calculator_lap_inputs(
-                model,
-                track,
-                car,
-                cond,
-                int(lap["lap_within_stint"]),
-                float(session_lap_time.get(lap["session_id"], lap["on_track_s"])),
-            )
         c_track = c_track_lookup.get(track, 1.0)
         session_compound = label_by_session.get(lap["session_id"])
         for c in CORNERS:
@@ -468,24 +493,71 @@ def _evaluate_fold(
             t_start = lap.get(f"t_start_{c}")
             if pd.isna(t_anchor) or pd.isna(t_start) or t_cum_s <= float(t_anchor):
                 continue
+            anchor_kind = str(lap.get(f"anchor_kind_{c}") or "first_lap")
+            pit_exit = anchor_kind == "pit_exit"
+            t_start_used = float(t_start)
+            out_info = stint_outlap.get((lap["session_id"], lap["stint_id"]))
             if inputs == "calculator":
-                # The driver's typed start temperature applies at roll-out
-                # (t = 0); the first TPMS reading stands in for what they
-                # would have typed.
-                t_from_start = t_pred_s
-                t_start_used = float(t_start)
+                # The driver types the pit-exit temperature; the calculator
+                # integrates the bucket's typical out-lap, then N flying laps
+                # at the pace-scaled bucket g². Without a pit-exit anchor the
+                # clock starts at the first flying lap (first_lap anchors are
+                # on that lap's start).
+                n_flying = (
+                    int(lap["lap_within_stint"]) if pit_exit else int(lap["lap_within_stint"])
+                )
+                g2_c, t_fly, g2_scale, out_s, out_g2 = _calculator_lap_inputs(
+                    model,
+                    track,
+                    car,
+                    cond,
+                    n_flying,
+                    float(session_lap_time.get(lap["session_id"], lap["on_track_s"])),
+                    with_outlap=pit_exit,
+                )
+                g2 = g2_c
+                t_pred_s = t_fly
+                _t_after, t_hot_pred = warmup_two_stage_c(
+                    t_outlap_s=out_s,
+                    g2_outlap=out_g2,
+                    t_flying_s=t_fly,
+                    g2_flying=g2,
+                    t_eff_c=t_eff,
+                    k_kelvin_per_g2=K,
+                    c_track=c_track,
+                    tau_sec=tau,
+                    t_start_c=t_start_used,
+                )
+                t_from_start = out_s + t_fly
             else:
+                # Oracle: the measured out-lap (its own g² over its rolling
+                # time after the reading), then the flying laps at this
+                # lap's measured g².
+                if pit_exit and out_info is not None:
+                    out_end_s, out_g2_meas = out_info
+                    out_seg = max(out_end_s - float(t_anchor), 0.0)
+                    _t_after, t_hot_pred = warmup_two_stage_c(
+                        t_outlap_s=out_seg,
+                        g2_outlap=out_g2_meas,
+                        t_flying_s=max(t_cum_s - out_end_s, 0.0),
+                        g2_flying=g2,
+                        t_eff_c=t_eff,
+                        k_kelvin_per_g2=K,
+                        c_track=c_track,
+                        tau_sec=tau,
+                        t_start_c=t_start_used,
+                    )
+                else:
+                    t_hot_pred = warmup_curve_c(
+                        t_seconds=t_cum_s - float(t_anchor),
+                        t_eff_c=t_eff,
+                        k_kelvin_per_g2=K,
+                        c_track=c_track,
+                        g2_typ=g2,
+                        tau_sec=tau,
+                        t_start_c=t_start_used,
+                    )
                 t_from_start = t_cum_s - float(t_anchor)
-                t_start_used = float(t_start)
-            t_hot_pred = warmup_curve_c(
-                t_seconds=t_from_start,
-                t_eff_c=t_eff,
-                k_kelvin_per_g2=K,
-                c_track=c_track,
-                g2_typ=g2,
-                tau_sec=tau,
-                t_start_c=t_start_used,
-            )
             # Pressure domain: what the driver actually gets. Push the
             # predicted hot temperature through the same constant-volume
             # step the calculators use, from the pressure/temperature at
@@ -510,6 +582,7 @@ def _evaluate_fold(
                     "t_cum_s": t_cum_s,
                     "t_anchor_s": float(t_anchor),
                     "t_start_c": t_start_used,
+                    "anchor_kind": anchor_kind,
                     "inputs": inputs,
                     "g2_used": g2,
                     "g2_scale": g2_scale,

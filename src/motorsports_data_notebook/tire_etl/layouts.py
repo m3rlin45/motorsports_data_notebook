@@ -384,8 +384,19 @@ class LayoutDetection:
     note: str = ""
 
 
+def _full_laps(laps: pa.Table) -> pa.Table:
+    """The logger's full laps: out/in-typed segments start at the recording
+    start / end at its end, not at a beacon crossing, so they must not take
+    part in beacon or lap-time reasoning."""
+    if "lap_type" in laps.column_names and len(laps) > 0:
+        import pyarrow.compute as pc
+
+        return laps.filter(pc.equal(laps.column("lap_type"), "full"))
+    return laps
+
+
 def _logger_lap_start_positions(log, trace: GpsTrace) -> tuple[np.ndarray, np.ndarray]:
-    laps = log.laps
+    laps = _full_laps(log.laps)
     if len(laps) == 0:
         return np.empty(0), np.empty(0)
     starts = laps.column("start_time").to_numpy().astype(np.int64)
@@ -422,6 +433,7 @@ def resplit_laps(
     ref_lap_s: float | None = None,
     min_frac: float = 0.5,
     max_frac: float = 2.0,
+    min_edge_s: float = 10.0,
 ) -> pa.Table:
     """Build a laps table from consecutive GPS crossings of ``gate``.
 
@@ -432,7 +444,10 @@ def resplit_laps(
     way. The reference lap time is ``ref_lap_s`` when given (the logger's own
     median lap duration is the natural choice: a beacon on the wrong gate
     still measures full laps), else the median interval. Laps are renumbered
-    1..N and typed ``"full"``.
+    1..N and typed ``"full"``; the segment from the first GPS sample to the
+    first crossing is lap 0 typed ``"out"`` and the segment after the last
+    crossing is typed ``"in"``, mirroring what the logger emits, when each is
+    at least ``min_edge_s`` long.
     """
     times = gate_crossings(trace, gate)
     if times.size < 2:
@@ -450,12 +465,30 @@ def resplit_laps(
     ref = ref_lap_s * 1000.0 if ref_lap_s and ref_lap_s > 0 else float(np.median(dur))
     keep = (dur >= min_frac * ref) & (dur <= max_frac * ref) & (dur > 0)
     starts, ends = starts[keep], ends[keep]
+    nums = list(np.arange(1, len(starts) + 1, dtype=np.int64))
+    s_list = list(starts)
+    e_list = list(ends)
+    types = ["full"] * len(starts)
+    t0 = int(trace.t_ms[0])
+    t1 = int(trace.t_ms[-1])
+    first_cross = int(np.round(times[0]))
+    last_cross = int(np.round(times[-1]))
+    if first_cross - t0 >= min_edge_s * 1000.0:
+        nums.insert(0, np.int64(0))
+        s_list.insert(0, np.int64(t0))
+        e_list.insert(0, np.int64(first_cross))
+        types.insert(0, "out")
+    if t1 - last_cross >= min_edge_s * 1000.0:
+        nums.append(np.int64(len(starts) + 1))
+        s_list.append(np.int64(last_cross))
+        e_list.append(np.int64(t1))
+        types.append("in")
     return pa.table(
         {
-            "num": pa.array(np.arange(1, len(starts) + 1, dtype=np.int64)),
-            "start_time": pa.array(starts),
-            "end_time": pa.array(ends),
-            "lap_type": pa.array(["full"] * len(starts)),
+            "num": pa.array(np.asarray(nums, dtype=np.int64)),
+            "start_time": pa.array(np.asarray(s_list, dtype=np.int64)),
+            "end_time": pa.array(np.asarray(e_list, dtype=np.int64)),
+            "lap_type": pa.array(types),
         }
     )
 
@@ -483,7 +516,7 @@ def detect_layout(
         declared_canonical = normalize_track_name(venue_meta)
         declared_layout = normalize_layout_name(venue_meta)
         declared_raw = venue_meta
-    n_logger = int(len(log.laps))
+    n_logger = int(len(_full_laps(log.laps)))
 
     trace = gps_trace_from_log(log, lat_channel=lat_channel, lon_channel=lon_channel)
     if trace is None:
@@ -550,7 +583,8 @@ def detect_layout(
     else:
         ref_lap_s: float | None = None
         if n_logger > 0:
-            ld = log.laps.column("end_time").to_numpy().astype(np.float64) - log.laps.column(
+            full = _full_laps(log.laps)
+            ld = full.column("end_time").to_numpy().astype(np.float64) - full.column(
                 "start_time"
             ).to_numpy().astype(np.float64)
             ref_lap_s = float(np.median(ld)) / 1000.0

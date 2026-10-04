@@ -18,10 +18,21 @@ deltas show up in PR diffs.
   `lap_source` (`logger` / `gps_resplit` when laps were rebuilt at the correct
   start/finish / `logger_unverified`), `beacon_gate`, `n_laps_logger`,
   `venue_meta`, `track_declared_canonical`. Review with `just tire-track-audit`.
-- `laps/YYYY-MM.parquet` — one row per *full* lap (summary stats derived from
-  timeseries). libxrk ≥ 0.13 types the first/last lap of a recording as out/in
-  and the loader drops them; before schema v2 most sessions were extracted with
-  an older libxrk and still carried their in-lap.
+- `laps/YYYY-MM.parquet` — one row per lap (summary stats derived from
+  timeseries), including the **out-lap** (`lap_type = "out"`, `lap_num = 0`:
+  pit exit, or recording start, to the first start/finish crossing) and any
+  in-lap (`lap_type = "in"`, excluded from tire modelling). Schema v3
+  (extractor 0.10.0): `lap_type`, `outlap_from_pit` (the out-lap began below
+  pit-lane speed, i.e. from standstill — mid-track file starts are not pit
+  exits), `moving_s` (rolling time above 5 km/h; an out-lap's `lap_time_s` and
+  `on_track_s` include the grid / pit-lane wait) and `speed_kmh_first`. The
+  out-lap's `tpms_*_start` is the first valid reading after the stale-prefix
+  mask — the pit-exit temperature and the cold pressure actually set — and is
+  the tire model's stint initial condition; `tpms_*_{corner}_first_valid_s`
+  says how far into the lap that first valid sample was. A new `stint_id` starts at every
+  from-pit out-lap, not only after a ≥ 10 min gap. Before v3 the loader
+  dropped out/in laps and the first *flying* lap of each stint was mis-flagged
+  as the out-lap and excluded.
 - `timeseries/YYYY-MM/{session_id}.parquet` — per-sample telemetry for one session.
   This is the source of truth; the per-lap aggregates are rebuildable from it.
 - `notes_extracted/*.json` — structured JSON extracted from run-note `.txt` files

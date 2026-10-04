@@ -458,3 +458,129 @@ def test_data_through_is_newest_fitted_session_in_track_local_time() -> None:
     assert local == "2026-10-02 14:23 JST"
     assert _data_through_for_fit(pd.DataFrame({"date": []})) == (None, None)
     assert _data_through_for_fit(pd.DataFrame({"x": [1]})) == (None, None)
+
+
+def test_compute_stint_anchor_uses_pit_exit_reading_on_the_rolling_clock() -> None:
+    """Schema v3: the stint starts with an out-lap from the pits. Its first
+    valid reading is the anchor, placed on the rolling clock (lap-relative
+    time minus the standstill before the car moved). Stints without a
+    from-pit out-lap keep the first-lap anchor."""
+    base = {"session_id": "s", "car": "FJ"}
+    laps = pd.DataFrame(
+        [
+            # stint 1: 200 s out-lap, 120 s of which standing on the grid; the
+            # TPMS woke 150 s into the lap -> 30 s into the rolling clock.
+            {
+                **base,
+                "stint_id": 1,
+                "lap_num": 0,
+                "is_outlap": True,
+                "outlap_from_pit": True,
+                "on_track_s": 200.0,
+                "moving_s": 80.0,
+                "t_cum_s": 80.0,
+                "tpms_temp_fl_start": 26.0,
+                "tpms_temp_fl_end": 31.0,
+                "tpms_press_fl_start": 1.30,
+                "tpms_temp_fl_first_valid_s": 150.0,
+            },
+            {
+                **base,
+                "stint_id": 1,
+                "lap_num": 1,
+                "is_outlap": False,
+                "outlap_from_pit": False,
+                "on_track_s": 60.0,
+                "moving_s": 60.0,
+                "t_cum_s": 140.0,
+                "tpms_temp_fl_start": 31.5,
+                "tpms_temp_fl_end": 38.0,
+                "tpms_press_fl_start": 1.35,
+                "tpms_temp_fl_first_valid_s": 0.0,
+            },
+            # stint 2: out-lap that started mid-track (file boundary) -> not a pit exit
+            {
+                **base,
+                "stint_id": 2,
+                "lap_num": 2,
+                "is_outlap": True,
+                "outlap_from_pit": False,
+                "on_track_s": 70.0,
+                "moving_s": 70.0,
+                "t_cum_s": 70.0,
+                "tpms_temp_fl_start": 44.0,
+                "tpms_temp_fl_end": 50.0,
+                "tpms_press_fl_start": 1.5,
+                "tpms_temp_fl_first_valid_s": 0.0,
+            },
+        ]
+    )
+    for c in ("fr", "rl", "rr"):
+        laps[f"tpms_temp_{c}_start"] = np.nan
+        laps[f"tpms_temp_{c}_end"] = np.nan
+        laps[f"tpms_press_{c}_start"] = np.nan
+        laps[f"tpms_temp_{c}_first_valid_s"] = np.nan
+    out = wt._compute_stint_anchor(laps)
+    s1 = out[out.stint_id == 1]
+    assert (s1["anchor_kind_fl"] == "pit_exit").all()
+    assert (s1["t_anchor_fl"] == 30.0).all()
+    assert (s1["t_start_fl"] == 26.0).all()
+    assert (s1["p_start_fl"] == 1.30).all()
+    s2 = out[out.stint_id == 2]
+    assert (s2["anchor_kind_fl"] == "first_lap").all()
+    assert (s2["t_anchor_fl"] == 0.0).all() and (s2["t_start_fl"] == 44.0).all()
+
+
+def test_rolling_clock_and_flying_lookups_exclude_outlap_wait() -> None:
+    laps = pd.DataFrame(
+        [
+            {
+                "session_id": "s",
+                "stint_id": 1,
+                "lap_num": 0,
+                "is_outlap": True,
+                "outlap_from_pit": True,
+                "on_track_s": 300.0,
+                "moving_s": 90.0,
+                "heat_proxy": 0.3 * 90,
+                "track_canonical": "t",
+                "car": "FJ",
+                "condition": "dry",
+            },
+            {
+                "session_id": "s",
+                "stint_id": 1,
+                "lap_num": 1,
+                "is_outlap": False,
+                "outlap_from_pit": False,
+                "on_track_s": 60.0,
+                "moving_s": 60.0,
+                "heat_proxy": 0.9 * 60,
+                "track_canonical": "t",
+                "car": "FJ",
+                "condition": "dry",
+            },
+            {
+                "session_id": "s",
+                "stint_id": 1,
+                "lap_num": 2,
+                "is_outlap": False,
+                "outlap_from_pit": False,
+                "on_track_s": 62.0,
+                "moving_s": 62.0,
+                "heat_proxy": 1.0 * 62,
+                "track_canonical": "t",
+                "car": "FJ",
+                "condition": "dry",
+            },
+        ]
+    )
+    clocked = wt._compute_stint_clock(laps)
+    assert clocked["t_cum_s"].tolist() == [90.0, 150.0, 212.0]
+    assert clocked["lap_within_stint"].tolist() == [0, 1, 2]
+    lt = wt._build_lap_time_typ(wt._flying_laps(laps))
+    assert lt[("t", "FJ", "dry")][0] == pytest.approx(61.0)
+    g2 = wt._build_g2_typ(wt._flying_laps(laps), percentile=50)
+    assert g2[("t", "FJ", "dry")][0] == pytest.approx(0.95)
+    out = wt._build_outlap_typ(laps)
+    assert out[("t", "FJ", "dry")] == (90.0, pytest.approx(0.3), 1)

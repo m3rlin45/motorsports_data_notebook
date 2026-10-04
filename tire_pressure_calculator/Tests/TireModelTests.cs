@@ -155,7 +155,10 @@ public class TireModelTests
         var tau = model.LookupTau("FJ", "fl", "dry");
         Assert.False(tau.FromPrior);
         // Plan says racing-tire τ is typically 150–350 s.
-        Assert.InRange(tau.ValueSeconds, 100.0, 500.0);
+        // τ is measured from pit exit with the stint anchored on the pit-exit
+        // TPMS reading (v0.26): 400–800 s on the fleet, longer than the v0
+        // numbers that anchored after the out-lap.
+        Assert.InRange(tau.ValueSeconds, 100.0, 900.0);
     }
 
     [Fact]

@@ -117,8 +117,9 @@ public class CircuitPredictorTests
         Assert.Equal(15.0, noOverride.TStartC, precision: 9);
         Assert.Equal(25.0, warmTire.TColdC, precision: 9);
         Assert.Equal(25.0, warmTire.TStartC, precision: 9);
-        // A warmer start ends the lap hotter by the decayed start excess.
-        double decay = Math.Exp(-noOverride.TAtLapNs / noOverride.TauSec);
+        // A warmer start ends the lap hotter by the decayed start excess; the
+        // decay runs over the out-lap segment plus the flying laps.
+        double decay = Math.Exp(-(noOverride.OutlapTimeS + noOverride.TAtLapNs) / noOverride.TauSec);
         Assert.Equal(10.0 * decay, warmTire.PredictedHotTempC - noOverride.PredictedHotTempC, precision: 9);
         // Higher T_cold → higher recommended cold pressure (P/T const).
         Assert.True(warmTire.ColdPressureBar > noOverride.ColdPressureBar);

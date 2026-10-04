@@ -114,7 +114,7 @@ def get_channel_unit(table: pa.Table, channel_name: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def load_session(file_data: str | bytes) -> "LogFile":
+def load_session(file_data: str | bytes, *, lap_types: tuple[str, ...] = ("full",)) -> "LogFile":
     """Load and prepare session data from a telemetry file.
 
     Supports AIM (XRK/XRZ) and iRacing (IBT) file formats. Automatically
@@ -130,6 +130,12 @@ def load_session(file_data: str | bytes) -> "LogFile":
     ----------
     file_data : str or bytes
         Path to the telemetry file, or bytes containing file data.
+    lap_types : tuple of str
+        Which ``lap_type`` values to keep when the loader provides them
+        (libxrk ≥ 0.13 types the first and last lap of a recording as
+        ``"out"`` / ``"in"``). The default keeps only full laps, which is
+        what lap-based analysis wants; the tire ETL asks for all three so the
+        out-lap (pit exit to the first start/finish crossing) is retained.
 
     Returns
     -------
@@ -145,7 +151,7 @@ def load_session(file_data: str | bytes) -> "LogFile":
         from libxrk import aim_xrk
 
         log = aim_xrk(file_data)
-    return _post_process_session(log)
+    return _post_process_session(log, lap_types=lap_types)
 
 
 def _add_lap_time(log: "LogFile") -> None:
@@ -185,13 +191,16 @@ def _add_distance_channel(
     log.channels["distance_m"] = distance_table
 
 
-def clean_laps(laps_table: pa.Table) -> pa.Table:
-    """Remove lap 0 and deduplicate lap numbers (keeps longest).
+def clean_laps(laps_table: pa.Table, *, drop_lap_zero: bool = True) -> pa.Table:
+    """Remove lap 0 (unless ``drop_lap_zero`` is False) and deduplicate lap
+    numbers (keeps longest).
 
     Parameters
     ----------
     laps_table : pa.Table
         Laps table with 'num', 'start_time', 'end_time' columns.
+    drop_lap_zero : bool
+        AIM loggers number the out-lap 0; callers that want it keep it.
 
     Returns
     -------
@@ -211,7 +220,7 @@ def clean_laps(laps_table: pa.Table) -> pa.Table:
     best_by_num: dict[int, tuple[int, float]] = {}
     for i in range(n):
         num = lap_nums[i]
-        if num == 0:
+        if num == 0 and drop_lap_zero:
             continue
         dur = float(durations_ms[i])
         if num not in best_by_num or dur > best_by_num[num][1]:
@@ -223,12 +232,14 @@ def clean_laps(laps_table: pa.Table) -> pa.Table:
     return laps_table.take(keep_indices)
 
 
-def _post_process_session(log: "LogFile") -> "LogFile":
+def _post_process_session(log: "LogFile", *, lap_types: tuple[str, ...] = ("full",)) -> "LogFile":
     """Add derived channels and clean laps for any telemetry format.
 
     Resolves the speed channel name via the profile system, then adds
-    speed_kmh, distance_m, and lap_time columns. Filters to full laps
-    if a ``lap_type`` column is present.
+    speed_kmh, distance_m, and lap_time columns. Keeps the laps whose
+    ``lap_type`` is in ``lap_types`` when that column is present (default:
+    full laps only). Lap 0 — the out-lap's number on AIM loggers — is kept
+    only when out-laps are requested.
     """
     from .profiles import DEFAULT_CHANNEL_NAMES, get_logger_id, get_profile_for_logger
 
@@ -254,11 +265,11 @@ def _post_process_session(log: "LogFile") -> "LogFile":
     if has_speed:
         _add_distance_channel(log, speed_channel, timecodes, speed_ms)
 
-    # Filter to full laps if lap_type column exists (e.g. iRacing IBT)
+    # Keep the requested lap types when the loader provides them
     if "lap_type" in log.laps.column_names:
-        log.laps = log.laps.filter(pc.equal(log.laps.column("lap_type"), "full"))
+        log.laps = log.laps.filter(pc.is_in(log.laps.column("lap_type"), pa.array(list(lap_types))))
 
-    log.laps = clean_laps(log.laps)
+    log.laps = clean_laps(log.laps, drop_lap_zero="out" not in lap_types)
     return log
 
 
@@ -333,9 +344,19 @@ class MergedLogFile:
                 if median_duration > 0 and dur < median_duration * 0.75:
                     boundary_skip.add((log_idx, nums[0]))
 
-        # Renumber laps sequentially, skipping partial boundary laps
+        # Renumber laps sequentially, skipping partial boundary laps. A
+        # leading out-lap keeps its number 0 (AIM convention) so single-file
+        # and merged sessions agree on what lap 0 means.
         parts: list[pa.Table] = []
         next_num = 1
+        first_laps = logs[0].laps
+        if (
+            len(first_laps) > 0
+            and "lap_type" in first_laps.column_names
+            and first_laps.column("lap_type")[0].as_py() == "out"
+            and (0, first_laps.column("num")[0].as_py()) not in boundary_skip
+        ):
+            next_num = 0
         for log_idx, log in enumerate(logs):
             laps = log.laps
             n = len(laps)
@@ -362,14 +383,18 @@ class MergedLogFile:
                     col = kept.column(col_name)
                     shifted = pc.add(col, pa.scalar(offset).cast(col.type))
                     kept = kept.set_column(col_idx, col_name, shifted)
+            # int64 for every part: logger laps carry int32 nums, a GPS
+            # re-split int64, and concat_tables will not widen across files.
             new_nums = pa.array(
                 list(range(next_num - len(keep_indices), next_num)),
-                type=kept.column("num").type,
+                type=pa.int64(),
             )
             num_idx = kept.schema.get_field_index("num")
             parts.append(kept.set_column(num_idx, "num", new_nums))
 
-        self.laps = pa.concat_tables(parts) if parts else logs[0].laps
+        # Files in one group may carry different lap-table schemas (a
+        # re-split file has lap_type / lap_time columns the others may not).
+        self.laps = pa.concat_tables(parts, promote_options="default") if parts else logs[0].laps
 
         # Use first file's metadata
         self.metadata = logs[0].metadata

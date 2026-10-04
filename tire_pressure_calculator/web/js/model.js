@@ -14,7 +14,7 @@ export const T_ZERO_C_TO_K = 273.15;
 
 // v3 adds the target-lap-time feature; v2 artifacts still load (the pace
 // scaling then always uses the exponent fallback defaults).
-export const SUPPORTED_SCHEMA_VERSION = 3;
+export const SUPPORTED_SCHEMA_VERSION = 4;
 export const MIN_SUPPORTED_SCHEMA_VERSION = 2;
 
 // C# Math.Round uses banker's rounding (half to even); mirror it so the
@@ -45,6 +45,18 @@ export function warmupCurveC(tSeconds, tEffC, kKelvinPerG2, cTrack, g2Typ, tauSe
   const deltaTInf = kKelvinPerG2 * cTrack * g2Typ;
   const start = tStartC ?? tEffC;
   return tEffC + deltaTInf * warmupFrac + (start - tEffC) * decay;
+}
+
+// Warm-up from pit exit: the out-lap (gentler, its own rolling time) from
+// tStartC, then the flying laps from the temperature at the end of the
+// out-lap. Exact for piecewise-constant g². Returns [tAfterOutlap, tHot].
+export function warmupTwoStageC(
+  tOutlapS, g2Outlap, tFlyingS, g2Flying, tEffC, kKelvinPerG2, cTrack, tauSec, tStartC) {
+  const tAfterOut = warmupCurveC(
+    Math.max(0, tOutlapS), tEffC, kKelvinPerG2, cTrack, g2Outlap, tauSec, tStartC);
+  const tHot = warmupCurveC(
+    Math.max(0, tFlyingS), tEffC, kKelvinPerG2, cTrack, g2Flying, tauSec, tAfterOut);
+  return [tAfterOut, tHot];
 }
 
 // Invert Gay-Lussac: cold gauge pressure from target hot gauge pressure +
@@ -355,6 +367,37 @@ export class TireModel {
     return { scale: Math.min(hi, Math.max(lo, scale)), source: 'exponent' };
   }
 
+  // Typical out-lap (pit exit to the first start/finish crossing): rolling
+  // seconds and g², integrated first from the typed pit-exit temperature.
+  // null when the artifact predates the table or has nothing for the track
+  // (the out-lap is then zero-length, the pre-v0.26 behaviour).
+  lookupOutlap(track, car, condition) {
+    const rows = this.dto.outlap_typ_by_track_car_cond ?? [];
+    for (const cond of conditionChain(condition)) {
+      const hit = rows.find(
+        (r) => r.track_canonical === track && r.car === car && r.condition === cond);
+      if (hit) {
+        const source = cond === condition ? 'exact' : `fallback(${cond})`;
+        return { movingS: hit.outlap_moving_s, g2: hit.outlap_g2, nLapsUsed: hit.n_laps_used, source };
+      }
+    }
+    const sameTC = rows.filter((r) => r.track_canonical === track && r.car === car);
+    if (sameTC.length > 0) {
+      return {
+        movingS: average(sameTC, (r) => r.outlap_moving_s), g2: average(sameTC, (r) => r.outlap_g2),
+        nLapsUsed: sum(sameTC, (r) => r.n_laps_used), source: 'track_car_pooled',
+      };
+    }
+    const sameT = rows.filter((r) => r.track_canonical === track);
+    if (sameT.length > 0) {
+      return {
+        movingS: average(sameT, (r) => r.outlap_moving_s), g2: average(sameT, (r) => r.outlap_g2),
+        nLapsUsed: sum(sameT, (r) => r.n_laps_used), source: 'track_pooled',
+      };
+    }
+    return null;
+  }
+
   lookupLapTime(track, car, condition) {
     const rows = this.dto.lap_time_typ_by_track_car_cond;
     for (const cond of conditionChain(condition)) {
@@ -390,7 +433,7 @@ export function predictCorner(model, {
   track, car, condition, lapWithinStint, ambientTempC,
   trackTempC = null, cloudCoverPct = null, corner,
   targetHotPressureBar, coldTireTempC = null, targetLapTimeS = null,
-  compound = null,
+  compound = null, includeOutlap = true, outlapTimeS = null,
 }) {
   const cond = condition.toLowerCase();
   if (cond !== 'dry' && cond !== 'damp' && cond !== 'wet') {
@@ -436,11 +479,25 @@ export function predictCorner(model, {
     lapTimeForClockS = targetLapTimeS;
   }
 
+  // Time at the end of flying lap N; the out-lap is a separate segment.
   const tAtLapNs = lapWithinStint * lapTimeForClockS;
+  let outlapS = 0.0;
+  let outlapG2 = 0.0;
+  let outlapSource = null;
+  if (includeOutlap) {
+    const o = model.lookupOutlap(track, car, cond);
+    if (o) { outlapS = o.movingS; outlapG2 = o.g2; outlapSource = o.source; }
+    if (outlapTimeS !== null && outlapTimeS !== undefined) {
+      if (!(outlapTimeS >= 0)) throw new RangeError(`outlap time must be >= 0; got ${outlapTimeS}`);
+      outlapS = outlapTimeS;
+      outlapSource = `${outlapSource ?? 'none'}+override`;
+    }
+  }
   const warmupFrac = tau.valueSeconds > 0 ? 1 - Math.exp(-tAtLapNs / tau.valueSeconds) : 0;
   const deltaTInf = k.valueKelvinPerG2 * c.value * g2Value;
-  const tHotC = warmupCurveC(
-    tAtLapNs, tEffC, k.valueKelvinPerG2, c.value, g2Value, tau.valueSeconds, tStartC);
+  const [tAfterOutlapC, tHotC] = warmupTwoStageC(
+    outlapS, outlapG2, tAtLapNs, g2Value, tEffC, k.valueKelvinPerG2, c.value,
+    tau.valueSeconds, tStartC);
 
   const coldPressureBar = gayLussacColdPressureBar(
     targetHotPressureBar, tHotC, tColdC, model.pAtmBar);
@@ -469,5 +526,9 @@ export function predictCorner(model, {
     targetLapTimeS,
     g2Scale,
     g2PaceSource,
+    outlapTimeS: outlapS,
+    outlapG2,
+    outlapSource,
+    tAfterOutlapC,
   };
 }

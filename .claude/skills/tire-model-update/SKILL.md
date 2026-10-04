@@ -178,6 +178,15 @@ cd /home/m3rlin45/code/motorsports_data_notebook && just tire-predict-holdout --
 cd /home/m3rlin45/code/motorsports_data_notebook && just tire-predict-validate 2>&1 | tail -20
 ```
 
+**Out-laps (dataset schema v3).** The extractor keeps the out-lap
+(`lap_type = "out"`, lap 0) and the first valid TPMS reading in it is the
+stint's starting temperature. After a refresh, sanity-check the new sessions'
+out-laps: `just tire-query "SELECT session_id, lap_num, outlap_from_pit,
+moving_s, tpms_temp_fl_start FROM read_parquet('laps/*.parquet') WHERE
+is_outlap AND tire_usable ORDER BY session_id DESC LIMIT 20"` —
+`outlap_from_pit` should be true for real pit exits (file starts mid-track are
+not), and `moving_s` should be a plausible pit-exit-to-line time for the track.
+
 **Rain buckets.** Damp and wet τ/K are fitted per condition with
 τ_rain ≤ τ_dry bounded inside the fit, and only when a (car, track) rain
 bucket has ≥ 3 sessions; thinner buckets fall back to dry at prediction.

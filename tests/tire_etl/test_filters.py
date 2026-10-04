@@ -43,11 +43,25 @@ def _base_lap(**overrides) -> dict:
     return d
 
 
-def test_outlap_excluded() -> None:
-    t = _laps([_base_lap(is_outlap=True)])
+def test_outlap_is_usable_when_it_rolled_long_enough() -> None:
+    """Out-laps are tire-model data (pit-exit reading = stint start). They are
+    judged on rolling time: lap time and mean speed include the grid wait."""
+    t = _laps(
+        [
+            # 4 min on the grid then a 70 s roll to the line: usable
+            _base_lap(is_outlap=True, lap_time_s=310.0, speed_kmh_mean=25.0, moving_s=70.0),
+            # rolled only 20 s (recording started just before the line): not usable
+            _base_lap(lap_num=2, is_outlap=True, lap_time_s=20.0, moving_s=20.0),
+            _base_lap(lap_num=3, moving_s=60.0),
+        ]
+    )
     out = apply_filters(t, FilterConfig())
-    assert out.column("tire_usable").to_pylist() == [False]
-    assert out.column("exclude_reason").to_pylist() == ["outlap"]
+    assert out.column("tire_usable").to_pylist() == [True, False, True]
+    assert out.column("exclude_reason").to_pylist() == [None, "outlap_too_short", None]
+    # The out-lap's long lap time must not count as the stint's best lap nor
+    # make the flying lap look slow.
+    legacy = apply_filters(t, FilterConfig(exclude_outlap=True))
+    assert legacy.column("exclude_reason").to_pylist()[0] == "outlap"
 
 
 def test_short_lap_excluded() -> None:

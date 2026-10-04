@@ -39,7 +39,7 @@ from .energy_balance import t_effective_c, t_road_proxy_c
 logger = logging.getLogger(__name__)
 
 CORNERS = ("fl", "fr", "rl", "rr")
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 # Cars pooled under one label for every fitted quantity. KK-F and KK-SII are
 # near-identical FJ-series machines running the same tires, so their laps
@@ -207,12 +207,14 @@ def build_warmup_table(
     laps = _compute_stint_anchor(laps)
     laps = _compute_delta_t(laps)
 
-    lap_time_lookup = _build_lap_time_typ(laps)
-    g2_lookup = _build_g2_typ(laps)
-    corner_defaults = _build_corner_defaults(laps)
+    flying = _flying_laps(laps)
+    lap_time_lookup = _build_lap_time_typ(flying)
+    g2_lookup = _build_g2_typ(flying)
+    corner_defaults = _build_corner_defaults(flying)
+    outlap_lookup = _build_outlap_typ(laps)
     from .sectors import build_pace_model
 
-    g2_curves, g2_exponent_default = build_pace_model(root, laps)
+    g2_curves, g2_exponent_default = build_pace_model(root, flying)
 
     laps_for_fit = _laps_for_fit(laps, g2_lookup)
 
@@ -303,6 +305,7 @@ def build_warmup_table(
         corner_defaults=corner_defaults,
         data_through_date=_data_through[0],
         data_through_local=_data_through[1],
+        outlap_lookup=outlap_lookup,
     )
 
     if write_artifacts:
@@ -459,22 +462,55 @@ def _attach_weather(laps: pd.DataFrame, weather: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def _is_outlap_col(df: pd.DataFrame) -> pd.Series:
+    if "is_outlap" in df.columns:
+        return df["is_outlap"].fillna(False).astype(bool)
+    return pd.Series(False, index=df.index)
+
+
+def _flying_laps(laps: pd.DataFrame) -> pd.DataFrame:
+    """Laps that are not out-laps: what the per-bucket lookups (typical lap
+    time, ⟨g²⟩, pace curves, corner defaults) describe. The out-lap has its
+    own lookup (:func:`_build_outlap_typ`)."""
+    return laps[~_is_outlap_col(laps)]
+
+
+def _rolling_time_s(df: pd.DataFrame) -> pd.Series:
+    """Per-lap rolling time: ``moving_s`` when the dataset carries it (schema
+    v3), else ``on_track_s``. An out-lap's ``on_track_s`` includes the grid /
+    pit-lane wait, which is not warm-up time."""
+    if "moving_s" in df.columns:
+        return df["moving_s"].where(df["moving_s"].notna(), df["on_track_s"])
+    return df["on_track_s"]
+
+
 def _compute_stint_clock(laps: pd.DataFrame) -> pd.DataFrame:
-    """Add ``lap_within_stint`` (cumcount within (session_id, stint_id)) and
-    ``t_cum_s`` (on_track_s cumsum within stint, at end of each lap)."""
+    """Add ``lap_within_stint`` (cumcount within (session_id, stint_id); the
+    out-lap, lap 0, is index 0 when present) and ``t_cum_s`` (rolling time
+    cumsum within the stint, at the end of each lap)."""
     df = laps.sort_values(["session_id", "stint_id", "lap_num"]).copy()
+    df["_roll_s"] = _rolling_time_s(df)
     grouped = df.groupby(["session_id", "stint_id"], sort=False)
     df["lap_within_stint"] = grouped.cumcount()
-    df["t_cum_s"] = grouped["on_track_s"].cumsum()
+    df["t_cum_s"] = grouped["_roll_s"].cumsum()
+    df = df.drop(columns=["_roll_s"])
     return df.reset_index(drop=True)
 
 
 def _compute_stint_anchor(laps: pd.DataFrame) -> pd.DataFrame:
-    """Per (session, stint, corner): the first finite TPMS reading of the stint.
+    """Per (session, stint, corner): the stint's initial condition.
 
-    Adds ``t_anchor_{c}`` (on-track seconds, same clock as ``t_cum_s``),
-    ``t_start_{c}`` (°C) and ``p_start_{c}`` (gauge bar at the same reading,
-    for the pressure-domain evaluation). The warmup curve is integrated from that point:
+    Adds ``t_anchor_{c}`` (rolling seconds, same clock as ``t_cum_s``),
+    ``t_start_{c}`` (°C), ``p_start_{c}`` (gauge bar at the same reading, for
+    the pressure-domain evaluation) and ``anchor_kind_{c}``:
+
+    - ``"pit_exit"``: the stint begins with an out-lap that left the pits
+      and the channel's first valid reading in it — the temperature and
+      the cold pressure the driver actually set. Its time on the rolling
+      clock is the reading's lap-relative time minus the standstill before
+      the car moved (clipped at 0).
+    - ``"first_lap"``: no usable out-lap; the first finite reading of the
+      first lap(s), the pre-schema-v3 behaviour. The warmup curve is integrated from that point:
     ``T(t) = T_eff + K·c·g²·(1 − e^{−(t−t_a)/τ}) + (T_a − T_eff)·e^{−(t−t_a)/τ}``.
 
     Candidates in order: the first lap's start reading (t_a = 0), its end
@@ -485,16 +521,47 @@ def _compute_stint_anchor(laps: pd.DataFrame) -> pd.DataFrame:
     dropped by the fit.
     """
     df = laps.sort_values(["session_id", "stint_id", "lap_num"]).copy()
+    df["_roll_s"] = _rolling_time_s(df)
+    df["_is_out"] = _is_outlap_col(df)
+    df["_from_pit"] = (
+        df["outlap_from_pit"].fillna(False).astype(bool)
+        if "outlap_from_pit" in df.columns
+        else False
+    )
     for c in CORNERS:
         df[f"t_anchor_{c}"] = np.nan
         df[f"t_start_{c}"] = np.nan
         df[f"p_start_{c}"] = np.nan
+        df[f"anchor_kind_{c}"] = None
     for (_sid, _stint), grp in df.groupby(["session_id", "stint_id"], sort=False):
+        first = grp.iloc[0]
         for c in CORNERS:
             start_col, end_col = f"tpms_temp_{c}_start", f"tpms_temp_{c}_end"
             p_start_col, p_end_col = f"tpms_press_{c}_start", f"tpms_press_{c}_end"
             anchor: tuple[float, float, float] | None = None
+            kind = "first_lap"
+            if (
+                bool(first["_is_out"])
+                and bool(first["_from_pit"])
+                and start_col in grp.columns
+                and pd.notna(first[start_col])
+            ):
+                fv_col = f"tpms_temp_{c}_first_valid_s"
+                first_valid = float(first[fv_col]) if fv_col in grp.columns else 0.0
+                if not np.isfinite(first_valid):
+                    first_valid = 0.0
+                wait_s = max(float(first["on_track_s"]) - float(first["_roll_s"]), 0.0)
+                t_read = max(first_valid - wait_s, 0.0)
+                p_val = first[p_start_col] if p_start_col in grp.columns else np.nan
+                anchor = (
+                    t_read,
+                    float(first[start_col]),
+                    float(p_val) if pd.notna(p_val) else np.nan,
+                )
+                kind = "pit_exit"
             for row in grp.itertuples(index=False):
+                if anchor is not None:
+                    break
                 t_end = float(getattr(row, "t_cum_s"))
                 t_begin = max(t_end - float(getattr(row, "on_track_s")), 0.0)
                 t_s = getattr(row, start_col, np.nan) if start_col in grp.columns else np.nan
@@ -513,6 +580,8 @@ def _compute_stint_anchor(laps: pd.DataFrame) -> pd.DataFrame:
                 df.loc[grp.index, f"t_anchor_{c}"] = anchor[0]
                 df.loc[grp.index, f"t_start_{c}"] = anchor[1]
                 df.loc[grp.index, f"p_start_{c}"] = anchor[2]
+                df.loc[grp.index, f"anchor_kind_{c}"] = kind
+    df = df.drop(columns=["_roll_s", "_is_out", "_from_pit"])
     return df.reset_index(drop=True)
 
 
@@ -701,6 +770,42 @@ def _build_lap_time_typ(
         out[(str(track), str(car), str(cond))] = (
             float(grp["on_track_s"].median()),
             int(len(grp)),
+        )
+    return out
+
+
+def _build_outlap_typ(
+    laps: pd.DataFrame,
+) -> dict[tuple[str, str, str], tuple[float, float, int]]:
+    """Typical out-lap per (track, car, condition): median rolling time and
+    median g² (``heat_proxy / moving_s``) over from-pit out-laps.
+
+    The calculator integrates this segment first, from the typed pit-exit
+    temperature, before the N flying laps. Returns
+    ``{(track, car, condition): (moving_s, g2, n)}``; empty when the dataset
+    predates schema v3.
+    """
+    out: dict[tuple[str, str, str], tuple[float, float, int]] = {}
+    if "is_outlap" not in laps.columns or "moving_s" not in laps.columns:
+        return out
+    from_pit = (
+        laps["outlap_from_pit"].fillna(False).astype(bool)
+        if "outlap_from_pit" in laps.columns
+        else True
+    )
+    outs = laps[_is_outlap_col(laps) & from_pit]
+    for (track, car, cond), grp in outs.groupby(["track_canonical", "car", "condition"]):
+        if cond == "unknown":
+            continue
+        mv = grp["moving_s"].astype(float)
+        g2 = (grp["heat_proxy"] / mv).replace([np.inf, -np.inf], np.nan)
+        ok = mv.notna() & (mv > 0) & g2.notna()
+        if ok.sum() == 0:
+            continue
+        out[(str(track), str(car), str(cond))] = (
+            float(mv[ok].median()),
+            float(g2[ok].median()),
+            int(ok.sum()),
         )
     return out
 
@@ -1133,6 +1238,7 @@ def _assemble_model(
     corner_defaults: dict[tuple[str, str, str], tuple[float, float, int]] | None = None,
     data_through_date: str | None = None,
     data_through_local: str | None = None,
+    outlap_lookup: dict[tuple[str, str, str], tuple[float, float, int]] | None = None,
 ) -> dict[str, Any]:
     """Build the in-memory model dict that matches the JSON artifact schema.
 
@@ -1182,10 +1288,11 @@ def _assemble_model(
         "model_form": (
             "T_hot - T_eff = K[car,corner,cond] * c_track[track] * g2 "
             "* (1 - exp(-t / tau_sec[car,corner,cond])) "
-            "+ (T_start - T_eff) * exp(-t / tau_sec[car,corner,cond])   "
-            "where T_start = the tire's temperature at roll-out (fit: first finite "
-            "TPMS reading of the stint; predict: the entered current tire temp, "
-            "default T_air), T_eff = (1-w_road)*T_air + w_road*T_road, t = N * lap_time_s, "
+            "+ (T_start - T_eff) * exp(-t / tau_sec[car,corner,cond]), integrated in two "
+            "segments: the out-lap (outlap_moving_s at outlap_g2) from T_start = the pit-exit "
+            "tire temperature (fit: first valid TPMS reading of the out-lap; predict: the "
+            "entered current tire temp, default T_air), then N flying laps (t = N * lap_time_s) "
+            "from the temperature at the end of the out-lap. T_eff = (1-w_road)*T_air + w_road*T_road, "
             "g2 = g2_typ[track,car,cond] * clamp((lap_time_typ_s / target_lap_time_s)"
             "^g2_lap_time_exponent) when a target lap time is given, else g2_typ"
         ),
@@ -1342,6 +1449,21 @@ def _assemble_model(
                 "n_laps_used": n,
             }
             for (car, corner, cond), (temp, press, n) in sorted(corner_defaults.items())
+        ],
+        # Typical out-lap (pit exit to the first start/finish crossing):
+        # rolling time and g², integrated first from the typed pit-exit
+        # temperature. Consumers without this table treat the out-lap as
+        # zero-length (pre-v0.26 behaviour).
+        "outlap_typ_by_track_car_cond": [
+            {
+                "track_canonical": track,
+                "car": car,
+                "condition": cond,
+                "outlap_moving_s": mv,
+                "outlap_g2": g2,
+                "n_laps_used": n,
+            }
+            for (track, car, cond), (mv, g2, n) in sorted((outlap_lookup or {}).items())
         ],
         "lap_time_typ_by_track_car_cond": [
             {

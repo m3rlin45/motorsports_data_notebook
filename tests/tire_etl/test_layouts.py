@@ -12,6 +12,7 @@ import math
 
 import numpy as np
 import pyarrow as pa
+import pyarrow.compute  # noqa: F401
 import pytest
 
 from motorsports_data_notebook.tire_etl.layouts import (
@@ -172,14 +173,12 @@ def test_full_course_logged_as_west_is_overridden_and_resplit() -> None:
     assert det.lap_source == LAP_SOURCE_RESPLIT
     assert det.resplit_laps is not None
     n = len(det.resplit_laps)
-    assert n >= 4
-    dur = (
-        det.resplit_laps.column("end_time").to_numpy()
-        - det.resplit_laps.column("start_time").to_numpy()
-    ) / 1000.0
+    full = det.resplit_laps.filter(pa.compute.equal(det.resplit_laps.column("lap_type"), "full"))
+    assert len(full) >= 4
+    dur = (full.column("end_time").to_numpy() - full.column("start_time").to_numpy()) / 1000.0
     assert np.allclose(dur, dur[0], rtol=0.02)
     # Boundaries now sit on the main line, not the West one.
-    starts = det.resplit_laps.column("start_time").to_numpy()
+    starts = full.column("start_time").to_numpy()
     main_times = gate_crossings(GpsTrace(t, lat, lon), MAIN)
     for s in starts:
         assert np.min(np.abs(main_times - s)) < 100
@@ -278,6 +277,7 @@ def test_resplit_drops_pit_stop_and_double_crossings() -> None:
     t2 = t.copy()
     t2[cut:] += 20 * 60 * 1000
     laps = resplit_laps(GpsTrace(t2, lat, lon), MAIN)
+    laps = laps.filter(pa.compute.equal(laps.column("lap_type"), "full"))
     dur = (laps.column("end_time").to_numpy() - laps.column("start_time").to_numpy()) / 1000.0
     assert len(laps) >= 3
     assert dur.max() < 2.0 * np.median(dur)  # the 20-minute "lap" is gone
@@ -294,6 +294,7 @@ def test_resplit_uses_logger_lap_time_as_reference_when_few_laps() -> None:
     t2 = t.copy()
     t2[cut:] += 20 * 60 * 1000
     laps = resplit_laps(GpsTrace(t2, lat, lon), MAIN, ref_lap_s=lap_s)
+    laps = laps.filter(pa.compute.equal(laps.column("lap_type"), "full"))
     dur = (laps.column("end_time").to_numpy() - laps.column("start_time").to_numpy()) / 1000.0
     assert len(laps) == 1
     assert dur[0] == pytest.approx(lap_s, rel=0.02)
@@ -364,3 +365,28 @@ def test_split_on_layout_separates_differing_fragments(tmp_path) -> None:
     assert _split_on_layout([([a, b], ["la", "lb"], [0, 10])], same) == [
         ([a, b], ["la", "lb"], [0, 10])
     ]
+
+
+def test_resplit_emits_out_and_in_segments_at_the_edges() -> None:
+    """The trace before the first crossing is lap 0 typed "out" and the tail
+    after the last crossing is typed "in", like the logger does."""
+    t, lat, lon = _full_course(4)
+    main_times = gate_crossings(GpsTrace(t, lat, lon), MAIN)
+    lap_ms = float(main_times[1] - main_times[0])
+    # Start the recording 30 s before the first crossing and stop it 20 s
+    # after a crossing (i.e. cut the last lap short).
+    i0 = int(np.searchsorted(t, main_times[0] - 30_000))
+    i1 = int(np.searchsorted(t, main_times[-2] + 20_000))
+    t2, lat2, lon2 = t[i0:i1], lat[i0:i1], lon[i0:i1]
+    laps = resplit_laps(GpsTrace(t2, lat2, lon2), MAIN, ref_lap_s=lap_ms / 1000.0)
+    types = laps.column("lap_type").to_pylist()
+    nums = laps.column("num").to_pylist()
+    assert types[0] == "out" and nums[0] == 0
+    assert types[-1] == "in"
+    assert types[1:-1] == ["full"] * (len(types) - 2)
+    assert nums[1:-1] == list(range(1, len(types) - 1))
+    out_s = (laps.column("end_time")[0].as_py() - laps.column("start_time")[0].as_py()) / 1000.0
+    assert out_s == pytest.approx(30.0, abs=0.5)
+    # Edges shorter than min_edge_s are not emitted.
+    short = resplit_laps(GpsTrace(t2, lat2, lon2), MAIN, ref_lap_s=lap_ms / 1000.0, min_edge_s=60.0)
+    assert short.column("lap_type").to_pylist() == ["full"] * len(short)
