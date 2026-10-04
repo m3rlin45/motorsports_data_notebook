@@ -40,6 +40,7 @@ from .predict import (
     predict_cold_pressure,
 )
 from .warmup_table import (
+    DEFAULT_FIT_METHOD,
     CORNERS as _WT_CORNERS,
     W_ROAD,
     build_warmup_table,
@@ -175,6 +176,7 @@ def _collect_holdout_frame(
     min_bucket_size: int,
     n_folds: int,
     inputs: str = "calculator",
+    fit_method: str = DEFAULT_FIT_METHOD,
     quiet: bool = False,
 ) -> tuple[pd.DataFrame | None, int]:
     """Run the k-fold holdout and return ``(residual rows, n session×fold
@@ -209,7 +211,13 @@ def _collect_holdout_frame(
                 f"{n_per_bucket} per (track, car, condition) bucket, min bucket size = "
                 f"{min_bucket_size} dry / 3 rain)"
             )
-        fold_df = _evaluate_fold(root, holdout_ids, inputs=inputs, inferred_labels=inferred_labels)
+        fold_df = _evaluate_fold(
+            root,
+            holdout_ids,
+            inputs=inputs,
+            inferred_labels=inferred_labels,
+            fit_method=fit_method,
+        )
         if not fold_df.empty:
             fold_df["fold"] = fold
             fold_frames.append(fold_df)
@@ -398,6 +406,7 @@ def _evaluate_fold(
     *,
     inputs: str = "calculator",
     inferred_labels: dict[str, str] | None = None,
+    fit_method: str = DEFAULT_FIT_METHOD,
 ) -> pd.DataFrame:
     """Train a model excluding ``holdout_ids`` and return per-(lap, corner)
     residual rows for the held-out sessions.
@@ -417,7 +426,9 @@ def _evaluate_fold(
     """
     if inputs not in INPUT_MODES:
         raise ValueError(f"inputs must be one of {INPUT_MODES}; got {inputs!r}")
-    model = build_warmup_table(root, exclude_session_ids=set(holdout_ids), write_artifacts=False)
+    model = build_warmup_table(
+        root, exclude_session_ids=set(holdout_ids), write_artifacts=False, fit_method=fit_method
+    )
 
     # Build per-(track, car) lookups from the held-out model
     g2_lookup = {
@@ -719,6 +730,7 @@ def run_holdout_validation(
     min_bucket_size: int = 10,
     n_folds: int = 1,
     inputs: str = "calculator",
+    fit_method: str = DEFAULT_FIT_METHOD,
 ) -> int:
     """Train on all-minus-held-out, predict per-lap T_hot for held-out sessions.
 
@@ -741,6 +753,7 @@ def run_holdout_validation(
         min_bucket_size=min_bucket_size,
         n_folds=n_folds,
         inputs=inputs,
+        fit_method=fit_method,
     )
     if df is None:
         return 1

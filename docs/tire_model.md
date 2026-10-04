@@ -229,8 +229,12 @@ data lookups.
 
 ### 2.6 Fitting procedure
 
-Two-pass non-linear least squares using `scipy.optimize.curve_fit` against
-per-lap aggregates from `laps.parquet`:
+Two passes. Pass 1 fits `τ` and the per-bucket gains; since 2026-10 it is
+the **per-second fit** of §2.6a by default (`tire_model/statespace.py`), with
+the per-lap closed form below kept as `--fit-method per_lap` for comparison.
+Pass 2 and everything downstream are shared. The per-lap form, non-linear
+least squares using `scipy.optimize.curve_fit` against per-lap aggregates
+from `laps.parquet`:
 
 0. **Stint anchor.** For each (session, stint, corner) the first finite TPMS
    reading becomes the initial condition `(t_a, T_start)`: the first full
@@ -258,6 +262,44 @@ per-lap aggregates from `laps.parquet`:
 If a (car, corner) bucket has fewer than `MIN_LAPS_FOR_TAU_FIT = 30` lap
 samples, the fit returns the prior `τ_sec = 240 s, K = 60 K/G²` with
 `from_prior: true` flagged in the artifact.
+
+### 2.6a Pass 1 at 1 Hz: the per-second fit (default since 2026-10)
+
+The per-lap closed form sees one pressure sample per lap. The TPMS reports
+pressure in 0.03 bar steps, so a lap-end sample is uncertain by ±0.015 bar
+(≈ 2 K of gas temperature) and the pit-exit sample the whole stint is
+referenced to is uncertain by the same amount; on the Inferno 86 that
+quantisation was the dominant residual once the observable became the gas
+temperature (§2.2a). At 1 Hz a rising pressure crosses a step every 10–30 s
+early in a stint and the *time* of each crossing locates the pressure to a
+fraction of a step, and the measured g²(t) through the lap identifies τ and
+K from each lap's shape rather than from lap-end levels alone.
+
+`statespace.fit_tau_and_gains` integrates the same energy balance exactly
+with the inputs held constant over each 1 s step of the stint's rolling
+clock (standstill excluded; a lap the usability filters dropped mid-stint
+still heats the tire and advances the clock, it is only not scored):
+
+    dT/dt = a · c_track · g²(t) − b · (T − T_eff),   T(t_anchor) = T_start
+    K = a / b,  τ = 1 / b
+
+The observation is the pressure-implied gas temperature from the pit-exit
+anchor for every second with a finite pressure at or after the anchor (a
+(stint, corner) needs ≥ 60 scored seconds). `a, b` are fitted per
+(car, corner, condition) and `c_track` per track (Tsukuba ≡ 1) by bounded
+least squares in log space (`τ` 30–3000 s, `c_track` 0.3–3); dry first,
+then the rain conditions with `b_rain ≥ b_dry` (τ_rain ≤ τ_dry) as a bound
+and `c_track` fixed, a rain (car, condition) cell needing ≥ 3 sessions.
+The output is the same `τ` table and per-track `gain = K · c_track` buckets
+Pass 1 produces, so Pass 2, the compound EM and the artifact are unchanged;
+the whole two-car fit takes ~30 s (vectorised cumulative-sum recurrence,
+450 k residuals). Parameter recovery on synthetic stints, with and without
+the 0.03 bar quantisation, is unit-tested.
+
+Compared with the per-lap gas-target fit on the same data the fitted τ are
+5–15 % shorter and K 5–15 % higher (the τ·K product barely moves), and
+`c_fuji` drops from 1.28 to 1.04 with the Inferno K absorbing the
+difference. Held-out results are in §4.0a.
 
 ### 2.7 Artifact: `tire_model.json`
 
@@ -632,6 +674,39 @@ split, dropping c_track) was evaluated alongside this change; only the
 measured initial condition and a per-car pressure–temperature gain survived
 held-out testing, so the other ideas were not adopted.
 
+### 4.0a Per-second fit vs per-lap (every-session 20-fold holdout, 106 sessions, 4655 lap × corner, calculator inputs, 2026-10-04)
+
+Hot-pressure MAE in bar, same folds and laps. "TPMS per-lap" is the v0.19
+model (TPMS temperature as the target, ⟨g²⟩ at the 75th percentile);
+"gas per-lap" is the v1.0 release (gas temperature, median ⟨g²⟩); "gas
+per-second" is §2.6a.
+
+| | TPMS per-lap (v0.19) | gas per-lap (v1.0) | gas per-second |
+|---|---|---|---|
+| pooled | 0.050 | 0.054 | **0.051** |
+| pooled bias | +0.000 | +0.009 | +0.010 |
+| FJ dry | 0.035 | **0.030** | 0.031 |
+| FJ Suzuka dry | 0.054 | **0.038** | **0.038** |
+| FJ wet | 0.043 | 0.049 | **0.042** |
+| FJ damp (3 sessions) | 0.079 | 0.113 | 0.099 |
+| Inferno 86 dry | **0.063** | 0.072 | 0.067 |
+| Inferno 86 Fuji dry | **0.054** | 0.069 | 0.062 |
+| Inferno 86 Sodegaura dry | 0.069 | 0.073 | 0.071 |
+| Inferno 86 wet | 0.064 | 0.066 | 0.070 |
+| within ±0.05 bar | 62 % | 61 % | 62 % |
+| oracle inputs, pooled | — | 0.055 | 0.052 |
+
+Paired bootstrap over sessions, pooled MAE: per-second − gas per-lap
+−0.0023 bar (95 % CI −0.0049 to −0.0002); per-second − TPMS per-lap
++0.0013 bar (−0.0020 to +0.0048), i.e. indistinguishable from the v0.19
+model overall while using the physically right observable. The Inferno 86
+recovers most of what the gas target had cost it (dry 0.072 → 0.067, Fuji
+0.069 → 0.062) but stays 0.005 bar behind the TPMS fit (CI −0.000 to
++0.011); what remains there is whole-stint offsets on a few long Sodegaura
+and Fuji sessions, not quantisation. The lap-1 bias of +0.023 bar decaying
+to zero by lap 5 is unchanged: the out-lap segment predicts heat that the
+pit-exit-referenced gas does not yet show (§2.2b).
+
 ### 4.1 Headline (v0.20 held-out, pooled, 236 (lap × corner) points — pre-anchor)
 
 | Corner | MAE | RMSE | mean bias | n |
@@ -762,9 +837,15 @@ In rough priority order:
 
 ### v1 — bigger architecture changes
 
-7. **Per-second fitting on pressure (next).** Fit the discretized ODE at
-   1 Hz against the pressure-implied gas temperature instead of the
-   per-lap closed form. Tested offline against the TPMS temperature
+7. ~~**Per-second fitting on pressure.**~~ **Done** (2026-10-04, §2.6a,
+   §4.0a): the default Pass 1 fits the discretized ODE at 1 Hz against the
+   pressure-implied gas temperature; held-out hot-pressure MAE 0.054 →
+   0.051 bar pooled (CI excludes zero), Inferno 86 dry 0.072 → 0.067. Not
+   yet done inside it: the anchor pressure as a per-stint nuisance
+   parameter and a tread-to-gas lag. The original reasoning follows. Fit
+   the discretized ODE at 1 Hz against the pressure-implied gas
+   temperature instead of the per-lap closed form. Tested offline against
+   the TPMS temperature
    (2026-10) it bought nothing, because that observable lags the gas by
    2–3 min and the within-lap detail was sensor dynamics. Against pressure
    it should: the 0.03 bar quantisation becomes information (the *time* a

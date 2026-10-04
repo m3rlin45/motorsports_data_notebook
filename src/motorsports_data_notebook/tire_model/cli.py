@@ -23,6 +23,20 @@ def _add_dataset_root_arg(p: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_fit_method_arg(p: argparse.ArgumentParser) -> None:
+    from .warmup_table import DEFAULT_FIT_METHOD, FIT_METHODS
+
+    p.add_argument(
+        "--fit-method",
+        choices=FIT_METHODS,
+        default=DEFAULT_FIT_METHOD,
+        help=(
+            "per_lap: closed form on lap-end gas temperatures. per_second: the 1 Hz "
+            "recurrence on the pressure-implied gas temperature (tire_model/statespace.py)."
+        ),
+    )
+
+
 def _add_inputs_args(p: argparse.ArgumentParser) -> None:
     p.add_argument(
         "--inputs",
@@ -197,6 +211,8 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     _add_inputs_args(p_holdout)
+    _add_fit_method_arg(p_holdout)
+    _add_fit_method_arg(p_build)
 
     args = parser.parse_args(argv)
 
@@ -311,7 +327,7 @@ def _cmd_infer_compounds(args: argparse.Namespace) -> int:
 def _cmd_build(args: argparse.Namespace) -> int:
     root = args.dataset_root or default_dataset_root()
     logger.info("Building tire model artifacts at %s", root)
-    model = build_warmup_table(root, rebuild=args.rebuild)
+    model = build_warmup_table(root, rebuild=args.rebuild, fit_method=args.fit_method)
     n_k = len(model["K_buckets"])
     n_tau = len(model["tau_sec_by_car_corner_cond"])
     n_c = len(model["c_track_by_track"])
@@ -437,6 +453,7 @@ def _cmd_holdout(args: argparse.Namespace) -> int:
         min_bucket_size=args.min_bucket_size,
         n_folds=args.n_folds,
         inputs=args.inputs,
+        fit_method=args.fit_method,
     )
 
 

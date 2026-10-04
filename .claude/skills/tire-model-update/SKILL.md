@@ -187,6 +187,16 @@ is_outlap AND tire_usable ORDER BY session_id DESC LIMIT 20"` —
 `outlap_from_pit` should be true for real pit exits (file starts mid-track are
 not), and `moving_s` should be a plausible pit-exit-to-line time for the track.
 
+**Fit method.** Pass 1 is the per-second fit on the pressure-implied gas
+temperature by default (`tire_model/statespace.py`, docs §2.6a). Once per
+refresh also run the per-lap closed form as a cross-check,
+`just tire-predict-holdout --n-folds 5 --fit-method per_lap`, and quote both
+pooled hot-pressure MAEs; the per-second fit should stay at or below per-lap
+(2026-10 baseline 0.051 vs 0.054 bar on the every-session holdout). If
+per-lap wins by more than ~0.003 bar on a car with lots of data, something
+in the 1 Hz data changed (TPMS cadence, masking, stint clock) — look before
+retraining.
+
 **Rain buckets.** Damp and wet τ/K are fitted per condition with
 τ_rain ≤ τ_dry bounded inside the fit, and only when a (car, track) rain
 bucket has ≥ 3 sessions; thinner buckets fall back to dry at prediction.
