@@ -1,4 +1,4 @@
-# Cold tire pressure model — compound-aware, out-lap-aware (schema v4)
+# Cold tire pressure model — physical heat input, no track constants (schema v5)
 
 A physically-based predictor that takes
 **(track, car, tire compound, target lap within stint, target lap time, target hot pressure per corner, expected ambient temp)**
@@ -18,16 +18,116 @@ model. The constraints we adopted:
 - **Per-corner output.** Front/rear and left/right tires are different physical
   objects, so per-corner cold pressures fall out naturally.
 - **Track-independent fit.** A car's thermal parameters are properties of the
-  car, not the venue. The track effect enters through data (⟨g²⟩, c_track),
+  car, not the venue. The track effect enters through data (the per-corner ⟨q⟩),
   not through track-specific fitted coefficients.
 - **Tire compound omitted.** Notes-derived compound coverage is only 49 of
   142 ok sessions (34%) and strings are messy. Including it as a model
-  dimension makes K + c_track + compound mutually unidentifiable in the
+  dimension makes K + compound mutually unidentifiable in the
   current data. Deferred until coverage improves.
 - **Rain awareness via the weather data, not the run-notes.** v0.3 adds
   `condition ∈ {dry, damp, wet}` as a model dimension, classified from
   Open-Meteo's `precipitation` field (mm/hr). 75% of sessions have weather
   coverage vs only ~25% with notes-derived condition. See §2.9.
+
+## 2.0 The schema-v5 model in one page (2026-10-09)
+
+Per corner ``i`` of a car, on axle ``A(i)``, with ``T_i`` the corner's
+cavity-gas temperature (°C, the quantity the TPMS pressure reads, §2.2a)
+corrected for the reading at speed (§2.2a′), fitted **per second** on the
+1 Hz stint series (§2.6a)::
+
+    dT_i/dt = a · q_i(t) − b_A · (T_i − T_eff)                 [K/s]
+
+    q_i = V · √( F_y,i² + F_x,i² )                              [G·m/s;  V in m/s]
+
+    lateral:  F_y,i = p_A · λ_i · |lat|
+              λ_i = ½ (1 + tanh(|lat| / g_transfer))   outer tyre of the axle (the side the turn loads)
+              λ_i = ½ (1 − tanh(|lat| / g_transfer))   inner tyre
+              p_front = p_f,  p_rear = 1 − p_f
+    braking:  F_x,i = ½ · β_A · ε_brake · |long|        (long < 0;  β_front = brake bias, β_rear = 1 − β_front)
+    accel:    F_x,i = ½ · ε_drive · long                (long > 0;  driven axle only)
+
+**Heat input: force × slip fraction × speed.** A race tyre runs near its
+optimum slip, a kinematic fraction that does not grow with force, so the
+power dissipated at the patch is the force the corner produces times that
+fraction times the rolling speed. ``F_y,i`` and ``F_x,i`` are the corner's
+force components as fractions of car weight (in G), built from the car's
+measured accelerations by **bounded shares**: fractions in [0, 1] that
+conserve across the axle and across the car (no corner can receive more
+than the whole force) and saturate as a tyre unloads. Lateral and
+longitudinal combine in quadrature because they are the two components of
+one force vector at the contact patch.
+
+**Energy out.** ``T_eff = 0.8·T_air + 0.2·T_road``: the tyre loses heat to
+the air over most of its surface and to the asphalt at the patch. Cooling
+is per axle because the rears sit in the car's wake.
+
+**No track constants.** The circuit enters only through data: the typical
+per-corner intensity ``q_typ_by_corner`` per (track, car, condition) and
+the out-lap intensity ``outlap_q_by_corner``, computed from the fitted
+stints' own laps, so direction and corner mix are in the numbers (Tsukuba
+gives the FJ 8.5 G·m/s on the front-left against 6.6 on the front-right;
+Suzuka's figure-eight is balanced at 8.0 / 8.0).
+
+### 2.0a The constants: units and what they are
+
+| Constant | Per | Units | Fitted (FJ / Inferno 86) | What it is |
+|---|---|---|---|---|
+| ``a`` | car, condition | K/s per (G·m/s) | 0.0116 / 0.0182 | **Heating rate**: heat input per unit intensity over the effective heat capacity of the carcass + gas the pressure reads. At 1 G of force and 30 m/s (``q`` = 30) the FJ's gas warms ≈ 0.35 K/s, the Inferno's ≈ 0.55 K/s, with cooling switched off. |
+| ``b_A`` (reported as ``τ_A = 1/b_A``) | car, axle, condition | 1/s (τ in s) | FJ front 382 s / rear 313 s; Inferno 480 / 664 s | **Cooling rate**: conductance to air and road over the same heat capacity; τ is the time to close 63 % of the gap to the steady state. The Inferno's rears cool at 72 % of its fronts' rate. |
+| ``K_A = a / b_A`` | car, corner (derived) | K per (G·m/s) | FJ 4.4 / 3.6 (f/r); Inferno 8.7 / 12.1 | **Steady-state gain**: the equilibrium rise above ``T_eff`` per unit intensity; what the calculators multiply ``q_typ`` by. |
+| ``g_transfer`` | car | G | 1.95 / 3.10 | **Lateral transfer scale**: the lateral g at which the outer tyre carries ≈ 88 % of its axle's load. The rigid-body lift acceleration ``track/(2·CG height)`` is its geometric floor (≈ 2.4 G FJ, 1.6 G Inferno); the Inferno's higher value says tyre load sensitivity and the roll-stiffness split soften the transfer the heat sees. |
+| ``ε_drive`` | car | dimensionless | 0.64 / 0.02 | **Drive heat efficiency**: heat per unit drive force relative to cornering force on the driven axle (wheelspin). The LSD road car makes none; the light rear-drive single-seater does. |
+| ``ε_brake`` | car | dimensionless | 2.3 / 2.0 | **Brake heat efficiency**: heat per unit braking force relative to cornering force, both axles — tyre slip plus brake-disc heat conducted into the hub and gas. Nearly the same on two very different cars. |
+| ``κ`` | car | 1/(m/s)² | 1.7 × 10⁻⁶ / 1.0 × 10⁻⁵ | **Speed–pressure constant**: ``P_read = P_gas/(1 + κV²)``, the fractional drop of the TPMS reading per squared speed from centrifugal tyre growth and the sensor's g-load; 0.5 % and 3 % at 200 km/h. |
+| ``p_f`` | car | fraction | 0.42 / 0.53 | Static front weight share. | 
+| ``β_front`` | car | fraction | 0.58 / 0.65 | Front brake bias. |
+| driven axle | car | | rear / rear | By drivetrain. |
+| ``w_road`` | all | fraction | 0.2 | Road share of the cooling sink. |
+| compound multiplier ``m`` | car, compound | dimensionless | FJ DRY 1.09, WET 0.74; A050 0.98, A052 1.00, RE-71RS 1.03 | Ratio of a compound's ``K`` to the car's base ``K``. |
+| ``q_typ_by_corner`` | track, car, condition, corner | G·m/s | e.g. Tsukuba FJ FL 8.5, FR 6.6 | Not fitted: the median per-lap intensity of each corner on that circuit. |
+
+Six fitted constants per car (``a``, ``b`` front and rear, ``g_transfer``,
+``ε_drive``, ``ε_brake``) plus κ; three car facts; nothing per track.
+The last three rows are car facts and data, not fitted.
+
+### 2.0b What is deliberately not in the model, and why
+
+Each of these was built, run on session folds and leave-one-track-out,
+and rejected (details in §2.6b–c and the history below):
+
+- **A per-track constant** (``c_track``). With the sliding-power input the
+  fitted factors collapsed to 1 ± 7 % and pinning them cost nothing on
+  known circuits while improving unseen circuits by 18 %. A constant that
+  can only be fitted after visiting a track is not a constant.
+- **Longitudinal transfer of the lateral share** (fronts take more lateral
+  force under braking, rears under acceleration). Physically real, but the
+  gas temperature cannot see it: fitted, the Inferno's scale ran to its
+  bound (no effect) and the FJ's to an unphysical 0.67 G while trading off
+  against the drive and brake efficiencies; fixed at the geometry it cost
+  0.0004 bar. The combined-slip transient lasts seconds and the carcass
+  node averages it away. Left out rather than carried as a dead parameter.
+- **A reference speed** in ``q``: a pure normalisation; removed, ``q`` is
+  in G·m/s.
+- **Brake efficiency on the fronts only.** The front/rear split of braking
+  force is the bias; the efficiency is how much heat a unit of braking
+  force makes, and the rears have discs too. One value, both axles.
+- **g² as the heat input.** The small-slip brush model (slip ∝ force)
+  double-counts the force in the racing regime; |g|·V scored better,
+  tighter per-track ratios and a wet/dry ratio of 1.
+- **Speed-weighted and slip-activated inputs on the carcass node**
+  (ChassisSim form, power laws), **speed-dependent cooling**, and the
+  **two-node tread model** for pressure: either worse, or invisible to the
+  gas, or both (§2.6b–c).
+- **Set pressure as a heat factor.** Strong in the data (−7.5 %) but failed
+  the instantaneous-pressure and cross-car controls; it may be the driver
+  anticipating an unmeasured tyre state. Kept as a harness option only.
+- **Per-corner free gains and free force shares.** Each buys 1–4 % on
+  known circuits by letting constants float (per-corner gains encode the
+  training circuits' direction mix; seven free shares are degenerate in
+  brake bias vs brake efficiency and unstable under leave-one-track-out).
+
+Held-out results for the promoted model are in §4.0b.
 
 ## 2. Modeling approach
 
@@ -38,7 +138,7 @@ thermal mass:
 
 ```
                                               ┌──────────────┐   ┌──────────────┐
-   m·c · dT/dt   =   c_track · α · g²(t)   −   │ h_air · (T   │ + │ h_road ·     │
+   m·c · dT/dt   =   α · q(t)             −   │ h_air · (T   │ + │ h_road ·     │
                                                │  − T_air )   │   │ (T − T_road) │
    ───────────       ──────────────────        └──────────────┘   └──────────────┘
    energy stored     energy IN                       energy OUT
@@ -48,11 +148,12 @@ thermal mass:
                                                       to the track at the patch)
 ```
 
-**Energy IN.** Friction work at the contact patch scales with squared total
-acceleration `g²(t) = lat_g(t)² + long_g(t)²` (cornering + braking) times a
-per-track surface factor `c_track` (asphalt grip, roughness — what's left over
-after accounting for ⟨g²⟩) times a coefficient `α` that absorbs friction
-coefficient, contact-patch geometry, brake-disc-to-tire heat coupling, and
+**Energy IN.** Friction work at the contact patch: force × slip velocity.
+Since schema v5 the driving intensity is `q_i = |g|·V/V_ref` with the
+per-corner weight-transfer / drive / brake split of §2.0 (the v0 proxy was
+`g² = lat_g² + long_g²` with a per-track factor; the track factor is gone —
+the circuit enters only through its measured per-corner ⟨q⟩). The
+coefficient `α` absorbs friction coefficient, contact-patch geometry and
 compound hysteresis.
 
 **Energy OUT.** Two parallel paths — convection to ambient air at the tire's
@@ -68,7 +169,7 @@ where `w_road = h_road / (h_air + h_road)` is the fraction of energy-OUT going
 to the track. **v0 fixes `w_road = 0.2`** based on the physical prior that
 convection-to-air dominates conduction-to-road at race speeds (fast airflow
 over the tire; small contact-patch area relative to tire surface area). Fitting
-`w_road` is deferred to v1 — at 34% c_track-known × ~5% T_road-measured, the
+`w_road` is deferred to v1 — at ~5% T_road-measured, the
 joint identifiability is poor.
 
 **T_road sourcing** at inference (priority order): user-supplied → AIM logger
@@ -82,7 +183,7 @@ a consistent driver), the linear ODE has a closed-form solution starting
 from the tire's actual temperature `T_start` at roll-out:
 
 ```
-T_hot(t) − T_eff  =  K · c_track · ⟨g²⟩ · (1 − exp(−t / τ_sec))
+T_hot(t) − T_eff  =  K · ⟨q⟩ · (1 − exp(−t / τ_sec))
                      + (T_start − T_eff) · exp(−t / τ_sec)
 ```
 
@@ -136,6 +237,41 @@ stint; the hot *pressure* is the number to trust. Pressure is reported in
 0.03 bar steps (≈ 3.6 K of gas temperature at 2.5 bar absolute), so the
 per-lap target is noisier than the TPMS temperature; the 1 Hz stale-prefix
 mask and per-corner wake rule (§2.8) keep the anchor clean.
+
+### 2.2a′ The reading at speed: the speed-pressure correction (2026-10-08)
+
+The TPMS pressure read while moving sits *below* the cavity gas-law
+pressure, by an amount that grows with speed²: the tyre grows under
+centrifugal load (and the valve-mounted sensor sees the same ∝ V²
+acceleration), so the cavity volume depends on speed:
+
+```
+P_read · V₀·(1 + κ·v²) = n·R·T        →   P_read = P_gas / (1 + κ·v²)
+```
+
+This was found from the within-stint residual of the per-second fit: with
+stint offsets and slow drift removed, the Inferno's gas residual rises
+monotonically from −2 °C below 60 km/h to +4 °C at 200 km/h, with no lag —
+a carcass with a four-minute time constant cannot do that, and it is the
+same on every track (κ 6.9–8.0 × 10⁻⁶ at Fuji, Sodegaura and Motegi), every
+corner (5.7–7.4 × 10⁻⁶) and across sessions (IQR 5.8–9.2 × 10⁻⁶). The
+per-second fit now carries **one κ per car** (`statespace`, ``v_corr``,
+fold-stable to ±5 % on the Inferno), and every lap-end observable is put on
+the gas-law scale with ``energy_balance.gas_temperature_at_speed_c`` using
+the lap-end speed and the anchor speed from the timeseries
+(``warmup_table.apply_speed_correction``; the compound EM and the holdout
+use it). Fitted: FJ 1.5 × 10⁻⁶, Inferno 86 1.0 × 10⁻⁵ per (m/s)² — 0.5 %
+and 3 % of pressure at 200 km/h; the stiff-belted slick grows far less
+than the tall street tyre. The artifact carries it under
+``energy_balance.speed_pressure`` (additive, schema unchanged).
+
+**What it changes.** The calculators' hot pressure is the standstill
+gas-law value, as before; a dash reading at speed is lower by the factor.
+In the oracle harness the lap-end pressure MAE went 0.0550 → 0.0527 bar
+and the lap-end bias 0.0225 → 0.0100 bar; the Inferno's per-stint gain
+spread went 0.41 → 0.34 and its per-track gain ratios moved to within ±9 %
+of 1. Speed-dependent *cooling* on the carcass node is rejected a second
+time once κ is in (β unstable 1.4–3.6, track factors drift up).
 
 ### 2.2b The out-lap (schema v4)
 
@@ -212,56 +348,31 @@ the field is left blank the predictor uses `T_air` for both.
 
 | Param            | Physics                                  | Pooled over                       | Count   | Notes |
 |------------------|------------------------------------------|-----------------------------------|---------|---|
-| `K`              | `α / (h_air + h_road)`                   | `(car, corner)`                   | 8       | Energy-IN / Energy-OUT gain |
-| `τ_sec`          | `m·c / (h_air + h_road)`                 | `(car, corner)`                   | 8       | Thermal time constant |
-| `c_track`        | per-track surface scalar                 | `(track)`                         | ~3–4    | Tsukuba anchored at 1.0 |
+| `K = a/b`        | `α / (h_air + h_road)`                   | `(car, condition)` gain, `(car, axle, condition)` cooling | 2 + 4 per car | Energy-IN / Energy-OUT gain, emitted per corner |
+| `τ_sec = 1/b`    | `m·c / (h_air + h_road)`                 | `(car, axle, condition)`          | 4 per car | Thermal time constant |
+| `d`, `c_b`, `κ`  | drive-slip, brake-disc, speed–pressure   | `(car)`                           | 3 per car | §2.0a |
 | `w_road`         | `h_road / (h_air + h_road)`              | **fixed at 0.2 in v0**            | 0       | Deferred |
 | `⟨g²⟩`           | `median(heat_proxy / on_track_s)`        | `(track, car)` — lookup, not fit  | ~6      | From data |
 | `lap_time_typ_s` | `median(on_track_s)`                     | `(track, car)` — lookup, not fit  | ~6      | From data |
 | `T_road`         | logger / weather + sun proxy             | per-session                       | 0       | From data |
 
-**Total fitted: ~20 parameters** across the entire dataset (8 K + 8 τ_sec +
-~4 c_track). Compare to a per-(track, car, lap) regression approach which
-would have hundreds. The energy-balance framing means the **track-aggressiveness
-signal is captured by ⟨g²⟩ data, not by a fitted constant** — that's why the
-model is track-independent at fit time and only enters the prediction via
-data lookups.
+**Total fitted: ~9 constants per car** and **no track constants**. Compare
+to a per-(track, car, lap) regression approach which would have hundreds.
+The energy-balance framing means the **track signal is captured by the
+per-corner ⟨q⟩ data, not by a fitted constant** — that's why the model is
+track-independent at fit time and transfers to circuits it has never seen.
 
 ### 2.6 Fitting procedure
 
-Two passes. Pass 1 fits `τ` and the per-bucket gains; since 2026-10 it is
-the **per-second fit** of §2.6a by default (`tire_model/statespace.py`), with
-the per-lap closed form below kept as `--fit-method per_lap` for comparison.
-Pass 2 and everything downstream are shared. The per-lap form, non-linear
-least squares using `scipy.optimize.curve_fit` against per-lap aggregates
-from `laps.parquet`:
-
-0. **Stint anchor.** For each (session, stint, corner) the first finite TPMS
-   reading becomes the initial condition `(t_a, T_start)`: the first full
-   lap's start reading (t_a = 0) when it exists, otherwise that lap's end
-   reading, and so on (TPMS channels are NaN for the first samples of nearly
-   every session). Laps at or before the anchor are not scored; the first
-   full lap *is* scored when the anchor sits at its start.
-
-1. **Pass 1 — `τ_sec[car, corner]` + per-bucket gains.** For each (car, corner),
-   select that car's (track) buckets with ≥ 30 lap samples. Fit jointly across
-   them: `δT_i = gain_{bucket(i)} · g²_i · (1 − exp(−Δt_i / τ_sec)) + (T_start − T_eff) · exp(−Δt_i / τ_sec)`
-   with `Δt_i = t_i − t_a`, per-lap `g²_i = heat_proxy_i / on_track_s_i`, a
-   shared `τ_sec[car, corner]` and bucket-specific `gain_b = K · c_track`.
-   KK-SII FL τ is fit jointly from Tsukuba + Fuji + Suzuka data —
-   precisely the cross-circuit shrinkage we want. The anchor term is known
-   per lap, so it adds no parameters; it roughly doubles the fitted τ
-   (FJ 215–247 s → 408–571 s, Inferno 86 248–312 s → 432–552 s) and raises K
-   by 5–15 %, because warm starts no longer masquerade as fast warm-ups.
-
-2. **Pass 2 — factor `gain_b` into `K[car, corner] × c_track[track]`.** Divide
-   out ⟨g²⟩ (a lookup) and use alternating least squares in log-space, with
-   `c_track[tsukuba_2000] ≡ 1.0` anchored for identifiability. Standard errors
-   propagate from Pass 1's bucket-gain stderrs.
-
-If a (car, corner) bucket has fewer than `MIN_LAPS_FOR_TAU_FIT = 30` lap
-samples, the fit returns the prior `τ_sec = 240 s, K = 60 K/G²` with
-`from_prior: true` flagged in the artifact.
+One pass, `statespace.fit_physical` (§2.0, §2.6a): the per-second fit of the
+physical model on every stint, dry cells first (with `κ`, `d`, `c_b`), then
+the rain cells with `b_rain ≥ b_dry` bounded and the per-car constants held.
+There is no second pass: with no track constants the fitted `K = a/b_axle`
+is the model, and the per-corner ⟨q⟩ lookups are computed from the fitted
+stints' own per-lap heat components (`statespace.lap_heat_components`).
+The earlier two-pass procedure (a per-lap closed-form Pass 1 and a Pass 2
+that factored per-track gains into `K × c_track`) was removed with schema
+v5.
 
 ### 2.6a Pass 1 at 1 Hz: the per-second fit (default since 2026-10)
 
@@ -275,31 +386,172 @@ early in a stint and the *time* of each crossing locates the pressure to a
 fraction of a step, and the measured g²(t) through the lap identifies τ and
 K from each lap's shape rather than from lap-end levels alone.
 
-`statespace.fit_tau_and_gains` integrates the same energy balance exactly
-with the inputs held constant over each 1 s step of the stint's rolling
-clock (standstill excluded; a lap the usability filters dropped mid-stint
-still heats the tire and advances the clock, it is only not scored):
+`statespace.fit_physical` (via `fit_cells`) integrates the energy balance
+exactly with the inputs held constant over each 1 s step of the stint's
+rolling clock (standstill excluded; a lap the usability filters dropped
+mid-stint still heats the tire and advances the clock, it is only not
+scored):
 
-    dT/dt = a · c_track · g²(t) − b · (T − T_eff),   T(t_anchor) = T_start
-    K = a / b,  τ = 1 / b
+    dT_i/dt = a · q_i(t) − b_axle(i) · (T_i − T_eff),   T(t_anchor) = T_start
+    K = a / b_axle,  τ = 1 / b_axle
 
 The observation is the pressure-implied gas temperature from the pit-exit
 anchor for every second with a finite pressure at or after the anchor (a
-(stint, corner) needs ≥ 60 scored seconds). `a, b` are fitted per
-(car, corner, condition) and `c_track` per track (Tsukuba ≡ 1) by bounded
-least squares in log space (`τ` 30–3000 s, `c_track` 0.3–3); dry first,
-then the rain conditions with `b_rain ≥ b_dry` (τ_rain ≤ τ_dry) as a bound
-and `c_track` fixed, a rain (car, condition) cell needing ≥ 3 sessions.
-The output is the same `τ` table and per-track `gain = K · c_track` buckets
-Pass 1 produces, so Pass 2, the compound EM and the artifact are unchanged;
-the whole two-car fit takes ~30 s (vectorised cumulative-sum recurrence,
-450 k residuals). Parameter recovery on synthetic stints, with and without
-the 0.03 bar quantisation, is unit-tested.
+(stint, corner) needs ≥ 60 scored seconds). `a` is fitted per (car,
+condition), `b` per (car, axle, condition), `d`, `c_b` and `κ` per car, by
+bounded least squares in log space (`τ` 30–3000 s); dry first, then the
+rain conditions with `b_rain ≥ b_dry` (τ_rain ≤ τ_dry) as a bound and the
+per-car constants fixed, a rain (car, condition) cell needing ≥ 3 sessions.
+The whole two-car fit takes under a minute (vectorised cumulative-sum
+recurrence, 450 k residuals). Parameter recovery on synthetic stints, with
+and without the 0.03 bar quantisation and with the speed-pressure effect, is
+unit-tested.
 
-Compared with the per-lap gas-target fit on the same data the fitted τ are
-5–15 % shorter and K 5–15 % higher (the τ·K product barely moves), and
-`c_fuji` drops from 1.28 to 1.04 with the Inferno K absorbing the
-difference. Held-out results are in §4.0a.
+History: the per-second fit replaced the per-lap closed form in 2026-10
+(τ 5–15 % shorter, K 5–15 % higher, the τ·K product unchanged; held-out
+results in §4.0a); the per-track constant it still carried then was
+removed with schema v5 (§2.0).
+
+### 2.6b Heat-input and cooling experiments (2026-10-07, `tire_model/heat_experiment.py`)
+
+The per-second fit makes alternative physics cheap to test: a candidate
+heat input or cooling law is dropped into the same 1 Hz integration and
+scored on the same held-out stints. The harness fits ``(a, b)`` on 5-fold
+session holdouts (the ``tire-predict-holdout`` buckets) or
+leave-one-track-out, simulates every held-out stint **from its own measured
+trace and pit-exit anchor** (oracle inputs — the thermal model's accuracy,
+not the calculator's), and scores the lap-end residual in the pressure
+domain. It also reports how *constant the constants are*: the IQR/median
+of per-stint implied gains, the per-track median gain ratio (1.0 when the
+heat input explains the track) and the wet/dry gain ratio. (The runs below
+pre-date the removal of the track constant; their ``c_track`` columns show
+what a fitted per-track factor did under each heat input.)
+
+```
+uv run python -m motorsports_data_notebook.tire_model.heat_experiment \
+    --form g2 --form sliding --form "sliding:glim=1.15" --n-folds 5
+```
+
+**Heat-input forms** (`tire_model/heat_input.py`). The ChassisSim
+"tyre model from nothing" writes the heat input as sliding power,
+``√((F_y·α·V)² + (F_x·SR·V)²)``; with one slip proxy for both axes that is
+``V · g · s(g)`` with ``g`` the friction-circle total g. Without slip
+channels ``s(g)`` was taken as the inverse of a ``tanh`` force saturation,
+``g_lim·atanh(g/g_lim)`` (linear well below the car's grip limit, steep at
+it), with ``g_lim`` from the car's p99.5 of total g.
+
+| heat input                    | held-out P MAE (bar) | c_track fuji / sodegaura | wet/dry gain (Inferno) |
+|-------------------------------|---------------------:|--------------------------|-----------------------:|
+| ``g²`` (production)           | **0.0550**           | 1.04 / 0.86              | 1.05 |
+| ``V·g²`` (sliding, linear slip)| 0.0567              | 0.93 / 0.83              | 1.23 |
+| ``V·g·s(g)``, g_lim = p99.5   | 0.0593               | 0.88 / 0.83              | 1.67 |
+| ``V·g·s(g)``, g_lim = 1.3×    | 0.0575               | 0.91 / 0.83              | 1.38 |
+| ``V·g² + 0.2·V`` (rolling)    | 0.0557               | 0.90 / 0.84              | 1.02 |
+| ``V·g^2.5``                   | 0.0582               | 0.91 / 0.83              | 1.53 |
+| ``V·g³``                      | 0.0598               | 0.90 / 0.83              | 1.84 |
+
+Every speed- or slip-weighted form is less accurate than ``g²``, moves the
+track factors further from 1 and (for the activation) makes the wet gain
+exceed the dry gain, which is unphysical. At this node the heat grows no
+faster than ``g²`` with pace. The speed and load² hidden in α (see the
+derivation: sliding power ≈ ``W²·g²·V/C_α``) are evidently stable enough
+within a car to stay in the constant. **``g²`` stays.**
+
+**Speed-dependent convection** (``b(t) = b·(1 + β·V/30)/(1 + β)``,
+``--cool-mode speed``): β = 0.50 pooled with folds 0.27–0.81, β = 0 on the
+FJ alone; held-out 0.0548 vs 0.0550. Not supported at the gas node.
+
+**Where the error actually is.** 73 % of the held-out MAE is a
+per-session offset (the per-stint implied gains have an IQR/median of
+0.28 on the FJ and 0.41 on the Inferno). Weather explains none of it
+(|r| ≤ 0.15 against T_eff, cloud, sun, wind, humidity, hour). The bias is
++0.025 bar from lap 1 and flat thereafter, and in-sample it is +0.015 bar
+at lap ends against +0.005 over all seconds, concentrated in the first and
+last tenth of the Inferno's laps (the straight, g² ≈ 0.14): the start/finish
+reading sits below what a six-minute single node predicts. That is the
+tread-lag item (a fast tread node feeding the gas), not a heat-input
+question.
+
+**Set pressure.** The one session-level variable that explains the offset
+is the pit-exit set pressure: r = 0.53 (FJ) and, with compound dummies,
+a slope of ≈ +0.15–0.17 bar of residual per bar of set pressure on both
+cars; the correlation holds *within* every track (0.35–0.69). Fitted as a
+heat-input factor ``(P_ref / P_set)^n`` with ``P_ref`` = 2.5 bar abs
+(``--p-mode anchor``), n = 1.50 pooled (folds 1.37–1.54), held-out
+0.0509 bar (−7.5 %), FJ 0.0454 → 0.0429, Inferno 0.0660 → 0.0602, per-stint
+gain spread 0.28 → 0.24 (FJ). Per car: FJ n = 3.06 (folds 2.75–3.4),
+Inferno n = 1.39 (1.29–1.42), 1.95 with compound cells split out.
+
+Three controls keep this out of the production model for now:
+
+- *Instantaneous* pressure carries no effect (``--p-mode instant``:
+  n = 0.27, folds 0.0–0.57; 0.0543 bar). Deflection physics would act on
+  the running pressure. A reconciliation exists — rubber modulus and gas
+  pressure both scale with absolute temperature, so ``P/E`` and the
+  deflection are invariant within a stint and set by the cold inflation
+  (the gas *density*) — but it is a hypothesis, not a measurement.
+- *Within a day*, a run-to-run change of set pressure moves the residual
+  with the same slope on the FJ (0.166 bar/bar, 36 pairs, r = 0.55) but not
+  at all on the Inferno (0.016 bar/bar, 34 pairs, r = 0.08) whose
+  between-session exponent is nevertheless 1.4–1.9. On the Inferno the
+  signal is a session-level confound (compound: A050 runs at 1.2–1.4 bar,
+  A052/RE-71RS at 1.5–2.2; unlabeled sessions stay pooled).
+- The FJ's set pressure also tracks the weather (r = −0.55 vs T_eff) and
+  the date (−0.60): drivers set higher cold pressures when they expect
+  less warm-up. The partial correlation given T_eff, T_start and g² is
+  still 0.63, so anticipation of the *weather* is not the explanation, but
+  anticipation of an unmeasured tyre state (wear, heat cycles) cannot be
+  excluded with this dataset, and n = 3 is larger than deflection physics
+  alone predicts.
+
+The harness keeps the term available (``fit_cells(..., p_mode="anchor")``
+with a global exponent and a synthetic-recovery test) so it can be
+promoted once a physical variable behind it is identified or a controlled
+pressure sweep on one tyre set is run.
+
+### 2.6c Two-node tread + carcass model on the IR tread sensors (2026-10-08, `tire_model/twonode.py`)
+
+The Inferno carries an 8-zone IR tread-temperature array per corner on 68
+sessions (the KK-F's 8 sessions have no usable IR: unplugged −200 sentinel
+or a covered sensor). A two-node model puts the ChassisSim heat input on a
+tread node that the IR observes and a carcass node that the gas observes::
+
+    dT_s/dt = a_s·c_track·q − b_sa·(T_s − T_eff) − b_sc·(T_s − T_c)
+    dT_c/dt = b_cs·(T_s − T_c) − b_c·(T_c − T_eff)
+
+fitted jointly on the IR mean-of-zones and the pressure-implied gas
+temperature (σ 4 K / 2 K), integrated exactly per second with the 2×2
+matrix exponential — loop-free via the modal decomposition, with a Picard
+iteration when the surface cooling varies with speed.
+
+**IR gating** (`twonode.ir_channel_ok`, per stint × corner): ≥ 300 moving
+seconds, median > 25 °C, max < 150 °C, p95−p5 swing ≥ 15 °C, 1 s step std
+≥ 0.8 °C, median across-zone range ≥ 5 °C (a tread has a lateral profile,
+bodywork does not), correlation ≥ 0.4 with the 10 s mean of g², and median
+tread − gas ≥ −3 °C (a running tread cannot sit below the gas). 156 of 224
+Inferno dry channels pass (42 sessions); the rejects are short stints,
+sensors reading below the gas, and near-ambient flat channels.
+
+**Result** (5-fold, Inferno dry, lap-end pressure, oracle inputs, κ not
+yet applied):
+
+| model | P MAE (bar) | tread MAE | constants |
+|---|---:|---:|---|
+| single node (gas only) | 0.0673 | — | τ 440–660 s |
+| two node, 5 constants per corner | 0.0682 | 7.1 °C | τ_s 9–88 s, C_c/C_s 1.3–11: under-identified |
+| two node, constants shared across corners | 0.0674 | 7.5 °C | τ_s 61 s (53–87), τ_c 249 s (242–261), C_c/C_s 2.0 (1.3–2.5) |
+| + speed-dependent tread cooling | 0.0648 | 7.1 °C | τ_s 90 s, β 1.2 (0.7–1.5), C_c/C_s 1.2 (0.9–1.4) |
+
+Sharing the thermal constants across the four corners of one tyre makes
+them fold-stable; the carcass loses heat only through the tread (``b_c``
+pins to its lower bound in every variant, so the carcass node can drop a
+constant). The tread node reproduces the within-lap IR swing on long
+stints but not the deep cooling on Fuji's straight, and the **gas-side
+accuracy barely moves**: the +0.024 bar lap-end bias survives every
+variant, which is what led to the speed-pressure correction above
+(§2.2a′) — the within-lap gas swing is mechanical, not thermal. The
+two-node fit should be re-run with κ applied to the gas observable before
+drawing conclusions about the tread constants.
 
 ### 2.7 Artifact: `tire_model.json`
 
@@ -312,10 +564,12 @@ Fitted tables:
 - `K_buckets` — pooled K per (car, corner, condition) with stderrs and
   `from_single_track` flags
 - `K_by_car_compound_corner_cond` — compound-specific K (decomposed
-  c_track × base × multiplier products, ready to use; see §2.11)
+  base × multiplier products, ready to use; see §2.11)
 - `K_compound_multipliers` — the fitted per-(car, compound) ratios, for audit
-- `c_track_by_track` — per-track surface scalars, Tsukuba marked as anchor
-- `g2_typ_by_track_car_cond` — ⟨g²⟩ lookup; each entry may carry a
+- `heat_input` — the schema-v5 heat input: form, `v_ref_ms`, `force_exp`,
+  `speed_exp`, `geometry_by_car`, `drive_by_car`, `brake_by_car`
+- `g2_typ_by_track_car_cond` — ⟨q⟩ lookup; each entry carries the
+  per-corner `q_typ_by_corner` (schema v5) and may carry a
   `g2_vs_lap_time` piecewise-linear curve (see §2.10)
 - `lap_time_typ_by_track_car_cond` — typical lap time lookup
 - `corner_defaults_by_car_corner_cond` — steady-state median hot temp +
@@ -409,7 +663,7 @@ pooled K.
 (``tire_model/compound_infer.py``): the compound K is not fitted as free
 buckets but decomposed as
 
-    K_effective = c_track[track] · K_base[car, corner, condition] · m[car, compound]
+    K_effective = K_base[car, corner, condition] · m[car, compound]
 
 so every lap of every tire informs the car's base K, and each compound is
 one scalar multiplier shared across corners and conditions (fitted
@@ -673,6 +927,28 @@ A state-space refit of the same energy balance on the 1 Hz timeseries
 split, dropping c_track) was evaluated alongside this change; only the
 measured initial condition and a per-car pressure–temperature gain survived
 held-out testing, so the other ideas were not adopted.
+
+### 4.0b The schema-v5 share model (every-session 20-fold holdout, 106 sessions, 4655 lap × corner, calculator inputs, 2026-10-09)
+
+Lap-end hot-pressure residual (predicted − observed TPMS reading), pooled
+and per car, for the promoted model (§2.0) against the geometry-based
+split it replaced (same |g|·V input and κ; four spec-sheet geometry
+numbers plus fitted drive/brake terms per car):
+
+| | FL | FR | RL | RR |
+|---|---|---|---|---|
+| geometry split, MAE (bar) | 0.048 | 0.050 | 0.051 | 0.052 |
+| **share model, MAE (bar)** | **0.048** | **0.050** | **0.051** | **0.052** |
+| share model, bias (bar) | +0.005 | +0.008 | +0.011 | +0.004 |
+| FJ, MAE / bias | 0.032 / +0.010 | 0.030 / +0.012 | 0.043 / +0.021 | 0.042 / +0.007 |
+| Inferno 86, MAE / bias | 0.066 / −0.001 | 0.074 / +0.002 | 0.061 / +0.001 | 0.065 / +0.001 |
+
+Identical accuracy on known circuits, three fitted heat constants per car
+instead of two fitted plus four hand-entered, and in the harness's
+leave-one-track-out 0.0635 against 0.0641 bar on unseen circuits. The FJ's
++0.01–0.02 bar held-out bias is the fold effect described under §2.0 of
+the previous build (the same model scores the FJ unbiased in-sample
+through the same path); its cause is an open item.
 
 ### 4.0a Per-second fit vs per-lap (every-session 20-fold holdout, 106 sessions, 4655 lap × corner, calculator inputs, 2026-10-04)
 
@@ -940,6 +1216,30 @@ per session so that pooling can be revisited.
 just tire-track-audit [--since YYYY-MM-DD]   # every session reconciled from GPS, or unresolved
 ```
 
+### Heat-input / cooling experiments
+
+```
+uv run python -m motorsports_data_notebook.tire_model.heat_experiment \
+    --form g2 --form sliding --form "sliding:glim=1.15" --form "power:p=2.5" \
+    [--p-mode anchor|instant] [--p-exp N] [--cool-mode speed] [--cool-beta B] \
+    [--split-compound] [--car FJ] [--n-folds 5] [--out-dir DIR]
+```
+
+Form specs: ``g2``; ``sliding`` (``V·g²``), ``sliding:glim=<mult>`` (×
+the car's p99.5 g) or ``sliding:glim=FJ:2.2,Inferno 86:1.5``,
+``sliding:rr=<G²>``; ``power:p=<exp>``. See §2.6b.
+
+### Two-node tread + carcass experiment
+
+```
+uv run python -m motorsports_data_notebook.tire_model.twonode \
+    [--mode per_corner|shared|shared_speed] [--car "Inferno 86"] [--n-folds 5] [--out-dir DIR]
+```
+
+Prints the IR gate counts and reasons, the held-out single-node vs
+two-node pressure/tread residuals, and the fitted constants per fold. See
+§2.6c.
+
 ## 7. Files of interest
 
 | Path | What |
@@ -949,13 +1249,13 @@ just tire-track-audit [--since YYYY-MM-DD]   # every session reconciled from GPS
 | `src/motorsports_data_notebook/tire_model/sectors.py` | Sector-wise pace model: per-lap sector split + kNN-median `g2_vs_lap_time` curves |
 | `src/motorsports_data_notebook/tire_model/compounds.py` | Compound label loading (sidecar + notes fallback, wheel-set mapping, condition seeds) |
 | `src/motorsports_data_notebook/tire_model/compound_infer.py` | Decomposed compound K: EM with partial supervision, forced selection |
-| `src/motorsports_data_notebook/tire_model/predict.py` | `predict_cold_pressure(...)` and the fallback chain for K / τ / c_track / ⟨g²⟩ |
+| `src/motorsports_data_notebook/tire_model/predict.py` | `predict_cold_pressure(...)` and the fallback chain for K / τ / ⟨q⟩ |
 | `src/motorsports_data_notebook/tire_model/validate.py` | `tire-predict-validate` (notes-recorded ground truth), `tire-predict-holdout` (held-out generalization test, temperature and pressure domains) |
 | `data/tire_dataset/tire_model.json` | The committed fitted artifact (diff-friendly) |
 | `data/tire_dataset/tire_compounds.yaml` | Human-curated compound history: per-session `compound:`, `wheel_sets`, `condition_seeds` |
 | `data/tire_dataset/sensor_blacklist.yaml` | Human-curated list of broken (session, corner) channels |
 | `scripts/regen_tire_predict_fixture.py` | Regenerates the Python-parity fixture pinned by the C# and web test suites |
 | `tests/tire_model/test_energy_balance.py` | Physics functions in isolation |
-| `tests/tire_model/test_warmup_table.py` | Synthetic-data round-trip: known K, τ, c_track → fit → recover |
+| `tests/tire_model/test_warmup_table.py` | Lookup builders, anchors, blacklist, pace scaling on synthetic laps |
 | `tests/tire_model/test_compound_infer.py` | EM recovery on synthetic mixtures: pinned labels, latent posteriors, forced selection |
 | `tests/tire_model/test_predict.py` | Fallback chain hits every level with mocked artifacts |

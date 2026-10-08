@@ -56,8 +56,9 @@ public sealed class CircuitPredictor
         if (compound is not null && _model.LookupCompoundK(car, compound, corner, cond) is KLookup ck)
             k = ck;
         var tau = _model.LookupTau(car, corner, cond);
-        var c = _model.LookupCTrack(track);
-        var g2 = _model.LookupG2(track, car, cond);
+        // The circuit enters only through its per-corner heat input (v5 has
+        // no track constant); entries without the map fall back to the mean.
+        var g2 = _model.LookupG2(track, car, cond, corner);
         var lap = _model.LookupLapTime(track, car, cond);
 
         // T_road: user-supplied → sun-cover proxy → fall back to T_air.
@@ -97,7 +98,7 @@ public sealed class CircuitPredictor
         string? outlapSource = null;
         if (includeOutlap)
         {
-            if (_model.LookupOutlap(track, car, cond) is OutlapLookup o)
+            if (_model.LookupOutlap(track, car, cond, corner) is OutlapLookup o)
             {
                 outlapS = o.MovingSeconds;
                 outlapG2 = o.G2;
@@ -114,7 +115,7 @@ public sealed class CircuitPredictor
         double warmupFrac = tau.ValueSeconds > 0
             ? 1.0 - Math.Exp(-tAtLapNs / tau.ValueSeconds)
             : 0.0;
-        double deltaTInf = k.ValueKelvinPerG2 * c.Value * g2Value;
+        double deltaTInf = k.ValueKelvinPerG2 * g2Value;
         var (tAfterOutlapC, tHotC) = EnergyBalance.WarmupTwoStageC(
             tOutlapS: outlapS,
             g2Outlap: outlapG2,
@@ -122,7 +123,6 @@ public sealed class CircuitPredictor
             g2Flying: g2Value,
             tEffC: tEffC,
             kKelvinPerG2: k.ValueKelvinPerG2,
-            cTrack: c.Value,
             tauSec: tau.ValueSeconds,
             tStartC: tStartC);
 
@@ -139,7 +139,6 @@ public sealed class CircuitPredictor
             TargetHotPressureBar: targetHotPressureBar,
             KKelvinPerG2: k.ValueKelvinPerG2,
             TauSec: tau.ValueSeconds,
-            CTrack: c.Value,
             G2Typ: g2Value,
             LapTimeTypS: lap.ValueSeconds,
             TAtLapNs: tAtLapNs,
@@ -170,7 +169,6 @@ public sealed record CornerPrediction(
     double TargetHotPressureBar,
     double KKelvinPerG2,
     double TauSec,
-    double CTrack,
     double G2Typ,
     double LapTimeTypS,
     double TAtLapNs,
