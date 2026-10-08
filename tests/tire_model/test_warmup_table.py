@@ -612,3 +612,37 @@ def test_delta_t_targets_the_pressure_implied_gas_temperature() -> None:
     assert np.isnan(out["t_gas_fl_end"].iloc[1])  # no anchor pressure -> no target
     g = wt.gas_temperature_c(np.array([25.0]), np.array([1.5]), np.array([1.5]))
     assert g[0] == pytest.approx(25.0)  # unchanged pressure -> anchor temperature
+
+
+def test_per_corner_q_lookup_and_outlap_corners() -> None:
+    """Schema v5 lookups: per-corner percentile of ``q_lap_{corner}`` for the
+    flying laps and per-corner median for the pit out-laps."""
+    rows = []
+    for i in range(10):
+        rows.append(
+            {
+                "session_id": "s1",
+                "stint_id": 1,
+                "lap_num": i,
+                "track_canonical": "t",
+                "car": "c",
+                "condition": "dry",
+                "is_outlap": i == 0,
+                "outlap_from_pit": i == 0,
+                "moving_s": 60.0,
+                "heat_proxy": 60.0 * 0.8,
+                "on_track_s": 60.0,
+                "q_lap_fl": 1.0 + 0.01 * i if i else 0.4,
+                "q_lap_fr": 0.5 + 0.01 * i if i else 0.2,
+                "q_lap_rl": 0.9 if i else 0.3,
+                "q_lap_rr": 0.4 if i else 0.1,
+            }
+        )
+    laps = pd.DataFrame(rows)
+    q = wt._build_q_typ_per_corner(wt._flying_laps(laps), percentile=50)
+    per, n = q[("t", "c", "dry")]
+    assert n == 9 and per["fl"] == pytest.approx(1.05) and per["rr"] == pytest.approx(0.4)
+    base, corners = wt._build_outlap_typ_with_corners(laps)
+    assert corners[("t", "c", "dry")] == {"fl": 0.4, "fr": 0.2, "rl": 0.3, "rr": 0.1}
+    mv, g2_mean, n_out = base[("t", "c", "dry")]
+    assert mv == 60.0 and g2_mean == pytest.approx(0.25) and n_out == 1

@@ -109,7 +109,9 @@ def _suff_stats(
     """Per-(session, corner, condition) sufficient statistics.
 
     Columns: session_id, car, corner, condition, sxx, sxy, syy, n where
-    x = g²·c_track·(1 − e^{−Δt/τ}) and y = ΔT − (T_start − T_eff)·e^{−Δt/τ},
+    x = q·c_track·(1 − e^{−Δt/τ}) and y = ΔT − (T_start − T_eff)·e^{−Δt/τ},
+    with q the lap's per-corner driving intensity ``q_lap_{corner}`` when
+    the frame carries it (schema v5) and ``heat_proxy/on_track_s`` otherwise,
     i.e. the known initial-condition term is moved to the response side so
     the regression through the origin recovers K (see
     ``warmup_table._compute_stint_anchor``).
@@ -132,7 +134,8 @@ def _suff_stats(
     rows = []
     for corner in _CORNER_AXLE:
         delta_col = f"delta_t_{corner}"
-        sub = laps[laps[delta_col].notna()].copy()
+        q_col = f"q_lap_{corner}" if f"q_lap_{corner}" in laps.columns else "g2_lap"
+        sub = laps[laps[delta_col].notna() & laps[q_col].notna() & (laps[q_col] > 0)].copy()
         t_anchor, start_excess = _anchor_terms(sub, corner)
         sub["_dt"] = sub["t_cum_s"].to_numpy(dtype=float) - t_anchor
         sub["_excess"] = start_excess
@@ -145,7 +148,7 @@ def _suff_stats(
                 continue
             decay = np.exp(-grp["_dt"].to_numpy() / tau_fp.value)
             x = (
-                grp["g2_lap"].to_numpy()
+                grp[q_col].to_numpy(dtype=float)
                 * grp["track_canonical"].map(c_val).to_numpy()
                 * (1.0 - decay)
             )

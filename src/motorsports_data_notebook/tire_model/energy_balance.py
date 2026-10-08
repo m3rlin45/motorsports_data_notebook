@@ -34,10 +34,54 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
+
 # Atmospheric assumption — matches the C# calculator
 # (tire_pressure_calculator/Core/ViewModels/TireCornerViewModel.cs:77-89)
 P_ATM_BAR = 1.0
 T_ZERO_C_TO_K = 273.15
+
+
+def speed_pressure_factor(v_ms: np.ndarray | float, kappa: float) -> np.ndarray:
+    """``P_gas / P_read = 1 + κ·V²``: the TPMS pressure read at speed sits
+    below the cavity gas-law pressure.
+
+    The tyre grows under centrifugal load (and the valve-mounted sensor sees
+    the same ∝ V² acceleration), so the cavity volume — and with it the
+    reading — depends on speed: ``P_read·V(v) = n·R·T`` with
+    ``V(v) = V₀·(1 + κ·v²)``. ``κ`` is a constant of the tyre + sensor
+    (per car), fitted in the per-second fit; ``κ = 0`` is the constant-volume
+    gas law. The gas temperature implied by a reading at speed is the raw
+    ratio times this factor (relative to the anchor's own factor).
+    """
+    v = np.asarray(v_ms, dtype=float)
+    return np.asarray(1.0 + kappa * v * v)
+
+
+def gas_temperature_at_speed_c(
+    t_anchor_c: np.ndarray,
+    p_anchor_bar: np.ndarray,
+    p_bar: np.ndarray,
+    v_ms: np.ndarray,
+    v_anchor_ms: np.ndarray,
+    kappa: float,
+) -> np.ndarray:
+    """Cavity-gas temperature implied by a pressure reading at speed ``v``
+    from an anchor reading at ``v_anchor``::
+
+        T_gas_K = T_anchor_K · (P_abs / P_anchor_abs) · (1 + κ v²) / (1 + κ v_anchor²)
+
+    NaN where any input is missing or a pressure is implausible.
+    """
+    t_k = np.asarray(t_anchor_c, dtype=float) + T_ZERO_C_TO_K
+    p_a = np.asarray(p_anchor_bar, dtype=float) + P_ATM_BAR
+    p = np.asarray(p_bar, dtype=float) + P_ATM_BAR
+    f = speed_pressure_factor(np.nan_to_num(np.asarray(v_ms, dtype=float)), kappa)
+    f_a = speed_pressure_factor(np.nan_to_num(np.asarray(v_anchor_ms, dtype=float)), kappa)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        out = t_k * p / p_a * f / f_a - T_ZERO_C_TO_K
+    ok = np.isfinite(t_k) & np.isfinite(p_a) & np.isfinite(p) & (p_a > 0.3) & (p > 0.3)
+    return np.asarray(np.where(ok, out, np.nan), dtype=float)
 
 
 def t_effective_c(

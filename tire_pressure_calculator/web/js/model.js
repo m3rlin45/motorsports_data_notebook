@@ -13,8 +13,11 @@ export const P_ATM_BAR = 1.0;
 export const T_ZERO_C_TO_K = 273.15;
 
 // v3 adds the target-lap-time feature; v2 artifacts still load (the pace
-// scaling then always uses the exponent fallback defaults).
-export const SUPPORTED_SCHEMA_VERSION = 4;
+// scaling then always uses the exponent fallback defaults). v5 adds optional
+// per-corner heat inputs (q_typ_by_corner / outlap_q_by_corner) and an
+// informational `heat_input` block (ignored here); older artifacts fall back
+// to the corner mean.
+export const SUPPORTED_SCHEMA_VERSION = 5;
 export const MIN_SUPPORTED_SCHEMA_VERSION = 2;
 
 // C# Math.Round uses banker's rounding (half to even); mirror it so the
@@ -111,6 +114,15 @@ export function conditionChain(condition) {
 
 const average = (rows, pick) => rows.reduce((s, r) => s + pick(r), 0) / rows.length;
 const sum = (rows, pick) => rows.reduce((s, r) => s + pick(r), 0);
+
+// Per-corner value from a v5 {fl, fr, rl, rr} map, else the entry's corner
+// mean. A null corner (or a map without that corner) keeps the mean, so
+// pre-v5 artifacts produce identical numbers.
+const perCornerOr = (byCorner, corner, mean) => {
+  if (corner === null || corner === undefined || !byCorner) return mean;
+  const v = byCorner[corner];
+  return typeof v === 'number' ? v : mean;
+};
 
 // Piecewise-linear interpolation clamped to the endpoints. Must stay in
 // lockstep with the Python and C# implementations (pinned by the parity
@@ -253,32 +265,36 @@ export class TireModel {
     return { value: this.dto.priors_when_no_fit.c_track, stderr: 0, fromPrior: true };
   }
 
-  lookupG2(track, car, condition) {
+  // Typical flying-lap heat input (g² in v2-v4; the per-corner q_typ in v5
+  // when `corner` is given and the entry carries q_typ_by_corner). Pooled
+  // fallbacks average the same per-corner value over the pooled rows.
+  lookupG2(track, car, condition, corner = null) {
     const rows = this.dto.g2_typ_by_track_car_cond;
+    const value = (r) => perCornerOr(r.q_typ_by_corner, corner, r.g2_typ);
     for (const cond of conditionChain(condition)) {
       const hit = rows.find(
         (r) => r.track_canonical === track && r.car === car && r.condition === cond);
       if (hit) {
         const source = cond === condition ? 'exact' : `fallback(${cond})`;
-        return { value: hit.g2_typ, nLapsUsed: hit.n_laps_used, source };
+        return { value: value(hit), nLapsUsed: hit.n_laps_used, source };
       }
     }
     const sameTC = rows.filter((r) => r.track_canonical === track && r.car === car);
     if (sameTC.length > 0) {
       return {
-        value: average(sameTC, (r) => r.g2_typ),
+        value: average(sameTC, value),
         nLapsUsed: sum(sameTC, (r) => r.n_laps_used), source: 'track_car_pooled',
       };
     }
     const sameT = rows.filter((r) => r.track_canonical === track);
     if (sameT.length > 0) {
       return {
-        value: average(sameT, (r) => r.g2_typ),
+        value: average(sameT, value),
         nLapsUsed: sum(sameT, (r) => r.n_laps_used), source: 'track_pooled',
       };
     }
     if (rows.length > 0) {
-      return { value: average(rows, (r) => r.g2_typ), nLapsUsed: 0, source: 'global' };
+      return { value: average(rows, value), nLapsUsed: 0, source: 'global' };
     }
     return { value: 0.7, nLapsUsed: 0, source: 'global' };
   }
@@ -370,28 +386,31 @@ export class TireModel {
   // Typical out-lap (pit exit to the first start/finish crossing): rolling
   // seconds and g², integrated first from the typed pit-exit temperature.
   // null when the artifact predates the table or has nothing for the track
-  // (the out-lap is then zero-length, the pre-v0.26 behaviour).
-  lookupOutlap(track, car, condition) {
+  // (the out-lap is then zero-length, the pre-v0.26 behaviour). With a
+  // `corner`, a v5 outlap_q_by_corner entry supplies that corner's heat
+  // input instead of outlap_g2.
+  lookupOutlap(track, car, condition, corner = null) {
     const rows = this.dto.outlap_typ_by_track_car_cond ?? [];
+    const g2 = (r) => perCornerOr(r.outlap_q_by_corner, corner, r.outlap_g2);
     for (const cond of conditionChain(condition)) {
       const hit = rows.find(
         (r) => r.track_canonical === track && r.car === car && r.condition === cond);
       if (hit) {
         const source = cond === condition ? 'exact' : `fallback(${cond})`;
-        return { movingS: hit.outlap_moving_s, g2: hit.outlap_g2, nLapsUsed: hit.n_laps_used, source };
+        return { movingS: hit.outlap_moving_s, g2: g2(hit), nLapsUsed: hit.n_laps_used, source };
       }
     }
     const sameTC = rows.filter((r) => r.track_canonical === track && r.car === car);
     if (sameTC.length > 0) {
       return {
-        movingS: average(sameTC, (r) => r.outlap_moving_s), g2: average(sameTC, (r) => r.outlap_g2),
+        movingS: average(sameTC, (r) => r.outlap_moving_s), g2: average(sameTC, g2),
         nLapsUsed: sum(sameTC, (r) => r.n_laps_used), source: 'track_car_pooled',
       };
     }
     const sameT = rows.filter((r) => r.track_canonical === track);
     if (sameT.length > 0) {
       return {
-        movingS: average(sameT, (r) => r.outlap_moving_s), g2: average(sameT, (r) => r.outlap_g2),
+        movingS: average(sameT, (r) => r.outlap_moving_s), g2: average(sameT, g2),
         nLapsUsed: sum(sameT, (r) => r.n_laps_used), source: 'track_pooled',
       };
     }
@@ -450,7 +469,9 @@ export function predictCorner(model, {
   }
   const tau = model.lookupTau(car, corner, cond);
   const c = model.lookupCTrack(track);
-  const g2 = model.lookupG2(track, car, cond);
+  // v5 artifacts carry a per-corner heat input; older ones fall back to the
+  // (track, car, cond) mean, so the corner argument is inert there.
+  const g2 = model.lookupG2(track, car, cond, corner);
   const lap = model.lookupLapTime(track, car, cond);
 
   // T_road: user-supplied -> sun-cover proxy -> fall back to T_air.
@@ -485,7 +506,7 @@ export function predictCorner(model, {
   let outlapG2 = 0.0;
   let outlapSource = null;
   if (includeOutlap) {
-    const o = model.lookupOutlap(track, car, cond);
+    const o = model.lookupOutlap(track, car, cond, corner);
     if (o) { outlapS = o.movingS; outlapG2 = o.g2; outlapSource = o.source; }
     if (outlapTimeS !== null && outlapTimeS !== undefined) {
       if (!(outlapTimeS >= 0)) throw new RangeError(`outlap time must be >= 0; got ${outlapTimeS}`);
