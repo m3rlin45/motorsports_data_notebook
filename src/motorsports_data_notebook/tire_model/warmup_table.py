@@ -39,7 +39,7 @@ from .energy_balance import P_ATM_BAR, T_ZERO_C_TO_K, t_effective_c, t_road_prox
 logger = logging.getLogger(__name__)
 
 CORNERS = ("fl", "fr", "rl", "rr")
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 # Cars pooled under one label for every fitted quantity. KK-F and KK-SII are
 # near-identical FJ-series machines running the same tires, so their laps
@@ -114,8 +114,8 @@ MIN_SESSIONS_FOR_RAIN_FIT = 3
 # How tau/K are fitted: "per_lap" = the closed form on lap-end gas temperatures
 # (Pass 1); "per_second" = the 1 Hz recurrence on the pressure-implied gas
 # temperature (tire_model/statespace.py). Both feed Pass 2 and the artifact.
-FIT_METHODS = ("per_lap", "per_second")
-DEFAULT_FIT_METHOD = "per_second"
+FIT_METHODS = ("per_lap", "per_second", "physical")
+DEFAULT_FIT_METHOD = "physical"
 
 # Per-(session, corner) sensor sanity check: flag stuck/broken TPMS channels so
 # the fit doesn't learn from them. Pure heuristic — easy to tune later.
@@ -221,7 +221,9 @@ def build_warmup_table(
     outlap_lookup = _build_outlap_typ(laps)
     from .sectors import build_pace_model
 
-    g2_curves, g2_exponent_default = build_pace_model(root, flying)
+    g2_curves, g2_exponent_default = build_pace_model(
+        root, flying, speed_weighted=(fit_method == "physical")
+    )
 
     laps_for_fit = _laps_for_fit(laps, g2_lookup)
 
@@ -229,6 +231,10 @@ def build_warmup_table(
     tau_by_car_corner_cond: dict[tuple[str, str, str], FitParam] = {}
     bucket_gains: dict[tuple[str, str, str, str], FitParam] = {}
     bucket_n_samples: dict[tuple[str, str, str, str], int] = {}
+    kappa_by_car: dict[str, float] = {}
+    heat_input_block: dict[str, Any] | None = None
+    q_corner_lookup: dict[tuple[str, str, str], tuple[dict[str, float], int]] = {}
+    outlap_corner_lookup: dict[tuple[str, str, str], dict[str, float]] = {}
 
     if fit_method not in FIT_METHODS:
         raise ValueError(f"fit_method must be one of {FIT_METHODS}; got {fit_method!r}")
@@ -237,12 +243,78 @@ def build_warmup_table(
     seen_conditions = [c for c in seen_conditions if c == "dry"] + [
         c for c in seen_conditions if c != "dry"
     ]
-    if fit_method == "per_second":
+    if fit_method == "physical":
+        # Schema v5: force × slip-fraction × speed input |g|·V/V_ref with the
+        # per-corner force-path split (load transfer, drive, brake), one gain per
+        # (car, condition), cooling per (car, axle, condition), κ per car,
+        # no track constants.
+        from .statespace import fit_physical, lap_heat_frame
+
+        pf = fit_physical(root, laps_for_fit)
+        tau_by_car_corner_cond = dict(pf.tau)
+        k_by_car_corner_cond = dict(pf.k)
+        kappa_by_car = dict(pf.kappa)
+        tracks_seen = sorted(set(laps_for_fit["track_canonical"]))
+        c_track_by_track = {
+            t: FitParam(
+                value=1.0, stderr=0.0, n_samples=int((laps_for_fit["track_canonical"] == t).sum())
+            )
+            for t in tracks_seen
+        }
+        bucket_n_samples = {
+            (str(car), str(track), corner, str(cond)): int(len(grp))
+            for (track, car, cond), grp in laps_for_fit.groupby(
+                ["track_canonical", "car", "condition"]
+            )
+            for corner in CORNERS
+            if (str(car), corner, str(cond)) in k_by_car_corner_cond
+        }
+        car_by_session = dict(zip(laps_for_fit["session_id"], laps_for_fit["car"]))
+        lap_q = lap_heat_frame(pf.components, pf.drive, pf.brake, car_by_session)
+        laps_for_fit = laps_for_fit.merge(
+            lap_q, on=["session_id", "stint_id", "lap_num"], how="left"
+        )
+        laps_for_fit = apply_speed_correction(root, laps_for_fit, kappa_by_car)
+        q_corner_lookup = _build_q_typ_per_corner(_flying_laps(laps_for_fit))
+        g2_lookup = {
+            key: (float(np.mean(list(per.values()))), n)
+            for key, (per, n) in q_corner_lookup.items()
+        }
+        outlap_lookup, outlap_corner_lookup = _build_outlap_typ_with_corners(laps_for_fit)
+        heat_input_block = {
+            "form": (
+                "q_i = (V/v_ref_ms) * [ r_i*sqrt(lat_g^2 + brake_g^2) + d*acc_g*[driven_i] ] "
+                "+ c_b*brake_g*(V/v_ref_ms)*[front_i]; r_i = W_i(t)/W_i,static from the quasi-static "
+                "load transfer of geometry_by_car (force x slip fraction x speed: slip is a kinematic "
+                "fraction near the optimum, so heat is linear in the force); "
+                "dT/dt = a*q_i - b_axle*(T - T_eff)"
+            ),
+            "v_ref_ms": 30.0,
+            "force_exp": 1.0,
+            "speed_exp": 1.0,
+            "geometry_by_car": {
+                car: {
+                    "wdf": g.wdf,
+                    "xi_x": g.xi_x,
+                    "xi_y": g.xi_y,
+                    "rld": g.rld,
+                    "driven": g.driven,
+                }
+                for car, g in pf.geometry.items()
+            },
+            "drive_by_car": {k: float(v) for k, v in pf.drive.items()},
+            "brake_by_car": {k: float(v) for k, v in pf.brake.items()},
+            "shared": "gain per (car, condition); cooling per (car, axle, condition); no track constants",
+        }
+    elif fit_method == "per_second":
         from .statespace import fit_tau_and_gains as _fit_per_second
 
-        tau_by_car_corner_cond, bucket_gains, bucket_n_samples = _fit_per_second(
+        tau_by_car_corner_cond, bucket_gains, bucket_n_samples, kappa_by_car = _fit_per_second(
             root, laps_for_fit, anchor_track=ANCHOR_TRACK, min_laps_for_fit=MIN_LAPS_FOR_K_BUCKET
         )
+        # The lap-end observables the compound EM regresses on are read at
+        # speed: put them on the gas-law (standstill) scale with the fitted κ.
+        laps_for_fit = apply_speed_correction(root, laps_for_fit, kappa_by_car)
     else:
         for car in sorted(set(laps_for_fit["car"])):
             for corner in CORNERS:
@@ -261,11 +333,12 @@ def build_warmup_table(
                             laps_for_fit, car, track, corner, cond
                         )
 
-    k_by_car_corner_cond, c_track_by_track = _pass2_factor_gains(
-        bucket_gains=bucket_gains,
-        g2_lookup=g2_lookup,
-        anchor_track=ANCHOR_TRACK,
-    )
+    if fit_method != "physical":
+        k_by_car_corner_cond, c_track_by_track = _pass2_factor_gains(
+            bucket_gains=bucket_gains,
+            g2_lookup=g2_lookup,
+            anchor_track=ANCHOR_TRACK,
+        )
 
     # Compound-aware K: multi-task fit with partial supervision. The
     # compound-assignment task is supervised where labels exist (sidecar +
@@ -323,6 +396,10 @@ def build_warmup_table(
         data_through_local=_data_through[1],
         outlap_lookup=outlap_lookup,
         fit_method=fit_method,
+        kappa_by_car=kappa_by_car,
+        heat_input_block=heat_input_block,
+        q_corner_lookup=q_corner_lookup,
+        outlap_corner_lookup=outlap_corner_lookup,
     )
 
     if write_artifacts:
@@ -766,6 +843,49 @@ def gas_temperature_c(
     return np.asarray(out, dtype=float)
 
 
+def apply_speed_correction(
+    root: Path, laps: pd.DataFrame, kappa_by_car: dict[str, float]
+) -> pd.DataFrame:
+    """Recompute ``t_gas_{c}_end`` / ``delta_t_{c}`` with the speed-pressure
+    correction (``energy_balance.gas_temperature_at_speed_c``): the lap-end
+    reading is taken at the lap-end speed, the anchor at the anchor speed.
+    Attaches ``speed_end_ms`` and ``speed_anchor_{c}_ms`` from the
+    timeseries. Cars without a fitted κ are left on the constant-volume
+    gas law."""
+    from .energy_balance import gas_temperature_at_speed_c
+    from .statespace import stint_speed_terms
+
+    if not kappa_by_car:
+        return laps
+    terms = stint_speed_terms(root, laps)
+    if terms.empty:
+        return laps
+    df = laps.drop(
+        columns=[
+            c
+            for c in terms.columns
+            if c in laps.columns and c not in ("session_id", "stint_id", "lap_num")
+        ]
+    )
+    df = df.merge(terms, on=["session_id", "stint_id", "lap_num"], how="left")
+    kap = df["car"].map(kappa_by_car).fillna(0.0).to_numpy(dtype=float)
+    for c in CORNERS:
+        if f"p_start_{c}" not in df.columns or f"tpms_press_{c}_end" not in df.columns:
+            continue
+        v_end = df["speed_end_ms"].to_numpy(dtype=float)
+        v_a = df[f"speed_anchor_{c}_ms"].to_numpy(dtype=float)
+        t_k = df[f"t_start_{c}"].to_numpy(dtype=float) + T_ZERO_C_TO_K
+        p_a = df[f"p_start_{c}"].to_numpy(dtype=float) + P_ATM_BAR
+        p = df[f"tpms_press_{c}_end"].to_numpy(dtype=float) + P_ATM_BAR
+        f = (1.0 + kap * np.nan_to_num(v_end) ** 2) / (1.0 + kap * np.nan_to_num(v_a) ** 2)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            corrected = t_k * p / p_a * f - T_ZERO_C_TO_K
+        ok = np.isfinite(corrected) & (p_a > 0.3) & (p > 0.3)
+        df[f"t_gas_{c}_end"] = np.where(ok, corrected, df[f"t_gas_{c}_end"].to_numpy(dtype=float))
+        df[f"delta_t_{c}"] = df[f"t_gas_{c}_end"] - df["t_eff_c"]
+    return df
+
+
 def _compute_delta_t(laps: pd.DataFrame) -> pd.DataFrame:
     """Compute T_road proxy, the pressure-implied gas temperature at lap end
     (``t_gas_{c}_end``) and the regression target
@@ -892,6 +1012,101 @@ def _build_g2_typ(
             int(len(g2_per_lap)),
         )
     return out
+
+
+def _build_q_typ_per_corner(
+    laps: pd.DataFrame,
+    *,
+    percentile: float = G2_TYP_PERCENTILE,
+) -> dict[tuple[str, str, str], tuple[dict[str, float], int]]:
+    """Schema v5: per (track, car, condition) the ``G2_TYP_PERCENTILE`` of the
+    per-lap driving intensity ``q_lap_{corner}`` for each corner.
+    Returns ``{(track, car, cond): ({corner: q}, n_laps)}``."""
+    out: dict[tuple[str, str, str], tuple[dict[str, float], int]] = {}
+    cols = [f"q_lap_{c}" for c in CORNERS]
+    if not all(c in laps.columns for c in cols):
+        return out
+    for (track, car, cond), grp in laps.groupby(["track_canonical", "car", "condition"]):
+        if cond == "unknown":
+            continue
+        per: dict[str, float] = {}
+        n = 0
+        for c in CORNERS:
+            v = grp[f"q_lap_{c}"].replace([np.inf, -np.inf], np.nan).dropna()
+            if v.empty:
+                continue
+            per[c] = float(np.percentile(v, percentile))
+            n = max(n, int(len(v)))
+        if len(per) == 4:
+            out[(str(track), str(car), str(cond))] = (per, n)
+    return out
+
+
+def _build_outlap_typ_with_corners(
+    laps: pd.DataFrame,
+) -> tuple[
+    dict[tuple[str, str, str], tuple[float, float, int]],
+    dict[tuple[str, str, str], dict[str, float]],
+]:
+    """:func:`_build_outlap_typ` plus the per-corner median out-lap driving
+    intensity ``q_lap_{corner}`` (schema v5)."""
+    base = _build_outlap_typ(laps)
+    per_corner: dict[tuple[str, str, str], dict[str, float]] = {}
+    cols = [f"q_lap_{c}" for c in CORNERS]
+    if "is_outlap" not in laps.columns or not all(c in laps.columns for c in cols):
+        return base, per_corner
+    from_pit = (
+        laps["outlap_from_pit"].fillna(False).astype(bool)
+        if "outlap_from_pit" in laps.columns
+        else True
+    )
+    outs = laps[_is_outlap_col(laps) & from_pit]
+    for (track, car, cond), grp in outs.groupby(["track_canonical", "car", "condition"]):
+        key = (str(track), str(car), str(cond))
+        if key not in base:
+            continue
+        per = {}
+        for c in CORNERS:
+            v = grp[f"q_lap_{c}"].replace([np.inf, -np.inf], np.nan).dropna()
+            if not v.empty:
+                per[c] = float(v.median())
+        if len(per) == 4:
+            per_corner[key] = per
+            mv, _g2, n = base[key]
+            base[key] = (mv, float(np.mean(list(per.values()))), n)
+    return base, per_corner
+
+
+def attach_lap_heat(root: Path, laps: pd.DataFrame, model: dict[str, Any]) -> pd.DataFrame:
+    """Attach the per-lap, per-corner driving intensity ``q_lap_{corner}``
+    of a schema-v5 model (its geometry and drive/brake coefficients) to a
+    prepped laps frame (anchors + T_eff present). No-op for older models."""
+    hi = model.get("heat_input")
+    if not hi:
+        return laps
+    from .heat_input import PHYSICAL_HEAT_INPUT, CarGeometry
+    from .statespace import build_stint_series, lap_heat_components, lap_heat_frame
+
+    geometry = {
+        car: CarGeometry(g["wdf"], g["xi_x"], g["xi_y"], g["rld"], g.get("driven", "rear"))
+        for car, g in hi.get("geometry_by_car", {}).items()
+    }
+    stints = build_stint_series(root, laps, PHYSICAL_HEAT_INPUT, geometry, 0.0, long_split=True)
+    comps = lap_heat_components(stints)
+    car_by_session = dict(zip(laps["session_id"], laps["car"]))
+    lap_q = lap_heat_frame(
+        comps, hi.get("drive_by_car", {}), hi.get("brake_by_car", {}), car_by_session
+    )
+    if lap_q.empty:
+        return laps
+    drop = [
+        c
+        for c in lap_q.columns
+        if c in laps.columns and c not in ("session_id", "stint_id", "lap_num")
+    ]
+    return laps.drop(columns=drop).merge(
+        lap_q, on=["session_id", "stint_id", "lap_num"], how="left"
+    )
 
 
 def _build_g2_typ_per_corner(
@@ -1296,6 +1511,10 @@ def _assemble_model(
     data_through_local: str | None = None,
     outlap_lookup: dict[tuple[str, str, str], tuple[float, float, int]] | None = None,
     fit_method: str = DEFAULT_FIT_METHOD,
+    kappa_by_car: dict[str, float] | None = None,
+    heat_input_block: dict[str, Any] | None = None,
+    q_corner_lookup: dict[tuple[str, str, str], tuple[dict[str, float], int]] | None = None,
+    outlap_corner_lookup: dict[tuple[str, str, str], dict[str, float]] | None = None,
 ) -> dict[str, Any]:
     """Build the in-memory model dict that matches the JSON artifact schema.
 
@@ -1321,6 +1540,9 @@ def _assemble_model(
         curve = g2_curves.get((track, car, cond))
         if curve is not None:
             entry["g2_vs_lap_time"] = curve
+        per = (q_corner_lookup or {}).get((track, car, cond))
+        if per is not None:
+            entry["q_typ_by_corner"] = {c: float(v) for c, v in sorted(per[0].items())}
         return entry
 
     fit_at = datetime.now(tz=timezone.utc).isoformat(timespec="seconds")
@@ -1343,8 +1565,19 @@ def _assemble_model(
         # through this map before any lookup, so old car names keep working.
         "car_aliases": dict(CAR_FIT_ALIASES),
         "fit_method": fit_method,
+        "heat_input": heat_input_block,
         "model_form": (
-            "T_hot - T_eff = K[car,corner,cond] * c_track[track] * g2 "
+            (
+                "T_hot - T_eff = K[car,corner,cond] * q_typ[track,car,cond,corner] "
+                "* (1 - exp(-t / tau_sec[car,corner,cond])) + (T_start - T_eff) * exp(-t / tau_sec), "
+                "q = the driving intensity of heat_input (|g| * V / v_ref_ms with the "
+                "per-corner load-transfer / drive / brake split; c_track is 1 everywhere); T is the "
+                "pressure-implied cavity-gas temperature with the speed-pressure correction of "
+                "energy_balance.speed_pressure; integrated in two segments (out-lap, then N flying "
+                "laps) as before"
+            )
+            if heat_input_block
+            else "T_hot - T_eff = K[car,corner,cond] * c_track[track] * g2 "
             "* (1 - exp(-t / tau_sec[car,corner,cond])) "
             "+ (T_start - T_eff) * exp(-t / tau_sec[car,corner,cond]), where T is the "
             "pressure-implied cavity-gas temperature T_K = T_start_K * P_abs / P_start_abs "
@@ -1391,6 +1624,18 @@ def _assemble_model(
                 "formula": "T_air + delta_sun_max_c * (1 - cloud_cover/100) * sun_factor",
                 "delta_sun_max_c": DELTA_SUN_MAX_C,
                 "sun_factor_default": SUN_FACTOR_DEFAULT,
+            },
+            # The TPMS pressure read at speed sits below the cavity gas-law
+            # pressure: the tyre grows under centrifugal load (and the
+            # valve-mounted sensor sees the same ∝ V² acceleration). Fitted
+            # per car in the per-second fit so the thermal constants are not
+            # polluted by the within-lap swing; the calculators' hot pressure
+            # is the standstill gas-law value, a dash reading at speed V
+            # (m/s) is lower by the factor (1 + kappa * V^2).
+            "speed_pressure": {
+                "form": "P_read = P_gas / (1 + kappa * V_ms^2)",
+                "kappa_by_car": {k: float(v) for k, v in (kappa_by_car or {}).items()},
+                "fitted": bool(kappa_by_car),
             },
         },
         "rain_thermal": {
@@ -1527,6 +1772,11 @@ def _assemble_model(
                 "outlap_moving_s": mv,
                 "outlap_g2": g2,
                 "n_laps_used": n,
+                **(
+                    {"outlap_q_by_corner": (outlap_corner_lookup or {})[(track, car, cond)]}
+                    if (track, car, cond) in (outlap_corner_lookup or {})
+                    else {}
+                ),
             }
             for (track, car, cond), (mv, g2, n) in sorted((outlap_lookup or {}).items())
         ],
@@ -1600,7 +1850,7 @@ def _write_warmup_table_parquet(root: Path, model: dict[str, Any]) -> None:
                     "tau_stderr": tau.get("stderr_seconds", np.nan),
                     "c_track": ct["value"],
                     "c_track_stderr": ct["stderr"],
-                    "g2_typ": g2.get("g2_typ", np.nan),
+                    "g2_typ": g2.get("q_typ_by_corner", {}).get(corner, g2.get("g2_typ", np.nan)),
                     "lap_time_typ_s": lt.get("lap_time_typ_s", np.nan),
                     "n_samples_K": kb["n_samples"],
                     "from_prior": kb["from_prior"],

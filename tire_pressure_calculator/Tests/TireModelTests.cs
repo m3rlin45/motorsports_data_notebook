@@ -15,21 +15,69 @@ public class TireModelTests
     public void LoadEmbedded_ParsesBundledArtifact()
     {
         var model = LoadBundled();
-        Assert.Equal(TireModel.SupportedSchemaVersion, model.Dto.SchemaVersion);
+        // The committed artifact may lag the newest supported schema (the
+        // per-corner v5 fields are optional); it must sit inside the window.
+        Assert.InRange(model.Dto.SchemaVersion,
+            TireModel.MinSupportedSchemaVersion, TireModel.SupportedSchemaVersion);
         Assert.NotNull(model.Dto.FitAtUtc);
         Assert.True(model.Dto.KBuckets.Count > 0, "expected at least one K bucket");
     }
 
-    [Fact]
-    public void Loader_RefusesUnsupportedSchemaVersion()
+    // Minimal valid-shaped artifact JSON at a given schema_version; bypasses
+    // the embedded path so the tests can feed a stream directly.
+    private static string MinimalArtifactJson(int schemaVersion) => $$$"""
+        {
+          "schema_version": {{{schemaVersion}}},
+          "fit_at_utc": "2026-01-01T00:00:00Z",
+          "model_form": "old",
+          "gay_lussac": {"p_atm_bar": 1.0, "t_zero_c_to_k": 273.15, "t_cold_uses": "T_air"},
+          "energy_balance": {"w_road": 0.2, "w_road_fitted": false,
+            "t_road_proxy": {"formula": "x", "delta_sun_max_c": 10.0, "sun_factor_default": 1.0}},
+          "conditions": {"values": ["dry"], "default": "dry"},
+          "corners": ["fl", "fr", "rl", "rr"],
+          "min_samples_per_bucket": 5,
+          "priors_when_no_fit": {"tau_sec_seconds": 240.0, "K_kelvin_per_g2": 60.0, "c_track": 1.0},
+          "tau_sec_by_car_corner_cond": [],
+          "K_buckets": [],
+          "c_track_by_track": [],
+          "g2_typ_by_track_car_cond": [],
+          "lap_time_typ_by_track_car_cond": []
+        }
+        """;
+
+    private static TireModel LoadFromJson(string json)
     {
-        // Craft a minimal valid-shaped JSON with schema_version=1 and ensure the
-        // wrapper throws. We bypass the embedded path and feed a stream directly.
-        const string oldSchema = """
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(json));
+        return TireModelLoader.LoadFromStream(stream);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(6)]
+    public void Loader_RefusesUnsupportedSchemaVersion(int schemaVersion)
+    {
+        Assert.Throws<InvalidOperationException>(() => LoadFromJson(MinimalArtifactJson(schemaVersion)));
+    }
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(5)]
+    public void Loader_AcceptsSupportedSchemaVersions(int schemaVersion)
+    {
+        var model = LoadFromJson(MinimalArtifactJson(schemaVersion));
+        Assert.Equal(schemaVersion, model.Dto.SchemaVersion);
+    }
+
+    [Fact]
+    public void Loader_ParsesV5PerCornerFieldsAndIgnoresHeatInputBlock()
+    {
+        const string json = """
             {
-              "schema_version": 1,
+              "schema_version": 5,
               "fit_at_utc": "2026-01-01T00:00:00Z",
-              "model_form": "old",
+              "model_form": "v5",
               "gay_lussac": {"p_atm_bar": 1.0, "t_zero_c_to_k": 273.15, "t_cold_uses": "T_air"},
               "energy_balance": {"w_road": 0.2, "w_road_fitted": false,
                 "t_road_proxy": {"formula": "x", "delta_sun_max_c": 10.0, "sun_factor_default": 1.0}},
@@ -39,13 +87,63 @@ public class TireModelTests
               "priors_when_no_fit": {"tau_sec_seconds": 240.0, "K_kelvin_per_g2": 60.0, "c_track": 1.0},
               "tau_sec_by_car_corner_cond": [],
               "K_buckets": [],
-              "c_track_by_track": [],
-              "g2_typ_by_track_car_cond": [],
-              "lap_time_typ_by_track_car_cond": []
+              "c_track_by_track": [{"track_canonical": "synth", "value": 1.0, "stderr": 0.0, "n_buckets_used": 4, "anchor": true}],
+              "g2_typ_by_track_car_cond": [
+                {"track_canonical": "synth", "car": "Car", "condition": "dry", "g2_typ": 1.0, "n_laps_used": 10,
+                 "q_typ_by_corner": {"fl": 1.3, "fr": 0.9, "rl": 1.1, "rr": 0.7}},
+                {"track_canonical": "other", "car": "Car", "condition": "dry", "g2_typ": 0.8, "n_laps_used": 3}
+              ],
+              "lap_time_typ_by_track_car_cond": [],
+              "outlap_typ_by_track_car_cond": [
+                {"track_canonical": "synth", "car": "Car", "condition": "dry",
+                 "outlap_moving_s": 90.0, "outlap_g2": 0.4, "n_laps_used": 10,
+                 "outlap_q_by_corner": {"fl": 0.6, "fr": 0.3, "rl": 0.5, "rr": 0.2}}
+              ],
+              "heat_input": {"form": "q = ...", "v_ref_ms": 30.0,
+                "geometry_by_car": {"Car": {"wheelbase_m": 2.5}},
+                "drive_by_car": {"Car": "rwd"}, "brake_by_car": {"Car": {"front_bias": 0.6}}}
             }
             """;
-        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(oldSchema));
-        Assert.Throws<InvalidOperationException>(() => TireModelLoader.LoadFromStream(stream));
+        var model = LoadFromJson(json);
+
+        var entry = model.Dto.G2TypByTrackCarCond.Single(r => r.TrackCanonical == "synth");
+        Assert.NotNull(entry.QTypByCorner);
+        Assert.Equal(1.3, entry.QTypByCorner!["fl"]);
+        Assert.Null(model.Dto.G2TypByTrackCarCond.Single(r => r.TrackCanonical == "other").QTypByCorner);
+
+        // Corner-aware lookup resolves the per-corner value; no corner (or no
+        // map) keeps the mean so pre-v5 numbers are preserved.
+        Assert.Equal(1.1, model.LookupG2("synth", "Car", "dry", "rl").Value);
+        Assert.Equal(1.0, model.LookupG2("synth", "Car", "dry").Value);
+        Assert.Equal(0.8, model.LookupG2("other", "Car", "dry", "rl").Value);
+        // Pooled fallbacks (condition chain exhausted) average the per-corner value.
+        var wet = model.LookupG2("synth", "Car", "wet", "fr");
+        Assert.Equal(0.9, wet.Value);
+        Assert.Equal("fallback(dry)", wet.Source);
+
+        var outlap = model.LookupOutlap("synth", "Car", "dry", "rr");
+        Assert.NotNull(outlap);
+        Assert.Equal(0.2, outlap!.Value.G2);
+        Assert.Equal(90.0, outlap.Value.MovingSeconds);
+        Assert.Equal(0.4, model.LookupOutlap("synth", "Car", "dry")!.Value.G2);
+    }
+
+    [Fact]
+    public void LookupG2AndOutlap_CornerArgumentIsInertWithoutPerCornerFields()
+    {
+        // The committed artifact may or may not carry the v5 fields; when it
+        // does not, passing a corner must not change a single number.
+        var model = LoadBundled();
+        if (model.Dto.G2TypByTrackCarCond.Any(r => r.QTypByCorner is not null)) return;
+        foreach (var track in model.AvailableTracks)
+        foreach (var car in model.AvailableCars)
+        foreach (var corner in new[] { "fl", "fr", "rl", "rr" })
+        {
+            Assert.Equal(model.LookupG2(track, car, "dry").Value,
+                model.LookupG2(track, car, "dry", corner).Value);
+            Assert.Equal(model.LookupOutlap(track, car, "dry"),
+                model.LookupOutlap(track, car, "dry", corner));
+        }
     }
 
     // ---------- Available cars / tracks / conditions ----------

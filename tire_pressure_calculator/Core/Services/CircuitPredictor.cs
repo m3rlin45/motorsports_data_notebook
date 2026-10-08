@@ -57,7 +57,9 @@ public sealed class CircuitPredictor
             k = ck;
         var tau = _model.LookupTau(car, corner, cond);
         var c = _model.LookupCTrack(track);
-        var g2 = _model.LookupG2(track, car, cond);
+        // v5 artifacts carry a per-corner heat input; older ones fall back
+        // to the (track, car, cond) mean, so the corner argument is inert there.
+        var g2 = _model.LookupG2(track, car, cond, corner);
         var lap = _model.LookupLapTime(track, car, cond);
 
         // T_road: user-supplied → sun-cover proxy → fall back to T_air.
@@ -97,7 +99,7 @@ public sealed class CircuitPredictor
         string? outlapSource = null;
         if (includeOutlap)
         {
-            if (_model.LookupOutlap(track, car, cond) is OutlapLookup o)
+            if (_model.LookupOutlap(track, car, cond, corner) is OutlapLookup o)
             {
                 outlapS = o.MovingSeconds;
                 outlapG2 = o.G2;
