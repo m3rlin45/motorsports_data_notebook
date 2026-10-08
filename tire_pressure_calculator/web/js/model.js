@@ -12,10 +12,12 @@
 export const P_ATM_BAR = 1.0;
 export const T_ZERO_C_TO_K = 273.15;
 
-// v3 adds the target-lap-time feature; v2 artifacts still load (the pace
-// scaling then always uses the exponent fallback defaults).
-export const SUPPORTED_SCHEMA_VERSION = 4;
-export const MIN_SUPPORTED_SCHEMA_VERSION = 2;
+// v5 drops the per-track constant c_track (the circuit enters only through
+// its per-corner heat input q_typ_by_corner / outlap_q_by_corner) and adds
+// an informational `heat_input` block (ignored here). Older artifacts
+// carried K values fitted against c_track and are no longer loadable.
+export const SUPPORTED_SCHEMA_VERSION = 5;
+export const MIN_SUPPORTED_SCHEMA_VERSION = 5;
 
 // C# Math.Round uses banker's rounding (half to even); mirror it so the
 // web app displays the exact same values as the desktop/Android heads.
@@ -36,13 +38,15 @@ export function tEffectiveC(tAirC, tRoadC, wRoad) {
 
 // Closed-form warmup from the tire's starting temperature tStartC (default:
 // in equilibrium at tEffC). The start excess decays with the same tau:
-//   T(t) = T_eff + K*c*g2*(1 - e^{-t/tau}) + (T_start - T_eff)*e^{-t/tau}
-export function warmupCurveC(tSeconds, tEffC, kKelvinPerG2, cTrack, g2Typ, tauSec, tStartC = null) {
+//   T(t) = T_eff + K*q*(1 - e^{-t/tau}) + (T_start - T_eff)*e^{-t/tau}
+// Schema v5 carries no per-track constant: the circuit enters only through
+// its per-corner heat input q.
+export function warmupCurveC(tSeconds, tEffC, kKelvinPerG2, g2Typ, tauSec, tStartC = null) {
   if (tauSec <= 0) throw new RangeError(`tau_sec must be > 0; got ${tauSec}`);
   if (tSeconds < 0) throw new RangeError(`t_seconds must be >= 0; got ${tSeconds}`);
   const decay = Math.exp(-tSeconds / tauSec);
   const warmupFrac = 1 - decay;
-  const deltaTInf = kKelvinPerG2 * cTrack * g2Typ;
+  const deltaTInf = kKelvinPerG2 * g2Typ;
   const start = tStartC ?? tEffC;
   return tEffC + deltaTInf * warmupFrac + (start - tEffC) * decay;
 }
@@ -51,11 +55,11 @@ export function warmupCurveC(tSeconds, tEffC, kKelvinPerG2, cTrack, g2Typ, tauSe
 // tStartC, then the flying laps from the temperature at the end of the
 // out-lap. Exact for piecewise-constant g². Returns [tAfterOutlap, tHot].
 export function warmupTwoStageC(
-  tOutlapS, g2Outlap, tFlyingS, g2Flying, tEffC, kKelvinPerG2, cTrack, tauSec, tStartC) {
+  tOutlapS, g2Outlap, tFlyingS, g2Flying, tEffC, kKelvinPerG2, tauSec, tStartC) {
   const tAfterOut = warmupCurveC(
-    Math.max(0, tOutlapS), tEffC, kKelvinPerG2, cTrack, g2Outlap, tauSec, tStartC);
+    Math.max(0, tOutlapS), tEffC, kKelvinPerG2, g2Outlap, tauSec, tStartC);
   const tHot = warmupCurveC(
-    Math.max(0, tFlyingS), tEffC, kKelvinPerG2, cTrack, g2Flying, tauSec, tAfterOut);
+    Math.max(0, tFlyingS), tEffC, kKelvinPerG2, g2Flying, tauSec, tAfterOut);
   return [tAfterOut, tHot];
 }
 
@@ -112,6 +116,15 @@ export function conditionChain(condition) {
 const average = (rows, pick) => rows.reduce((s, r) => s + pick(r), 0) / rows.length;
 const sum = (rows, pick) => rows.reduce((s, r) => s + pick(r), 0);
 
+// Per-corner value from a v5 {fl, fr, rl, rr} map, else the entry's corner
+// mean. A null corner (or a map without that corner) keeps the mean, so
+// pre-v5 artifacts produce identical numbers.
+const perCornerOr = (byCorner, corner, mean) => {
+  if (corner === null || corner === undefined || !byCorner) return mean;
+  const v = byCorner[corner];
+  return typeof v === 'number' ? v : mean;
+};
+
 // Piecewise-linear interpolation clamped to the endpoints. Must stay in
 // lockstep with the Python and C# implementations (pinned by the parity
 // fixture).
@@ -166,12 +179,9 @@ export class TireModel {
   }
 
   get availableTracks() {
-    // Every track with observed data, not just those with a fitted
-    // c_track — thin tracks (e.g. Motegi's 18 Inferno laps) predict via
-    // the c_track prior until enough laps accumulate.
-    const fitted = this.dto.c_track_by_track.map((r) => r.track_canonical);
+    // Every track with observed data (a typical heat input).
     const observed = this.dto.g2_typ_by_track_car_cond.map((r) => r.track_canonical);
-    return [...new Set([...fitted, ...observed])].sort();
+    return [...new Set(observed)].sort();
   }
 
   get availableConditions() { return this.dto.conditions.values; }
@@ -247,43 +257,41 @@ export class TireModel {
     };
   }
 
-  lookupCTrack(track) {
-    const hit = this.dto.c_track_by_track.find((r) => r.track_canonical === track);
-    if (hit) return { value: hit.value, stderr: hit.stderr, fromPrior: false };
-    return { value: this.dto.priors_when_no_fit.c_track, stderr: 0, fromPrior: true };
-  }
-
-  lookupG2(track, car, condition) {
+  // Typical flying-lap heat input (g² in v2-v4; the per-corner q_typ in v5
+  // when `corner` is given and the entry carries q_typ_by_corner). Pooled
+  // fallbacks average the same per-corner value over the pooled rows.
+  lookupG2(track, car, condition, corner = null) {
     const rows = this.dto.g2_typ_by_track_car_cond;
+    const value = (r) => perCornerOr(r.q_typ_by_corner, corner, r.g2_typ);
     for (const cond of conditionChain(condition)) {
       const hit = rows.find(
         (r) => r.track_canonical === track && r.car === car && r.condition === cond);
       if (hit) {
         const source = cond === condition ? 'exact' : `fallback(${cond})`;
-        return { value: hit.g2_typ, nLapsUsed: hit.n_laps_used, source };
+        return { value: value(hit), nLapsUsed: hit.n_laps_used, source };
       }
     }
     const sameTC = rows.filter((r) => r.track_canonical === track && r.car === car);
     if (sameTC.length > 0) {
       return {
-        value: average(sameTC, (r) => r.g2_typ),
+        value: average(sameTC, value),
         nLapsUsed: sum(sameTC, (r) => r.n_laps_used), source: 'track_car_pooled',
       };
     }
     const sameT = rows.filter((r) => r.track_canonical === track);
     if (sameT.length > 0) {
       return {
-        value: average(sameT, (r) => r.g2_typ),
+        value: average(sameT, value),
         nLapsUsed: sum(sameT, (r) => r.n_laps_used), source: 'track_pooled',
       };
     }
     if (rows.length > 0) {
-      return { value: average(rows, (r) => r.g2_typ), nLapsUsed: 0, source: 'global' };
+      return { value: average(rows, value), nLapsUsed: 0, source: 'global' };
     }
     return { value: 0.7, nLapsUsed: 0, source: 'global' };
   }
 
-  // ---- Compound-aware K (decomposed c_track × base × multiplier) ----
+  // ---- Compound-aware K (base × compound multiplier) ----
 
   // Distinct compounds fitted for a car, for UI enumeration.
   availableCompounds(car) {
@@ -370,28 +378,31 @@ export class TireModel {
   // Typical out-lap (pit exit to the first start/finish crossing): rolling
   // seconds and g², integrated first from the typed pit-exit temperature.
   // null when the artifact predates the table or has nothing for the track
-  // (the out-lap is then zero-length, the pre-v0.26 behaviour).
-  lookupOutlap(track, car, condition) {
+  // (the out-lap is then zero-length, the pre-v0.26 behaviour). With a
+  // `corner`, a v5 outlap_q_by_corner entry supplies that corner's heat
+  // input instead of outlap_g2.
+  lookupOutlap(track, car, condition, corner = null) {
     const rows = this.dto.outlap_typ_by_track_car_cond ?? [];
+    const g2 = (r) => perCornerOr(r.outlap_q_by_corner, corner, r.outlap_g2);
     for (const cond of conditionChain(condition)) {
       const hit = rows.find(
         (r) => r.track_canonical === track && r.car === car && r.condition === cond);
       if (hit) {
         const source = cond === condition ? 'exact' : `fallback(${cond})`;
-        return { movingS: hit.outlap_moving_s, g2: hit.outlap_g2, nLapsUsed: hit.n_laps_used, source };
+        return { movingS: hit.outlap_moving_s, g2: g2(hit), nLapsUsed: hit.n_laps_used, source };
       }
     }
     const sameTC = rows.filter((r) => r.track_canonical === track && r.car === car);
     if (sameTC.length > 0) {
       return {
-        movingS: average(sameTC, (r) => r.outlap_moving_s), g2: average(sameTC, (r) => r.outlap_g2),
+        movingS: average(sameTC, (r) => r.outlap_moving_s), g2: average(sameTC, g2),
         nLapsUsed: sum(sameTC, (r) => r.n_laps_used), source: 'track_car_pooled',
       };
     }
     const sameT = rows.filter((r) => r.track_canonical === track);
     if (sameT.length > 0) {
       return {
-        movingS: average(sameT, (r) => r.outlap_moving_s), g2: average(sameT, (r) => r.outlap_g2),
+        movingS: average(sameT, (r) => r.outlap_moving_s), g2: average(sameT, g2),
         nLapsUsed: sum(sameT, (r) => r.n_laps_used), source: 'track_pooled',
       };
     }
@@ -449,8 +460,9 @@ export function predictCorner(model, {
     if (hit) k = hit;
   }
   const tau = model.lookupTau(car, corner, cond);
-  const c = model.lookupCTrack(track);
-  const g2 = model.lookupG2(track, car, cond);
+  // The circuit enters only through its per-corner heat input (v5 has no
+  // track constant); entries without the map fall back to the mean.
+  const g2 = model.lookupG2(track, car, cond, corner);
   const lap = model.lookupLapTime(track, car, cond);
 
   // T_road: user-supplied -> sun-cover proxy -> fall back to T_air.
@@ -485,7 +497,7 @@ export function predictCorner(model, {
   let outlapG2 = 0.0;
   let outlapSource = null;
   if (includeOutlap) {
-    const o = model.lookupOutlap(track, car, cond);
+    const o = model.lookupOutlap(track, car, cond, corner);
     if (o) { outlapS = o.movingS; outlapG2 = o.g2; outlapSource = o.source; }
     if (outlapTimeS !== null && outlapTimeS !== undefined) {
       if (!(outlapTimeS >= 0)) throw new RangeError(`outlap time must be >= 0; got ${outlapTimeS}`);
@@ -494,9 +506,9 @@ export function predictCorner(model, {
     }
   }
   const warmupFrac = tau.valueSeconds > 0 ? 1 - Math.exp(-tAtLapNs / tau.valueSeconds) : 0;
-  const deltaTInf = k.valueKelvinPerG2 * c.value * g2Value;
+  const deltaTInf = k.valueKelvinPerG2 * g2Value;
   const [tAfterOutlapC, tHotC] = warmupTwoStageC(
-    outlapS, outlapG2, tAtLapNs, g2Value, tEffC, k.valueKelvinPerG2, c.value,
+    outlapS, outlapG2, tAtLapNs, g2Value, tEffC, k.valueKelvinPerG2,
     tau.valueSeconds, tStartC);
 
   const coldPressureBar = gayLussacColdPressureBar(
@@ -509,7 +521,6 @@ export function predictCorner(model, {
     targetHotPressureBar,
     kKelvinPerG2: k.valueKelvinPerG2,
     tauSec: tau.valueSeconds,
-    cTrack: c.value,
     g2Typ: g2Value,
     lapTimeTypS: lap.valueSeconds,
     tAtLapNs,
