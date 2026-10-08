@@ -2,11 +2,13 @@
 
 Energy balance:
 
-    m·c · dT/dt  =  c_track · α · g²(t)  −  h_air·(T−T_air)  −  h_road·(T−T_road)
+    m·c · dT/dt  =  α · q(t)  −  h_air·(T−T_air)  −  h_road·(T−T_road)
 
-Closed-form solution at constant g² ≈ ⟨g²⟩ starting from T(0) = T_start:
+with ``q`` the driving intensity (schema v5: |g|·V/V_ref with the
+per-corner force-path split, see ``heat_input``). Closed-form solution at
+constant q ≈ ⟨q⟩ starting from T(0) = T_start:
 
-    T_hot(t) − T_eff  =  K · c_track · ⟨g²⟩ · (1 − exp(−t / τ_sec))
+    T_hot(t) − T_eff  =  K · ⟨q⟩ · (1 − exp(−t / τ_sec))
                          + (T_start − T_eff) · exp(−t / τ_sec)
 
 The second term is the decaying memory of the tire's actual temperature at
@@ -34,10 +36,54 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
+
 # Atmospheric assumption — matches the C# calculator
 # (tire_pressure_calculator/Core/ViewModels/TireCornerViewModel.cs:77-89)
 P_ATM_BAR = 1.0
 T_ZERO_C_TO_K = 273.15
+
+
+def speed_pressure_factor(v_ms: np.ndarray | float, kappa: float) -> np.ndarray:
+    """``P_gas / P_read = 1 + κ·V²``: the TPMS pressure read at speed sits
+    below the cavity gas-law pressure.
+
+    The tyre grows under centrifugal load (and the valve-mounted sensor sees
+    the same ∝ V² acceleration), so the cavity volume — and with it the
+    reading — depends on speed: ``P_read·V(v) = n·R·T`` with
+    ``V(v) = V₀·(1 + κ·v²)``. ``κ`` is a constant of the tyre + sensor
+    (per car), fitted in the per-second fit; ``κ = 0`` is the constant-volume
+    gas law. The gas temperature implied by a reading at speed is the raw
+    ratio times this factor (relative to the anchor's own factor).
+    """
+    v = np.asarray(v_ms, dtype=float)
+    return np.asarray(1.0 + kappa * v * v)
+
+
+def gas_temperature_at_speed_c(
+    t_anchor_c: np.ndarray,
+    p_anchor_bar: np.ndarray,
+    p_bar: np.ndarray,
+    v_ms: np.ndarray,
+    v_anchor_ms: np.ndarray,
+    kappa: float,
+) -> np.ndarray:
+    """Cavity-gas temperature implied by a pressure reading at speed ``v``
+    from an anchor reading at ``v_anchor``::
+
+        T_gas_K = T_anchor_K · (P_abs / P_anchor_abs) · (1 + κ v²) / (1 + κ v_anchor²)
+
+    NaN where any input is missing or a pressure is implausible.
+    """
+    t_k = np.asarray(t_anchor_c, dtype=float) + T_ZERO_C_TO_K
+    p_a = np.asarray(p_anchor_bar, dtype=float) + P_ATM_BAR
+    p = np.asarray(p_bar, dtype=float) + P_ATM_BAR
+    f = speed_pressure_factor(np.nan_to_num(np.asarray(v_ms, dtype=float)), kappa)
+    f_a = speed_pressure_factor(np.nan_to_num(np.asarray(v_anchor_ms, dtype=float)), kappa)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        out = t_k * p / p_a * f / f_a - T_ZERO_C_TO_K
+    ok = np.isfinite(t_k) & np.isfinite(p_a) & np.isfinite(p) & (p_a > 0.3) & (p > 0.3)
+    return np.asarray(np.where(ok, out, np.nan), dtype=float)
 
 
 def t_effective_c(
@@ -63,7 +109,6 @@ def warmup_curve_c(
     *,
     t_eff_c: float,
     k_kelvin_per_g2: float,
-    c_track: float,
     g2_typ: float,
     tau_sec: float,
     t_start_c: float | None = None,
@@ -73,7 +118,7 @@ def warmup_curve_c(
     Implements the closed-form solution of the lumped-capacity energy balance
     with constant ``g² ≈ g2_typ`` starting from ``T(0) = t_start_c``:
 
-        T(t) = T_eff + K · c_track · g2_typ · (1 − exp(−t / τ_sec))
+        T(t) = T_eff + K · g2_typ · (1 − exp(−t / τ_sec))
                      + (T_start − T_eff) · exp(−t / τ_sec)
 
     Parameters
@@ -83,9 +128,7 @@ def warmup_curve_c(
     t_eff_c
         Effective ambient temperature (blended air + road) in °C.
     k_kelvin_per_g2
-        Warmup gain K = α / (h_air + h_road), units Kelvin per G².
-    c_track
-        Per-track surface scalar (dimensionless), anchored at 1.0 for reference.
+        Warmup gain K = α / (h_air + h_road), kelvin per unit of ``g2_typ``.
     g2_typ
         Session-average squared total acceleration, units G² (dimensionless).
     tau_sec
@@ -105,7 +148,7 @@ def warmup_curve_c(
         raise ValueError(f"t_seconds must be >= 0; got {t_seconds}")
     decay = math.exp(-t_seconds / tau_sec)
     warmup_frac = 1.0 - decay
-    delta_t_inf = k_kelvin_per_g2 * c_track * g2_typ
+    delta_t_inf = k_kelvin_per_g2 * g2_typ
     start = t_eff_c if t_start_c is None else t_start_c
     return t_eff_c + delta_t_inf * warmup_frac + (start - t_eff_c) * decay
 
@@ -118,7 +161,6 @@ def warmup_two_stage_c(
     g2_flying: float,
     t_eff_c: float,
     k_kelvin_per_g2: float,
-    c_track: float,
     tau_sec: float,
     t_start_c: float,
 ) -> tuple[float, float]:
@@ -138,7 +180,6 @@ def warmup_two_stage_c(
         t_seconds=max(0.0, t_outlap_s),
         t_eff_c=t_eff_c,
         k_kelvin_per_g2=k_kelvin_per_g2,
-        c_track=c_track,
         g2_typ=g2_outlap,
         tau_sec=tau_sec,
         t_start_c=t_start_c,
@@ -147,7 +188,6 @@ def warmup_two_stage_c(
         t_seconds=max(0.0, t_flying_s),
         t_eff_c=t_eff_c,
         k_kelvin_per_g2=k_kelvin_per_g2,
-        c_track=c_track,
         g2_typ=g2_flying,
         tau_sec=tau_sec,
         t_start_c=t_after_out,
@@ -229,7 +269,6 @@ def warmup_recurrence_step_c(
     dt_seconds: float,
     t_eff_c: float,
     k_kelvin_per_g2: float,
-    c_track: float,
     tau_sec: float,
 ) -> float:
     """One step of the discretized energy-balance ODE (for sanity checks).
@@ -238,7 +277,7 @@ def warmup_recurrence_step_c(
     assumption ``g²`` is constant within the step:
 
         T_{i+1} = T_eff + (T_i − T_eff) · exp(−Δt/τ)
-                        + K · c_track · g²_i · (1 − exp(−Δt/τ))
+                        + K · g²_i · (1 − exp(−Δt/τ))
 
     Run repeatedly with a constant ``g²`` starting from any ``T_0`` to
     recover :func:`warmup_curve_c` (with ``t_start_c=T_0``) to within float
@@ -253,6 +292,4 @@ def warmup_recurrence_step_c(
         raise ValueError(f"dt_seconds must be > 0; got {dt_seconds}")
     decay = math.exp(-dt_seconds / tau_sec)
     growth = 1.0 - decay
-    return (
-        t_eff_c + (t_current_c - t_eff_c) * decay + k_kelvin_per_g2 * c_track * g2_current * growth
-    )
+    return t_eff_c + (t_current_c - t_eff_c) * decay + k_kelvin_per_g2 * g2_current * growth

@@ -76,9 +76,7 @@ def test_t_road_proxy_clamps_cloud_cover_to_unit_range() -> None:
 
 
 def test_warmup_curve_at_t_zero_returns_t_eff() -> None:
-    t = warmup_curve_c(
-        t_seconds=0.0, t_eff_c=20.0, k_kelvin_per_g2=60.0, c_track=1.0, g2_typ=0.8, tau_sec=240.0
-    )
+    t = warmup_curve_c(t_seconds=0.0, t_eff_c=20.0, k_kelvin_per_g2=60.0, g2_typ=0.8, tau_sec=240.0)
     assert t == pytest.approx(20.0)
 
 
@@ -88,7 +86,6 @@ def test_warmup_curve_at_infinity_returns_t_eff_plus_delta_inf() -> None:
         t_seconds=2400.0,  # 10·τ
         t_eff_c=20.0,
         k_kelvin_per_g2=60.0,
-        c_track=1.0,
         g2_typ=0.8,
         tau_sec=240.0,
     )
@@ -99,7 +96,7 @@ def test_warmup_curve_at_infinity_returns_t_eff_plus_delta_inf() -> None:
 def test_warmup_curve_at_one_tau_reaches_63_percent() -> None:
     # (1 − e⁻¹) ≈ 0.6321
     t = warmup_curve_c(
-        t_seconds=240.0, t_eff_c=20.0, k_kelvin_per_g2=60.0, c_track=1.0, g2_typ=0.8, tau_sec=240.0
+        t_seconds=240.0, t_eff_c=20.0, k_kelvin_per_g2=60.0, g2_typ=0.8, tau_sec=240.0
     )
     delta_inf = 60.0 * 1.0 * 0.8
     expected = 20.0 + delta_inf * (1.0 - math.exp(-1.0))
@@ -110,7 +107,7 @@ def test_warmup_curve_starts_at_t_start_and_forgets_it_with_tau() -> None:
     """With a start temperature the curve begins there and the start excess
     decays with the same τ as the warmup: at t = τ, 63 % of the gap to the
     asymptote has closed regardless of where the tire started."""
-    kw = dict(t_eff_c=20.0, k_kelvin_per_g2=50.0, c_track=1.0, g2_typ=0.8, tau_sec=240.0)
+    kw = dict(t_eff_c=20.0, k_kelvin_per_g2=50.0, g2_typ=0.8, tau_sec=240.0)
     assert warmup_curve_c(t_seconds=0.0, t_start_c=45.0, **kw) == pytest.approx(45.0)
     at_tau = warmup_curve_c(t_seconds=240.0, t_start_c=45.0, **kw)
     asymptote = 20.0 + 50.0 * 0.8
@@ -127,15 +124,12 @@ def test_warmup_curve_starts_at_t_start_and_forgets_it_with_tau() -> None:
 
 def test_warmup_curve_rejects_invalid_tau_or_time() -> None:
     with pytest.raises(ValueError):
-        warmup_curve_c(
-            t_seconds=10.0, t_eff_c=20.0, k_kelvin_per_g2=60.0, c_track=1.0, g2_typ=0.8, tau_sec=0.0
-        )
+        warmup_curve_c(t_seconds=10.0, t_eff_c=20.0, k_kelvin_per_g2=60.0, g2_typ=0.8, tau_sec=0.0)
     with pytest.raises(ValueError):
         warmup_curve_c(
             t_seconds=-1.0,
             t_eff_c=20.0,
             k_kelvin_per_g2=60.0,
-            c_track=1.0,
             g2_typ=0.8,
             tau_sec=240.0,
         )
@@ -191,7 +185,6 @@ def test_discretized_recurrence_matches_closed_form() -> None:
     correctness invariant for any future within-lap fitting)."""
     t_eff = 20.0
     k = 60.0
-    c_track = 1.0
     g2 = 0.8
     tau = 240.0
     dt = 1.0
@@ -203,14 +196,12 @@ def test_discretized_recurrence_matches_closed_form() -> None:
             dt_seconds=dt,
             t_eff_c=t_eff,
             k_kelvin_per_g2=k,
-            c_track=c_track,
             tau_sec=tau,
         )
         t_closed = warmup_curve_c(
             t_seconds=float(step),
             t_eff_c=t_eff,
             k_kelvin_per_g2=k,
-            c_track=c_track,
             g2_typ=g2,
             tau_sec=tau,
         )
@@ -224,7 +215,7 @@ def test_p_atm_constant_matches_csharp() -> None:
 
 
 def test_two_stage_warmup_matches_piecewise_recurrence_and_reduces_without_outlap() -> None:
-    kw = dict(t_eff_c=18.0, k_kelvin_per_g2=40.0, c_track=1.0, tau_sec=300.0)
+    kw = dict(t_eff_c=18.0, k_kelvin_per_g2=40.0, tau_sec=300.0)
     t_after, t_hot = warmup_two_stage_c(
         t_outlap_s=90.0, g2_outlap=0.3, t_flying_s=240.0, g2_flying=0.9, t_start_c=24.0, **kw
     )
