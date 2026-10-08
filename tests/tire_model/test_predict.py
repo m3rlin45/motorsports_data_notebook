@@ -812,3 +812,63 @@ def test_predict_integrates_the_outlap_first_when_the_artifact_has_one() -> None
         outlap_time_s=0.0,
     )["fl"]
     assert overridden.predicted_hot_temp_c == pytest.approx(base.predicted_hot_temp_c)
+
+
+def test_schema_v5_per_corner_intensity_is_used_with_fallback() -> None:
+    """A ``q_typ_by_corner`` entry drives each corner with its own driving
+    intensity (and ``outlap_q_by_corner`` its own out-lap); entries without
+    the fields keep the corner-blind ``g2_typ`` / ``outlap_g2``."""
+    model = _minimal_model()
+    model = dict(model)
+    entries = []
+    for r in model["g2_typ_by_track_car_cond"]:
+        r = dict(r)
+        if r["track_canonical"] == "track_a" and r["condition"] == "dry":
+            r["q_typ_by_corner"] = {"fl": 1.2, "fr": 0.6, "rl": 1.0, "rr": 0.5}
+        entries.append(r)
+    model["g2_typ_by_track_car_cond"] = entries
+    model["outlap_typ_by_track_car_cond"] = [
+        {
+            "track_canonical": "track_a",
+            "car": "ToyCar",
+            "condition": "dry",
+            "outlap_moving_s": 90.0,
+            "outlap_g2": 0.3,
+            "outlap_q_by_corner": {"fl": 0.5, "fr": 0.2, "rl": 0.4, "rr": 0.2},
+            "n_laps_used": 12,
+        },
+    ]
+    pred = predict_cold_pressure(
+        track="track_a",
+        car="ToyCar",
+        lap_within_stint=3,
+        target_hot_pressure_bar={c: 1.95 for c in CORNERS},
+        ambient_temp_c=15.0,
+        _model=model,
+    )
+    assert pred["fl"].g2_typ == pytest.approx(1.2) and pred["fr"].g2_typ == pytest.approx(0.6)
+    assert pred["fl"].outlap_g2 == pytest.approx(0.5) and pred["fr"].outlap_g2 == pytest.approx(0.2)
+    # same K and tau on both fronts in the minimal model → the hotter corner is the loaded one
+    assert pred["fl"].predicted_hot_temp_c > pred["fr"].predicted_hot_temp_c
+    assert pred["fl"].cold_pressure_bar < pred["fr"].cold_pressure_bar
+    # an override still applies to every corner
+    over = predict_cold_pressure(
+        track="track_a",
+        car="ToyCar",
+        lap_within_stint=3,
+        target_hot_pressure_bar={c: 1.95 for c in CORNERS},
+        ambient_temp_c=15.0,
+        g2_typ_override=0.8,
+        _model=model,
+    )
+    assert over["fl"].g2_typ == pytest.approx(0.8) and over["rr"].g2_typ == pytest.approx(0.8)
+    # fallback: no per-corner dict → corner-blind value for every corner
+    plain = predict_cold_pressure(
+        track="track_a",
+        car="ToyCar",
+        lap_within_stint=3,
+        target_hot_pressure_bar={c: 1.95 for c in CORNERS},
+        ambient_temp_c=15.0,
+        _model=_minimal_model(),
+    )
+    assert len({round(p.g2_typ, 9) for p in plain.values()}) == 1

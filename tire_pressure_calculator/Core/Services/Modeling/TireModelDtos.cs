@@ -3,9 +3,10 @@ using System.Text.Json.Serialization;
 
 namespace TirePressureCalculator.Services.Modeling;
 
-// DTOs mirroring data/tire_dataset/tire_model.json (schema v3; v2
+// DTOs mirroring data/tire_dataset/tire_model.json (schema v5; v2–v4
 // artifacts still load). See docs/tire_model.md §2.7 for the schema
-// reference.
+// reference. The informational v5 `heat_input` block is not modelled —
+// System.Text.Json ignores unknown keys.
 
 public sealed record TireModelDto(
     [property: JsonPropertyName("schema_version")] int SchemaVersion,
@@ -142,7 +143,10 @@ public sealed record G2EntryDto(
     [property: JsonPropertyName("condition")] string Condition,
     [property: JsonPropertyName("g2_typ")] double G2Typ,
     [property: JsonPropertyName("n_laps_used")] int NLapsUsed,
-    [property: JsonPropertyName("g2_vs_lap_time")] G2CurveDto? G2VsLapTime = null
+    [property: JsonPropertyName("g2_vs_lap_time")] G2CurveDto? G2VsLapTime = null,
+    // Schema v5: per-corner typical heat input keyed "fl"/"fr"/"rl"/"rr".
+    // g2_typ stays as the corner mean for older consumers.
+    [property: JsonPropertyName("q_typ_by_corner")] Dictionary<string, double>? QTypByCorner = null
 );
 
 public sealed record OutlapEntryDto(
@@ -151,7 +155,9 @@ public sealed record OutlapEntryDto(
     [property: JsonPropertyName("condition")] string Condition,
     [property: JsonPropertyName("outlap_moving_s")] double OutlapMovingS,
     [property: JsonPropertyName("outlap_g2")] double OutlapG2,
-    [property: JsonPropertyName("n_laps_used")] int NLapsUsed
+    [property: JsonPropertyName("n_laps_used")] int NLapsUsed,
+    // Schema v5: per-corner out-lap heat input; outlap_g2 stays as the mean.
+    [property: JsonPropertyName("outlap_q_by_corner")] Dictionary<string, double>? OutlapQByCorner = null
 );
 
 public sealed record LapTimeEntryDto(
@@ -165,4 +171,5 @@ public sealed record LapTimeEntryDto(
 // Source-gen context — AOT-friendly. Single entry point lets us deserialize
 // the full root DTO without runtime reflection.
 [JsonSerializable(typeof(TireModelDto))]
+[JsonSerializable(typeof(Dictionary<string, double>))]
 public partial class TireModelJsonContext : JsonSerializerContext { }

@@ -374,6 +374,7 @@ def _calculator_lap_inputs(
     session_lap_time_s: float,
     *,
     with_outlap: bool,
+    corner: str | None = None,
 ) -> tuple[float, float, float, float, float]:
     """What the calculator would feed the warmup curve for this lap.
 
@@ -387,14 +388,14 @@ def _calculator_lap_inputs(
     flying lap as before).
     """
     lap_time_typ_s, _n, _src = _lookup_lap_time(model, track, car, condition)
-    g2_typ, _n2, _src2 = _lookup_g2(model, track, car, condition)
+    g2_typ, _n2, _src2 = _lookup_g2(model, track, car, condition, corner)
     scale, _pace_src = _g2_pace_scale(
         model, track, car, condition, lap_time_typ_s, session_lap_time_s
     )
     t_flying_s = float(flying_lap_n) * float(session_lap_time_s)
     out_s, out_g2 = 0.0, 0.0
     if with_outlap:
-        hit = _lookup_outlap(model, track, car, condition)
+        hit = _lookup_outlap(model, track, car, condition, corner)
         if hit is not None:
             out_s, out_g2 = hit[0], hit[1]
     return g2_typ * scale, t_flying_s, scale, out_s, out_g2
@@ -485,6 +486,24 @@ def _evaluate_fold(
     all_laps, _ = _apply_blacklist(all_laps, blacklist_pairs, warn_on_unknown=False)
     all_laps = _compute_stint_anchor(all_laps)
     all_laps = _compute_delta_t(all_laps)
+    # Lap-end readings are taken at speed: put them on the gas-law scale
+    # with the fold model's κ (energy_balance.speed_pressure), so the
+    # comparison is with what a standstill reading would show.
+    from .warmup_table import apply_speed_correction
+
+    kappa_by_car = {
+        k: float(v)
+        for k, v in model.get("energy_balance", {})
+        .get("speed_pressure", {})
+        .get("kappa_by_car", {})
+        .items()
+    }
+    all_laps = apply_speed_correction(root, all_laps, kappa_by_car)
+    # Schema v5: the held-out laps' own per-corner driving intensity from
+    # the fold model's geometry and drive/brake coefficients (oracle inputs).
+    from .warmup_table import attach_lap_heat
+
+    all_laps = attach_lap_heat(root, all_laps, model)
     # Score the flying laps (the out-lap, lap_within_stint 0 when present, is
     # the anchor's own lap). With pit-exit anchors N = lap_within_stint is
     # the calculator's lap number; for first-lap anchors the first scored
@@ -516,19 +535,21 @@ def _evaluate_fold(
     session_lap_time = (
         flying_only.groupby("session_id")["on_track_s"].quantile(TARGET_LAP_TIME_QUANTILE).to_dict()
     )
-    # Measured out-lap per stint for the oracle: (rolling-clock end, g²).
-    stint_outlap: dict[tuple[str, int], tuple[float, float]] = {}
+    # Measured out-lap per stint for the oracle: (rolling-clock end, {corner: q}).
+    stint_outlap: dict[tuple[str, int], tuple[float, dict[str, float]]] = {}
     if "_is_out" in all_laps_full.columns and "moving_s" in all_laps_full.columns:
         outs = all_laps_full[all_laps_full["_is_out"]]
-        for sid_o, stint_o, mv, hp, t_end in zip(
-            outs["session_id"].tolist(),
-            outs["stint_id"].tolist(),
-            outs["moving_s"].to_numpy(dtype=float),
-            outs["heat_proxy"].to_numpy(dtype=float),
-            outs["t_cum_s"].to_numpy(dtype=float),
-        ):
-            if np.isfinite(mv) and mv > 0 and np.isfinite(hp):
-                stint_outlap[(str(sid_o), int(stint_o))] = (float(t_end), float(hp / mv))
+        for _, o in outs.iterrows():
+            mv, hp, t_end = o.get("moving_s"), o.get("heat_proxy"), float(o["t_cum_s"])
+            per: dict[str, float] = {}
+            for c in CORNERS:
+                qv = o.get(f"q_lap_{c}")
+                if qv is not None and pd.notna(qv):
+                    per[c] = float(qv)
+                elif pd.notna(mv) and float(mv) > 0 and pd.notna(hp):
+                    per[c] = float(hp) / float(mv)
+            if per:
+                stint_outlap[(str(o["session_id"]), int(o["stint_id"]))] = (t_end, per)
 
     # Per-lap predictions. Per-lap g² (heat_proxy / on_track_s) is the
     # held-out lap's actual driving intensity; falls back to the bucket
@@ -546,23 +567,26 @@ def _evaluate_fold(
             continue
         on_track_s = lap.get("on_track_s")
         heat_proxy_total = lap.get("heat_proxy")
-        g2: float | None
+        g2_total: float | None
         if (
             pd.notna(heat_proxy_total)
             and pd.notna(on_track_s)
             and float(on_track_s) > 0
             and float(heat_proxy_total) > 0
         ):
-            g2 = float(heat_proxy_total) / float(on_track_s)
+            g2_total = float(heat_proxy_total) / float(on_track_s)
         else:
-            g2 = g2_lookup.get((track, car, cond)) or g2_lookup.get((track, car, "dry"))
-        if g2 is None:
+            g2_total = g2_lookup.get((track, car, cond)) or g2_lookup.get((track, car, "dry"))
+        if g2_total is None:
             continue
         g2_scale = 1.0
         t_pred_s = t_cum_s
         c_track = c_track_lookup.get(track, 1.0)
         session_compound = label_by_session.get(lap["session_id"])
         for c in CORNERS:
+            # The lap's own driving intensity for this corner (schema v5), else the total g².
+            q_c = lap.get(f"q_lap_{c}")
+            g2 = float(q_c) if (q_c is not None and pd.notna(q_c) and float(q_c) > 0) else g2_total
             K = k_lookup.get((car, c, cond)) or k_lookup.get((car, c, "dry"))
             if session_compound is not None:
                 K = (
@@ -603,6 +627,7 @@ def _evaluate_fold(
                     n_flying,
                     float(session_lap_time.get(lap["session_id"], lap["on_track_s"])),
                     with_outlap=pit_exit,
+                    corner=c,
                 )
                 g2 = g2_c
                 t_pred_s = t_fly
@@ -622,8 +647,8 @@ def _evaluate_fold(
                 # Oracle: the measured out-lap (its own g² over its rolling
                 # time after the reading), then the flying laps at this
                 # lap's measured g².
-                if pit_exit and out_info is not None:
-                    out_end_s, out_g2_meas = out_info
+                if pit_exit and out_info is not None and c in out_info[1]:
+                    out_end_s, out_g2_meas = out_info[0], out_info[1][c]
                     out_seg = max(out_end_s - float(t_anchor), 0.0)
                     _t_after, t_hot_pred = warmup_two_stage_c(
                         t_outlap_s=out_seg,
@@ -656,7 +681,14 @@ def _evaluate_fold(
             p_pred = float("nan")
             if pd.notna(p_anchor) and pd.notna(p_obs) and float(t_start) > -273.15:
                 ratio = (t_hot_pred + T_ZERO_C_TO_K) / (float(t_start) + T_ZERO_C_TO_K)
-                p_pred = (float(p_anchor) + P_ATM_BAR) * ratio - P_ATM_BAR
+                # what the TPMS would read at the lap-end speed
+                kap = kappa_by_car.get(car, 0.0)
+                v_end = _as_float(lap.get("speed_end_ms"))
+                v_a = _as_float(lap.get(f"speed_anchor_{c}_ms"))
+                f_speed = (1.0 + kap * (0.0 if np.isnan(v_a) else v_a) ** 2) / (
+                    1.0 + kap * (0.0 if np.isnan(v_end) else v_end) ** 2
+                )
+                p_pred = (float(p_anchor) + P_ATM_BAR) * ratio * f_speed - P_ATM_BAR
             rows.append(
                 {
                     "session_id": lap["session_id"],
