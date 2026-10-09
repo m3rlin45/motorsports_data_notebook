@@ -6,6 +6,13 @@
 // __BUILD__ is stamped with the git SHA by the deploy workflow
 // (.github/workflows/build-tire-pressure-web.yml); locally it stays as-is,
 // which simply means one long-lived dev cache.
+//
+// Updates: a new build means a new cache name, so the browser installs a
+// new worker. It takes over as soon as its precache is complete
+// (skipWaiting + clients.claim) instead of waiting for every window of
+// the old one to close — an installed PWA may never close — and the page
+// reloads once when its controller changes (app.js). Offline is never
+// interrupted: the old cache is only deleted after the new one is full.
 const CACHE = 'tire-pressure-calculator-__BUILD__';
 
 const SHELL = [
@@ -30,12 +37,14 @@ self.addEventListener('install', (event) => {
     // visit. Present next to index.html on the deployed site; absent in
     // local dev (the app falls back to the repo's data dir there).
     try { await cache.add('./tire_model.json'); } catch { /* dev serve */ }
+    await self.skipWaiting();
   }));
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(caches.keys().then((keys) =>
-    Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))));
+    Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+    .then(() => self.clients.claim()));
 });
 
 self.addEventListener('fetch', (event) => {

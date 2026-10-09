@@ -584,6 +584,34 @@ init();
 
 // Offline support is progressive — registration failure (old browser,
 // file:// serve) just means the app needs a network connection.
+//
+// Updates: the deploy stamps a new cache name into sw.js and the worker
+// claims the page as soon as its precache is complete (see sw.js), so a
+// client on an old build reloads once onto the new files the first time
+// it is online and the browser sees the new worker. `updateViaCache:
+// 'none'` keeps the HTTP cache from hiding a new sw.js, and the explicit
+// update() on launch and on every return to the foreground covers an
+// installed PWA that never navigates. Offline, update() fails silently
+// and the current worker keeps serving. Settings live in localStorage,
+// so the reload loses nothing.
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').catch(() => {});
+  // A first install also claims the page (controllerchange with no previous
+  // controller); only a change of controller is an update worth a reload.
+  let hadController = Boolean(navigator.serviceWorker.controller);
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController) { hadController = true; return; }
+    if (reloading) return;
+    reloading = true;
+    window.location.reload();
+  });
+  navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
+    .then((reg) => {
+      const check = () => { reg.update().catch(() => {}); };
+      check();
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') check();
+      });
+    })
+    .catch(() => {});
 }
