@@ -19,8 +19,12 @@ jobs:
           rm -rf site/tests
           cp data/tire_dataset/tire_model.json site/
           # Stamp the service-worker cache version so each deploy busts the
-          # previous one (the repo copy keeps the __BUILD__ placeholder).
+          # previous one, and the app version shown in the footer (the repo
+          # copies keep the __BUILD__ / __VERSION__ placeholders).
+          VERSION=$(sed -nE 's/^version = "([^"]+)"/\1/p' pyproject.toml | head -1)
+          test -n "$VERSION"
           sed -i "s/__BUILD__/${GITHUB_SHA::12}/" site/sw.js
+          sed -i "s/__VERSION__/${VERSION}/" site/js/app.js
 
       - name: Upload site artifact
         uses: actions/upload-artifact@v4
