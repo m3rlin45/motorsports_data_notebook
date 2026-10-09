@@ -31,13 +31,14 @@ public static class EnergyBalance
     /// Closed-form warmup from the tire's starting temperature
     /// <paramref name="tStartC"/> (null: in equilibrium at <paramref name="tEffC"/>).
     /// The start excess decays with the same τ as the warmup:
-    /// T(t) = T_eff + K·c·g²·(1 − e^{−t/τ}) + (T_start − T_eff)·e^{−t/τ}.
+    /// T(t) = T_eff + K·q·(1 − e^{−t/τ}) + (T_start − T_eff)·e^{−t/τ}.
+    /// Schema v5 carries no per-track constant: the circuit enters only
+    /// through its per-corner heat input q.
     /// </summary>
     public static double WarmupCurveC(
         double tSeconds,
         double tEffC,
         double kKelvinPerG2,
-        double cTrack,
         double g2Typ,
         double tauSec,
         double? tStartC = null)
@@ -48,7 +49,7 @@ public static class EnergyBalance
             throw new ArgumentOutOfRangeException(nameof(tSeconds), tSeconds, "t_seconds must be >= 0");
         double decay = Math.Exp(-tSeconds / tauSec);
         double warmupFrac = 1.0 - decay;
-        double deltaTInf = kKelvinPerG2 * cTrack * g2Typ;
+        double deltaTInf = kKelvinPerG2 * g2Typ;
         double start = tStartC ?? tEffC;
         return tEffC + deltaTInf * warmupFrac + (start - tEffC) * decay;
     }
@@ -65,14 +66,13 @@ public static class EnergyBalance
         double g2Flying,
         double tEffC,
         double kKelvinPerG2,
-        double cTrack,
         double tauSec,
         double tStartC)
     {
         double tAfterOut = WarmupCurveC(
-            Math.Max(0.0, tOutlapS), tEffC, kKelvinPerG2, cTrack, g2Outlap, tauSec, tStartC);
+            Math.Max(0.0, tOutlapS), tEffC, kKelvinPerG2, g2Outlap, tauSec, tStartC);
         double tHot = WarmupCurveC(
-            Math.Max(0.0, tFlyingS), tEffC, kKelvinPerG2, cTrack, g2Flying, tauSec, tAfterOut);
+            Math.Max(0.0, tFlyingS), tEffC, kKelvinPerG2, g2Flying, tauSec, tAfterOut);
         return (tAfterOut, tHot);
     }
 
@@ -123,7 +123,6 @@ public static class EnergyBalance
         double dtSeconds,
         double tEffC,
         double kKelvinPerG2,
-        double cTrack,
         double tauSec)
     {
         if (tauSec <= 0.0)
@@ -132,6 +131,6 @@ public static class EnergyBalance
             throw new ArgumentOutOfRangeException(nameof(dtSeconds), dtSeconds, "dt_seconds must be > 0");
         double decay = Math.Exp(-dtSeconds / tauSec);
         double growth = 1.0 - decay;
-        return tEffC + (tCurrentC - tEffC) * decay + kKelvinPerG2 * cTrack * g2Current * growth;
+        return tEffC + (tCurrentC - tEffC) * decay + kKelvinPerG2 * g2Current * growth;
     }
 }

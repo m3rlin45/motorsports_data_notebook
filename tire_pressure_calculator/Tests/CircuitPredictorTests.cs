@@ -137,7 +137,7 @@ public class CircuitPredictorTests
     }
 
     [Fact]
-    public void Predict_CrossTrack_UsesSameKDifferentCTrack()
+    public void Predict_CrossTrack_UsesSameKAndTauDifferentPerCornerQ()
     {
         var p = LoadPredictor();
         var tsk = p.Predict(
@@ -152,7 +152,97 @@ public class CircuitPredictorTests
             corner: "fl", targetHotPressureBar: 1.7);
         Assert.Equal(tsk.KKelvinPerG2, fuji.KKelvinPerG2, precision: 9);
         Assert.Equal(tsk.TauSec, fuji.TauSec, precision: 9);
-        Assert.NotEqual(tsk.CTrack, fuji.CTrack);
+        // Schema v5 carries no track constant: the circuit enters through
+        // its per-corner driving intensity instead.
+        Assert.NotEqual(tsk.G2Typ, fuji.G2Typ);
+        Assert.NotEqual(tsk.PredictedHotTempC, fuji.PredictedHotTempC);
+    }
+
+    // ---------- Schema v5: per-corner heat inputs ----------
+
+    // Tiny synthetic v5 artifact: one car, one track, every corner sharing
+    // the same K/tau so any hot-temp difference comes from q_typ_by_corner /
+    // outlap_q_by_corner alone.
+    private static TireModel SyntheticV5Model(bool withPerCorner)
+    {
+        var corners = new[] { "fl", "fr", "rl", "rr" };
+        var dto = new TireModelDto(
+            SchemaVersion: 5,
+            FitAtUtc: "2026-10-08T00:00:00Z",
+            ModelForm: "synthetic",
+            GayLussac: new GayLussacConfigDto(1.0, 273.15, "T_air"),
+            EnergyBalance: new EnergyBalanceConfigDto(0.2, false, new TRoadProxyConfigDto("x", 10.0, 1.0)),
+            Conditions: new ConditionsConfigDto(new[] { "dry", "damp", "wet" }, "dry"),
+            Corners: corners,
+            MinSamplesPerBucket: 5,
+            PriorsWhenNoFit: new PriorsDto(240.0, 60.0),
+            TauSecByCarCornerCond: corners.Select(c =>
+                new TauEntryDto("Car", c, "dry", 300.0, 0.0, 10, false)).ToList(),
+            KBuckets: corners.Select(c =>
+                new KBucketEntryDto(new KBucketKeyDto("Car", c, "dry"), 40.0, 0.0, 10, false, false)).ToList(),
+            G2TypByTrackCarCond: new[]
+            {
+                new G2EntryDto("synth", "Car", "dry", 1.0, 10,
+                    G2VsLapTime: new G2CurveDto(new[] { 50.0, 60.0, 70.0 }, new[] { 1.4, 1.0, 0.7 }, 10),
+                    QTypByCorner: withPerCorner
+                        ? new Dictionary<string, double> { ["fl"] = 1.3, ["fr"] = 0.9, ["rl"] = 1.1, ["rr"] = 0.7 }
+                        : null),
+            },
+            LapTimeTypByTrackCarCond: new[] { new LapTimeEntryDto("synth", "Car", "dry", 60.0, 10) },
+            OutlapTypByTrackCarCond: new[]
+            {
+                new OutlapEntryDto("synth", "Car", "dry", 90.0, 0.4, 10,
+                    OutlapQByCorner: withPerCorner
+                        ? new Dictionary<string, double> { ["fl"] = 0.6, ["fr"] = 0.3, ["rl"] = 0.5, ["rr"] = 0.2 }
+                        : null),
+            },
+            G2LapTimeModel: new G2LapTimeModelDto("sector_curve", "x", 3.0, new MultiplierClampDto(0.4, 2.5)));
+        return new TireModel(dto);
+    }
+
+    private static CornerPrediction PredictSynthetic(
+        CircuitPredictor p, string corner, double? targetLapTimeS = null) => p.Predict(
+            track: "synth", car: "Car", condition: "dry",
+            lapWithinStint: 5, ambientTempC: 20.0,
+            trackTempC: null, cloudCoverPct: 100.0,
+            corner: corner, targetHotPressureBar: 1.8,
+            targetLapTimeS: targetLapTimeS);
+
+    [Fact]
+    public void Predict_V5_PerCornerHeatInputsDriveTheCornerPrediction()
+    {
+        var p = new CircuitPredictor(SyntheticV5Model(withPerCorner: true));
+        var fl = PredictSynthetic(p, "fl");
+        var rr = PredictSynthetic(p, "rr");
+
+        // Same K and tau: only the per-corner heat input differs.
+        Assert.Equal(fl.KKelvinPerG2, rr.KKelvinPerG2);
+        Assert.Equal(fl.TauSec, rr.TauSec);
+        Assert.Equal(1.3, fl.G2Typ);
+        Assert.Equal(0.7, rr.G2Typ);
+        Assert.Equal(0.6, fl.OutlapG2);
+        Assert.Equal(0.2, rr.OutlapG2);
+        Assert.True(fl.PredictedHotTempC > rr.PredictedHotTempC, "FL (hotter corner) ends hotter");
+        Assert.True(fl.ColdPressureBar < rr.ColdPressureBar);
+
+        // The pace multiplier applies to the per-corner value exactly as to g2_typ.
+        var flFast = PredictSynthetic(p, "fl", targetLapTimeS: 55.0);
+        Assert.Equal("curve", flFast.G2PaceSource);
+        Assert.True(flFast.G2Scale > 1.0);
+        Assert.Equal(1.3 * flFast.G2Scale, flFast.G2Typ, precision: 12);
+    }
+
+    [Fact]
+    public void Predict_V5_EntriesWithoutPerCornerFieldsFallBackToTheMean()
+    {
+        var p = new CircuitPredictor(SyntheticV5Model(withPerCorner: false));
+        var fl = PredictSynthetic(p, "fl");
+        var rr = PredictSynthetic(p, "rr");
+        Assert.Equal(1.0, fl.G2Typ);
+        Assert.Equal(1.0, rr.G2Typ);
+        Assert.Equal(0.4, fl.OutlapG2);
+        Assert.Equal(fl.PredictedHotTempC, rr.PredictedHotTempC);
+        Assert.Equal(fl.ColdPressureBar, rr.ColdPressureBar);
     }
 
     // ---------- Fixture DTOs (private; only used by the parity test) ----------
