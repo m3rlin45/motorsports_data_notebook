@@ -41,3 +41,28 @@ test('cache name carries the deploy-stamped build placeholder', () => {
     new URL('../../../.github/workflows/build-tire-pressure-web.yml', import.meta.url), 'utf8');
   assert.match(workflow, /sed -i "s\/__BUILD__\//);
 });
+
+test('the footer version is stamped by the deploy from pyproject', () => {
+  const app = readFileSync(new URL('../js/app.js', import.meta.url), 'utf8');
+  assert.match(app, /const APP_VERSION = '__VERSION__'/);
+  const workflow = readFileSync(
+    new URL('../../../.github/workflows/build-tire-pressure-web.yml', import.meta.url), 'utf8');
+  assert.match(workflow, /__VERSION__.*site\/js\/app\.js/);
+  assert.match(workflow, /pyproject\.toml/);
+});
+
+test('a new build takes over open clients and the page reloads once', () => {
+  // The worker must not wait for the old one's windows to close (an
+  // installed PWA may never close) and must claim pages it did not load.
+  assert.match(swSource, /self\.skipWaiting\(\)/);
+  assert.match(swSource, /self\.clients\.claim\(\)/);
+  // The old cache is deleted before claim, never before the new precache
+  // is complete (skipWaiting sits after addAll inside install).
+  assert.ok(swSource.indexOf('cache.addAll(SHELL)') < swSource.indexOf('self.skipWaiting()'));
+  const app = readFileSync(new URL('../js/app.js', import.meta.url), 'utf8');
+  assert.match(app, /addEventListener\('controllerchange'/);
+  assert.match(app, /window\.location\.reload\(\)/);
+  assert.match(app, /updateViaCache: 'none'/);
+  assert.match(app, /reg\.update\(\)/);
+  assert.match(app, /visibilitychange/);
+});

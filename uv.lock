@@ -1527,7 +1527,7 @@ wheels = [
 
 [[package]]
 name = "motorsports-data-notebook"
-version = "1.1.0"
+version = "1.1.1"
 source = { editable = "." }
 dependencies = [
     { name = "ipywidgets" },
