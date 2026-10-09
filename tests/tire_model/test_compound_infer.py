@@ -23,7 +23,6 @@ class _FP:
 
 
 TAU = {("ToyCar", c, "dry"): _FP(200.0) for c in CORNERS}
-C_TRACK = {"track_a": _FP(1.0)}
 
 
 def _session_laps(sid: str, k_true: float, n_laps: int = 12, noise: float = 1.0) -> pd.DataFrame:
@@ -71,7 +70,7 @@ class TestFitCompoundsEM:
     def test_recovers_unlabeled_assignments_and_k(self):
         laps = _mixture_frame()
         labels = _labels({"soft1": "SOFT", "soft2": "SOFT", "hard1": "HARD", "hard2": "HARD"})
-        k, assignments, multipliers = fit_compounds_em(laps, labels, TAU, C_TRACK)
+        k, assignments, multipliers = fit_compounds_em(laps, labels, TAU)
 
         by_unit = {(a.session_id, a.axle): a for a in assignments}
         assert by_unit[("mystery_soft", "all")].compound == "SOFT"
@@ -100,7 +99,7 @@ class TestFitCompoundsEM:
                 "mystery_hard": "SOFT",
             }
         )
-        _, assignments, _m = fit_compounds_em(laps, labels, TAU, C_TRACK)
+        _, assignments, _m = fit_compounds_em(laps, labels, TAU)
         by_unit = {(a.session_id, a.axle): a for a in assignments}
         a = by_unit[("mystery_hard", "all")]
         assert a.pinned and a.compound == "SOFT" and a.responsibility == 1.0
@@ -111,7 +110,7 @@ class TestFitCompoundsEM:
             ignore_index=True,
         )
         labels = _labels({"s1": "ONLY", "s2": "ONLY"})
-        k, assignments, multipliers = fit_compounds_em(laps, labels, TAU, C_TRACK)
+        k, assignments, multipliers = fit_compounds_em(laps, labels, TAU)
         assert k[("ToyCar", "ONLY", "fl", "dry")][0] == pytest.approx(40.0, abs=2.0)
         # Forced selection: the unlabeled session joins the only compound,
         # whose multiplier is anchored at 1.
@@ -121,7 +120,7 @@ class TestFitCompoundsEM:
 
     def test_no_labels_no_output(self):
         laps = _mixture_frame()
-        k, assignments, multipliers = fit_compounds_em(laps, laps.iloc[0:0], TAU, C_TRACK)
+        k, assignments, multipliers = fit_compounds_em(laps, laps.iloc[0:0], TAU)
         assert k == {} and assignments == [] and multipliers == {}
 
 
@@ -192,8 +191,8 @@ def test_set_pressure_prior_resolves_a_thermally_ambiguous_session() -> None:
             "hard3": "HARD",
         }
     )
-    _, without, _ = fit_compounds_em(laps, labels, TAU, C_TRACK, pressure_prior=False)
-    _, with_prior, _ = fit_compounds_em(laps, labels, TAU, C_TRACK)
+    _, without, _ = fit_compounds_em(laps, labels, TAU, pressure_prior=False)
+    _, with_prior, _ = fit_compounds_em(laps, labels, TAU)
     amb_without = next(a for a in without if a.session_id == "ambiguous")
     amb_with = next(a for a in with_prior if a.session_id == "ambiguous")
     assert amb_without.compound == "HARD"
