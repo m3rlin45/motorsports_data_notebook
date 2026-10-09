@@ -11,6 +11,12 @@ import { STRINGS, resolveLanguage } from './strings.js';
 // build carry over, and stay portable with Desktop/Android exports.
 const STORAGE_KEY = 'tire-pressure-calculator/settings';
 
+// Stamped by the deploy workflow (.github/workflows/build-tire-pressure-web.yml)
+// from pyproject.toml and the git SHA; the repo copy keeps the placeholders,
+// which render as "dev" locally.
+const APP_VERSION = '__VERSION__';
+const APP_BUILD = '__BUILD__';
+
 const MODE_MANUAL = 0;
 const MODE_PREDICTION = 1;
 
@@ -123,10 +129,17 @@ const els = {
   lastUpdated: $('lastUpdated'),
 };
 
-// "Model data: 2026-10-02 14:23 JST": the newest session in the model, so a
-// cached PWA can be told apart from the latest deploy at a glance.
+// "Model data: 2026-10-02 14:23 JST · v1.1.1 (11f8d38145df)": the newest
+// session in the model and the deployed app version + build, so a cached
+// PWA can be told apart from the latest deploy at a glance.
+function appVersionLabel() {
+  if (APP_VERSION.startsWith('__')) return 'dev';
+  return APP_BUILD.startsWith('__') ? `v${APP_VERSION}` : `v${APP_VERSION} (${APP_BUILD})`;
+}
+
 function renderLastUpdated() {
-  els.lastUpdated.textContent = t('LastUpdatedFormat').replace('{0}', model?.dataThrough ?? '—');
+  const data = t('LastUpdatedFormat').replace('{0}', model?.dataThrough ?? '—');
+  els.lastUpdated.textContent = `${data} · ${appVersionLabel()}`;
 }
 
 // ---- Corner cards ----
@@ -584,6 +597,34 @@ init();
 
 // Offline support is progressive — registration failure (old browser,
 // file:// serve) just means the app needs a network connection.
+//
+// Updates: the deploy stamps a new cache name into sw.js and the worker
+// claims the page as soon as its precache is complete (see sw.js), so a
+// client on an old build reloads once onto the new files the first time
+// it is online and the browser sees the new worker. `updateViaCache:
+// 'none'` keeps the HTTP cache from hiding a new sw.js, and the explicit
+// update() on launch and on every return to the foreground covers an
+// installed PWA that never navigates. Offline, update() fails silently
+// and the current worker keeps serving. Settings live in localStorage,
+// so the reload loses nothing.
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').catch(() => {});
+  // A first install also claims the page (controllerchange with no previous
+  // controller); only a change of controller is an update worth a reload.
+  let hadController = Boolean(navigator.serviceWorker.controller);
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController) { hadController = true; return; }
+    if (reloading) return;
+    reloading = true;
+    window.location.reload();
+  });
+  navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
+    .then((reg) => {
+      const check = () => { reg.update().catch(() => {}); };
+      check();
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') check();
+      });
+    })
+    .catch(() => {});
 }
