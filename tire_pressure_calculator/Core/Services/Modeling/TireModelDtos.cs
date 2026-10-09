@@ -3,9 +3,10 @@ using System.Text.Json.Serialization;
 
 namespace TirePressureCalculator.Services.Modeling;
 
-// DTOs mirroring data/tire_dataset/tire_model.json (schema v3; v2
-// artifacts still load). See docs/tire_model.md §2.7 for the schema
-// reference.
+// DTOs mirroring data/tire_dataset/tire_model.json (schema v5). See
+// docs/tire_model.md §2.7 for the schema reference. v5 has no per-track
+// constant (no c_track_by_track); the informational `heat_input` block is
+// not modelled — System.Text.Json ignores unknown keys.
 
 public sealed record TireModelDto(
     [property: JsonPropertyName("schema_version")] int SchemaVersion,
@@ -19,7 +20,6 @@ public sealed record TireModelDto(
     [property: JsonPropertyName("priors_when_no_fit")] PriorsDto PriorsWhenNoFit,
     [property: JsonPropertyName("tau_sec_by_car_corner_cond")] IReadOnlyList<TauEntryDto> TauSecByCarCornerCond,
     [property: JsonPropertyName("K_buckets")] IReadOnlyList<KBucketEntryDto> KBuckets,
-    [property: JsonPropertyName("c_track_by_track")] IReadOnlyList<CTrackEntryDto> CTrackByTrack,
     [property: JsonPropertyName("g2_typ_by_track_car_cond")] IReadOnlyList<G2EntryDto> G2TypByTrackCarCond,
     [property: JsonPropertyName("lap_time_typ_by_track_car_cond")] IReadOnlyList<LapTimeEntryDto> LapTimeTypByTrackCarCond,
     [property: JsonPropertyName("outlap_typ_by_track_car_cond")] IReadOnlyList<OutlapEntryDto>? OutlapTypByTrackCarCond = null,
@@ -99,8 +99,7 @@ public sealed record ConditionsConfigDto(
 
 public sealed record PriorsDto(
     [property: JsonPropertyName("tau_sec_seconds")] double TauSecSeconds,
-    [property: JsonPropertyName("K_kelvin_per_g2")] double KKelvinPerG2,
-    [property: JsonPropertyName("c_track")] double CTrack
+    [property: JsonPropertyName("K_kelvin_per_g2")] double KKelvinPerG2
 );
 
 public sealed record TauEntryDto(
@@ -128,21 +127,16 @@ public sealed record KBucketKeyDto(
     [property: JsonPropertyName("condition")] string Condition
 );
 
-public sealed record CTrackEntryDto(
-    [property: JsonPropertyName("track_canonical")] string TrackCanonical,
-    [property: JsonPropertyName("value")] double Value,
-    [property: JsonPropertyName("stderr")] double Stderr,
-    [property: JsonPropertyName("n_buckets_used")] int NBucketsUsed,
-    [property: JsonPropertyName("anchor")] bool Anchor
-);
-
 public sealed record G2EntryDto(
     [property: JsonPropertyName("track_canonical")] string TrackCanonical,
     [property: JsonPropertyName("car")] string Car,
     [property: JsonPropertyName("condition")] string Condition,
     [property: JsonPropertyName("g2_typ")] double G2Typ,
     [property: JsonPropertyName("n_laps_used")] int NLapsUsed,
-    [property: JsonPropertyName("g2_vs_lap_time")] G2CurveDto? G2VsLapTime = null
+    [property: JsonPropertyName("g2_vs_lap_time")] G2CurveDto? G2VsLapTime = null,
+    // Schema v5: per-corner typical heat input keyed "fl"/"fr"/"rl"/"rr".
+    // g2_typ stays as the corner mean for older consumers.
+    [property: JsonPropertyName("q_typ_by_corner")] Dictionary<string, double>? QTypByCorner = null
 );
 
 public sealed record OutlapEntryDto(
@@ -151,7 +145,9 @@ public sealed record OutlapEntryDto(
     [property: JsonPropertyName("condition")] string Condition,
     [property: JsonPropertyName("outlap_moving_s")] double OutlapMovingS,
     [property: JsonPropertyName("outlap_g2")] double OutlapG2,
-    [property: JsonPropertyName("n_laps_used")] int NLapsUsed
+    [property: JsonPropertyName("n_laps_used")] int NLapsUsed,
+    // Schema v5: per-corner out-lap heat input; outlap_g2 stays as the mean.
+    [property: JsonPropertyName("outlap_q_by_corner")] Dictionary<string, double>? OutlapQByCorner = null
 );
 
 public sealed record LapTimeEntryDto(
@@ -165,4 +161,5 @@ public sealed record LapTimeEntryDto(
 // Source-gen context — AOT-friendly. Single entry point lets us deserialize
 // the full root DTO without runtime reflection.
 [JsonSerializable(typeof(TireModelDto))]
+[JsonSerializable(typeof(Dictionary<string, double>))]
 public partial class TireModelJsonContext : JsonSerializerContext { }

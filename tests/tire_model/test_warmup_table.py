@@ -1,7 +1,7 @@
 """Synthetic-data round-trip tests for the warmup-table fit.
 
 Generate per-lap (t_cum_s, δT) samples from a known set of
-(K[car, corner], τ_sec[car, corner], c_track[track]) parameters and verify
+(K[car, corner], τ_sec[car, corner]) parameters and verify
 that ``build_warmup_table`` recovers them within physically reasonable
 tolerance. This guards against regressions in either pass of the fit.
 
@@ -26,7 +26,6 @@ def _synth_laps(
     tracks: list[str],
     K_true: dict[tuple[str, str], float],  # (car, corner) -> K
     tau_true: dict[tuple[str, str], float],  # (car, corner) -> tau_sec
-    c_track_true: dict[str, float],  # track -> c_track
     g2_true: dict[tuple[str, str], float],  # (track, car) -> g2
     lap_time_s: float = 80.0,
     laps_per_stint: int = 12,
@@ -71,121 +70,17 @@ def _synth_laps(
                             "session_start_utc": "2026-01-01T00:00:00Z",
                             "date": "2026-01-01",
                         }
-                        # δT per corner = K · c_track · g² · (1 − exp(−t / τ)) + noise
+                        # δT per corner = K · g² · (1 − exp(−t / τ)) + noise
                         for c in ("fl", "fr", "rl", "rr"):
                             K = K_true[(car, c)]
                             tau = tau_true[(car, c)]
-                            c_t = c_track_true[track]
                             g2 = g2_true[(track, car)]
-                            delta_t = K * c_t * g2 * (1.0 - math.exp(-t_cum / tau))
+                            delta_t = K * g2 * (1.0 - math.exp(-t_cum / tau))
                             tpms_temp = t_air_c + delta_t + rng.normal(0.0, noise_std_c)
                             row[f"tpms_temp_{c}_end"] = tpms_temp
                             row[f"delta_t_{c}"] = tpms_temp - t_air_c
                         rows.append(row)
     return pd.DataFrame(rows)
-
-
-def test_pass1_recovers_tau_and_gain_from_warm_starts() -> None:
-    """Stints that start warm (previous run's heat still in the tire) must
-    not bias τ short: with the stint anchor in the frame, Pass 1 recovers
-    both τ and K·c_track from data generated with a +25 °C start excess."""
-    K_true, tau_true, c_t, g2, t_air = 60.0, 250.0, 1.0, 0.9, 20.0
-    rng = np.random.default_rng(7)
-    rows: list[dict] = []
-    for sess in range(12):
-        start_excess = 25.0 if sess % 2 else 0.0  # alternate warm / cold starts
-        t_cum = 0.0
-        for lap in range(0, 12):
-            t_cum += 60.0
-            decay = math.exp(-t_cum / tau_true)
-            temp = t_air + K_true * c_t * g2 * (1 - decay) + start_excess * decay
-            rows.append(
-                {
-                    "session_id": f"s{sess}",
-                    "track_canonical": "track_x",
-                    "car": "CarA",
-                    "stint_id": 1,
-                    "lap_num": lap + 1,
-                    "lap_within_stint": lap,
-                    "on_track_s": 60.0,
-                    "t_cum_s": t_cum,
-                    "heat_proxy": g2 * 60.0,
-                    "condition": "dry",
-                    "t_eff_c": t_air,
-                    "tpms_temp_fl_end": temp + rng.normal(0.0, 0.3),
-                    "delta_t_fl": temp + rng.normal(0.0, 0.3) - t_air,
-                    "t_anchor_fl": 0.0,
-                    "t_start_fl": t_air + start_excess,
-                }
-            )
-    laps_for_fit = pd.DataFrame(rows)
-    tau_fit, gains = wt._pass1_fit_tau_and_gains(laps_for_fit, "CarA", "fl", "dry")
-    assert tau_fit.value == pytest.approx(tau_true, rel=0.05)
-    assert gains["track_x"].value == pytest.approx(K_true * c_t, rel=0.05)
-
-    # Without the anchor columns the same data fits the v0 form, which has
-    # to explain the warm starts as a fast warmup: τ comes out biased short.
-    naive = laps_for_fit.drop(columns=["t_anchor_fl", "t_start_fl"])
-    tau_naive, _ = wt._pass1_fit_tau_and_gains(naive, "CarA", "fl", "dry")
-    assert tau_naive.value < 0.8 * tau_true
-
-
-def test_pass1_tau_upper_bounds_tau_inside_the_fit_and_refits_gain() -> None:
-    """Rain buckets are fitted with τ ≤ τ_dry as a bound *inside* curve_fit, so
-    the gain is estimated consistently with the bound (unlike a post-hoc clip,
-    which leaves a gain that was fitted jointly with a longer τ)."""
-    K_true, tau_true, g2, t_air = 60.0, 600.0, 0.9, 20.0
-    rows: list[dict] = []
-    for sess in range(8):
-        t_cum = 0.0
-        for lap in range(0, 6):  # short stints: never reach the plateau
-            t_cum += 60.0
-            temp = t_air + K_true * g2 * (1 - math.exp(-t_cum / tau_true))
-            rows.append(
-                {
-                    "session_id": f"s{sess}",
-                    "track_canonical": "track_x",
-                    "car": "CarA",
-                    "stint_id": 1,
-                    "lap_num": lap + 1,
-                    "lap_within_stint": lap,
-                    "on_track_s": 60.0,
-                    "t_cum_s": t_cum,
-                    "heat_proxy": g2 * 60.0,
-                    "condition": "damp",
-                    "t_eff_c": t_air,
-                    "tpms_temp_fl_end": temp,
-                    "delta_t_fl": temp - t_air,
-                    "t_anchor_fl": 0.0,
-                    "t_start_fl": t_air,
-                }
-            )
-    laps = pd.DataFrame(rows)
-    free_tau, free_gain = wt._pass1_fit_tau_and_gains(laps, "CarA", "fl", "damp")
-    bound_tau, bound_gain = wt._pass1_fit_tau_and_gains(laps, "CarA", "fl", "damp", tau_upper=300.0)
-    assert free_tau.value == pytest.approx(tau_true, rel=0.05)
-    assert bound_tau.value <= 300.0 + 1e-6
-    # With τ forced short, the gain must come down to match the same early
-    # temperatures: a clip that kept the free gain would over-predict.
-    assert bound_gain["track_x"].value < free_gain["track_x"].value
-    # Both fits still track the observed range (the bound trades asymptote
-    # for speed; a post-hoc clip of τ with the free gain would sit ~5 °C high).
-    t = 360.0
-    truth = t_air + K_true * g2 * (1 - math.exp(-t / tau_true))
-    for tau_fp, gain in ((free_tau, free_gain), (bound_tau, bound_gain)):
-        pred = t_air + gain["track_x"].value * g2 * (1 - math.exp(-t / tau_fp.value))
-        assert pred == pytest.approx(truth, abs=2.0)
-    clipped = t_air + free_gain["track_x"].value * g2 * (1 - math.exp(-t / 300.0))
-    assert clipped - truth > 3.0
-
-
-def test_rain_tau_upper_is_dry_tau_only_for_rain_buckets() -> None:
-    taus = {("CarA", "fl", "dry"): wt.FitParam(300.0, 1.0, 100)}
-    assert wt._rain_tau_upper(taus, "CarA", "fl", "dry") is None
-    assert wt._rain_tau_upper(taus, "CarA", "fl", "damp") == 300.0
-    assert wt._rain_tau_upper(taus, "CarA", "fr", "damp") is None  # no dry fit
-    taus[("CarA", "fl", "dry")] = wt.FitParam(240.0, 0.0, 0, from_prior=True)
-    assert wt._rain_tau_upper(taus, "CarA", "fl", "wet") is None  # dry is a prior
 
 
 def test_compute_stint_anchor_prefers_first_lap_start_then_falls_back() -> None:
@@ -235,99 +130,6 @@ def test_compute_stint_anchor_prefers_first_lap_start_then_falls_back() -> None:
     assert out["t_anchor_rr"].isna().all()
 
 
-def test_pass1_recovers_tau_sec_per_car_corner() -> None:
-    """Pass 1 should recover τ_sec[car, corner] from synthetic data."""
-    K_true = {
-        ("CarA", "fl"): 60.0,
-        ("CarA", "fr"): 65.0,
-        ("CarA", "rl"): 70.0,
-        ("CarA", "rr"): 72.0,
-    }
-    tau_true = {
-        ("CarA", "fl"): 220.0,
-        ("CarA", "fr"): 230.0,
-        ("CarA", "rl"): 280.0,
-        ("CarA", "rr"): 285.0,
-    }
-    c_track_true = {"track_x": 1.0, "track_y": 0.85}
-    g2_true = {("track_x", "CarA"): 0.9, ("track_y", "CarA"): 0.7}
-
-    laps = _synth_laps(
-        cars=["CarA"],
-        tracks=["track_x", "track_y"],
-        K_true=K_true,
-        tau_true=tau_true,
-        c_track_true=c_track_true,
-        g2_true=g2_true,
-        sessions_per_bucket=10,
-        laps_per_stint=15,
-        noise_std_c=0.5,
-        seed=42,
-    )
-    laps_for_fit = laps[laps["lap_within_stint"] > 0].reset_index(drop=True)
-    # Attach g2_typ to each row (normally _laps_for_fit does this)
-    laps_for_fit = laps_for_fit.copy()
-    laps_for_fit["g2_typ"] = [
-        g2_true[(t, c)] for t, c in zip(laps_for_fit["track_canonical"], laps_for_fit["car"])
-    ]
-
-    for corner in ("fl", "fr", "rl", "rr"):
-        tau_fit, _ = wt._pass1_fit_tau_and_gains(laps_for_fit, "CarA", corner, "dry")
-        assert tau_fit.value == pytest.approx(
-            tau_true[("CarA", corner)], rel=0.10
-        ), f"τ for CarA/{corner}: got {tau_fit.value:.1f}, expected {tau_true[('CarA', corner)]:.1f}"
-
-
-def test_pass2_recovers_k_and_c_track_with_anchor() -> None:
-    """Pass 2 alternating LS should recover K and c_track with track_x anchored at 1.0.
-
-    Pass 1 now folds per-lap g² into the curve fit, so the bucket gains it
-    feeds to Pass 2 are already ``K · c_track`` (no ⟨g²⟩ factor).
-    """
-    K_true = {
-        ("CarA", "fl"): 60.0,
-        ("CarA", "fr"): 65.0,
-        ("CarA", "rl"): 70.0,
-        ("CarA", "rr"): 72.0,
-    }
-    c_track_true = {"track_x": 1.0, "track_y": 0.85}
-
-    bucket_gains: dict[tuple[str, str, str, str], wt.FitParam] = {}
-    for (car, corner), K in K_true.items():
-        for track, c_t in c_track_true.items():
-            gain = K * c_t  # gain = K · c_track (no g² factor)
-            bucket_gains[(car, track, corner, "dry")] = wt.FitParam(
-                value=gain, stderr=gain * 0.01, n_samples=120
-            )
-    # g2_lookup is still passed (kept in signature) but unused by Pass 2.
-    g2_lookup: dict[tuple[str, str, str], tuple[float, int]] = {}
-
-    K_fit, c_track_fit = wt._pass2_factor_gains(
-        bucket_gains=bucket_gains,
-        g2_lookup=g2_lookup,
-        anchor_track="track_x",
-    )
-    for (car, corner), K_expected in K_true.items():
-        assert K_fit[(car, corner, "dry")].value == pytest.approx(K_expected, rel=0.001)
-    assert c_track_fit["track_x"].value == pytest.approx(1.0, abs=1e-9)
-    assert c_track_fit["track_y"].value == pytest.approx(0.85, rel=0.001)
-
-
-def test_pass2_handles_single_track_bucket_gracefully() -> None:
-    """If a (car, corner, cond) has data only at one track, K · c_track is
-    unidentifiable on its own; the alternating-LS should still produce some
-    K value rather than crashing.
-    """
-    bucket_gains = {
-        ("CarA", "track_x", "fl", "dry"): wt.FitParam(60.0, 1.0, 100),  # K · c_track = 60 · 1.0
-    }
-    K_fit, c_track_fit = wt._pass2_factor_gains(
-        bucket_gains=bucket_gains, g2_lookup={}, anchor_track="track_x"
-    )
-    assert K_fit[("CarA", "fl", "dry")].value == pytest.approx(60.0, rel=0.001)
-    assert c_track_fit["track_x"].value == pytest.approx(1.0, abs=1e-9)
-
-
 def test_classify_condition_thresholds() -> None:
     """Three-level classification from precipitation in mm/hr."""
     assert wt.classify_condition(0.0) == "dry"
@@ -341,40 +143,9 @@ def test_classify_condition_thresholds() -> None:
     assert wt.classify_condition(float("nan")) == "unknown"
 
 
-def test_pass1_returns_prior_when_no_dense_bucket() -> None:
-    """If every (track) bucket for a (car, corner) has fewer than
-    MIN_LAPS_FOR_TAU_FIT samples, return the physical prior with from_prior=True."""
-    # Make a tiny dataset: 10 laps total per (car, corner) — under the 30-lap threshold
-    laps = _synth_laps(
-        cars=["CarA"],
-        tracks=["track_x"],
-        K_true={("CarA", c): 60.0 for c in ("fl", "fr", "rl", "rr")},
-        tau_true={("CarA", c): 240.0 for c in ("fl", "fr", "rl", "rr")},
-        c_track_true={"track_x": 1.0},
-        g2_true={("track_x", "CarA"): 0.9},
-        sessions_per_bucket=1,
-        laps_per_stint=10,
-        stints_per_session=1,
-        noise_std_c=0.0,
-        seed=0,
-    )
-    laps_for_fit = laps[laps["lap_within_stint"] > 0].copy()
-    laps_for_fit["g2_typ"] = 0.9
-
-    tau_fit, per_bucket = wt._pass1_fit_tau_and_gains(laps_for_fit, "CarA", "fl", "dry")
-    assert tau_fit.from_prior is True
-    assert tau_fit.value == pytest.approx(wt.PRIOR_TAU_SEC)
-    assert per_bucket == {}
-
-
 def test_w_road_default_is_zero_point_two() -> None:
     """v0 fixes w_road = 0.2; if this changes, lots of other things break."""
     assert wt.W_ROAD == pytest.approx(0.2)
-
-
-def test_anchor_track_is_tsukuba_2000() -> None:
-    """The c_track identifiability anchor must remain stable across runs."""
-    assert wt.ANCHOR_TRACK == "tsukuba_2000"
 
 
 def test_build_corner_defaults_medians_and_steady_state_filter() -> None:
@@ -612,3 +383,37 @@ def test_delta_t_targets_the_pressure_implied_gas_temperature() -> None:
     assert np.isnan(out["t_gas_fl_end"].iloc[1])  # no anchor pressure -> no target
     g = wt.gas_temperature_c(np.array([25.0]), np.array([1.5]), np.array([1.5]))
     assert g[0] == pytest.approx(25.0)  # unchanged pressure -> anchor temperature
+
+
+def test_per_corner_q_lookup_and_outlap_corners() -> None:
+    """Schema v5 lookups: per-corner percentile of ``q_lap_{corner}`` for the
+    flying laps and per-corner median for the pit out-laps."""
+    rows = []
+    for i in range(10):
+        rows.append(
+            {
+                "session_id": "s1",
+                "stint_id": 1,
+                "lap_num": i,
+                "track_canonical": "t",
+                "car": "c",
+                "condition": "dry",
+                "is_outlap": i == 0,
+                "outlap_from_pit": i == 0,
+                "moving_s": 60.0,
+                "heat_proxy": 60.0 * 0.8,
+                "on_track_s": 60.0,
+                "q_lap_fl": 1.0 + 0.01 * i if i else 0.4,
+                "q_lap_fr": 0.5 + 0.01 * i if i else 0.2,
+                "q_lap_rl": 0.9 if i else 0.3,
+                "q_lap_rr": 0.4 if i else 0.1,
+            }
+        )
+    laps = pd.DataFrame(rows)
+    q = wt._build_q_typ_per_corner(wt._flying_laps(laps), percentile=50)
+    per, n = q[("t", "c", "dry")]
+    assert n == 9 and per["fl"] == pytest.approx(1.05) and per["rr"] == pytest.approx(0.4)
+    base, corners = wt._build_outlap_typ_with_corners(laps)
+    assert corners[("t", "c", "dry")] == {"fl": 0.4, "fr": 0.2, "rl": 0.3, "rr": 0.1}
+    mv, g2_mean, n_out = base[("t", "c", "dry")]
+    assert mv == 60.0 and g2_mean == pytest.approx(0.25) and n_out == 1

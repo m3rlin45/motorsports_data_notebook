@@ -23,20 +23,6 @@ def _add_dataset_root_arg(p: argparse.ArgumentParser) -> None:
     )
 
 
-def _add_fit_method_arg(p: argparse.ArgumentParser) -> None:
-    from .warmup_table import DEFAULT_FIT_METHOD, FIT_METHODS
-
-    p.add_argument(
-        "--fit-method",
-        choices=FIT_METHODS,
-        default=DEFAULT_FIT_METHOD,
-        help=(
-            "per_lap: closed form on lap-end gas temperatures. per_second: the 1 Hz "
-            "recurrence on the pressure-implied gas temperature (tire_model/statespace.py)."
-        ),
-    )
-
-
 def _add_inputs_args(p: argparse.ArgumentParser) -> None:
     p.add_argument(
         "--inputs",
@@ -211,8 +197,6 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     _add_inputs_args(p_holdout)
-    _add_fit_method_arg(p_holdout)
-    _add_fit_method_arg(p_build)
 
     args = parser.parse_args(argv)
 
@@ -268,11 +252,6 @@ def _cmd_infer_compounds(args: argparse.Namespace) -> int:
         )
         for d in model["tau_sec_by_car_corner_cond"]
     }
-    c_track = {
-        d["track_canonical"]: FitParam(d["value"], d["stderr"], d["n_buckets_used"])
-        for d in model["c_track_by_track"]
-    }
-
     laps = _load_filtered_laps(root)
     laps = _attach_weather(laps, _load_weather(root))
     laps = _compute_stint_clock(laps)
@@ -283,8 +262,8 @@ def _cmd_infer_compounds(args: argparse.Namespace) -> int:
 
     labels = load_compound_labels(root)
     labels = apply_condition_seeds(labels, laps, load_condition_seeds(root))
-    _, assignments, multipliers = fit_compounds_em(laps, labels, tau, c_track)
-    print("Fitted compound multipliers (K_effective = c_track × K_base × m):")
+    _, assignments, multipliers = fit_compounds_em(laps, labels, tau)
+    print("Fitted compound multipliers (K_effective = K_base × m):")
     for car, comps in sorted(multipliers.items()):
         print(f"  {car}: " + ", ".join(f"{c}×{v}" for c, v in sorted(comps.items())))
     detail = [a for a in assignments if not a.pinned]
@@ -327,16 +306,14 @@ def _cmd_infer_compounds(args: argparse.Namespace) -> int:
 def _cmd_build(args: argparse.Namespace) -> int:
     root = args.dataset_root or default_dataset_root()
     logger.info("Building tire model artifacts at %s", root)
-    model = build_warmup_table(root, rebuild=args.rebuild, fit_method=args.fit_method)
+    model = build_warmup_table(root, rebuild=args.rebuild)
     n_k = len(model["K_buckets"])
     n_tau = len(model["tau_sec_by_car_corner_cond"])
-    n_c = len(model["c_track_by_track"])
     n_g2 = len(model["g2_typ_by_track_car_cond"])
     logger.info(
-        "Wrote tire_model.json + warmup_table.parquet: " "%d K, %d τ, %d c_track, %d ⟨g²⟩ entries",
+        "Wrote tire_model.json + warmup_table.parquet: %d K, %d τ, %d ⟨g²⟩ entries",
         n_k,
         n_tau,
-        n_c,
         n_g2,
     )
     return 0
@@ -386,10 +363,7 @@ def _cmd_predict(args: argparse.Namespace) -> int:
 def _print_prediction(result: dict[str, Prediction], args: argparse.Namespace) -> None:
     # Header from the first corner (all share track-level lookups)
     any_p = next(iter(result.values()))
-    print(
-        f"Track:        {args.track:<20} c_track = {any_p.c_track:.2f}"
-        f" ± {any_p.c_track_stderr:.3f}     ⟨g²⟩ = {any_p.g2_typ:.2f} G²"
-    )
+    print(f"Track:        {args.track:<20} per-corner q (FL): {any_p.g2_typ:.2f}")
     print(
         f"Car:          {args.car:<20} condition = {args.condition:<5}"
         f" lap_time_typ = {any_p.lap_time_typ_s:.1f} s"
@@ -418,8 +392,8 @@ def _print_prediction(result: dict[str, Prediction], args: argparse.Namespace) -
     print(header)
     for c in CORNERS:
         p = result[c]
-        # Propagate uncertainty: dominant term is K stderr × c_track × g²
-        dT_inf_stderr = p.K_stderr * p.c_track * p.g2_typ
+        # Propagate uncertainty: dominant term is K stderr × q
+        dT_inf_stderr = p.K_stderr * p.g2_typ
         # Roughly: |dCold/dT_hot| · stderr of T_hot
         t_hot_k = p.predicted_hot_temp_c + 273.15
         t_cold_k = p.t_air_c + 273.15
@@ -434,7 +408,7 @@ def _print_prediction(result: dict[str, Prediction], args: argparse.Namespace) -
             f"{cold_stderr:>7.3f} ({src})".ljust(0) + f"{'':<4}{p.K_n_samples:>4}"
         )
     print()
-    print("ΔT_∞ = K · c_track · ⟨g²⟩       Hot T = T_eff + ΔT_∞ · warmup_frac")
+    print("ΔT_∞ = K · q_corner       Hot T = T_eff + ΔT_∞ · warmup_frac")
     print("Cold  = (HotIn + 1)·(T_air+273)/(HotT+273) − 1")
 
 
@@ -453,7 +427,6 @@ def _cmd_holdout(args: argparse.Namespace) -> int:
         min_bucket_size=args.min_bucket_size,
         n_folds=args.n_folds,
         inputs=args.inputs,
-        fit_method=args.fit_method,
     )
 
 

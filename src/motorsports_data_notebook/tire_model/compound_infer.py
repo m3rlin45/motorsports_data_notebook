@@ -9,7 +9,7 @@ car and axle:
   (responsibility 1);
 - regression loss: every lap contributes
   ``(ΔT − K[compound, corner, cond] · x)²`` with
-  ``x = g²·c_track·warmup_frac``, weighted by the session's compound
+  ``x = q·warmup_frac``, weighted by the session's compound
   responsibilities.
 
 Under Gaussian residuals the optimum is a mixture of linear regressions,
@@ -104,12 +104,13 @@ class AxleAssignment:
 def _suff_stats(
     laps_for_fit: pd.DataFrame,
     tau_by_car_corner_cond: dict,
-    c_track_by_track: dict,
 ) -> pd.DataFrame:
     """Per-(session, corner, condition) sufficient statistics.
 
     Columns: session_id, car, corner, condition, sxx, sxy, syy, n where
-    x = g²·c_track·(1 − e^{−Δt/τ}) and y = ΔT − (T_start − T_eff)·e^{−Δt/τ},
+    x = q·(1 − e^{−Δt/τ}) and y = ΔT − (T_start − T_eff)·e^{−Δt/τ},
+    with q the lap's per-corner driving intensity ``q_lap_{corner}`` when
+    the frame carries it (schema v5) and ``heat_proxy/on_track_s`` otherwise,
     i.e. the known initial-condition term is moved to the response side so
     the regression through the origin recovers K (see
     ``warmup_table._compute_stint_anchor``).
@@ -123,16 +124,13 @@ def _suff_stats(
         & (laps["condition"] != "unknown")
     ]
 
-    def c_val(track: object) -> float:
-        fp = c_track_by_track.get(str(track))
-        return fp.value if fp is not None else 1.0
-
     from .warmup_table import _anchor_terms
 
     rows = []
     for corner in _CORNER_AXLE:
         delta_col = f"delta_t_{corner}"
-        sub = laps[laps[delta_col].notna()].copy()
+        q_col = f"q_lap_{corner}" if f"q_lap_{corner}" in laps.columns else "g2_lap"
+        sub = laps[laps[delta_col].notna() & laps[q_col].notna() & (laps[q_col] > 0)].copy()
         t_anchor, start_excess = _anchor_terms(sub, corner)
         sub["_dt"] = sub["t_cum_s"].to_numpy(dtype=float) - t_anchor
         sub["_excess"] = start_excess
@@ -144,11 +142,7 @@ def _suff_stats(
             if tau_fp is None or tau_fp.value <= 0:
                 continue
             decay = np.exp(-grp["_dt"].to_numpy() / tau_fp.value)
-            x = (
-                grp["g2_lap"].to_numpy()
-                * grp["track_canonical"].map(c_val).to_numpy()
-                * (1.0 - decay)
-            )
+            x = grp[q_col].to_numpy(dtype=float) * (1.0 - decay)
             y = grp[delta_col].to_numpy(dtype=float) - grp["_excess"].to_numpy() * decay
             ok = x > 0
             if not ok.any():
@@ -173,7 +167,6 @@ def fit_compounds_em(
     laps_for_fit: pd.DataFrame,
     labels: pd.DataFrame,
     tau_by_car_corner_cond: dict,
-    c_track_by_track: dict,
     *,
     max_iter: int = EM_MAX_ITER,
     pressure_prior: bool = True,
@@ -192,9 +185,9 @@ def fit_compounds_em(
 
     K is structured, not free per bucket:
 
-        K_effective = c_track[track] · K_base[car, corner, cond] · m[car, compound]
+        K_effective = K_base[car, corner, cond] · m[car, compound]
 
-    (c_track is already inside the regressor ``x``, so this function fits
+    (this function fits
     ``K_base`` per (car, corner, condition) and one scalar multiplier per
     (car, compound), by responsibility-weighted alternating least squares
     inside each M-step.) The structure pools statistical strength — every
@@ -218,7 +211,7 @@ def fit_compounds_em(
     if laps_for_fit.empty or labels.empty:
         return {}, [], {}
 
-    stats = _suff_stats(laps_for_fit, tau_by_car_corner_cond, c_track_by_track)
+    stats = _suff_stats(laps_for_fit, tau_by_car_corner_cond)
     if stats.empty:
         return {}, [], {}
     stats["axle"] = stats["corner"].map(_CORNER_AXLE)

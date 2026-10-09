@@ -61,7 +61,156 @@ test('parity with Python predictor fixture', () => {
 });
 
 test('rejects unsupported schema versions', () => {
-  assert.throws(() => new TireModel({ ...modelDto, schema_version: 1 }), /schema_version/);
+  // v4 and below carried K values fitted against the per-track c_track,
+  // which v5 dropped; only v5 loads.
+  for (const v of [1, 2, 3, 4, 6]) {
+    assert.throws(() => new TireModel({ ...modelDto, schema_version: v }), /schema_version/, `schema v${v}`);
+  }
+  assert.doesNotThrow(() => new TireModel({ ...modelDto, schema_version: 5 }));
+});
+
+test('legacy c_track keys in a v5 artifact are ignored', () => {
+  // An artifact written by an older trainer may still carry the keys (all
+  // 1.0); the model never reads them.
+  const withLegacy = {
+    ...modelDto, schema_version: 5,
+    priors_when_no_fit: { ...modelDto.priors_when_no_fit, c_track: 1.0 },
+    c_track_by_track: [{ track_canonical: 'synth', value: 1.0, stderr: 0, n_buckets_used: 4, anchor: true }],
+  };
+  const model = new TireModel(withLegacy);
+  assert.ok(!model.availableTracks.includes('synth'), 'c_track_by_track no longer feeds the track list');
+  assert.equal(typeof model.lookupCTrack, 'undefined');
+});
+
+// Tiny synthetic v5 artifact: one car, one track, with per-corner heat
+// inputs on the exact (track, car, dry) entries. Every corner shares the
+// same K/tau so any hot-temp difference comes from q_typ_by_corner /
+// outlap_q_by_corner alone.
+function syntheticV5Model({ withPerCorner = true } = {}) {
+  const corners = ['fl', 'fr', 'rl', 'rr'];
+  const g2Entry = {
+    track_canonical: 'synth', car: 'Car', condition: 'dry', g2_typ: 1.0, n_laps_used: 10,
+    g2_vs_lap_time: { lap_time_s: [50, 60, 70], g2: [1.4, 1.0, 0.7], n_laps: 10 },
+  };
+  const outlapEntry = {
+    track_canonical: 'synth', car: 'Car', condition: 'dry',
+    outlap_moving_s: 90, outlap_g2: 0.4, n_laps_used: 10,
+  };
+  if (withPerCorner) {
+    g2Entry.q_typ_by_corner = { fl: 1.3, fr: 0.9, rl: 1.1, rr: 0.7 };
+    outlapEntry.outlap_q_by_corner = { fl: 0.6, fr: 0.3, rl: 0.5, rr: 0.2 };
+  }
+  return {
+    schema_version: 5,
+    fit_at_utc: '2026-10-08T00:00:00Z',
+    model_form: 'synthetic',
+    gay_lussac: { p_atm_bar: 1.0, t_zero_c_to_k: 273.15, t_cold_uses: 'T_air' },
+    energy_balance: {
+      w_road: 0.2, w_road_fitted: false,
+      t_road_proxy: { formula: 'x', delta_sun_max_c: 10.0, sun_factor_default: 1.0 },
+    },
+    conditions: { values: ['dry', 'damp', 'wet'], default: 'dry' },
+    corners,
+    min_samples_per_bucket: 5,
+    priors_when_no_fit: { tau_sec_seconds: 240.0, K_kelvin_per_g2: 60.0 },
+    tau_sec_by_car_corner_cond: corners.map((corner) => ({
+      car: 'Car', corner, condition: 'dry', value_seconds: 300.0, stderr_seconds: 0,
+      n_samples_used: 10, from_prior: false,
+    })),
+    K_buckets: corners.map((corner) => ({
+      key: { car: 'Car', corner, condition: 'dry' }, value_kelvin_per_g2: 40.0,
+      stderr_kelvin_per_g2: 0, n_samples: 10, from_prior: false, from_single_track: false,
+    })),
+    g2_typ_by_track_car_cond: [g2Entry],
+    lap_time_typ_by_track_car_cond: [
+      { track_canonical: 'synth', car: 'Car', condition: 'dry', lap_time_typ_s: 60.0, n_laps_used: 10 },
+    ],
+    outlap_typ_by_track_car_cond: [outlapEntry],
+    g2_lap_time_model: {
+      method: 'sector_curve', formula: 'x', default_exponent: 3.0,
+      multiplier_clamp: { min: 0.4, max: 2.5 },
+    },
+    // Informational v5 block; the predictor must tolerate it untouched.
+    heat_input: {
+      form: 'q = ...', v_ref_ms: 30.0,
+      geometry_by_car: { Car: { wheelbase_m: 2.5 } },
+      drive_by_car: { Car: 'rwd' }, brake_by_car: { Car: { front_bias: 0.6 } },
+    },
+  };
+}
+
+test('schema v5: per-corner q_typ / outlap_q drive the corner prediction', () => {
+  const model = new TireModel(syntheticV5Model());
+  const args = {
+    track: 'synth', car: 'Car', condition: 'dry', lapWithinStint: 5,
+    ambientTempC: 20, cloudCoverPct: 100, targetHotPressureBar: 1.8,
+  };
+  const fl = predictCorner(model, { ...args, corner: 'fl' });
+  const rr = predictCorner(model, { ...args, corner: 'rr' });
+  // Same K and tau: only the per-corner heat input differs.
+  assert.equal(fl.kKelvinPerG2, rr.kKelvinPerG2);
+  assert.equal(fl.tauSec, rr.tauSec);
+  assert.equal(fl.g2Typ, 1.3);
+  assert.equal(rr.g2Typ, 0.7);
+  assert.equal(fl.outlapG2, 0.6);
+  assert.equal(rr.outlapG2, 0.2);
+  assert.ok(fl.predictedHotTempC > rr.predictedHotTempC, 'FL (hotter corner) ends hotter');
+  assert.ok(fl.coldPressureBar < rr.coldPressureBar);
+
+  // The lookups themselves resolve the corner, and keep the mean without one.
+  assert.equal(model.lookupG2('synth', 'Car', 'dry', 'rl').value, 1.1);
+  assert.equal(model.lookupG2('synth', 'Car', 'dry').value, 1.0);
+  assert.equal(model.lookupOutlap('synth', 'Car', 'dry', 'rl').g2, 0.5);
+  assert.equal(model.lookupOutlap('synth', 'Car', 'dry').g2, 0.4);
+  // Pooled fallbacks (condition chain exhausted) average the per-corner value.
+  assert.equal(model.lookupG2('synth', 'Car', 'wet', 'fr').value, 0.9);
+  assert.equal(model.lookupG2('synth', 'Car', 'wet', 'fr').source, 'fallback(dry)');
+
+  // The pace multiplier applies to the per-corner value exactly as to g2_typ.
+  const flFast = predictCorner(model, { ...args, corner: 'fl', targetLapTimeS: 55 });
+  assert.equal(flFast.g2PaceSource, 'curve');
+  assert.ok(Math.abs(flFast.g2Typ - 1.3 * flFast.g2Scale) < 1e-12);
+  assert.ok(flFast.g2Scale > 1);
+});
+
+test('schema v5: entries without per-corner fields fall back to g2_typ / outlap_g2', () => {
+  const model = new TireModel(syntheticV5Model({ withPerCorner: false }));
+  const args = {
+    track: 'synth', car: 'Car', condition: 'dry', lapWithinStint: 5,
+    ambientTempC: 20, cloudCoverPct: 100, targetHotPressureBar: 1.8,
+  };
+  const fl = predictCorner(model, { ...args, corner: 'fl' });
+  const rr = predictCorner(model, { ...args, corner: 'rr' });
+  assert.equal(fl.g2Typ, 1.0);
+  assert.equal(rr.g2Typ, 1.0);
+  assert.equal(fl.outlapG2, 0.4);
+  assert.equal(fl.predictedHotTempC, rr.predictedHotTempC);
+  assert.equal(fl.coldPressureBar, rr.coldPressureBar);
+  // Same numbers as the corner-less lookup (the pre-v5 call shape).
+  assert.equal(model.lookupG2('synth', 'Car', 'dry', 'fl').value,
+    model.lookupG2('synth', 'Car', 'dry').value);
+  // A map missing the asked corner also keeps the mean.
+  const partial = syntheticV5Model();
+  partial.g2_typ_by_track_car_cond[0].q_typ_by_corner = { fl: 1.3 };
+  assert.equal(new TireModel(partial).lookupG2('synth', 'Car', 'dry', 'rr').value, 1.0);
+});
+
+test('bundled artifact: corner-aware lookups match the corner-less ones when no per-corner fields', () => {
+  // The committed artifact may or may not carry the v5 fields; when it does
+  // not, passing a corner must be a no-op (pre-v5 numbers are preserved).
+  const model = new TireModel(modelDto);
+  const hasPerCorner = modelDto.g2_typ_by_track_car_cond.some((r) => r.q_typ_by_corner);
+  if (hasPerCorner) return;
+  for (const track of model.availableTracks) {
+    for (const car of model.availableCars) {
+      for (const corner of ['fl', 'fr', 'rl', 'rr']) {
+        assert.equal(model.lookupG2(track, car, 'dry', corner).value,
+          model.lookupG2(track, car, 'dry').value, `${track}/${car}/${corner}`);
+        assert.deepEqual(model.lookupOutlap(track, car, 'dry', corner),
+          model.lookupOutlap(track, car, 'dry'), `${track}/${car}/${corner} outlap`);
+      }
+    }
+  }
 });
 
 test('available tracks and cars are sorted and non-empty', () => {
@@ -99,10 +248,6 @@ test('unknown track/car fall back to priors and pooled values', () => {
   assert.equal(tau.sourceBucket, '(prior)');
   assert.equal(tau.valueSeconds, modelDto.priors_when_no_fit.tau_sec_seconds);
 
-  const c = model.lookupCTrack('no_such_track');
-  assert.ok(c.fromPrior);
-  assert.equal(c.value, modelDto.priors_when_no_fit.c_track);
-
   const g2 = model.lookupG2('no_such_track', 'NoSuchCar', 'dry');
   assert.equal(g2.source, 'global');
   const lap = model.lookupLapTime('no_such_track', 'NoSuchCar', 'dry');
@@ -134,23 +279,23 @@ test('effective temperature blends air and road by w_road', () => {
   assert.throws(() => tEffectiveC(10, 30, 1.5), RangeError);
 });
 
-test('warmup curve starts at T_eff and saturates at T_eff + K*c*g2', () => {
-  const tEff = 15, k = 60, c = 1.0, g2 = 0.7, tau = 240;
-  assert.ok(Math.abs(warmupCurveC(0, tEff, k, c, g2, tau) - tEff) < 1e-12);
-  const nearInf = warmupCurveC(tau * 50, tEff, k, c, g2, tau);
-  assert.ok(Math.abs(nearInf - (tEff + k * c * g2)) < 1e-6);
-  assert.throws(() => warmupCurveC(10, tEff, k, c, g2, 0), RangeError);
+test('warmup curve starts at T_eff and saturates at T_eff + K*q', () => {
+  const tEff = 15, k = 60, g2 = 0.7, tau = 240;
+  assert.ok(Math.abs(warmupCurveC(0, tEff, k, g2, tau) - tEff) < 1e-12);
+  const nearInf = warmupCurveC(tau * 50, tEff, k, g2, tau);
+  assert.ok(Math.abs(nearInf - (tEff + k * g2)) < 1e-6);
+  assert.throws(() => warmupCurveC(10, tEff, k, g2, 0), RangeError);
 });
 
 test('warmup curve starts at the given tire temperature and forgets it with tau', () => {
-  const tEff = 15, k = 60, c = 1.0, g2 = 0.7, tau = 240, tStart = 45;
-  assert.ok(Math.abs(warmupCurveC(0, tEff, k, c, g2, tau, tStart) - tStart) < 1e-12);
-  const asymptote = tEff + k * c * g2;
-  const atTau = warmupCurveC(tau, tEff, k, c, g2, tau, tStart);
+  const tEff = 15, k = 60, g2 = 0.7, tau = 240, tStart = 45;
+  assert.ok(Math.abs(warmupCurveC(0, tEff, k, g2, tau, tStart) - tStart) < 1e-12);
+  const asymptote = tEff + k * g2;
+  const atTau = warmupCurveC(tau, tEff, k, g2, tau, tStart);
   assert.ok(Math.abs(atTau - (asymptote + (tStart - asymptote) * Math.exp(-1))) < 1e-9);
-  assert.ok(Math.abs(warmupCurveC(tau * 50, tEff, k, c, g2, tau, tStart) - asymptote) < 1e-6);
+  assert.ok(Math.abs(warmupCurveC(tau * 50, tEff, k, g2, tau, tStart) - asymptote) < 1e-6);
   // null start reproduces the T_eff start.
-  assert.equal(warmupCurveC(100, tEff, k, c, g2, tau, null), warmupCurveC(100, tEff, k, c, g2, tau));
+  assert.equal(warmupCurveC(100, tEff, k, g2, tau, null), warmupCurveC(100, tEff, k, g2, tau));
 });
 
 test('current tire temp moves the predicted hot temperature by the decayed start excess', () => {
