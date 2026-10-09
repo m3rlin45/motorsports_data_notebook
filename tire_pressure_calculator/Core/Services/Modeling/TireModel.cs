@@ -11,10 +11,12 @@ namespace TirePressureCalculator.Services.Modeling;
 /// </summary>
 public sealed class TireModel
 {
-    // v3 adds the target-lap-time feature; v2 artifacts still load (the
-    // pace scaling then always uses the exponent fallback defaults).
-    public const int SupportedSchemaVersion = 4;
-    public const int MinSupportedSchemaVersion = 2;
+    // v5 drops the per-track constant c_track (the circuit enters only
+    // through its per-corner heat input q_typ_by_corner / outlap_q_by_corner).
+    // Older artifacts carried K values fitted against c_track and are no
+    // longer loadable.
+    public const int SupportedSchemaVersion = 5;
+    public const int MinSupportedSchemaVersion = 5;
 
     public TireModelDto Dto { get; }
 
@@ -48,11 +50,9 @@ public sealed class TireModel
     public string ResolveCar(string car) =>
         Dto.CarAliases is { } aliases && aliases.TryGetValue(car, out var pooled) ? pooled : car;
 
-    // Every track with observed data, not just those with a fitted c_track —
-    // thin tracks predict via the c_track prior until enough laps accumulate.
-    public IReadOnlyList<string> AvailableTracks => Dto.CTrackByTrack
+    // Every track with observed data (a typical heat input).
+    public IReadOnlyList<string> AvailableTracks => Dto.G2TypByTrackCarCond
         .Select(r => r.TrackCanonical)
-        .Concat(Dto.G2TypByTrackCarCond.Select(r => r.TrackCanonical))
         .Distinct().OrderBy(s => s).ToList();
 
     public IReadOnlyList<string> AvailableConditions => Dto.Conditions.Values;
@@ -146,7 +146,7 @@ public sealed class TireModel
             SourceBucket: "(prior)", FromPrior: true);
     }
 
-    // ---- Compound-aware K (decomposed c_track × base × multiplier) ----
+    // ---- Compound-aware K (base × compound multiplier) ----
 
     /// <summary>Distinct compounds fitted for a car, for UI enumeration.
     /// One tire runs on all four corners — the choice is forced, so an
@@ -194,16 +194,25 @@ public sealed class TireModel
         return null;
     }
 
-    public CTrackLookup LookupCTrack(string track)
-    {
-        var hit = Dto.CTrackByTrack.FirstOrDefault(r => r.TrackCanonical == track);
-        if (hit is not null)
-            return new CTrackLookup(hit.Value, hit.Stderr, FromPrior: false);
-        return new CTrackLookup(Dto.PriorsWhenNoFit.CTrack, 0.0, FromPrior: true);
-    }
+    /// <summary>Per-corner value from a v5 map, else the entry's corner
+    /// mean. A null corner (or a map without that corner) keeps the mean,
+    /// so pre-v5 artifacts produce identical numbers.</summary>
+    private static double PerCornerOr(
+        IReadOnlyDictionary<string, double>? byCorner, string? corner, double mean) =>
+        corner is not null && byCorner is not null && byCorner.TryGetValue(corner, out var v)
+            ? v
+            : mean;
 
-    public G2Lookup LookupG2(string track, string car, string condition)
+    /// <summary>
+    /// Typical flying-lap heat input (g² in v2–v4; the per-corner q_typ in
+    /// v5 when <paramref name="corner"/> is given and the entry carries
+    /// <c>q_typ_by_corner</c>). Pooled fallbacks average the same per-corner
+    /// value over the pooled rows.
+    /// </summary>
+    public G2Lookup LookupG2(string track, string car, string condition, string? corner = null)
     {
+        double Value(G2EntryDto r) => PerCornerOr(r.QTypByCorner, corner, r.G2Typ);
+
         foreach (var cond in ConditionChain(condition))
         {
             var hit = Dto.G2TypByTrackCarCond.FirstOrDefault(
@@ -211,25 +220,25 @@ public sealed class TireModel
             if (hit is not null)
             {
                 var tag = cond == condition ? "exact" : $"fallback({cond})";
-                return new G2Lookup(hit.G2Typ, hit.NLapsUsed, tag);
+                return new G2Lookup(Value(hit), hit.NLapsUsed, tag);
             }
         }
         var sameTC = Dto.G2TypByTrackCarCond.Where(
             r => r.TrackCanonical == track && r.Car == car).ToList();
         if (sameTC.Count > 0)
         {
-            return new G2Lookup(sameTC.Average(r => r.G2Typ),
+            return new G2Lookup(sameTC.Average(Value),
                 sameTC.Sum(r => r.NLapsUsed), "track_car_pooled");
         }
         var sameT = Dto.G2TypByTrackCarCond.Where(r => r.TrackCanonical == track).ToList();
         if (sameT.Count > 0)
         {
-            return new G2Lookup(sameT.Average(r => r.G2Typ),
+            return new G2Lookup(sameT.Average(Value),
                 sameT.Sum(r => r.NLapsUsed), "track_pooled");
         }
         if (Dto.G2TypByTrackCarCond.Count > 0)
         {
-            return new G2Lookup(Dto.G2TypByTrackCarCond.Average(r => r.G2Typ), 0, "global");
+            return new G2Lookup(Dto.G2TypByTrackCarCond.Average(Value), 0, "global");
         }
         return new G2Lookup(0.7, 0, "global");
     }
@@ -300,12 +309,16 @@ public sealed class TireModel
     /// Typical out-lap (pit exit to the first start/finish crossing): rolling
     /// seconds and g², integrated first from the typed pit-exit temperature.
     /// Null when the artifact predates the table or has nothing for the track
-    /// (the out-lap is then zero-length — pre-v0.26 behaviour).
+    /// (the out-lap is then zero-length — pre-v0.26 behaviour). With a
+    /// <paramref name="corner"/>, a v5 <c>outlap_q_by_corner</c> entry
+    /// supplies that corner's heat input instead of <c>outlap_g2</c>.
     /// </summary>
-    public OutlapLookup? LookupOutlap(string track, string car, string condition)
+    public OutlapLookup? LookupOutlap(string track, string car, string condition, string? corner = null)
     {
         var rows = Dto.OutlapTypByTrackCarCond;
         if (rows is null || rows.Count == 0) return null;
+        double G2(OutlapEntryDto r) => PerCornerOr(r.OutlapQByCorner, corner, r.OutlapG2);
+
         foreach (var cond in ConditionChain(condition))
         {
             var hit = rows.FirstOrDefault(
@@ -313,19 +326,19 @@ public sealed class TireModel
             if (hit is not null)
             {
                 var tag = cond == condition ? "exact" : $"fallback({cond})";
-                return new OutlapLookup(hit.OutlapMovingS, hit.OutlapG2, hit.NLapsUsed, tag);
+                return new OutlapLookup(hit.OutlapMovingS, G2(hit), hit.NLapsUsed, tag);
             }
         }
         var sameTC = rows.Where(r => r.TrackCanonical == track && r.Car == car).ToList();
         if (sameTC.Count > 0)
         {
-            return new OutlapLookup(sameTC.Average(r => r.OutlapMovingS), sameTC.Average(r => r.OutlapG2),
+            return new OutlapLookup(sameTC.Average(r => r.OutlapMovingS), sameTC.Average(G2),
                 sameTC.Sum(r => r.NLapsUsed), "track_car_pooled");
         }
         var sameT = rows.Where(r => r.TrackCanonical == track).ToList();
         if (sameT.Count > 0)
         {
-            return new OutlapLookup(sameT.Average(r => r.OutlapMovingS), sameT.Average(r => r.OutlapG2),
+            return new OutlapLookup(sameT.Average(r => r.OutlapMovingS), sameT.Average(G2),
                 sameT.Sum(r => r.NLapsUsed), "track_pooled");
         }
         return null;
@@ -368,9 +381,6 @@ public readonly record struct TauLookup(
 
 public readonly record struct KLookup(
     double ValueKelvinPerG2, double StderrKelvinPerG2, int NSamples, string SourceBucket, bool FromPrior);
-
-public readonly record struct CTrackLookup(
-    double Value, double Stderr, bool FromPrior);
 
 public readonly record struct G2Lookup(
     double Value, int NLapsUsed, string Source);

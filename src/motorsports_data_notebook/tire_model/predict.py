@@ -2,7 +2,7 @@
 
 Reads the JSON artifact written by :func:`build_warmup_table`, applies the
 fallback chain documented in the plan (K[car, corner] → K[car] → global; track
-falls back to ``c_track = 1.0``; ⟨g²⟩ falls back to (track) mean → global), and
+⟨g²⟩ falls back to (track) mean → global), and
 returns per-corner :class:`Prediction` records with full provenance.
 """
 
@@ -36,7 +36,6 @@ class Prediction:
     target_hot_pressure_bar: float
     K_kelvin_per_g2: float
     tau_sec: float
-    c_track: float
     g2_typ: float
     lap_time_typ_s: float
     t_at_lap_n_s: float
@@ -52,7 +51,6 @@ class Prediction:
     K_n_samples: int
     K_stderr: float
     tau_stderr: float
-    c_track_stderr: float
     # ---- Target-lap-time feature (schema v3); defaults preserve v2 behavior ----
     target_lap_time_s: float | None = None
     g2_scale: float = 1.0  # multiplier applied to g2_typ (1.0 when no target given)
@@ -158,19 +156,19 @@ def _lookup_k(
     return prior_k, 0.0, 0, True, ()
 
 
-def _lookup_c_track(model: dict[str, Any], track: str) -> tuple[float, float, bool]:
-    """Return (c_track, stderr, from_prior). Track-only (condition-independent)."""
-    for r in model["c_track_by_track"]:
-        if r["track_canonical"] == track:
-            return float(r["value"]), float(r["stderr"]), False
-    prior_c = float(model["priors_when_no_fit"]["c_track"])
-    return prior_c, 0.0, True
+def _corner_value(entry: dict[str, Any], key: str, fallback_key: str, corner: str | None) -> float:
+    """Schema v5 entries carry a per-corner dict next to the corner-blind value."""
+    per = entry.get(key)
+    if corner is not None and isinstance(per, dict) and corner in per:
+        return float(per[corner])
+    return float(entry[fallback_key])
 
 
 def _lookup_g2(
-    model: dict[str, Any], track: str, car: str, condition: str
+    model: dict[str, Any], track: str, car: str, condition: str, corner: str | None = None
 ) -> tuple[float, int, str]:
-    """Return (g2_typ, n_laps_used, source).
+    """Return (g2_typ, n_laps_used, source) — the corner's ``q_typ_by_corner``
+    value on a schema-v5 artifact when ``corner`` is given.
 
     Fallback walks the condition chain ((wet) → damp → dry, (damp) → dry,
     (dry) → dry), then (track, car) pooled across conditions, then (track),
@@ -181,18 +179,22 @@ def _lookup_g2(
         for r in table:
             if r["track_canonical"] == track and r["car"] == car and r["condition"] == cond:
                 tag = "exact" if cond == condition else f"fallback({cond})"
-                return float(r["g2_typ"]), int(r["n_laps_used"]), tag
+                return (
+                    _corner_value(r, "q_typ_by_corner", "g2_typ", corner),
+                    int(r["n_laps_used"]),
+                    tag,
+                )
     same_tc = [r for r in table if r["track_canonical"] == track and r["car"] == car]
     if same_tc:
-        vals = [r["g2_typ"] for r in same_tc]
+        vals = [_corner_value(r, "q_typ_by_corner", "g2_typ", corner) for r in same_tc]
         n = sum(int(r["n_laps_used"]) for r in same_tc)
         return float(sum(vals) / len(vals)), n, "track_car_pooled"
     same_t = [r for r in table if r["track_canonical"] == track]
     if same_t:
-        vals = [r["g2_typ"] for r in same_t]
+        vals = [_corner_value(r, "q_typ_by_corner", "g2_typ", corner) for r in same_t]
         n = sum(int(r["n_laps_used"]) for r in same_t)
         return float(sum(vals) / len(vals)), n, "track_pooled"
-    all_g2 = [r["g2_typ"] for r in table]
+    all_g2 = [_corner_value(r, "q_typ_by_corner", "g2_typ", corner) for r in table]
     if all_g2:
         return float(sum(all_g2) / len(all_g2)), 0, "global"
     return 0.7, 0, "global"
@@ -289,7 +291,7 @@ def _g2_pace_scale(
 
 
 def _lookup_outlap(
-    model: dict[str, Any], track: str, car: str, condition: str
+    model: dict[str, Any], track: str, car: str, condition: str, corner: str | None = None
 ) -> tuple[float, float, int, str] | None:
     """Typical out-lap ``(moving_s, g2, n, source)`` for the bucket, walking
     the condition chain, then (track, car) pooled, then (track) pooled.
@@ -302,7 +304,7 @@ def _lookup_outlap(
                 tag = "exact" if cond == condition else f"fallback({cond})"
                 return (
                     float(r["outlap_moving_s"]),
-                    float(r["outlap_g2"]),
+                    _corner_value(r, "outlap_q_by_corner", "outlap_g2", corner),
                     int(r["n_laps_used"]),
                     tag,
                 )
@@ -311,7 +313,10 @@ def _lookup_outlap(
         n = sum(int(r["n_laps_used"]) for r in same_tc)
         return (
             float(sum(r["outlap_moving_s"] for r in same_tc) / len(same_tc)),
-            float(sum(r["outlap_g2"] for r in same_tc) / len(same_tc)),
+            float(
+                sum(_corner_value(r, "outlap_q_by_corner", "outlap_g2", corner) for r in same_tc)
+                / len(same_tc)
+            ),
             n,
             "track_car_pooled",
         )
@@ -320,7 +325,10 @@ def _lookup_outlap(
         n = sum(int(r["n_laps_used"]) for r in same_t)
         return (
             float(sum(r["outlap_moving_s"] for r in same_t) / len(same_t)),
-            float(sum(r["outlap_g2"] for r in same_t) / len(same_t)),
+            float(
+                sum(_corner_value(r, "outlap_q_by_corner", "outlap_g2", corner) for r in same_t)
+                / len(same_t)
+            ),
             n,
             "track_pooled",
         )
@@ -420,13 +428,9 @@ def predict_cold_pressure(
         raise ValueError(f"track_condition must be one of dry/damp/wet; got {track_condition!r}")
 
     # Lookups (all condition-aware where applicable)
-    g2_typ, g2_n, _g2_source = _lookup_g2(model, track, car, cond)
-    if g2_typ_override is not None:
-        g2_typ = float(g2_typ_override)
     lap_time_typ_s, lt_n, _lt_source = _lookup_lap_time(model, track, car, cond)
     if lap_time_typ_override_s is not None:
         lap_time_typ_s = float(lap_time_typ_override_s)
-    c_track, c_track_stderr, _c_from_prior = _lookup_c_track(model, track)
     w_road = float(model["energy_balance"]["w_road"])
     sun_factor = float(model["energy_balance"]["t_road_proxy"].get("sun_factor_default", 1.0))
     delta_sun_max_c = float(model["energy_balance"]["t_road_proxy"].get("delta_sun_max_c", 10.0))
@@ -458,30 +462,35 @@ def predict_cold_pressure(
         if target <= 0:
             raise ValueError(f"target_lap_time_s must be > 0; got {target_lap_time_s!r}")
         g2_scale, g2_pace_source = _g2_pace_scale(model, track, car, cond, lap_time_typ_s, target)
-        g2_typ = g2_typ * g2_scale
         lap_time_for_clock_s = target
 
     # Time at end of flying lap N (the out-lap is a separate segment)
     t_at_lap_n_s = float(lap_within_stint) * lap_time_for_clock_s
 
-    out_time_s = 0.0
-    out_g2 = 0.0
-    out_src: str | None = None
-    if include_outlap:
-        hit_out = _lookup_outlap(model, track, car, cond)
-        if hit_out is not None:
-            out_time_s, out_g2, _out_n, out_src = hit_out
-        if outlap_time_s is not None:
-            if float(outlap_time_s) < 0:
-                raise ValueError(f"outlap_time_s must be >= 0; got {outlap_time_s!r}")
-            out_time_s = float(outlap_time_s)
-            out_src = (out_src or "none") + "+override"
+    if outlap_time_s is not None and float(outlap_time_s) < 0:
+        raise ValueError(f"outlap_time_s must be >= 0; got {outlap_time_s!r}")
 
     out: dict[str, Prediction] = {}
     for corner in CORNERS:
         if corner not in target_hot_pressure_bar:
             raise KeyError(f"target_hot_pressure_bar missing corner {corner!r}")
         target_hot = float(target_hot_pressure_bar[corner])
+        # Driving intensity for this corner (schema v5: per corner; older
+        # artifacts carry one value for all four), scaled by the pace target.
+        g2_typ, g2_n, _g2_source = _lookup_g2(model, track, car, cond, corner)
+        if g2_typ_override is not None:
+            g2_typ = float(g2_typ_override)
+        g2_typ = g2_typ * g2_scale
+        out_time_s = 0.0
+        out_g2 = 0.0
+        out_src: str | None = None
+        if include_outlap:
+            hit_out = _lookup_outlap(model, track, car, cond, corner)
+            if hit_out is not None:
+                out_time_s, out_g2, _out_n, out_src = hit_out
+            if outlap_time_s is not None:
+                out_time_s = float(outlap_time_s)
+                out_src = (out_src or "none") + "+override"
         K, K_stderr, K_n, K_from_prior, K_src = _lookup_k(model, car, corner, cond)
         if compound is not None:
             hit = _lookup_compound_k(model, car, compound, corner, cond)
@@ -491,7 +500,7 @@ def predict_cold_pressure(
         tau_sec, tau_stderr, _tau_src = _lookup_tau(model, car, corner, cond)
 
         warmup_frac = 1.0 - math.exp(-t_at_lap_n_s / tau_sec) if tau_sec > 0 else 0.0
-        delta_t_inf = K * c_track * g2_typ
+        delta_t_inf = K * g2_typ
         t_after_out_c, t_hot_c = warmup_two_stage_c(
             t_outlap_s=out_time_s,
             g2_outlap=out_g2,
@@ -499,7 +508,6 @@ def predict_cold_pressure(
             g2_flying=g2_typ,
             t_eff_c=t_eff_c,
             k_kelvin_per_g2=K,
-            c_track=c_track,
             tau_sec=tau_sec,
             t_start_c=t_start_c,
         )
@@ -517,7 +525,6 @@ def predict_cold_pressure(
             target_hot_pressure_bar=target_hot,
             K_kelvin_per_g2=K,
             tau_sec=tau_sec,
-            c_track=c_track,
             g2_typ=g2_typ,
             lap_time_typ_s=lap_time_typ_s,
             t_at_lap_n_s=t_at_lap_n_s,
@@ -533,7 +540,6 @@ def predict_cold_pressure(
             K_n_samples=K_n,
             K_stderr=K_stderr,
             tau_stderr=tau_stderr,
-            c_track_stderr=c_track_stderr,
             target_lap_time_s=(float(target_lap_time_s) if target_lap_time_s is not None else None),
             g2_scale=g2_scale,
             g2_pace_source=g2_pace_source,

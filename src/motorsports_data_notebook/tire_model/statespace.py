@@ -1,35 +1,34 @@
-"""Per-second (1 Hz) fit of the lumped-capacity energy balance.
+"""Per-second (1 Hz) fit of the tire energy balance on the pressure-implied
+cavity-gas temperature.
 
-The per-lap closed form (``warmup_table._pass1_fit_tau_and_gains``) sees one
-pressure sample per lap. The TPMS reports pressure in 0.03 bar steps, so a
-lap-end sample is uncertain by ±0.015 bar (≈ 2 K of gas temperature) and the
-pit-exit anchor sample the whole stint is referenced to is uncertain by the
-same amount. At 1 Hz a rising pressure crosses a step every 10–30 s early in
-a stint and the *time* of each crossing locates the pressure to a fraction
-of a step, so the per-second series carries far more information than its
-lap-end samples; measured g²(t) through the lap also identifies τ and K from
-the shape of each lap rather than from end-of-lap levels only.
+Model (per stint, per corner), integrated exactly with the inputs held
+constant over each 1 s step of the stint's rolling clock (standstill
+excluded; a lap the usability filters dropped mid-stint still heats the
+tire and advances the clock, it is only not scored)::
 
-Model (per stint, per corner), integrated exactly with inputs held constant
-over each 1 s step on the stint's rolling clock (standstill excluded):
+    dT_i/dt = a · q_i(t) − b_axle(i) · (T_i − T_eff),   T(t_anchor) = T_start
 
-    dT/dt = a · c_track · g²(t) − b · (T − T_eff),   T(t_anchor) = T_start
-    K = a / b,  τ = 1 / b
+``q_i`` is the per-corner driving intensity of :mod:`.heat_input` (schema
+v5: |g|·V/V_ref with the weight-transfer / drive / brake split). The
+production fit (:func:`fit_physical`) shares the gain ``a`` across the
+corners of a (car, condition), fits the cooling ``b`` per (car, axle,
+condition), the drive and brake coefficients and the speed-pressure
+constant κ per car, and carries **no track constants**.
 
 Observation: the pressure-implied cavity-gas temperature
-``T_gas_K = T_start_K · P(t)_abs / P_start_abs`` from the stint's pit-exit
-(T, P) anchor, for every 1 s bin with a finite pressure at or after the
-anchor. Parameters: ``a, b`` per (car, corner, condition) and ``c_track`` per
-track (Tsukuba anchored at 1), fitted by bounded least squares in log space.
-Rain conditions are fitted after dry with ``b_rain ≥ b_dry`` (τ_rain ≤ τ_dry)
-as a bound. Outputs the same ``tau`` / per-track ``gain = K · c_track`` tables
-Pass 1 produces, so Pass 2, the compound EM and the artifact are unchanged.
+``T_gas_K = T_start_K · P(t)_abs / P_start_abs · (1 + κV²)/(1 + κV_anchor²)``
+from the stint's pit-exit (T, P) anchor, for every 1 s bin with a finite
+pressure at or after the anchor (a (stint, corner) needs ≥ 60 scored
+seconds). Rain conditions are fitted after dry with ``b_rain ≥ b_dry``
+(τ_rain ≤ τ_dry) as a bound. Parameter recovery on synthetic stints is
+unit-tested.
 """
 
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+import warnings
+from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -40,7 +39,24 @@ import pyarrow.parquet as pq
 from scipy.optimize import least_squares  # type: ignore[import-untyped]
 
 from ..tire_etl.paths import timeseries_dir
-from .energy_balance import P_ATM_BAR, T_ZERO_C_TO_K
+from .energy_balance import P_ATM_BAR, T_ZERO_C_TO_K, speed_pressure_factor
+from .heat_input import (
+    BUILTIN_GEOMETRY,
+    CAR_FACTS,
+    DEFAULT_CAR_FACTS,
+    DEFAULT_HEAT_INPUT,
+    PHYSICAL_HEAT_INPUT,
+    SHARE_BOUNDS,
+    SHARE_INIT,
+    SHARE_PARAM_NAMES,
+    CarFacts,
+    CarGeometry,
+    HeatInput,
+    ShareParams,
+    corner_heat_parts,
+    corner_heat_rate,
+    share_heat_rate,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -49,8 +65,20 @@ MOVING_SPEED_MS = 5.0 / 3.6
 MIN_SCORED_SECONDS = 60  # a (stint, corner) needs this much observed data to count
 MIN_RAIN_SESSIONS = 3  # per (car, condition) for its own tau/K (else the condition chain)
 TAU_BOUNDS_S = (30.0, 3000.0)
-A_BOUNDS = (1e-4, 10.0)
-C_TRACK_BOUNDS = (0.3, 3.0)
+A_BOUNDS = (1e-3, 1e3)  # relative to the initial guess (see _Design.bounds)
+P_REF_ABS_BAR = 2.5  # the heat-input gain ``a`` is quoted at this absolute pressure
+P_EXP_BOUNDS = (0.0, 4.0)
+P_MODES = ("anchor", "instant")
+V_REF_MS = 30.0  # the cooling coefficient ``b`` is quoted at this speed
+IR_VALID_C = (-40.0, 200.0)  # IR samples outside this range are sentinels (−200 = unplugged)
+# "speed": one convection slope; "speed_axle": one per axle (f/r); "speed_car": one
+# per car; "power": b_eff = b·(ΔT/ΔT_ref)^(n−1), nonlinear in the temperature gap.
+COOL_MODES = ("speed", "speed_axle", "speed_car", "power")
+COOL_EXP_BOUNDS = (0.5, 2.0)
+COOL_DT_REF_K = 20.0
+W_ROAD_BOUNDS = (0.0, 1.0)
+KAPPA_BOUNDS = (0.0, 5e-5)  # per (m/s)²: pressure observable P_obs = P_gas / (1 + κ·V²)
+COOL_BETA_BOUNDS = (0.0, 20.0)
 
 
 @dataclass
@@ -61,12 +89,67 @@ class StintSeries:
     track: str
     condition: str
     t_eff_c: float
-    g2: np.ndarray  # (n,) mean lat²+long² per rolling second
+    g2: np.ndarray  # (n,) mean heat input q per rolling second (G² for the g2 form)
+    v: np.ndarray  # (n,) mean speed per rolling second (m/s)
+    surf: np.ndarray  # (n, 4) IR tread temperature (mean of the zones), NaN when absent/invalid
+    surf_zone_range: np.ndarray  # (n, 4) max − min across the IR zones
     obs: np.ndarray  # (n, 4) pressure-implied gas temperature, NaN where missing
     anchor_idx: np.ndarray  # (4,) first scored bin per corner, -1 when none
     t_start: np.ndarray  # (4,) anchor temperature per corner
+    p_start: np.ndarray  # (4,) anchor gauge pressure per corner (bar)
     n_laps: int
     lap_ends: np.ndarray  # (n,) bool: last bin of a lap
+    q4: np.ndarray | None = None  # (n, 4) per-corner heat input with load transfer, else None
+    q4_drive: np.ndarray | None = None  # (n, 4) drive-slip part (driven corners), see heat_input
+    q4_brake: np.ndarray | None = None  # (n, 4) brake-power part (front corners)
+    lap_lo: int = 0  # lap_num of the stint's first bin (lap index k ↔ lap_num lap_lo + k)
+    # per-second non-negative parts of the accelerations (moving bins), for the
+    # bounded force-share heat input: lat_pos = right turns, long_neg = braking
+    lat_pos: np.ndarray | None = None
+    lat_neg: np.ndarray | None = None
+    long_pos: np.ndarray | None = None
+    long_neg: np.ndarray | None = None
+    # the two sinks T_eff is blended from (NaN when the prep lacks them)
+    t_air_c: float = float("nan")
+    t_road_c: float = float("nan")
+    # irradiance on the asphalt as a fraction of overhead clear sky (solar.sun_index)
+    sun: float = float("nan")
+    sun_clear: float = float("nan")  # the same without the cloud attenuation
+
+
+def sink_temperature(s: StintSeries, cool_params: dict[str, float], corner: str) -> float:
+    """``T_eff`` of a stint corner: the prepped blend, or ``T_air + w·(T_road −
+    T_air)`` with the fitted sink weight (shared ``w|road``, per axle
+    ``w|road|f*`` / ``w|road|r*`` or per car ``w|road|<car>``) when both
+    sinks are known. A fitted solar coefficient (``s|sun``, or per axle
+    ``s|sun|f*`` / ``s|sun|r*``) replaces the blend with ``T_air + c_sun·sun``."""
+    c_clear = cool_params.get("s|sunclear")
+    if c_clear is not None:
+        if np.isfinite(s.t_air_c) and np.isfinite(s.sun_clear):
+            return float(s.t_air_c + c_clear * s.sun_clear)
+        return s.t_eff_c
+    c_sun = cool_params.get("s|sun", cool_params.get(f"s|sun|{corner[0]}*"))
+    if c_sun is not None:
+        if np.isfinite(s.t_air_c) and np.isfinite(s.sun):
+            return float(s.t_air_c + c_sun * s.sun)
+        return s.t_eff_c
+    w = cool_params.get(
+        "w|road",
+        cool_params.get(
+            f"w|road|{corner[0]}*", cool_params.get(f"w|road|{s.car.split('/', 1)[0]}")
+        ),
+    )
+    if w is None or not (np.isfinite(s.t_air_c) and np.isfinite(s.t_road_c)):
+        return s.t_eff_c
+    return float(s.t_air_c + w * (s.t_road_c - s.t_air_c))
+
+
+def cooling_power_factor(T: np.ndarray, t_eff: float | np.ndarray, n: float) -> np.ndarray:
+    """``b_eff / b = (ΔT/ΔT_ref)^(n−1)`` for ``dT/dt ∝ −b·ΔT·(ΔT/ΔT_ref)^(n−1)``
+    (``n = 1`` is Newton's law; ``n > 1`` a hot tyre sheds heat faster than
+    linear). ΔT is floored at 1 K; NaN temperatures give 1."""
+    dT = np.maximum(np.nan_to_num(np.asarray(T, dtype=float) - t_eff, nan=COOL_DT_REF_K), 1.0)
+    return np.asarray((dT / COOL_DT_REF_K) ** (n - 1.0))
 
 
 # ---------------------------------------------------------------- data prep
@@ -79,14 +162,28 @@ def _session_timeseries(root_str: str, session_id: str) -> pd.DataFrame | None:
         return None
     cols = ["lap_num", "sample_idx", "t_session_s", "speed_ms", "lat_g", "long_g"]
     cols += [f"tpms_press_{c}_bar" for c in CORNERS]
+    cols += [f"surf_temp_{c}_ch{i}_c" for c in CORNERS for i in range(1, 9)]
     schema = pq.read_schema(files[0])
     cols = [c for c in cols if c in schema.names]
     df: pd.DataFrame = pq.read_table(files[0], columns=cols).to_pandas()
     return df
 
 
-def _bin_stint(ts: pd.DataFrame, lap_nums: list[int]) -> dict[str, np.ndarray] | None:
-    """1 Hz bins on the rolling clock for the given laps of one stint."""
+def _bin_stint(
+    ts: pd.DataFrame,
+    lap_nums: list[int],
+    heat: HeatInput = DEFAULT_HEAT_INPUT,
+    car: str = "",
+    geometry: CarGeometry | None = None,
+    load_exp: float = 0.0,
+    long_split: bool = False,
+) -> dict[str, Any] | None:
+    """1 Hz bins on the rolling clock for the given laps of one stint.
+
+    ``heat`` picks the heat-input form; ``q`` is evaluated per sample before
+    binning so a nonlinear slip activation sees the native-rate g. With a
+    ``geometry`` and ``load_exp > 0`` the per-corner input
+    ``q_i = (W_i/W_i,static)^p · q`` is binned too (``"q4"``)."""
     # The clock and g² span every lap from the first to the last fitted one (a lap
     # the usability filters dropped mid-stint still heats the tire and advances the
     # clock); observations are scored only in the fitted laps.
@@ -111,10 +208,68 @@ def _bin_stint(ts: pd.DataFrame, lap_nums: list[int]) -> dict[str, np.ndarray] |
     if n < 2:
         return None
     cnt = np.bincount(b[moving], minlength=n).astype(float)
-    g2 = sub["lat_g"].to_numpy(dtype=float) ** 2 + sub["long_g"].to_numpy(dtype=float) ** 2
-    g2 = np.nan_to_num(g2, nan=0.0)
+    lat_s = sub["lat_g"].to_numpy(dtype=float)
+    lng_s = sub["long_g"].to_numpy(dtype=float)
+    g2 = heat.rate(lat_s, lng_s, v, car)
+    q4 = None
+    q4_drive = None
+    q4_brake = None
+    if geometry is not None and long_split:
+        parts = [
+            corner_heat_parts(
+                lat_s,
+                lng_s,
+                v,
+                c,
+                geometry,
+                heat.g_clip,
+                speed_exp=heat.speed_exp,
+                force_exp=heat.force_exp,
+            )
+            for c in CORNERS
+        ]
+        q4 = np.column_stack([p[0] for p in parts])
+        q4_drive = np.column_stack([p[1] for p in parts])
+        q4_brake = np.column_stack([p[2] for p in parts])
+    elif geometry is not None and load_exp:
+        cols = []
+        for c in CORNERS:
+            qc = corner_heat_rate(heat, lat_s, lng_s, v, car, c, geometry, load_exp)
+            cols.append(qc)
+        q4 = np.column_stack(cols)
     g2_bin = np.bincount(b[moving], weights=g2[moving], minlength=n) / np.maximum(cnt, 1)
     g2_bin = np.where(cnt > 0, g2_bin, 0.0)
+    v_bin = np.bincount(b[moving], weights=np.nan_to_num(v[moving]), minlength=n) / np.maximum(
+        cnt, 1
+    )
+    v_bin = np.where(cnt > 0, v_bin, 0.0)
+
+    def _bin4(x: np.ndarray | None) -> np.ndarray | None:
+        if x is None:
+            return None
+        out = np.zeros((n, 4))
+        for j in range(4):
+            out[:, j] = np.bincount(b[moving], weights=x[moving, j], minlength=n) / np.maximum(
+                cnt, 1
+            )
+        return np.where(cnt[:, None] > 0, out, 0.0)
+
+    q4_bin = _bin4(q4)
+    q4_drive_bin = _bin4(q4_drive)
+    q4_brake_bin = _bin4(q4_brake)
+
+    def _bin1(x: np.ndarray) -> np.ndarray:
+        out = np.bincount(b[moving], weights=x[moving], minlength=n) / np.maximum(cnt, 1)
+        return np.where(cnt > 0, out, 0.0)
+
+    lat_c = np.clip(np.nan_to_num(lat_s, nan=0.0), -heat.g_clip, heat.g_clip)
+    lng_c = np.clip(np.nan_to_num(lng_s, nan=0.0), -heat.g_clip, heat.g_clip)
+    acc_parts = {
+        "lat_pos": _bin1(np.maximum(lat_c, 0.0)),
+        "lat_neg": _bin1(np.maximum(-lat_c, 0.0)),
+        "long_pos": _bin1(np.maximum(lng_c, 0.0)),
+        "long_neg": _bin1(np.maximum(-lng_c, 0.0)),
+    }
     press = np.full((n, 4), np.nan)
     for j, c in enumerate(CORNERS):
         col = f"tpms_press_{c}_bar"
@@ -129,12 +284,53 @@ def _bin_stint(ts: pd.DataFrame, lap_nums: list[int]) -> dict[str, np.ndarray] |
     for ln in np.unique(lap):
         m = lap == ln
         lap_end[int(b[m].max())] = True
-    return {"g2": g2_bin, "press": press, "lap_end": lap_end}
+    # IR tread temperature: mean and spread across the zones, sentinel-masked.
+    surf = np.full((n, 4), np.nan)
+    zr = np.full((n, 4), np.nan)
+    for j, c in enumerate(CORNERS):
+        zcols = [f"surf_temp_{c}_ch{i}_c" for i in range(1, 9) if f"surf_temp_{c}_ch{i}_c" in sub]
+        if not zcols:
+            continue
+        z = sub[zcols].to_numpy(dtype=float)
+        z = np.where((z > IR_VALID_C[0]) & (z < IR_VALID_C[1]), z, np.nan)
+        with np.errstate(all="ignore"), warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)  # all-NaN rows
+            zmean = np.nanmean(z, axis=1)
+            zrange = np.nanmax(z, axis=1) - np.nanmin(z, axis=1)
+        ok = np.isfinite(zmean) & moving
+        k = np.bincount(b[ok], minlength=n)
+        surf[:, j] = np.where(
+            k > 0, np.bincount(b[ok], weights=zmean[ok], minlength=n) / np.maximum(k, 1), np.nan
+        )
+        zr[:, j] = np.where(
+            k > 0, np.bincount(b[ok], weights=zrange[ok], minlength=n) / np.maximum(k, 1), np.nan
+        )
+    return {
+        "g2": g2_bin,
+        "v": v_bin,
+        "press": press,
+        "lap_end": lap_end,
+        "surf": surf,
+        "surf_zone_range": zr,
+        "q4": q4_bin,
+        "q4_drive": q4_drive_bin,
+        "q4_brake": q4_brake_bin,
+        **acc_parts,
+    }
 
 
-def build_stint_series(root: Path, laps_for_fit: pd.DataFrame) -> list[StintSeries]:
+def build_stint_series(
+    root: Path,
+    laps_for_fit: pd.DataFrame,
+    heat: HeatInput = DEFAULT_HEAT_INPUT,
+    geometry: dict[str, CarGeometry] | None = None,
+    load_exp: float = 0.0,
+    long_split: bool = False,
+) -> list[StintSeries]:
     """One :class:`StintSeries` per (session, stint) present in ``laps_for_fit``
-    (which carries the anchors, T_eff, condition, car and track)."""
+    (which carries the anchors, T_eff, condition, car and track). With a
+    ``geometry`` map and ``load_exp`` the per-corner load-transfer input is
+    attached as ``q4``."""
     out: list[StintSeries] = []
     need = ["t_eff_c", "condition", "car", "track_canonical"] + [
         f"{p}_{c}" for c in CORNERS for p in ("t_anchor", "t_start", "p_start")
@@ -150,13 +346,22 @@ def build_stint_series(root: Path, laps_for_fit: pd.DataFrame) -> list[StintSeri
         first = grp.iloc[0]
         if pd.isna(first["t_eff_c"]) or first["condition"] == "unknown":
             continue
-        binned = _bin_stint(ts, [int(x) for x in grp["lap_num"]])
+        binned = _bin_stint(
+            ts,
+            [int(x) for x in grp["lap_num"]],
+            heat,
+            str(first["car"]),
+            (geometry or {}).get(str(first["car"])),
+            load_exp,
+            long_split,
+        )
         if binned is None:
             continue
         n = len(binned["g2"])
         obs = np.full((n, 4), np.nan)
         anchor_idx = np.full(4, -1, dtype=int)
         t_start = np.full(4, np.nan)
+        p_start = np.full(4, np.nan)
         roll_t = np.arange(n, dtype=float)
         for j, c in enumerate(CORNERS):
             t0, p0, ta = first[f"t_start_{c}"], first[f"p_start_{c}"], first[f"t_anchor_{c}"]
@@ -172,8 +377,26 @@ def build_stint_series(root: Path, laps_for_fit: pd.DataFrame) -> list[StintSeri
             obs[:, j] = np.where(scored, tg, np.nan)
             anchor_idx[j] = int(np.argmax(scored))
             t_start[j] = float(t0)
+            p_start[j] = float(p0)
         if (anchor_idx < 0).all():
             continue
+        sun = sun_clear = float("nan")
+        if "session_start_utc" in grp.columns and pd.notna(first["session_start_utc"]):
+            from ..tire_etl.tracks import get_track
+            from .solar import sun_index
+
+            ti = get_track(str(first["track_canonical"]))
+            if ti is not None:
+                cloud = first["cloud_cover"] if "cloud_cover" in grp.columns else None
+                sun = sun_index(
+                    pd.Timestamp(first["session_start_utc"]).to_pydatetime(),
+                    ti.lat,
+                    ti.lon,
+                    None if cloud is None or pd.isna(cloud) else float(cloud),
+                )
+                sun_clear = sun_index(
+                    pd.Timestamp(first["session_start_utc"]).to_pydatetime(), ti.lat, ti.lon, None
+                )
         out.append(
             StintSeries(
                 session_id=str(sid),
@@ -182,15 +405,64 @@ def build_stint_series(root: Path, laps_for_fit: pd.DataFrame) -> list[StintSeri
                 track=str(first["track_canonical"]),
                 condition=str(first["condition"]),
                 t_eff_c=float(first["t_eff_c"]),
+                t_air_c=float(first["t_air_c"]) if "t_air_c" in grp.columns else float("nan"),
+                t_road_c=float(first["t_road_c"]) if "t_road_c" in grp.columns else float("nan"),
+                sun=sun,
+                sun_clear=sun_clear,
                 g2=binned["g2"],
+                v=binned["v"],
+                surf=binned["surf"],
+                surf_zone_range=binned["surf_zone_range"],
+                q4=binned["q4"],
+                q4_drive=binned["q4_drive"],
+                q4_brake=binned["q4_brake"],
+                lap_lo=int(min(int(x) for x in grp["lap_num"])),
+                lat_pos=binned["lat_pos"],
+                lat_neg=binned["lat_neg"],
+                long_pos=binned["long_pos"],
+                long_neg=binned["long_neg"],
                 obs=obs,
                 anchor_idx=anchor_idx,
                 t_start=t_start,
+                p_start=p_start,
                 n_laps=int(len(grp)),
                 lap_ends=binned["lap_end"],
             )
         )
     return out
+
+
+def stint_log_pressure_ratio(s: StintSeries, mode: str) -> np.ndarray:
+    """``log(P_abs(t) / P_REF_ABS_BAR)`` per (second, corner) for the
+    pressure dependence of the heat input.
+
+    ``"anchor"``: the stint's pit-exit absolute pressure, constant.
+    ``"instant"``: the measured pressure at each second (from the observed
+    gas temperature and the anchor), forward-filled over gaps.
+    """
+    n = len(s.g2)
+    out = np.zeros((n, 4))
+    for j in range(4):
+        p0 = float(s.p_start[j])
+        if not np.isfinite(p0):
+            continue
+        p_abs = np.full(n, p0 + P_ATM_BAR)
+        if mode == "instant":
+            t0 = float(s.t_start[j])
+            pk = (p0 + P_ATM_BAR) * (s.obs[:, j] + T_ZERO_C_TO_K) / (t0 + T_ZERO_C_TO_K)
+            fin = np.isfinite(pk)
+            if fin.any():
+                idx = np.where(fin, np.arange(n), -1)
+                idx = np.maximum.accumulate(idx)
+                p_abs = np.where(idx >= 0, pk[np.maximum(idx, 0)], p0 + P_ATM_BAR)
+        out[:, j] = np.log(np.maximum(p_abs, 0.5) / P_REF_ABS_BAR)
+    return out
+
+
+def cooling_factor(v: np.ndarray, beta: float) -> np.ndarray:
+    """``h(V) / h(V_ref)`` for forced convection ``h = h_0 + h_1·V``:
+    ``(1 + β·V/V_ref) / (1 + β)``; ``β = 0`` is speed-independent cooling."""
+    return np.asarray((1.0 + beta * np.asarray(v, dtype=float) / V_REF_MS) / (1.0 + beta))
 
 
 # ---------------------------------------------------------------- design + fit
@@ -204,17 +476,73 @@ class _Design:
         self,
         stints: list[StintSeries],
         cells: list[tuple[str, str]],
-        tracks: list[str],
-        anchor_track: str,
         fixed: dict[tuple[str, str, str], tuple[float, float]],
-        fixed_c: dict[str, float],
+        p_mode: str | None = None,
+        fixed_p_exp: float | None = None,
+        cool_mode: str | None = None,
+        fixed_cool_beta: float | None = None,
+        v_corr: bool = False,
+        fixed_kappa: dict[str, float] | None = None,
+        share_a: bool | str = False,
+        share_b: bool | str = False,
+        drive_term: bool = False,
+        brake_term: bool = False,
+        fixed_drive: dict[str, float] | None = None,
+        fixed_brake: dict[str, float] | None = None,
+        share_model: bool = False,
+        fixed_share: dict[str, ShareParams] | None = None,
+        driven_by_car: dict[str, str] | None = None,
+        share_fixed: dict[str, dict[str, float]] | None = None,
+        share_tie_gc: bool = False,
+        fixed_a: float | None = None,
+        fixed_b: float | None = None,
+        fixed_cool: dict[str, float] | None = None,
+        fit_w_road: bool | str = False,
+        fit_sun: bool | str = False,
     ):
         self.cells = cells
-        self.tracks = [t for t in tracks if t != anchor_track and t not in fixed_c]
-        self.anchor_track = anchor_track
+        self.fixed_a = fixed_a  # ablation: the gain is not a parameter
+        self.fixed_b = fixed_b  # ablation: the cooling rate is not a parameter
+        # cooling / sink parameters held at given values (rain cells reuse dry)
+        self.fixed_cool: dict[str, float] = dict(fixed_cool or {})
+        if fixed_cool_beta is not None:
+            self.fixed_cool["m|v"] = fixed_cool_beta
+        self.fit_w_road = fit_w_road
+        self.fit_sun = fit_sun  # T_eff = T_air + c_sun·sun (shared, or per axle)
         self.fixed = fixed
-        self.fixed_c = dict(fixed_c)
-        g2, teff, obs, seg_start, t0, cell_i, trk_i = [], [], [], [], [], [], []
+        self.p_mode = p_mode
+        self.fixed_p_exp = fixed_p_exp
+        self.cool_mode = cool_mode
+        self.fixed_cool_beta = fixed_cool_beta
+        self.v_corr = v_corr
+        self.fixed_kappa = dict(fixed_kappa or {})
+        self.share_a = share_a
+        self.share_b = share_b  # False | True (all corners) | "axle" (front / rear)
+        self.drive_term = drive_term
+        self.brake_term = brake_term
+        self.fixed_drive = dict(fixed_drive or {})
+        self.fixed_brake = dict(fixed_brake or {})
+        self.share_model = share_model
+        self.fixed_share = dict(fixed_share or {})
+        self.driven_by_car = dict(driven_by_car or {})
+        self.share_fixed = {
+            c: dict(v) for c, v in (share_fixed or {}).items()
+        }  # car -> {name: value}
+        self.share_tie_gc = share_tie_gc
+        q4s = []
+        q4d = []
+        q4b = []
+        acc_parts: dict[str, list[np.ndarray]] = {
+            k: [] for k in ("lat_pos", "lat_neg", "long_pos", "long_neg")
+        }
+        self.cars = sorted({s.car for s in stints})
+        car_i = []
+        v_anchor = []
+        g2, teff, obs, seg_start, t0, cell_i, logp = [], [], [], [], [], [], []
+        vv = []
+        tair: list[np.ndarray] = []
+        troad: list[np.ndarray] = []
+        suns: list[np.ndarray] = []
         n0 = 0
         for s in stints:
             n = len(s.g2)
@@ -225,27 +553,90 @@ class _Design:
                 ss[:, j] = n0 + a_i
                 tt[:, j] = s.t_start[j] if np.isfinite(s.t_start[j]) else s.t_eff_c
             g2.append(s.g2)
+            q4s.append(s.q4 if s.q4 is not None else np.repeat(s.g2[:, None], 4, axis=1))
+            q4d.append(s.q4_drive if s.q4_drive is not None else np.zeros((n, 4)))
+            q4b.append(s.q4_brake if s.q4_brake is not None else np.zeros((n, 4)))
+            for k in acc_parts:
+                arr = getattr(s, k)
+                acc_parts[k].append(arr if arr is not None else np.zeros(n))
+            vv.append(s.v)
             teff.append(np.full(n, s.t_eff_c))
+            tair.append(np.full(n, s.t_air_c))
+            troad.append(np.full(n, s.t_road_c))
+            suns.append(np.full(n, s.sun_clear if fit_sun == "clear" else s.sun))
             obs.append(s.obs)
             seg_start.append(ss)
             t0.append(tt)
             cell_i.append(np.full(n, self._cell_index(s.car, s.condition)))
-            trk_i.append(np.full(n, tracks.index(s.track)))
+            car_i.append(np.full(n, self.cars.index(s.car)))
+            va = np.zeros((n, 4))
+            for j in range(4):
+                a_i = s.anchor_idx[j] if s.anchor_idx[j] >= 0 else 0
+                va[:, j] = s.v[a_i]
+            v_anchor.append(va)
+            if p_mode is not None:
+                logp.append(stint_log_pressure_ratio(s, p_mode))
             n0 += n
         self.g2 = np.concatenate(g2)
+        self.q4 = np.concatenate(q4s)
+        self.q4_drive = np.concatenate(q4d)
+        self.q4_brake = np.concatenate(q4b)
+        self.acc = {k: np.concatenate(v) for k, v in acc_parts.items()}
+        self.v = np.concatenate(vv)
+        self.car_idx = np.concatenate(car_i)
+        self.v_anchor = np.concatenate(v_anchor)
+        self.logp = np.concatenate(logp) if logp else None
         self.teff = np.concatenate(teff)
+        self.tair = np.concatenate(tair)
+        self.troad = np.concatenate(troad)
+        self.sun = np.concatenate(suns)
         self.obs = np.concatenate(obs)
         self.seg_start = np.concatenate(seg_start)
         self.t0 = np.concatenate(t0)
         self.cell = np.concatenate(cell_i)
-        self.trk = np.concatenate(trk_i)
-        self.all_tracks = tracks
         self.fin = np.isfinite(self.obs)
         self.names: list[str] = []
         for car, cond in cells:
-            self.names += [f"a|{car}|{c}|{cond}" for c in CORNERS]
-            self.names += [f"b|{car}|{c}|{cond}" for c in CORNERS]
-        self.names += [f"c|{t}" for t in self.tracks]
+            a_car = "*" if share_a == "cars" else car
+            if fixed_a is None:
+                self.names += [
+                    f"a|{a_car}|{c}|{cond}"
+                    for c in (("*",) if share_a else CORNERS)
+                    if f"a|{a_car}|{c}|{cond}" not in self.names
+                ]
+            b_car = "*" if self.share_b == "cars" else car
+            if fixed_b is None:
+                self.names += [
+                    f"b|{b_car}|{c}|{cond}"
+                    for c in self._b_keys()
+                    if f"b|{b_car}|{c}|{cond}" not in self.names
+                ]
+        if p_mode is not None and fixed_p_exp is None:
+            self.names.append("n|p")
+        self.names += [nme for nme in self._cool_names() if nme not in self.fixed_cool]
+        self.names += [nme for nme in self._sink_names() if nme not in self.fixed_cool]
+        if v_corr:
+            self.names += [f"k|{car}" for car in self.cars if car not in self.fixed_kappa]
+        if drive_term:
+            self.names += [f"d|{car}" for car in self.cars if car not in self.fixed_drive]
+        if brake_term:
+            self.names += [f"cb|{car}" for car in self.cars if car not in self.fixed_brake]
+        if share_model:
+            for car in self.cars:
+                if car not in self.fixed_share:
+                    self.names += [
+                        f"sh|{car}|{nme}" for nme in SHARE_PARAM_NAMES if self._share_free(car, nme)
+                    ]
+
+    def _b_keys(self) -> tuple[str, ...]:
+        if self.share_b in ("axle", "cars"):
+            return ("f*", "r*")
+        return ("*",) if self.share_b else CORNERS
+
+    def _b_key(self, corner: str) -> str:
+        if self.share_b in ("axle", "cars"):
+            return corner[0] + "*"
+        return "*" if self.share_b else corner
 
     def _cell_index(self, car: str, cond: str) -> int:
         try:
@@ -253,36 +644,263 @@ class _Design:
         except ValueError:
             return -1
 
-    def unpack(self, x: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def p_exp(self, x: np.ndarray) -> float:
+        """The heat-input pressure exponent ``n`` (``q ∝ (P_ref / P)^n``)."""
+        if self.p_mode is None:
+            return 0.0
+        if self.fixed_p_exp is not None:
+            return self.fixed_p_exp
+        return float(x[self.names.index("n|p")])  # linear, not log-scaled
+
+    def kappa(self, x: np.ndarray) -> dict[str, float]:
+        """Per-car speed-pressure constant κ (linear, not log-scaled)."""
+        out = dict(self.fixed_kappa)
+        if self.v_corr:
+            for car in self.cars:
+                if car not in out:
+                    out[car] = float(x[self.names.index(f"k|{car}")])
+        return out
+
+    def _per_car_linear(
+        self, x: np.ndarray, prefix: str, fixed: dict[str, float]
+    ) -> dict[str, float]:
+        out = dict(fixed)
+        for car in self.cars:
+            nme = f"{prefix}|{car}"
+            if car not in out and nme in self.names:
+                out[car] = float(x[self.names.index(nme)])
+        return out
+
+    def drive_coef(self, x: np.ndarray) -> dict[str, float]:
+        """Per-car drive-slip heat coefficient ``d`` (0 when off)."""
+        return (
+            self._per_car_linear(x, "d", self.fixed_drive)
+            if (self.drive_term or self.fixed_drive)
+            else {}
+        )
+
+    def brake_coef(self, x: np.ndarray) -> dict[str, float]:
+        """Per-car brake-power heat coefficient ``c_b`` (0 when off)."""
+        return (
+            self._per_car_linear(x, "cb", self.fixed_brake)
+            if (self.brake_term or self.fixed_brake)
+            else {}
+        )
+
+    def _share_free(self, car: str, nme: str) -> bool:
+        """Whether a share parameter is fitted for this car (not fixed, not tied)."""
+        if nme in self.share_fixed.get(car, {}) or nme in self.share_fixed.get("*", {}):
+            return False
+        if self.share_tie_gc and nme == "g_transfer_rear":
+            return False
+        return True
+
+    def share_params(self, x: np.ndarray) -> dict[str, ShareParams]:
+        """Per-car bounded force-share parameters (fitted, fixed or tied)."""
+        out = dict(self.fixed_share)
+        if self.share_model:
+            for car in self.cars:
+                if car in out:
+                    continue
+                vals: dict[str, float] = {}
+                for nme in SHARE_PARAM_NAMES:
+                    if self._share_free(car, nme):
+                        vals[nme] = float(x[self.names.index(f"sh|{car}|{nme}")])
+                    elif nme in self.share_fixed.get(car, {}):
+                        vals[nme] = float(self.share_fixed[car][nme])
+                    elif nme in self.share_fixed.get("*", {}):
+                        vals[nme] = float(self.share_fixed["*"][nme])
+                if self.share_tie_gc:
+                    vals["g_transfer_rear"] = vals["g_transfer_front"]
+                out[car] = ShareParams(driven=self.driven_by_car.get(car, "rear"), **vals)
+        return out
+
+    def heat_input(self, x: np.ndarray) -> np.ndarray:
+        """``(n, 4)`` per-corner driving intensity including the fitted
+        drive and brake terms (or the bounded force-share model)."""
+        if self.share_model or self.fixed_share:
+            sp = self.share_params(x)
+            q = np.zeros((len(self.g2), 4))
+            for ci, car in enumerate(self.cars):
+                rows = self.car_idx == ci
+                if not rows.any() or car not in sp:
+                    continue
+                for j, c in enumerate(CORNERS):
+                    q[rows, j] = share_heat_rate(
+                        sp[car],
+                        self.acc["lat_pos"][rows],
+                        self.acc["lat_neg"][rows],
+                        self.acc["long_pos"][rows],
+                        self.acc["long_neg"][rows],
+                        self.v[rows],
+                        c,
+                    )
+            return q
+        q = self.q4
+        d = self.drive_coef(x)
+        cb = self.brake_coef(x)
+        if d:
+            q = (
+                q
+                + np.array([d.get(c, 0.0) for c in self.cars])[self.car_idx][:, None]
+                * self.q4_drive
+            )
+        if cb:
+            q = (
+                q
+                + np.array([cb.get(c, 0.0) for c in self.cars])[self.car_idx][:, None]
+                * self.q4_brake
+            )
+        return np.asarray(q)
+
+    def observed(self, x: np.ndarray) -> np.ndarray:
+        """The gas temperature observations, corrected for the speed effect
+        on the pressure reading when ``v_corr`` is on."""
+        if not self.v_corr and not self.fixed_kappa:
+            return self.obs
+        kap = self.kappa(x)
+        k = np.array([kap.get(c, 0.0) for c in self.cars])[self.car_idx]
+        f = (1.0 + k[:, None] * self.v[:, None] ** 2) / (1.0 + k[:, None] * self.v_anchor**2)
+        return np.asarray((self.obs + T_ZERO_C_TO_K) * f - T_ZERO_C_TO_K)
+
+    def _cool_names(self) -> list[str]:
+        if self.cool_mode is None:
+            return []
+        if self.cool_mode == "speed":
+            return ["m|v"]
+        if self.cool_mode == "speed_axle":
+            return ["m|v|f*", "m|v|r*"]
+        if self.cool_mode == "speed_car":
+            return [f"m|v|{car}" for car in self.cars]
+        if self.cool_mode == "power":
+            return ["n|cool"]
+        raise ValueError(self.cool_mode)
+
+    def _cp(self, nme: str, x: np.ndarray) -> float:
+        """A cooling / sink parameter: held value or fitted (carried linearly)."""
+        if nme in self.fixed_cool:
+            return float(self.fixed_cool[nme])
+        return float(x[self.names.index(nme)])
+
+    def _sink_names(self) -> list[str]:
+        if self.fit_sun == "axle":
+            return ["s|sun|f*", "s|sun|r*"]
+        if self.fit_sun == "clear":
+            return ["s|sunclear"]
+        if self.fit_sun:
+            return ["s|sun"]
+        if self.fit_w_road == "axle":
+            return ["w|road|f*", "w|road|r*"]
+        if self.fit_w_road == "car":
+            return [f"w|road|{car}" for car in self.cars]
+        if self.fit_w_road:
+            return ["w|road"]
+        return [k for k in self.fixed_cool if k.startswith(("w|road", "s|sun"))]
+
+    def cool_params(self, x: np.ndarray) -> dict[str, float]:
+        """All cooling / sink parameters of this design by name."""
+        out = {nme: self._cp(nme, x) for nme in self._cool_names()}
+        out.update({nme: self._cp(nme, x) for nme in self._sink_names()})
+        return out
+
+    def cool_beta(self, x: np.ndarray) -> float:
+        """The forced-convection slope ``β`` of the one-slope mode (0 otherwise)."""
+        return self._cp("m|v", x) if self.cool_mode == "speed" else 0.0
+
+    def sink(self, x: np.ndarray) -> np.ndarray:
+        """``T_eff`` (rows × 4): the prepped blend, or the fitted-weight blend
+        where both sinks are known (one weight, per axle or per car)."""
+        names = self._sink_names()
+        if not names:
+            return np.repeat(self.teff[:, None], 4, axis=1)
+        if names and names[0].startswith("s|sun"):
+            if names in (["s|sun"], ["s|sunclear"]):
+                c = np.full((len(self.teff), 4), self._cp(names[0], x))
+            else:
+                c = np.tile(
+                    [self._cp("s|sun|f*", x)] * 2 + [self._cp("s|sun|r*", x)] * 2,
+                    (len(self.teff), 1),
+                )
+            known = (np.isfinite(self.tair) & np.isfinite(self.sun))[:, None]
+            return np.asarray(
+                np.where(known, self.tair[:, None] + c * self.sun[:, None], self.teff[:, None])
+            )
+        if names == ["w|road"]:
+            w = np.full((len(self.teff), 4), self._cp("w|road", x))
+        elif "w|road|f*" in names:
+            w = np.tile(
+                [self._cp("w|road|f*", x)] * 2 + [self._cp("w|road|r*", x)] * 2, (len(self.teff), 1)
+            )
+        else:
+            per_car = np.array([self._cp(f"w|road|{car}", x) for car in self.cars])[self.car_idx]
+            w = np.repeat(per_car[:, None], 4, axis=1)
+        known = (np.isfinite(self.tair) & np.isfinite(self.troad))[:, None]
+        blend = self.tair[:, None] + w * (self.troad - self.tair)[:, None]
+        return np.asarray(np.where(known, blend, self.teff[:, None]))
+
+    def cooling_rates(self, x: np.ndarray, b: np.ndarray) -> np.ndarray:
+        """``b`` (rows × 4) scaled by the speed-dependent convection factor
+        of the active mode."""
+        if self.cool_mode == "speed":
+            return np.asarray(b * cooling_factor(self.v, self._cp("m|v", x))[:, None])
+        if self.cool_mode == "speed_axle":
+            out = b.copy()
+            out[:, :2] *= cooling_factor(self.v, self._cp("m|v|f*", x))[:, None]
+            out[:, 2:] *= cooling_factor(self.v, self._cp("m|v|r*", x))[:, None]
+            return out
+        if self.cool_mode == "speed_car":
+            betas = np.array([self._cp(f"m|v|{car}", x) for car in self.cars])[self.car_idx]
+            return np.asarray(b * cooling_factor(self.v, betas)[:, None])
+        return b
+
+    def unpack(self, x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         p = dict(zip(self.names, np.exp(x)))
         n_cells = len(self.cells)
         a = np.zeros((n_cells, 4))
         b = np.zeros((n_cells, 4))
         for i, (car, cond) in enumerate(self.cells):
             for j, c in enumerate(CORNERS):
-                a[i, j] = p[f"a|{car}|{c}|{cond}"]
-                b[i, j] = p[f"b|{car}|{c}|{cond}"]
-        ct = np.ones(len(self.all_tracks))
-        for i, t in enumerate(self.all_tracks):
-            if t in self.fixed_c:
-                ct[i] = self.fixed_c[t]
-            elif t != self.anchor_track:
-                ct[i] = p[f"c|{t}"]
-        return a, b, ct
+                a_car = "*" if self.share_a == "cars" else car
+                a[i, j] = (
+                    self.fixed_a
+                    if self.fixed_a is not None
+                    else p[f"a|{a_car}|{'*' if self.share_a else c}|{cond}"]
+                )
+                b_car = "*" if self.share_b == "cars" else car
+                b[i, j] = (
+                    self.fixed_b
+                    if self.fixed_b is not None
+                    else p[f"b|{b_car}|{self._b_key(c)}|{cond}"]
+                )
+        return a, b
 
     def simulate(self, x: np.ndarray) -> np.ndarray:
-        a_t, b_t, ct = self.unpack(x)
+        a_t, b_t = self.unpack(x)
         rows = self.cell >= 0
         a = np.zeros((len(self.g2), 4))
         b = np.full((len(self.g2), 4), 1.0 / 600.0)
         a[rows] = a_t[self.cell[rows]]
         b[rows] = b_t[self.cell[rows]]
-        q = (self.g2 * ct[self.trk])[:, None]
+        b = self.cooling_rates(x, b)
+        q = self.heat_input(x)
+        if self.logp is not None:
+            q = q * np.exp(-self.p_exp(x) * self.logp)
+        teff = self.sink(x)
+        T = self._integrate(a, b, q, teff)
+        if self.cool_mode == "power":
+            n = self._cp("n|cool", x)
+            for _ in range(3):  # Picard: the gap sets the rate, the rate sets the gap
+                T = self._integrate(a, b * cooling_power_factor(T, teff, n), q, teff)
+        return T
+
+    def _integrate(
+        self, a: np.ndarray, b: np.ndarray, q: np.ndarray, teff: np.ndarray
+    ) -> np.ndarray:
         # exact per-second update, segment-wise via cumulative sums
         S = np.cumsum(b, 0)
         S_prev = S - b
         d = np.exp(-b)
-        teq = self.teff[:, None] + a * q / b
+        teq = teff + a * q / b
         s_at = np.take_along_axis(S_prev, self.seg_start, 0)
         srel_next = S - s_at
         srel = S_prev - s_at
@@ -295,128 +913,544 @@ class _Design:
 
     def residuals(self, x: np.ndarray) -> np.ndarray:
         T = self.simulate(x)
-        r: np.ndarray = (T - self.obs)[self.fin & (self.cell >= 0)[:, None]]
+        r: np.ndarray = (T - self.observed(x))[self.fin & (self.cell >= 0)[:, None]]
         return r
 
     def bounds(
-        self, b_lower: dict[tuple[str, str, str], float]
+        self,
+        b_lower: dict[tuple[str, str, str], float],
+        warm: dict[str, float] | None = None,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        # The scale of ``a`` depends on the heat-input units (G² or G²·m/s):
+        # start where a typical stint reaches ~25 K above T_eff in 400 s.
+        q_typ = float(np.mean(self.g2[self.cell >= 0])) if (self.cell >= 0).any() else 1.0
+        a0 = 25.0 / 400.0 / max(q_typ, 1e-9)
         x0, lo, hi = [], [], []
         for nme in self.names:
             kind = nme.split("|")[0]
             if kind == "a":
-                x0.append(0.08)
-                lo.append(A_BOUNDS[0])
-                hi.append(A_BOUNDS[1])
+                x0.append(a0)
+                lo.append(a0 * A_BOUNDS[0])
+                hi.append(a0 * A_BOUNDS[1])
             elif kind == "b":
                 _, car, corner, cond = nme.split("|")
-                lo_b = max(1.0 / TAU_BOUNDS_S[1], b_lower.get((car, corner, cond), 0.0))
+                group = [c for c in CORNERS if corner in ("*", c) or corner == c[0] + "*"]
+                lo_b = max(
+                    1.0 / TAU_BOUNDS_S[1], max(b_lower.get((car, c, cond), 0.0) for c in group)
+                )
                 x0.append(max(1.0 / 400.0, lo_b * 1.05))
                 lo.append(lo_b)
                 hi.append(1.0 / TAU_BOUNDS_S[0])
-            else:
-                x0.append(1.0)
-                lo.append(C_TRACK_BOUNDS[0])
-                hi.append(C_TRACK_BOUNDS[1])
-        return np.log(x0), np.log(lo), np.log(hi)
+        x0l, lol, hil = list(np.log(x0)), list(np.log(lo)), list(np.log(hi))
+        if "n|p" in self.names:  # the exponent is carried linearly
+            x0l.append(1.0)
+            lol.append(P_EXP_BOUNDS[0])
+            hil.append(P_EXP_BOUNDS[1])
+        for nme in self.names:
+            if nme.startswith("m|v"):
+                x0l.append(1.0)
+                lol.append(COOL_BETA_BOUNDS[0])
+                hil.append(COOL_BETA_BOUNDS[1])
+            elif nme == "n|cool":
+                x0l.append(1.0)
+                lol.append(COOL_EXP_BOUNDS[0])
+                hil.append(COOL_EXP_BOUNDS[1])
+            elif nme.startswith("w|road"):
+                x0l.append(0.2)
+                lol.append(W_ROAD_BOUNDS[0])
+                hil.append(W_ROAD_BOUNDS[1])
+            elif nme.startswith("s|sun"):  # K of sink offset at overhead clear sky
+                x0l.append(5.0)
+                lol.append(0.0)
+                hil.append(60.0)
+        for nme in self.names:
+            if nme.startswith("k|"):
+                x0l.append(2e-6)
+                lol.append(KAPPA_BOUNDS[0])
+                hil.append(KAPPA_BOUNDS[1])
+            elif nme.startswith("d|") or nme.startswith("cb|"):
+                x0l.append(0.5)
+                lol.append(0.0)
+                hil.append(20.0)
+            elif nme.startswith("sh|"):
+                key = nme.split("|")[2]
+                x0l.append(SHARE_INIT[key])
+                lol.append(SHARE_BOUNDS[key][0])
+                hil.append(SHARE_BOUNDS[key][1])
+        x0a, loa, hia = np.array(x0l), np.array(lol), np.array(hil)
+        if warm:
+            # Warm start (solver-space values by parameter name), clipped inside the bounds.
+            for i, nme in enumerate(self.names):
+                if nme in warm and np.isfinite(warm[nme]):
+                    x0a[i] = float(np.clip(warm[nme], loa[i] + 1e-9, hia[i] - 1e-9))
+        return x0a, loa, hia
+
+    def jac_sparsity(self) -> Any:
+        """Residual-by-parameter sparsity: a car's parameters touch only its
+        own residuals, so grouped finite differences need one evaluation per
+        parameter *slot* rather than per parameter."""
+        from scipy.sparse import lil_matrix
+
+        mask = self.fin & (self.cell >= 0)[:, None]
+        row_car = np.repeat(self.car_idx[:, None], 4, axis=1)[mask]
+        n_res, n_par = row_car.size, len(self.names)
+        S = lil_matrix((n_res, n_par), dtype=np.int8)
+        for j, nme in enumerate(self.names):
+            parts = nme.split("|")
+            car = parts[1] if len(parts) > 1 and parts[1] in self.cars else None
+            rows = np.flatnonzero(row_car == self.cars.index(car)) if car else np.arange(n_res)
+            S[rows, j] = 1
+        return S.tocsr()
 
 
-def fit_tau_and_gains(
+def lap_heat_components(stints: list[StintSeries]) -> pd.DataFrame:
+    """Per (session, stint, lap_num, corner): the lap sums of the three
+    heat-input parts (``base``, ``drive``, ``brake``; see
+    :func:`heat_input.corner_heat_parts`) and the lap's moving seconds.
+    A corner-blind stint (no geometry) carries its ``g2`` as ``base``.
+    The lap's driving intensity is ``(base + d·drive + c_b·brake) / seconds``."""
+    rows = []
+    for s in stints:
+        lap_idx = np.cumsum(s.lap_ends) - s.lap_ends  # 0-based lap index per bin
+        n_laps = int(lap_idx.max()) + 1 if len(lap_idx) else 0
+        seconds = np.bincount(lap_idx, minlength=n_laps).astype(float)
+        for j, c in enumerate(CORNERS):
+            base = s.q4[:, j] if s.q4 is not None else s.g2
+            drive = s.q4_drive[:, j] if s.q4_drive is not None else np.zeros_like(base)
+            brake = s.q4_brake[:, j] if s.q4_brake is not None else np.zeros_like(base)
+            b_sum = np.bincount(lap_idx, weights=base, minlength=n_laps)
+            d_sum = np.bincount(lap_idx, weights=drive, minlength=n_laps)
+            k_sum = np.bincount(lap_idx, weights=brake, minlength=n_laps)
+            for k in range(n_laps):
+                rows.append(
+                    {
+                        "session_id": s.session_id,
+                        "stint_id": s.stint_id,
+                        "lap_num": s.lap_lo + k,
+                        "corner": c,
+                        "base": float(b_sum[k]),
+                        "drive": float(d_sum[k]),
+                        "brake": float(k_sum[k]),
+                        "seconds": float(seconds[k]),
+                    }
+                )
+    return pd.DataFrame(
+        rows,
+        columns=[
+            "session_id",
+            "stint_id",
+            "lap_num",
+            "corner",
+            "base",
+            "drive",
+            "brake",
+            "seconds",
+        ],
+    )
+
+
+def lap_heat_frame(
+    components: pd.DataFrame,
+    drive_by_car: dict[str, float],
+    brake_by_car: dict[str, float],
+    car_by_session: dict[str, str],
+) -> pd.DataFrame:
+    """Wide per-lap frame ``q_lap_{corner}`` (driving intensity per corner,
+    units of the fit's q) from :func:`lap_heat_components`."""
+    if components.empty:
+        return pd.DataFrame(columns=["session_id", "stint_id", "lap_num"])
+    df = components.copy()
+    car = df["session_id"].map(car_by_session)
+    d = car.map(drive_by_car).fillna(0.0).to_numpy(dtype=float)
+    cb = car.map(brake_by_car).fillna(0.0).to_numpy(dtype=float)
+    sec = df["seconds"].to_numpy(dtype=float)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        df["q_lap"] = np.where(
+            sec > 0,
+            (df["base"] + d * df["drive"] + cb * df["brake"]) / np.maximum(sec, 1e-9),
+            np.nan,
+        )
+    wide = df.pivot_table(
+        index=["session_id", "stint_id", "lap_num"],
+        columns="corner",
+        values="q_lap",
+        aggfunc="first",
+    )
+    wide.columns = [f"q_lap_{c}" for c in wide.columns]
+    return wide.reset_index()
+
+
+@dataclass
+class PhysicalFit:
+    """Result of :func:`fit_physical`: the schema-v5 production model."""
+
+    tau: dict[tuple[str, str, str], Any]  # (car, corner, cond) -> FitParam seconds
+    k: dict[tuple[str, str, str], Any]  # (car, corner, cond) -> FitParam K per unit q
+    n_samples: dict[tuple[str, str, str], int]
+    kappa: dict[str, float]
+    share: dict[str, ShareParams]  # per car: g_transfer fitted (+ the car facts; efficiencies 1)
+    facts: dict[str, CarFacts]
+    lap_q: pd.DataFrame  # per (session, stint, lap_num): q_lap_{corner}
+    cost_dry: float
+
+
+def lap_heat_share(stints: list[StintSeries], share: dict[str, ShareParams]) -> pd.DataFrame:
+    """Per (session, stint, lap_num): the mean per-corner driving intensity
+    ``q_lap_{corner}`` (G·m/s) of each lap under the share model."""
+    rows = []
+    for s in stints:
+        p = share.get(s.car)
+        if p is None or s.lat_pos is None:
+            continue
+        lap_idx = np.cumsum(s.lap_ends) - s.lap_ends
+        n_laps = int(lap_idx.max()) + 1 if len(lap_idx) else 0
+        seconds = np.bincount(lap_idx, minlength=n_laps).astype(float)
+        qs = {
+            c: np.bincount(
+                lap_idx,
+                weights=share_heat_rate(
+                    p, s.lat_pos, s.lat_neg, s.long_pos, s.long_neg, s.v, c  # type: ignore[arg-type]
+                ),
+                minlength=n_laps,
+            )
+            for c in CORNERS
+        }
+        for k in range(n_laps):
+            if seconds[k] <= 0:
+                continue
+            rows.append(
+                {
+                    "session_id": s.session_id,
+                    "stint_id": s.stint_id,
+                    "lap_num": s.lap_lo + k,
+                    **{f"q_lap_{c}": float(qs[c][k] / seconds[k]) for c in CORNERS},
+                }
+            )
+    cols = ["session_id", "stint_id", "lap_num"] + [f"q_lap_{c}" for c in CORNERS]
+    return pd.DataFrame(rows, columns=cols)
+
+
+def fit_physical(
     root: Path,
     laps_for_fit: pd.DataFrame,
     *,
-    anchor_track: str,
-    min_laps_for_fit: int = 30,
-) -> tuple[
-    dict[tuple[str, str, str], Any],
-    dict[tuple[str, str, str, str], Any],
-    dict[tuple[str, str, str, str], int],
-]:
-    """Per-second fit. Returns ``(tau_by_car_corner_cond, bucket_gains,
-    bucket_n_samples)`` in the same shapes as Pass 1 (FitParam values)."""
+    facts: dict[str, CarFacts] | None = None,
+) -> PhysicalFit:
+    """The production fit (schema v5): ``q_i = V·|F_i|`` with the corner's
+    force from bounded shares of the car's accelerations (one lateral
+    transfer scale ``g_transfer`` fitted per car; weight split and brake
+    bias from :data:`CAR_FACTS`; braking and drive force heat exactly like
+    cornering force — the efficiencies are 1, not fitted: the ablation of
+    2026-10-09 showed fitted efficiencies absorb circuit-specific braking
+    and predict worse on an unseen circuit), one gain per (car, condition),
+    cooling per (car, axle, condition), the speed-pressure constant κ per
+    car, and **no track constants**."""
     from .warmup_table import FitParam
 
-    stints = build_stint_series(root, laps_for_fit)
+    facts_all = dict(CAR_FACTS)
+    facts_all.update(facts or {})
+    stints = build_stint_series(root, laps_for_fit, PHYSICAL_HEAT_INPUT)
     if not stints:
-        return {}, {}, {}
-    tracks = sorted({s.track for s in stints})
-    if anchor_track not in tracks:
-        tracks = [anchor_track] + tracks
-    # Which (car, condition) cells have enough data to fit on their own.
+        return PhysicalFit({}, {}, {}, {}, {}, {}, pd.DataFrame(), 0.0)
+    cars = sorted({s.car for s in stints})
+    used = {car: facts_all.get(car, DEFAULT_CAR_FACTS) for car in cars}
+    share_fixed = {
+        car: {
+            "p_f": f.p_f,
+            "beta0": f.beta0,
+            "beta1": 0.0,
+            "g_x_transfer": float("inf"),
+            "eps_drive": 1.0,
+            "eps_brake": 1.0,
+        }
+        for car, f in used.items()
+    }
+    cf = fit_cells(
+        stints,
+        v_corr=True,
+        share_a=True,
+        share_b="axle",
+        share_model=True,
+        share_fixed=share_fixed,
+        share_tie_gc=True,
+        driven_by_car={car: f.driven for car, f in used.items()},
+    )
+    scored: dict[tuple[str, str, str], int] = {}
+    for s in stints:
+        for j, c in enumerate(CORNERS):
+            if s.anchor_idx[j] >= 0:
+                scored[(s.car, c, s.condition)] = scored.get((s.car, c, s.condition), 0) + s.n_laps
+    tau: dict[tuple[str, str, str], Any] = {}
+    k: dict[tuple[str, str, str], Any] = {}
+    for (car, c, cond), (a_v, b_v) in cf.ab.items():
+        n = scored.get((car, c, cond), 0)
+        tau[(car, c, cond)] = FitParam(value=1.0 / b_v, stderr=0.0, n_samples=n)
+        k[(car, c, cond)] = FitParam(value=a_v / b_v, stderr=0.0, n_samples=n)
+    logger.info(
+        "physical fit: %d stints, kappa %s, shares %s",
+        len(stints),
+        cf.kappa,
+        {c: round(p.g_transfer_front, 2) for c, p in cf.share.items()},
+    )
+    return PhysicalFit(
+        tau=tau,
+        k=k,
+        n_samples=scored,
+        kappa=dict(cf.kappa),
+        share=dict(cf.share),
+        facts=used,
+        lap_q=lap_heat_share(stints, cf.share),
+        cost_dry=cf.cost_dry,
+    )
+
+
+def stint_speed_terms(root: Path, laps_for_fit: pd.DataFrame) -> pd.DataFrame:
+    """Per (session, stint, lap_num): the speed over the lap's last rolling
+    second (``speed_end_ms``, where ``tpms_press_{c}_end`` is read) and per
+    corner the speed at the stint anchor (``speed_anchor_{c}_ms``), for the
+    speed-pressure correction of lap-level observables."""
+    rows = []
+    for key, grp in laps_for_fit.groupby(["session_id", "stint_id"], sort=False):
+        sid, stint = str(key[0]), int(grp["stint_id"].iloc[0])  # type: ignore[index]
+        ts = _session_timeseries(str(root), sid)
+        if ts is None:
+            continue
+        lap_nums = [int(x) for x in grp["lap_num"]]
+        binned = _bin_stint(ts, lap_nums)
+        if binned is None:
+            continue
+        v = binned["v"]
+        ends = np.flatnonzero(binned["lap_end"])
+        lo = min(lap_nums)
+        first = grp.iloc[0]
+        anchors = {}
+        for c in CORNERS:
+            ta = first.get(f"t_anchor_{c}")
+            if ta is None or pd.isna(ta):
+                anchors[c] = np.nan
+            else:
+                i = min(max(int(np.ceil(float(ta))), 0), len(v) - 1)
+                anchors[c] = float(v[i])
+        for k, e in enumerate(ends):
+            rows.append(
+                {
+                    "session_id": sid,
+                    "stint_id": stint,
+                    "lap_num": lo + k,
+                    "speed_end_ms": float(v[e]),
+                    **{f"speed_anchor_{c}_ms": anchors[c] for c in CORNERS},
+                }
+            )
+    cols = ["session_id", "stint_id", "lap_num", "speed_end_ms"] + [
+        f"speed_anchor_{c}_ms" for c in CORNERS
+    ]
+    return pd.DataFrame(rows, columns=cols)
+
+
+@dataclass
+class CellFit:
+    """Result of :func:`fit_cells`: per-(car, corner, condition) ``(a, b)`` and
+    the per-car constants."""
+
+    ab: dict[tuple[str, str, str], tuple[float, float]]
+    cost_dry: float
+    n_residuals_dry: int
+    x_by_name: dict[str, float] = field(default_factory=dict)  # dry solution, for warm starts
+    p_mode: str | None = None
+    p_exp: float = 0.0
+    cool_mode: str | None = None
+    cool_beta: float = 0.0
+    cool_params: dict[str, float] = field(default_factory=dict)  # all cooling/sink params
+    w_road: float | None = None  # fitted sink weight, None when the prepped T_eff is used
+    kappa: dict[str, float] = field(default_factory=dict)  # per car, 0 when not fitted
+    drive: dict[str, float] = field(default_factory=dict)  # per car drive-slip heat coefficient
+    brake: dict[str, float] = field(default_factory=dict)  # per car brake-power heat coefficient
+    share: dict[str, ShareParams] = field(default_factory=dict)  # per car bounded force shares
+
+    def params_for(self, car: str, corner: str, condition: str) -> tuple[float, float] | None:
+        """``(a, b)`` for the cell, falling back along the condition chain."""
+        for cond in _condition_chain(condition):
+            ab = self.ab.get((car, corner, cond))
+            if ab is not None:
+                return ab
+        return None
+
+
+def _condition_chain(condition: str) -> tuple[str, ...]:
+    if condition == "wet":
+        return ("wet", "damp", "dry")
+    if condition == "damp":
+        return ("damp", "dry")
+    return ("dry",)
+
+
+def fit_cells(
+    stints: list[StintSeries],
+    *,
+    p_mode: str | None = None,
+    p_exp: float | None = None,
+    cool_mode: str | None = None,
+    cool_beta: float | None = None,
+    v_corr: bool = False,
+    kappa: dict[str, float] | None = None,
+    share_a: bool | str = False,
+    share_b: bool | str = False,
+    drive_term: bool = False,
+    brake_term: bool = False,
+    share_model: bool = False,
+    driven_by_car: dict[str, str] | None = None,
+    share_fixed: dict[str, dict[str, float]] | None = None,
+    share_tie_gc: bool = False,
+    warm: dict[str, float] | None = None,
+    max_nfev: int = 300,
+    conditions_shared: bool = False,
+    fixed_a: float | None = None,
+    fixed_b: float | None = None,
+    fit_w_road: bool | str = False,
+    fit_sun: bool | str = False,
+    fixed_cool: dict[str, float] | None = None,
+) -> CellFit:
+    """Fit ``(a, b)`` per (car, corner, condition) on the given stints (dry
+    first; rain cells after with ``b_rain ≥ b_dry`` and the per-car
+    constants held).
+
+    ``p_mode`` enables the pressure dependence of the heat input,
+    ``q ∝ (P_ref / P)^n`` with one global exponent ``n`` fitted with the dry
+    cells (or fixed at ``p_exp``) and held for the rain cells.
+    """
+    if p_mode is not None and p_mode not in P_MODES:
+        raise ValueError(f"p_mode must be one of {P_MODES}; got {p_mode!r}")
+    if cool_mode is not None and cool_mode not in COOL_MODES:
+        raise ValueError(f"cool_mode must be one of {COOL_MODES}; got {cool_mode!r}")
+    if conditions_shared:
+        # One (a, b) per car for every condition: fit everything as "dry".
+        import dataclasses
+
+        stints = [dataclasses.replace(s, condition="dry") for s in stints]
     sess_by_cell: dict[tuple[str, str], set[str]] = {}
-    laps_by_bucket: dict[tuple[str, str, str], int] = {}
     for s in stints:
         sess_by_cell.setdefault((s.car, s.condition), set()).add(s.session_id)
-        laps_by_bucket[(s.car, s.track, s.condition)] = (
-            laps_by_bucket.get((s.car, s.track, s.condition), 0) + s.n_laps
-        )
     dry_cells = sorted(c for c in sess_by_cell if c[1] == "dry")
     rain_cells = sorted(
         c for c in sess_by_cell if c[1] != "dry" and len(sess_by_cell[c]) >= MIN_RAIN_SESSIONS
     )
-
-    fitted: dict[tuple[str, str, str], tuple[float, float]] = {}  # (car, corner, cond) -> (a, b)
-    fixed_c: dict[str, float] = {}
-    # ---- phase 1: dry cells + c_track ----
+    fitted: dict[tuple[str, str, str], tuple[float, float]] = {}
     dry_stints = [s for s in stints if s.condition == "dry"]
-    d1 = _Design(dry_stints, dry_cells, tracks, anchor_track, {}, {})
-    x0, lo, hi = d1.bounds({})
-    res = least_squares(
-        d1.residuals, x0, bounds=(lo, hi), method="trf", x_scale="jac", max_nfev=300
+    d1 = _Design(
+        dry_stints,
+        dry_cells,
+        {},
+        p_mode,
+        p_exp,
+        cool_mode,
+        cool_beta,
+        v_corr,
+        kappa,
+        share_a,
+        share_b,
+        drive_term,
+        brake_term,
+        None,
+        None,
+        share_model,
+        None,
+        driven_by_car,
+        share_fixed,
+        share_tie_gc,
+        fixed_a=fixed_a,
+        fixed_b=fixed_b,
+        fit_w_road=fit_w_road,
+        fit_sun=fit_sun,
+        fixed_cool=fixed_cool,
     )
-    a, b, ct = d1.unpack(res.x)
+    x0, lo, hi = d1.bounds({}, warm)
+    res = least_squares(
+        d1.residuals,
+        x0,
+        bounds=(lo, hi),
+        method="trf",
+        x_scale="jac",
+        max_nfev=max_nfev,
+        jac_sparsity=d1.jac_sparsity(),
+        tr_solver="lsmr",
+    )
+    a, b = d1.unpack(res.x)
+    x_by_name = dict(zip(d1.names, (float(v) for v in res.x)))
+    n_p = d1.p_exp(res.x)
+    beta = d1.cool_beta(res.x)
+    cool_fixed = d1.cool_params(res.x)
+    kap = d1.kappa(res.x)
+    drive = d1.drive_coef(res.x)
+    brake = d1.brake_coef(res.x)
+    share_fit = d1.share_params(res.x)
     for i, (car, cond) in enumerate(dry_cells):
         for j, c in enumerate(CORNERS):
             fitted[(car, c, cond)] = (float(a[i, j]), float(b[i, j]))
-    for i, t in enumerate(tracks):
-        fixed_c[t] = float(ct[i])
     logger.info(
-        "per-second fit (dry): %d stints, %d residuals, cost %.1f, c_track %s",
+        "per-second fit (dry): %d stints, %d residuals, cost %.1f",
         len(dry_stints),
         res.fun.size,
         res.cost,
-        {t: round(v, 3) for t, v in fixed_c.items()},
     )
-    # ---- phase 2: rain cells with b >= b_dry (tau_rain <= tau_dry), c_track fixed ----
     if rain_cells:
         rain_stints = [s for s in stints if (s.car, s.condition) in rain_cells]
-        d2 = _Design(rain_stints, rain_cells, tracks, anchor_track, fitted, fixed_c)
+        d2 = _Design(
+            rain_stints,
+            rain_cells,
+            fitted,
+            p_mode,
+            n_p,
+            cool_mode,
+            beta,
+            False,
+            kap,
+            share_a,
+            share_b,
+            False,
+            False,
+            drive,
+            brake,
+            False,
+            share_fit,
+            driven_by_car,
+            fixed_a=fixed_a,
+            fixed_b=fixed_b,
+            fixed_cool=cool_fixed,
+        )
         b_lower = {}
         for car, cond in rain_cells:
             for c in CORNERS:
                 dry = fitted.get((car, c, "dry"))
                 if dry is not None:
                     b_lower[(car, c, cond)] = dry[1]
-        x0, lo, hi = d2.bounds(b_lower)
+        x0, lo, hi = d2.bounds(b_lower, warm)
         res2 = least_squares(
-            d2.residuals, x0, bounds=(lo, hi), method="trf", x_scale="jac", max_nfev=300
+            d2.residuals,
+            x0,
+            bounds=(lo, hi),
+            method="trf",
+            x_scale="jac",
+            max_nfev=max_nfev,
+            jac_sparsity=d2.jac_sparsity(),
+            tr_solver="lsmr",
         )
-        a2, b2, _ = d2.unpack(res2.x)
+        a2, b2 = d2.unpack(res2.x)
         for i, (car, cond) in enumerate(rain_cells):
             for j, c in enumerate(CORNERS):
                 fitted[(car, c, cond)] = (float(a2[i, j]), float(b2[i, j]))
-
-    # ---- outputs in Pass 1 shape ----
-    tau_out: dict[tuple[str, str, str], Any] = {}
-    gains: dict[tuple[str, str, str, str], Any] = {}
-    n_samples: dict[tuple[str, str, str, str], int] = {}
-    scored_laps: dict[tuple[str, str, str], int] = {}
-    for s in stints:
-        for j, c in enumerate(CORNERS):
-            if s.anchor_idx[j] >= 0:
-                scored_laps[(s.car, c, s.condition)] = (
-                    scored_laps.get((s.car, c, s.condition), 0) + s.n_laps
-                )
-    for (car, c, cond), (a_v, b_v) in fitted.items():
-        n_cell = scored_laps.get((car, c, cond), 0)
-        tau_out[(car, c, cond)] = FitParam(value=1.0 / b_v, stderr=0.0, n_samples=n_cell)
-        k_v = a_v / b_v
-        for t in tracks:
-            n_b = laps_by_bucket.get((car, t, cond), 0)
-            if n_b < min_laps_for_fit:
-                continue
-            gains[(car, t, c, cond)] = FitParam(
-                value=k_v * fixed_c.get(t, 1.0), stderr=0.0, n_samples=n_b
-            )
-            n_samples[(car, t, c, cond)] = n_b
-    return tau_out, gains, n_samples
+    return CellFit(
+        ab=fitted,
+        cost_dry=float(res.cost),
+        n_residuals_dry=int(res.fun.size),
+        x_by_name=x_by_name,
+        p_mode=p_mode,
+        p_exp=float(n_p),
+        cool_mode=cool_mode,
+        cool_beta=float(beta),
+        cool_params=cool_fixed,
+        w_road=cool_fixed.get("w|road"),
+        kappa=kap,
+        drive=drive,
+        brake=brake,
+        share=share_fit,
+    )

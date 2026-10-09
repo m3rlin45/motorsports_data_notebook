@@ -41,11 +41,12 @@ _TS_COLUMNS = ["lap_num", "t_lap_s", "speed_ms", "lat_g", "long_g"]
 
 # One sector table per dataset root per process: the timeseries is immutable
 # during a build/CV run and sector extraction is the expensive part.
-_SECTOR_CACHE: dict[str, pd.DataFrame] = {}
+_SECTOR_CACHE: dict[tuple[str, bool], pd.DataFrame] = {}
 
 
-def compute_sector_table(root: Path) -> pd.DataFrame:
-    """Per-(session, lap, sector) time + g² from the raw timeseries.
+def compute_sector_table(root: Path, *, speed_weighted: bool = False) -> pd.DataFrame:
+    """Per-(session, lap, sector) time + g² from the raw timeseries
+    (``speed_weighted``: the sliding-power input ``g²·V/V_ref`` instead).
 
     Sectors are equal thirds of the lap by *distance* (integrated speed) so
     they map to the same piece of track across laps; laps without speed
@@ -53,7 +54,7 @@ def compute_sector_table(root: Path) -> pd.DataFrame:
 
     Returns columns: session_id, lap_num, lap_time_s, sector, t_s, g2_s.
     """
-    key = str(root.resolve())
+    key = (str(root.resolve()), speed_weighted)
     cached = _SECTOR_CACHE.get(key)
     if cached is not None:
         return cached
@@ -98,6 +99,8 @@ def compute_sector_table(root: Path) -> pd.DataFrame:
             sector = np.minimum((progress / total * N_SECTORS).astype(int), N_SECTORS - 1)
 
             g2 = lat * lat + lng * lng
+            if speed_weighted and "speed_ms" in lap.columns:
+                g2 = np.sqrt(g2) * speed  # |g|·V (G·m/s): the schema-v5 input
             for s in range(N_SECTORS):
                 mask = sector == s
                 t_s = float(np.sum(dt[mask]))
@@ -164,7 +167,7 @@ def _curve_for_bucket(bucket: pd.DataFrame) -> dict | None:
 
 
 def build_pace_model(
-    root: Path, laps: pd.DataFrame
+    root: Path, laps: pd.DataFrame, *, speed_weighted: bool = False
 ) -> tuple[dict[tuple[str, str, str], dict], float]:
     """Build per-bucket g²-vs-lap-time curves + the pooled fallback exponent.
 
@@ -174,7 +177,7 @@ def build_pace_model(
 
     Returns ``({(track, car, cond): curve_dict}, default_exponent)``.
     """
-    sector_tbl = compute_sector_table(root)
+    sector_tbl = compute_sector_table(root, speed_weighted=speed_weighted)
     if sector_tbl.empty:
         return {}, 3.0
 
