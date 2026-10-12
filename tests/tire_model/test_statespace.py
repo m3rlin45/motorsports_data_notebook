@@ -6,9 +6,11 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 from motorsports_data_notebook.tire_model import statespace as ss
+from motorsports_data_notebook.tire_model.cleaning import mask_stale_session_prefix
 from motorsports_data_notebook.tire_model.energy_balance import P_ATM_BAR, T_ZERO_C_TO_K
 
 CORNERS = ("fl", "fr", "rl", "rr")
@@ -54,6 +56,7 @@ def _make_stint(
     v_1hz = 15.0 + 25.0 * np.cos(2 * np.pi * t_1hz / (0.37 * LAP_S)) ** 2
     t_k = T[:-1] + T_ZERO_C_TO_K
     p = (p_start + P_ATM_BAR) * t_k / (T_START + T_ZERO_C_TO_K) / (1 + kappa * v_1hz**2) - P_ATM_BAR
+    p_true = p.copy()
     if quantise:
         p = np.round(p / 0.03) * 0.03
     rows = []
@@ -76,6 +79,15 @@ def _make_stint(
     out = root / "timeseries" / "2026-01"
     out.mkdir(parents=True, exist_ok=True)
     ts.to_parquet(out / f"{sid}.parquet")
+    # The dataset is raw and the fit masks the TPMS streams on load; the
+    # production anchor is the first *live* reading of the cleaned laps.
+    # Mirror that: anchor where the masked series becomes finite (quantised
+    # pressure sits flat for the first seconds and reads as a stale prefix).
+    masked = mask_stale_session_prefix(pa.Table.from_pandas(ts[["tpms_press_fl_bar"]]))
+    pm = masked.column("tpms_press_fl_bar").to_numpy(zero_copy_only=False)
+    k0 = int(np.argmax(np.isfinite(pm)))
+    i0 = k0 // HZ
+    t_anchor_s = float(ts["t_session_s"].iloc[k0])
     laps = pd.DataFrame(
         {
             "session_id": sid,
@@ -87,10 +99,15 @@ def _make_stint(
             "t_eff_c": T_EFF,
         }
     )
+    # The anchor is the exact (T, P) pair at that instant. A noise-free
+    # quantised series first changes exactly at a step edge, where the TPMS
+    # reading is half a quantum (0.015 bar ≈ 1.8 K) off the true pressure —
+    # a worst case the stale rule lands on by construction here, not a
+    # property of the fit under test.
     for c in CORNERS:
-        laps[f"t_anchor_{c}"] = 0.0
-        laps[f"t_start_{c}"] = T_START
-        laps[f"p_start_{c}"] = float(p[0])  # the anchor is the first reading (at its speed)
+        laps[f"t_anchor_{c}"] = t_anchor_s
+        laps[f"t_start_{c}"] = float(T[i0])
+        laps[f"p_start_{c}"] = float(p_true[i0])  # first live reading (at its speed)
     return laps
 
 

@@ -17,8 +17,6 @@ from motorsports_data_notebook.tire_etl.extract import (
     _build_empty_session_row,
     _extract_session_datetime_utc,
     _rename_to_canonical,
-    _stale_prefix_len,
-    mask_stale_session_prefix,
 )
 from motorsports_data_notebook.tire_etl.discovery import SessionCandidate
 
@@ -158,44 +156,6 @@ def test_session_row_error_msg_is_always_string_typed() -> None:
     assert row.schema.field("error_msg").type == pa.string()
 
 
-def test_stale_prefix_len_detects_constant_run() -> None:
-    # 4 bit-exact samples then a real change → prefix is 4.
-    assert _stale_prefix_len(np.array([2.40, 2.40, 2.40, 2.40, 2.45, 2.50])) == 4
-
-
-def test_stale_prefix_len_zero_when_data_starts_moving() -> None:
-    # Sample 1 already differs from sample 0 → no stale prefix, return 0.
-    assert _stale_prefix_len(np.array([2.40, 2.45, 2.50, 2.55])) == 0
-
-
-def test_stale_prefix_len_returns_full_size_when_all_constant() -> None:
-    arr = np.array([2.40, 2.40, 2.40, 2.40])
-    assert _stale_prefix_len(arr) == arr.size
-
-
-def test_mask_stale_session_prefix_masks_each_tpms_channel_independently() -> None:
-    # FL sleeps for 3 samples then wakes; FR is alive from the start.
-    ts = pa.table(
-        {
-            "t_lap_s": pa.array([0.0, 0.1, 0.2, 0.3, 0.4], type=pa.float32()),
-            "tpms_press_fl_bar": pa.array([2.40, 2.40, 2.40, 2.45, 2.50], type=pa.float32()),
-            "tpms_press_fr_bar": pa.array([2.30, 2.31, 2.32, 2.33, 2.34], type=pa.float32()),
-            "tpms_temp_fl_c": pa.array([30.0, 30.0, 30.0, 32.0, 34.0], type=pa.float32()),
-        }
-    )
-    out = mask_stale_session_prefix(ts)
-    fl = out.column("tpms_press_fl_bar").to_pylist()
-    assert all(v is None or v != v for v in fl[:3])  # NaN
-    assert fl[3] == pytest.approx(2.45)
-    fr = out.column("tpms_press_fr_bar").to_pylist()
-    # FR was alive from sample 0 — no mask applied anywhere.
-    assert fr[0] == pytest.approx(2.30)
-    # FL temp also masked at the same 3-sample prefix length (per-channel).
-    temp = out.column("tpms_temp_fl_c").to_pylist()
-    assert all(v is None or v != v for v in temp[:3])
-    assert temp[3] == pytest.approx(32.0)
-
-
 def test_restint_at_pit_exits_splits_short_pit_visits() -> None:
     import pyarrow as pa
     from motorsports_data_notebook.tire_etl.extract import _restint_at_pit_exits
@@ -220,37 +180,3 @@ def test_restint_at_pit_exits_splits_short_pit_visits() -> None:
     laps3 = laps.set_column(1, "stint_id", pa.array([1, 1, 1, 2, 2, 3], type=pa.int16()))
     out3, _ = _restint_at_pit_exits(laps3, ts)
     assert out3.column("stint_id").to_pylist() == [1, 1, 1, 2, 2, 3]
-
-
-def test_stale_mask_is_per_corner_first_change_on_either_stream() -> None:
-    """One module reports a corner's pressure and temperature. As soon as
-    either stream changes the module is awake, so the other stream's
-    constant reading from that sample on is real and must not be masked."""
-    import numpy as np
-    import pyarrow as pa
-    from motorsports_data_notebook.tire_etl.extract import mask_stale_session_prefix
-
-    n = 12
-    # FL: pressure changes at sample 3, temperature only at sample 8.
-    press_fl = np.array([2.0] * 3 + [2.03] * 9)
-    temp_fl = np.array([20.0] * 8 + [21.0] * 4)
-    # RR: both change at sample 5.
-    press_rr = np.array([2.0] * 5 + [2.03] * 7)
-    temp_rr = np.array([20.0] * 5 + [21.0] * 7)
-    ts = pa.table(
-        {
-            "tpms_press_fl_bar": press_fl,
-            "tpms_temp_fl_c": temp_fl,
-            "tpms_press_rr_bar": press_rr,
-            "tpms_temp_rr_c": temp_rr,
-        }
-    )
-    out = mask_stale_session_prefix(ts)
-    fl_t = out.column("tpms_temp_fl_c").to_numpy(zero_copy_only=False)
-    fl_p = out.column("tpms_press_fl_bar").to_numpy(zero_copy_only=False)
-    # FL temperature is valid from sample 3 (pressure proved the module awake),
-    # still reading its constant 20 °C until it ticks up at sample 8.
-    assert np.isnan(fl_t[:3]).all() and np.isnan(fl_p[:3]).all()
-    assert fl_t[3] == 20.0 and fl_p[3] == 2.03
-    rr_t = out.column("tpms_temp_rr_c").to_numpy(zero_copy_only=False)
-    assert np.isnan(rr_t[:5]).all() and rr_t[5] == 21.0

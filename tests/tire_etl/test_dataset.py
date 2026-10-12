@@ -42,7 +42,6 @@ def _session_row(session_id: str, path: str, date_str: str) -> pa.Table:
             "status": ["ok"],
             "error_msg": pa.array([None], type=pa.string()),
             "n_laps": pa.array([5], type=pa.int32()),
-            "n_tire_usable_laps": pa.array([3], type=pa.int32()),
             "has_tpms": [True],
             "has_surface_temp": [False],
             "has_ambient_temp": [False],
@@ -198,3 +197,30 @@ def test_compare_manifests_by_file_group() -> None:
     assert [r["paths"] for r in d["regrouped"]] == [["/d/b.xrk", "/d/c.xrk"]]
     assert [r["paths"] for r in d["added"]] == [["/d/new.xrk"]]
     assert [r["paths"] for r in d["removed"]] == [["/d/gone.xrk"]]
+
+
+def test_upsert_with_no_laps_drops_the_sessions_earlier_lap_rows(tmp_path: Path) -> None:
+    """A session that re-extracts as a zero-lap error must not keep the lap
+    rows an earlier run wrote for it (the writer used to skip the laps
+    partition entirely when the new extraction had no rows)."""
+    root = tmp_path
+    first = _simple_extract_result("sess_a", "/aim/2026-01-01/a.xrk", "2026-01-01")
+    upsert_session(root, first)
+    laps_path = root / "laps" / "2026-01.parquet"
+    assert pq.read_table(laps_path).num_rows == 1
+
+    errored = ExtractResult(
+        session_row=first.session_row,
+        laps_rows=pa.table({}),
+        timeseries=pa.table({}),
+        status="error",
+        error_msg="no laps",
+    )
+    upsert_session(root, errored)
+    assert pq.read_table(laps_path).num_rows == 0
+
+    # Other sessions' rows in the same partition survive.
+    other = _simple_extract_result("sess_b", "/aim/2026-01-02/b.xrk", "2026-01-02")
+    upsert_session(root, other)
+    upsert_session(root, errored)
+    assert pq.read_table(laps_path).column("session_id").to_pylist() == ["sess_b"]
