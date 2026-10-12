@@ -72,7 +72,7 @@ first and last lap of a recording as out/in and the loader drops them, so a
 one-lap file (an out-lap only) is a benign `no laps` error, a single-file
 session has one lap fewer than the dash shows, a merged restart pair loses
 one per file, and a run recorded as many one-lap fragments keeps nothing.
-The model never used those laps (`tire_usable` excludes out/in laps), but
+The model never used those laps (the training-time filters exclude in-laps), but
 `n_laps` in commit messages before 2026-10 predates this typing. The
 `pruned_sessions=` counter at the end of the extract output is the number of
 stale rows removed because merge grouping changed; non-zero is normal after
@@ -178,24 +178,36 @@ cd /home/m3rlin45/code/motorsports_data_notebook && just tire-predict-holdout --
 cd /home/m3rlin45/code/motorsports_data_notebook && just tire-predict-validate 2>&1 | tail -20
 ```
 
-**Out-laps (dataset schema v3).** The extractor keeps the out-lap
-(`lap_type = "out"`, lap 0) and the first valid TPMS reading in it is the
-stint's starting temperature. After a refresh, sanity-check the new sessions'
-out-laps: `just tire-query "SELECT session_id, lap_num, outlap_from_pit,
-moving_s, tpms_temp_fl_start FROM read_parquet('laps/*.parquet') WHERE
-is_outlap AND tire_usable ORDER BY session_id DESC LIMIT 20"` —
+**Out-laps and the cleaned table (dataset schema 4).** The committed laps
+table is raw: no TPMS masking and no `tire_usable` column. The model cleans
+it on load (`tire_model/cleaning.py`: stale-TPMS prefix and wake-up transition
+masked, per-lap TPMS summaries rebuilt, usability flags). For queries that
+need the cleaned view, materialise it first:
+`just tire-clean-laps --out "$TMPDIR/laps_clean.parquet"` and
+`read_parquet('<that path>')` in `just tire-query` (it carries date, car,
+track_canonical, tire_usable and exclude_reason). After a refresh, sanity-check
+the new sessions' out-laps there: `SELECT session_id, lap_num, outlap_from_pit,
+moving_s, tpms_temp_fl_start, tpms_press_fl_start FROM read_parquet('<path>')
+WHERE is_outlap AND tire_usable ORDER BY session_id DESC LIMIT 20` —
 `outlap_from_pit` should be true for real pit exits (file starts mid-track are
-not), and `moving_s` should be a plausible pit-exit-to-line time for the track.
+not), `moving_s` a plausible pit-exit-to-line time for the track, and the
+start pressure the cold pressure the driver set (a value 0.2+ bar above the
+following lap's start is a stale wake-up reading the mask missed).
 
-**Fit method.** Pass 1 is the per-second fit on the pressure-implied gas
-temperature by default (`tire_model/statespace.py`, docs §2.6a). Once per
-refresh also run the per-lap closed form as a cross-check,
-`just tire-predict-holdout --n-folds 5 --fit-method per_lap`, and quote both
-pooled hot-pressure MAEs; the per-second fit should stay at or below per-lap
-(2026-10 baseline 0.051 vs 0.054 bar on the every-session holdout). If
-per-lap wins by more than ~0.003 bar on a car with lots of data, something
-in the 1 Hz data changed (TPMS cadence, masking, stint clock) — look before
-retraining.
+**Fit method and the before/after baseline.** Pass 1 is the per-second fit
+on the pressure-implied gas temperature (`tire_model/statespace.py`, docs
+§2.6a); the per-lap closed form was removed with schema v5, so there is no
+`--fit-method` cross-check any more. The apples-to-apples comparison is the
+same 5-fold holdout run on the committed dataset: export it with
+`sl archive -r . -I 'data/tire_dataset/**' <scratch>` and run
+`uv run python -m motorsports_data_notebook.tire_model.cli holdout --n-folds 5 --dataset-root <scratch>/data/tire_dataset`.
+Quote both pooled and per-car hot-pressure MAEs. When a car's MAE moves by
+more than ~0.01 bar (or ~1 °C) and that car got only a handful of new laps,
+find the session: group the holdout frame's residuals by session and corner
+(`validate._collect_holdout_frame` returns them) for both dataset roots and
+look for one session carrying a large bias — a bad stint anchor (stale TPMS
+wake-up reading, mid-track file start) looks like +30 to +50 °C on every
+lap of one stint, and the fix belongs in the extractor, not the model.
 
 **Rain buckets.** Damp and wet τ/K are fitted per condition with
 τ_rain ≤ τ_dry bounded inside the fit, and only when a (car, track) rain

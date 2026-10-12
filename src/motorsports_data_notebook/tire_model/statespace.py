@@ -39,6 +39,7 @@ import pyarrow.parquet as pq
 from scipy.optimize import least_squares  # type: ignore[import-untyped]
 
 from ..tire_etl.paths import timeseries_dir
+from .cleaning import mask_stale_session_prefix
 from .energy_balance import P_ATM_BAR, T_ZERO_C_TO_K, speed_pressure_factor
 from .heat_input import (
     BUILTIN_GEOMETRY,
@@ -162,10 +163,14 @@ def _session_timeseries(root_str: str, session_id: str) -> pd.DataFrame | None:
         return None
     cols = ["lap_num", "sample_idx", "t_session_s", "speed_ms", "lat_g", "long_g"]
     cols += [f"tpms_press_{c}_bar" for c in CORNERS]
+    # Temperatures are read only so the per-corner wake rule can see both
+    # streams of a module; the fit itself uses the pressure.
+    cols += [f"tpms_temp_{c}_c" for c in CORNERS]
     cols += [f"surf_temp_{c}_ch{i}_c" for c in CORNERS for i in range(1, 9)]
     schema = pq.read_schema(files[0])
     cols = [c for c in cols if c in schema.names]
-    df: pd.DataFrame = pq.read_table(files[0], columns=cols).to_pandas()
+    # The dataset is raw: mask the stale TPMS prefix / wake-up step here.
+    df: pd.DataFrame = mask_stale_session_prefix(pq.read_table(files[0], columns=cols)).to_pandas()
     return df
 
 
