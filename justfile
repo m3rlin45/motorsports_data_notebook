@@ -36,8 +36,12 @@ clean:
 
 # AIM files are routinely 10-90 MB; Tornado's default websocket limit (10 MiB)
 # silently drops larger uploads from the file picker, so raise it.
+# use_redirect_file is off so Jupyter opens the http URL directly: under WSL,
+# xdg-open routes URLs to wslview (the Windows browser) but hands the default
+# redirect .html file to whatever claims text/html locally (an editor, say).
 run:
-    uv run jupyter lab workspace/ --ServerApp.tornado_settings='{"websocket_max_message_size": 268435456}'
+    uv run jupyter lab workspace/ --ServerApp.use_redirect_file=False \
+        --ServerApp.tornado_settings='{"websocket_max_message_size": 268435456}'
 
 run-clean: clean run
 
