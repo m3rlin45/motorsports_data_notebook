@@ -899,6 +899,104 @@ class TestLoadIbtSession:
 # ============================================================================
 
 
+class TestSessionPickerLapLabels:
+    """The lap dropdown labels out/in laps from ``lap_type``, never by position."""
+
+    @staticmethod
+    def _picker_with_laps(laps, mock_ipywidgets_session):
+        picker = SessionPicker.__new__(SessionPicker)
+        picker._log = None
+        picker._laps = laps
+        picker._lap_dropdown = mock_ipywidgets_session.Dropdown()
+        picker._lap_status = mock_ipywidgets_session.HTML()
+        picker._update_lap_dropdown()
+        return picker
+
+    def test_full_laps_only_get_no_positional_annotations(self, mock_ipywidgets_session):
+        """Mirrors a session loaded with the default lap_types=("full",): the
+        real out/in laps are gone, so the first/last rows are ordinary laps and
+        the last one may well be the fastest."""
+        laps = pd.DataFrame(
+            {
+                "num": [1, 2, 3, 4],
+                "start_time": [0, 60000, 120000, 180000],
+                "end_time": [60000, 120000, 180000, 240000],
+                "lap_type": ["full"] * 4,
+                "lap_time": pd.to_timedelta([78.4, 78.0, 77.6, 77.2], unit="s"),
+            }
+        )
+        with patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets_session}):
+            picker = self._picker_with_laps(laps, mock_ipywidgets_session)
+
+        labels = [label for label, _ in picker._lap_dropdown.options]
+        assert not any("out lap" in label for label in labels)
+        assert not any("in lap" in label for label in labels)
+        assert "fastest" in labels[3]
+        assert picker._lap_dropdown.value == 3
+
+    def test_typed_out_in_laps_are_annotated_and_never_fastest(self, mock_ipywidgets_session):
+        laps = pd.DataFrame(
+            {
+                "num": [0, 1, 2, 3],
+                "start_time": [0, 60000, 120000, 180000],
+                "end_time": [60000, 120000, 180000, 240000],
+                "lap_type": ["out", "full", "full", "in"],
+                # the in lap is a cool-down shortcut and comes out "fastest" by time
+                "lap_time": pd.to_timedelta([90.0, 78.0, 77.5, 40.0], unit="s"),
+            }
+        )
+        with patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets_session}):
+            picker = self._picker_with_laps(laps, mock_ipywidgets_session)
+
+        labels = [label for label, _ in picker._lap_dropdown.options]
+        assert "out lap" in labels[0]
+        assert "in lap" in labels[3]
+        assert "fastest" in labels[2]
+        assert "fastest" not in labels[3]
+        assert picker._lap_dropdown.value == 2
+
+    def test_untyped_table_has_no_out_in_annotations(self, mock_ipywidgets_session):
+        laps = pd.DataFrame(
+            {
+                "num": [1, 2, 3],
+                "start_time": [0, 60000, 120000],
+                "end_time": [60000, 120000, 180000],
+                "lap_time": pd.to_timedelta([80.0, 79.0, 78.0], unit="s"),
+            }
+        )
+        with patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets_session}):
+            picker = self._picker_with_laps(laps, mock_ipywidgets_session)
+
+        labels = [label for label, _ in picker._lap_dropdown.options]
+        assert not any(
+            "lap)" in label and ("out" in label or "in lap" in label) for label in labels
+        )
+        assert "fastest" in labels[2]
+
+
+class TestLapPickerLapType:
+    """LapPicker honours lap_type the same way."""
+
+    def test_in_lap_annotated_and_excluded_from_fastest(self, mock_ipywidgets):
+        laps = pd.DataFrame(
+            {
+                "num": [1, 2, 3],
+                "start_time": [0, 60000, 120000],
+                "end_time": [60000, 120000, 180000],
+                "lap_type": ["full", "full", "in"],
+                "lap_time": pd.to_timedelta([78.0, 77.5, 40.0], unit="s"),
+            }
+        )
+        with patch.dict("sys.modules", {"ipywidgets": mock_ipywidgets}):
+            LapPicker(laps)
+            call_kwargs = mock_ipywidgets.Dropdown.call_args[1]
+
+        options = call_kwargs["options"]
+        assert "in lap" in options[2][0]
+        assert "fastest" in options[1][0]
+        assert call_kwargs["value"] == 1
+
+
 class TestSessionPickerGetFileType:
     """Tests for SessionPicker.get_file_type method."""
 
