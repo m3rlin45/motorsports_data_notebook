@@ -36,10 +36,21 @@ clean:
 
 # AIM files are routinely 10-90 MB; Tornado's default websocket limit (10 MiB)
 # silently drops larger uploads from the file picker, so raise it.
-run:
-    uv run jupyter lab workspace/ --ServerApp.tornado_settings='{"websocket_max_message_size": 268435456}'
+# IP is the bind address; pass the WSL VM address (`hostname -I`) when
+# Windows localhost forwarding is wedged.
+# Under WSL the URL is opened in the Windows browser via scripts/open_browser.sh
+# (xdg-open's text/html handler is not necessarily a browser); use_redirect_file
+# is off so the browser gets the http URL rather than a Linux-side HTML file.
+run IP="localhost":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -z "${BROWSER:-}" ] && command -v wslview >/dev/null 2>&1; then
+        export BROWSER="{{justfile_directory()}}/scripts/open_browser.sh"
+    fi
+    uv run jupyter lab workspace/ --ip={{IP}} --ServerApp.use_redirect_file=False \
+        --ServerApp.tornado_settings='{"websocket_max_message_size": 268435456}'
 
-run-clean: clean run
+run-clean IP="localhost": clean (run IP)
 
 # Tire ETL pipeline — extract per-sample telemetry into data/tire_dataset/
 tire-etl *ARGS:
