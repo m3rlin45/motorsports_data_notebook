@@ -95,11 +95,56 @@ class FileUpload:
         return self._default_file
 
 
+def _find_fastest_lap_index(laps: pd.DataFrame) -> Any:
+    """Index of the fastest lap, preferring typed full laps.
+
+    When the loader provides a ``lap_type`` column (libxrk ≥ 0.13), only
+    ``"full"`` laps compete; out/in laps are never the "fastest". Without
+    the column every row is a candidate — ``clean_laps`` has already removed
+    fractional laps, and the loader drops out/in laps by default.
+    """
+    if len(laps) == 0:
+        return None
+    candidates = laps
+    if "lap_type" in laps.columns:
+        full = laps[laps["lap_type"] == "full"]
+        if len(full) > 0:
+            candidates = full
+    return candidates["lap_time"].idxmin()
+
+
+def _build_lap_options(laps: pd.DataFrame) -> tuple[list[tuple[str, Any]], Any]:
+    """Build ``(label, index)`` dropdown options and the fastest lap's index.
+
+    Labels carry "out lap" / "in lap" annotations only when the ``lap_type``
+    column says so; the picker never infers them from a lap's position in the
+    table, because the real out/in laps are usually filtered out before the
+    table reaches the widget.
+    """
+    fastest_idx = _find_fastest_lap_index(laps)
+    has_type = "lap_type" in laps.columns
+    options: list[tuple[str, Any]] = []
+    for idx, row in laps.iterrows():
+        label = f"Lap {int(row['num'])}: {format_lap_time(row['lap_time'])}"
+        annotations = []
+        if has_type and row["lap_type"] == "out":
+            annotations.append("out lap")
+        if has_type and row["lap_type"] == "in":
+            annotations.append("in lap")
+        if len(laps) > 1 and idx == fastest_idx:
+            annotations.append("fastest")
+        if annotations:
+            label += f" ({', '.join(annotations)})"
+        options.append((label, idx))
+    return options, fastest_idx
+
+
 class LapPicker:
     """Dropdown widget for selecting a lap to analyze.
 
     Provides a dropdown interface for lap selection with formatted lap times.
-    The fastest lap (excluding first/last pit laps) is pre-selected by default.
+    The fastest full lap is pre-selected by default. Out/in laps are
+    annotated when the laps table carries a ``lap_type`` column.
 
     Parameters
     ----------
@@ -158,39 +203,12 @@ class LapPicker:
 
     def _build_options(self) -> list[tuple[str, Any]]:
         """Build dropdown options with formatted labels."""
-        options: list[tuple[str, Any]] = []
-        fastest_idx = self._find_fastest_lap_index()
-
-        for idx, row in self._laps.iterrows():
-            lap_num = int(row["num"])
-            lap_time_str = format_lap_time(row["lap_time"])
-
-            # Build label with annotations
-            label = f"Lap {lap_num}: {lap_time_str}"
-
-            # Add annotations for special laps
-            annotations = []
-            if len(self._laps) > 1 and idx == fastest_idx:
-                annotations.append("fastest")
-
-            if annotations:
-                label += f" ({', '.join(annotations)})"
-
-            options.append((label, idx))
-
+        options, _ = _build_lap_options(self._laps)
         return options
 
     def _find_fastest_lap_index(self) -> Any:
-        """Find the index of the fastest lap.
-
-        The laps table is pre-cleaned by ``clean_laps`` which removes
-        incomplete/fractional laps, so all remaining laps are valid candidates.
-        """
-        if len(self._laps) == 0:
-            return None
-
-        fastest_idx = self._laps["lap_time"].idxmin()
-        return fastest_idx
+        """Find the index of the fastest lap (see ``_find_fastest_lap_index``)."""
+        return _find_fastest_lap_index(self._laps)
 
     def _get_default_lap_index(self) -> Any:
         """Get the default lap index to select."""
@@ -455,29 +473,7 @@ class SessionPicker:
             self._lap_dropdown.disabled = True
             return
 
-        # Build options
-        options: list[tuple[str, Any]] = []
-        n_laps = len(self._laps)
-        fastest_idx = self._find_fastest_middle_lap_index()
-
-        for idx, row in self._laps.iterrows():
-            lap_num = int(row["num"])
-            lap_time_str = format_lap_time(row["lap_time"])
-
-            label = f"Lap {lap_num}: {lap_time_str}"
-
-            annotations = []
-            if idx == self._laps.index[0]:
-                annotations.append("out lap")
-            if idx == self._laps.index[-1]:
-                annotations.append("in lap")
-            if n_laps > 2 and idx == fastest_idx:
-                annotations.append("fastest")
-
-            if annotations:
-                label += f" ({', '.join(annotations)})"
-
-            options.append((label, idx))
+        options, fastest_idx = _build_lap_options(self._laps)
 
         # Update dropdown
         self._lap_dropdown.options = options
@@ -486,13 +482,6 @@ class SessionPicker:
 
         # Update status
         self._update_lap_status()
-
-    def _find_fastest_middle_lap_index(self) -> Any:
-        """Find the index of the fastest lap, excluding first and last."""
-        if self._laps is None or len(self._laps) <= 2:
-            return None
-        middle_laps = self._laps.iloc[1:-1]
-        return middle_laps["lap_time"].idxmin()
 
     def _update_lap_status(self) -> None:
         """Update the lap status label."""
