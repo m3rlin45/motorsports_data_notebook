@@ -34,8 +34,10 @@ check: lint typecheck lint-notebooks typecheck-notebooks test
 clean:
     rm -rf workspace/* && mkdir -p workspace/en workspace/ja workspace/data && cp workspace_template/en/*.ipynb workspace/en/ && cp workspace_template/ja/*.ipynb workspace/ja/ && cp workspace_template/data/*.xrz workspace/data/
 
+# AIM files are routinely 10-90 MB; Tornado's default websocket limit (10 MiB)
+# silently drops larger uploads from the file picker, so raise it.
 run:
-    uv run jupyter lab workspace/
+    uv run jupyter lab workspace/ --ServerApp.tornado_settings='{"websocket_max_message_size": 268435456}'
 
 run-clean: clean run
 
