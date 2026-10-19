@@ -18,8 +18,13 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      # Pin the workload set instead of taking the newest advertised one: a set
+      # can be announced before its manifests are indexed on nuget.org (that race
+      # broke CI). The set must come from the SDK's feature band (10.0.4xx), so
+      # bump it deliberately alongside SDK updates. --skip-manifest-update is not
+      # an option: the SDK's bundled Android manifest references unpublished packs.
       - name: Install Android workload
-        run: dotnet workload install android
+        run: dotnet workload install android --version 10.0.402.1
 
       - name: Install uv
         uses: astral-sh/setup-uv@v3
@@ -116,8 +121,13 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      # Pin the workload set instead of taking the newest advertised one: a set
+      # can be announced before its manifests are indexed on nuget.org (that race
+      # broke CI). The set must come from the SDK's feature band (10.0.4xx), so
+      # bump it deliberately alongside SDK updates. --skip-manifest-update is not
+      # an option: the SDK's bundled Android manifest references unpublished packs.
       - name: Install Android workload
-        run: dotnet workload install android
+        run: dotnet workload install android --version 10.0.402.1
 
       - name: Install uv
         uses: astral-sh/setup-uv@v3
