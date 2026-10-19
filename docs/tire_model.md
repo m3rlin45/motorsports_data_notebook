@@ -263,6 +263,35 @@ through the lag, resolves it the other way. The same windows show cooling
 3–5× slower below 15 m/s, but those are < 1 % of the seconds (pit lane),
 which is why the fitted speed slope cannot see them.
 
+### 1.0a Raw dataset, training-time cleaning (schema 4, 2026-10-12)
+
+The extractor writes what the logger recorded, downsampled to the 1 Hz
+reference channel, with laps and stints split, the circuit resolved from
+GPS, channels selected and renamed, and a raw per-lap summary. Nothing in
+`data/tire_dataset/` is masked, filtered or judged. Every rule about which
+samples and laps the model learns from lives in
+`src/motorsports_data_notebook/tire_model/cleaning.py` and runs when the
+model loads the data (`warmup_table._load_filtered_laps`, the holdout and
+notes-validation loaders, `statespace._session_timeseries`):
+
+1. **Stale TPMS prefix and wake-up transition.** A module asleep at
+   roll-out repeats its stored value bit-exactly until it wakes; the first
+   change on either of a corner's two streams proves the module awake, and
+   the one or two resampled samples blended across the step are masked too.
+2. **Per-lap TPMS summaries rebuilt** from the masked streams, so an
+   out-lap's `tpms_*_start` — the stint anchor — is the first live reading.
+3. **Lap usability** (`tire_usable` / `exclude_reason`): out-laps need
+   60 s of rolling time, in-laps are excluded, laps shorter than 30 s or
+   slower than 1.4× the stint's best are dropped, and a lap needs a TPMS
+   pressure range above 0.003 bar on at least one corner.
+
+A cleaning change is therefore a code change plus a retrain; the dataset
+is re-extracted only when the extractor's own output (lap splitting,
+channels, downsampling) changes. `just tire-clean-laps` materialises the
+cleaned table for DuckDB queries. Before schema 4 the extractor applied
+steps 1 and 3 and committed the result, which is why the 2026-10 anchor
+fix first looked like a dataset rebuild.
+
 ## 2. Modeling approach
 
 ### 2.1 Energy balance on a lumped tire mass
@@ -370,7 +399,14 @@ is therefore a gas temperature and reads lower than the dash early in a
 stint; the hot *pressure* is the number to trust. Pressure is reported in
 0.03 bar steps (≈ 3.6 K of gas temperature at 2.5 bar absolute), so the
 per-lap target is noisier than the TPMS temperature; the 1 Hz stale-prefix
-mask and per-corner wake rule (§2.8) keep the anchor clean.
+mask and per-corner wake rule keep the anchor clean. The resample's
+interpolated sample on the wake-up step is masked as well: a module that
+fell asleep hot on an earlier run reports that stored value until it
+wakes, and the blended sample between it and the first live reading had
+been taken as the anchor — 0.4–0.5 bar high on the Sodegaura 2026-10-10
+rear axle, +43 °C on every lap of that stint. Since dataset schema 4 all
+of this runs at training time (`tire_model/cleaning.py`, §1.0a), not in
+the extractor.
 
 ### 2.2a′ The reading at speed: the speed-pressure correction (2026-10-08)
 

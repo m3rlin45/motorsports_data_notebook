@@ -169,6 +169,20 @@ def main(argv: list[str] | None = None) -> int:
     )
     _add_dataset_root_arg(p_infer)
 
+    p_clean = sub.add_parser(
+        "clean-laps",
+        help=(
+            "Write the cleaned laps table (masked TPMS summaries, tire_usable / "
+            "exclude_reason, session date/car/track) to a parquet file for ad-hoc queries."
+        ),
+    )
+    _add_dataset_root_arg(p_clean)
+    p_clean.add_argument(
+        "--out",
+        default=None,
+        help="Output parquet path (default: <tmp>/tire_laps_clean.parquet).",
+    )
+
     p_holdout = sub.add_parser(
         "holdout",
         help="Held-out validation: exclude sessions from training, predict per-lap T_hot, report residuals.",
@@ -217,6 +231,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_audit_sensors(args)
     if args.cmd == "infer-compounds":
         return _cmd_infer_compounds(args)
+    if args.cmd == "clean-laps":
+        return _cmd_clean_laps(args)
     parser.print_help()
     return 2
 
@@ -428,6 +444,33 @@ def _cmd_holdout(args: argparse.Namespace) -> int:
         n_folds=args.n_folds,
         inputs=args.inputs,
     )
+
+
+def _cmd_clean_laps(args: argparse.Namespace) -> int:
+    """Materialise the training-side cleaning for DuckDB / notebook queries."""
+    import tempfile
+    from pathlib import Path
+
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    from ..tire_etl.paths import default_dataset_root
+    from .validate import _load_sessions_and_laps
+
+    root = Path(args.dataset_root) if args.dataset_root else default_dataset_root()
+    sessions, laps = _load_sessions_and_laps(root)
+    meta_cols = [
+        c
+        for c in ("session_id", "date", "car", "track_canonical", "status", "has_tpms")
+        if c in sessions.columns
+    ]
+    out = laps.merge(sessions[meta_cols], on="session_id", how="left")
+    target = Path(args.out) if args.out else Path(tempfile.gettempdir()) / "tire_laps_clean.parquet"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    pq.write_table(pa.Table.from_pandas(out, preserve_index=False), target)
+    usable = int(out["tire_usable"].sum()) if "tire_usable" in out.columns else 0
+    print(f"clean-laps: {len(out)} laps ({usable} tire-usable) -> {target}")
+    return 0
 
 
 def _cmd_audit_sensors(args: argparse.Namespace) -> int:
