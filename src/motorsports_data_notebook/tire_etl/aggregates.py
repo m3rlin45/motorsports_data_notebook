@@ -76,9 +76,9 @@ def compute_corner_aggregates(lap_ts: pa.Table, corner: str) -> CornerTireAggreg
 
     ``lap_ts`` is a wide timeseries table with columns like
     ``tpms_press_fl_kpa``, ``tpms_temp_fl_c``, ``surf_temp_fl_mean_c``, and
-    ``t_lap_s``. Stale TPMS samples are masked at the session level (see
-    :func:`mask_stale_session_prefix` in ``extract.py``) before this runs,
-    so ``_safe_stats`` already ignores them via NaN.
+    ``t_lap_s``. The extractor runs this on the raw timeseries; the model
+    runs it again on the masked one (``tire_model.cleaning``), so the stale
+    TPMS wake-up samples are judged at training time, not here.
     """
     n = len(lap_ts)
     t = _col_or_nan(lap_ts, "t_lap_s", n)

@@ -77,6 +77,11 @@ tire-query SQL:
 # Run all three phases in order (full refresh)
 tire-refresh: tire-etl tire-notes tire-weather
 
+# Write the cleaned laps table (training-side masking + tire_usable) to a
+# parquet file for ad-hoc queries; prints the path (`--out PATH` to choose it)
+tire-clean-laps *ARGS:
+    uv run python -m motorsports_data_notebook.tire_model.cli clean-laps {{ARGS}}
+
 # Detect candidate broken TPMS sensors (low-variance channels) for human review
 tire-sensor-audit *ARGS:
     uv run python -m motorsports_data_notebook.tire_model.cli audit-sensors {{ARGS}}
