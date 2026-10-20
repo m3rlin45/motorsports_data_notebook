@@ -723,6 +723,97 @@ variant, which is what led to the speed-pressure correction above
 two-node fit should be re-run with κ applied to the gas observable before
 drawing conclusions about the tread constants.
 
+### 2.6d Follow-ups on the schema-v5 model (2026-10-20, `heat_experiment --production`)
+
+The harness now reproduces the production configuration with one flag
+(`--production`: |g|·V, the share model with the car facts fixed and
+`g_transfer` tied, `a` per car, `b` per axle, κ) so a variant is one extra
+flag away from the shipped model. Dataset through 2026-10-10 (schema 4,
+training-time cleaning). Baseline: 5 session folds 0.0465 bar, bias
++0.011; leave-one-track-out (LOTO, the circuit unseen) 0.0552 bar. Three
+candidates from the §5 list were run, and the residual was decomposed.
+
+**Where the error is.** Per (stint, corner) the mean held-out residual
+accounts for 80 % (FJ) / 87 % (Inferno) of the squared lap-end error on
+dry; the within-stint shape is the rest. The per-stint offset has sd 0.035
+bar (FJ) / 0.072 bar (Inferno); a session-mean explains 28–34 % of its
+variance and a day-mean 13–16 %, so most of it is stint-to-stint within
+a day.
+
+**Tread-to-gas lag** (`--lag car`, `statespace.lowpass_heat`): the heat
+input through a first-order filter from zero at pit exit, one time
+constant per car. τ_s = 33 s FJ (folds 32–36), 45 s Inferno (35–53).
+Session folds 0.0463 vs 0.0465 (paired Δ −0.0001, CI ±0.0008: no gain);
+LOTO 0.0538 vs 0.0552 (−2.5 %, dry −3 %, FJ|fuji bias −0.065 → −0.055).
+The Inferno's S-shaped bias through a stint (over +0.016 on lap 1, under
+−0.024 by lap 8, back to +0.011) flattens to ±0.007; the track gain
+ratios move from 0.94–1.01 to 0.96–1.04 and the FJ's κ goes to zero (its
+speed effect was 0.8 % at top speed and the two trade off). τ shortens
+(FJ 442/292 → 369/247 s, Inferno 580/574 → 504/494 s) because part of the
+rise time was the lag. Physically coherent and more constant constants,
+but no accuracy on known circuits; promoting it changes the calculators'
+closed form (a second-order response) in three ports, so it is **not
+promoted** — kept as the harness option.
+
+**Anchor pressure as a per-stint nuisance** (`--anchor-nuisance`): a log
+offset on every (stint, corner) pit-exit pressure with a Gaussian prior of
+half a TPMS step (0.0087 bar), the candidate of §5 item 7. The data
+overwhelm the prior: the fitted offsets have sd 0.046 bar, p95 0.098 bar,
+12 of 631 on the ±0.15 bar rail — five times the quantisation width.
+Held-out +0.0005 bar (CI includes 0), constants no more constant. **Rejected**
+as a quantisation fix; what it measured is that the per-stint offsets are
+real, not anchor error.
+
+**What the offsets correlate with.** Per car, dry, the per-(stint, corner)
+offset against stint covariates: the pit-exit set pressure is the only
+strong one (r +0.46 FJ, +0.32 Inferno; by set-pressure quartile the offset
+runs −0.010 → +0.034 bar on the FJ and −0.012 → +0.048 on the Inferno);
+air temperature, cloud, pace, stint length, date, stint-in-day and the gap
+since the previous stint are all |r| ≤ 0.3 and not monotone. Set pressure
+correlates with air temperature (−0.56 / −0.60: higher cold pressures on
+cold days) so the raw correlation is confounded; **within a day** (same
+tyres, same weather) the slope is +0.24 bar/bar FJ (R² 0.23) and +0.46
+bar/bar Inferno (R² 0.47), positive on every one of the 12 days with more
+than one set pressure (0.06–1.19 bar/bar), and unchanged by controlling
+stint order. Within a day set pressure also tracks the anchor temperature
+(r 0.89 FJ, 0.63 Inferno); with both in the regression they pull opposite
+ways (FJ: +0.71 bar/bar for pressure, −0.004 bar/K for start temperature)
+— a warm start under-predicts, a high pressure over-predicts. A tyre at
+higher pressure deflects less and so dissipates less: ``q ∝ (P_ref /
+P_set)^n`` with n > 0, the "set-pressure term" of §2.6b, now reproduced
+on held-out offsets on both cars. A lap-end offset of 0.25–0.5 bar/bar on
+a 0.3 bar rise at 2.4–2.7 bar absolute is n ≈ 2–4.
+
+**The set-pressure term in the production configuration** (`--p-mode
+anchor`, exponent fitted; `--p-mode density` refers the anchor pressure to
+20 °C by the gas law — the cold inflation — and scores the same, so the
+raw pressure is used):
+
+| variant | folds (bar) | FJ | Inferno | LOTO (bar) | n (folds) | track ratios |
+|---|---:|---:|---:|---:|---|---|
+| baseline | 0.0465 | 0.0370 | 0.0569 | 0.0552 | — | 0.94–1.01 |
+| n fitted, pooled | 0.0455 | 0.0359 | 0.0562 | 0.0565 | 0.43 (0.39–0.56; LOTO 0.39–1.42) | 0.95–1.04 |
+| n = 1 fixed | 0.0465 | 0.0348 | 0.0594 | 0.0541 | 1 | 0.94–1.06 |
+| n = 2 fixed | 0.0523 | 0.0335 | 0.0731 | 0.0610 | 2 | 0.91–1.16 |
+| n fitted, FJ alone | — | 0.0341 (−8 %) | — | — | 1.73 (1.54–2.25) | 0.92 / 1.01 |
+| n fitted, Inferno alone | — | — | 0.0560 (−1.6 %) | — | 0.34 (0.29–0.49) | 0.96–1.04 |
+| n fitted, Inferno per-compound cells | — | — | (cells too small to score) | — | **1.16** (1.09–1.52) | — |
+
+The pooled exponent is small and does not transfer (LOTO worse, n → 1.42
+with Sodegaura held out) because the cars disagree: the FJ wants n ≈ 1.7
+and gains 8 %, the Inferno pooled wants 0.3 — although its within-day slope
+is the steeper one. The Inferno's between-track pattern is reversed (Fuji
+runs 1.76 bar set and an offset of −0.007, Sodegaura 1.52 bar and +0.028),
+and its compounds come with their own pressure targets (the harness pools
+compounds; production has the EM multiplier of §2.11). With one cell per
+labelled compound the Inferno's exponent is 1.16, in line with the FJ and
+with the within-day slopes. **Not promoted from the harness**: the term
+has to be judged inside the production fit, where the compound multiplier
+is, and with the exponent per tyre bounded to the physical range (≈ 1–2)
+rather than pooled; the calculator then solves a fixed point (the cold
+pressure it outputs is the P_set the heat depends on). That is the next
+step; the lag can ride along once the pressure term is settled.
+
 ### 2.7 Artifact: `tire_model.json`
 
 The model serializes to a versioned JSON committed under
@@ -1287,9 +1378,11 @@ In rough priority order:
 7. ~~**Per-second fitting on pressure.**~~ **Done** (2026-10-04, §2.6a,
    §4.0a): the default Pass 1 fits the discretized ODE at 1 Hz against the
    pressure-implied gas temperature; held-out hot-pressure MAE 0.054 →
-   0.051 bar pooled (CI excludes zero), Inferno 86 dry 0.072 → 0.067. Not
-   yet done inside it: the anchor pressure as a per-stint nuisance
-   parameter and a tread-to-gas lag. The original reasoning follows. Fit
+   0.051 bar pooled (CI excludes zero), Inferno 86 dry 0.072 → 0.067. The
+   anchor pressure as a per-stint nuisance parameter and a tread-to-gas
+   lag were both tried on 2026-10-20 (§2.6d): the nuisance is rejected
+   (the offsets it finds are 5× the quantisation), the lag is coherent
+   but buys nothing on known circuits. The original reasoning follows. Fit
    the discretized ODE at 1 Hz against the pressure-implied gas
    temperature instead of the per-lap closed form. Tested offline against
    the TPMS temperature
@@ -1398,7 +1491,15 @@ uv run python -m motorsports_data_notebook.tire_model.heat_experiment \
 
 Form specs: ``g2``; ``sliding`` (``V·g²``), ``sliding:glim=<mult>`` (×
 the car's p99.5 g) or ``sliding:glim=FJ:2.2,Inferno 86:1.5``,
-``sliding:rr=<G²>``; ``power:p=<exp>``. See §2.6b.
+``sliding:rr=<G²>``; ``power:p=<exp>``; ``gv:p=1:m=1`` (production). See §2.6b.
+
+``--production`` sets the schema-v5 configuration (``gv:p=1:m=1 --v-corr
+--share a+axle --share-model --share-tie-gc`` with the car facts fixed);
+other flags add to it. Follow-up options (§2.6d): ``--lag [car|shared]``
+(tread-to-gas lag of the heat input), ``--anchor-nuisance
+[--anchor-sigma-bar S]`` (per-stint anchor-pressure offset with a prior),
+``--p-mode density`` (cold inflation instead of the pit-exit pressure),
+``--loto`` for the unseen-circuit score.
 
 ### Two-node tread + carcass experiment
 

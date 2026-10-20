@@ -69,7 +69,12 @@ TAU_BOUNDS_S = (30.0, 3000.0)
 A_BOUNDS = (1e-3, 1e3)  # relative to the initial guess (see _Design.bounds)
 P_REF_ABS_BAR = 2.5  # the heat-input gain ``a`` is quoted at this absolute pressure
 P_EXP_BOUNDS = (0.0, 4.0)
-P_MODES = ("anchor", "instant")
+# "anchor": q ∝ (P_ref / P_pit-exit)^n; "instant": the live gas-law pressure;
+# "density": the cold-inflation gas density (P_abs / T_K at the anchor, relative
+# to P_ref at T_REF_DENSITY_K) — the quantity that sets how much the tyre
+# deflects if the rubber stiffens with temperature in step with the gas.
+P_MODES = ("anchor", "instant", "density")
+T_REF_DENSITY_K = 293.15
 V_REF_MS = 30.0  # the cooling coefficient ``b`` is quoted at this speed
 IR_VALID_C = (-40.0, 200.0)  # IR samples outside this range are sentinels (−200 = unplugged)
 # "speed": one convection slope; "speed_axle": one per axle (f/r); "speed_car": one
@@ -80,6 +85,20 @@ COOL_DT_REF_K = 20.0
 W_ROAD_BOUNDS = (0.0, 1.0)
 KAPPA_BOUNDS = (0.0, 5e-5)  # per (m/s)²: pressure observable P_obs = P_gas / (1 + κ·V²)
 COOL_BETA_BOUNDS = (0.0, 20.0)
+# Heat-input lag (experiment): the frictional heat enters at the tread and
+# reaches the cavity gas through the carcass; ``q_eff`` is ``q`` passed through
+# a first-order filter with time constant tau_s (s) starting from zero at pit
+# exit (tread and carcass in equilibrium when the car leaves the box).
+LAG_BOUNDS_S = (5.0, 900.0)
+LAG_INIT_S = 60.0
+# Anchor nuisance (experiment): the pit-exit pressure the gas observable is
+# referred to is one quantised TPMS reading (0.03 bar step). Its log is given a
+# per-(stint, corner) offset with a Gaussian prior of this width in bar
+# (uniform half-step 0.015 bar → sd 0.0087), weighted against the gas-temperature
+# residuals by the quantisation noise of one reading (≈ 1 K at 2.9 bar / 300 K).
+ANCHOR_SIGMA_BAR = 0.0087
+ANCHOR_PRIOR_SIGMA_T_K = 1.0
+ANCHOR_DELTA_BOUND = 0.05  # |δ| ≤ 5 % of absolute pressure (≈ 0.15 bar): a safety rail
 
 
 @dataclass
@@ -444,6 +463,9 @@ def stint_log_pressure_ratio(s: StintSeries, mode: str) -> np.ndarray:
     ``"anchor"``: the stint's pit-exit absolute pressure, constant.
     ``"instant"``: the measured pressure at each second (from the observed
     gas temperature and the anchor), forward-filled over gaps.
+    ``"density"``: the pit-exit pressure scaled to :data:`T_REF_DENSITY_K`
+    by the gas law (``P_abs · T_ref / T_anchor``), i.e. the cold inflation,
+    constant over the stint.
     """
     n = len(s.g2)
     out = np.zeros((n, 4))
@@ -452,6 +474,10 @@ def stint_log_pressure_ratio(s: StintSeries, mode: str) -> np.ndarray:
         if not np.isfinite(p0):
             continue
         p_abs = np.full(n, p0 + P_ATM_BAR)
+        if mode == "density":
+            t0 = float(s.t_start[j])
+            if np.isfinite(t0):
+                p_abs = p_abs * T_REF_DENSITY_K / (t0 + T_ZERO_C_TO_K)
         if mode == "instant":
             t0 = float(s.t_start[j])
             pk = (p0 + P_ATM_BAR) * (s.obs[:, j] + T_ZERO_C_TO_K) / (t0 + T_ZERO_C_TO_K)
@@ -471,6 +497,19 @@ def cooling_factor(v: np.ndarray, beta: float) -> np.ndarray:
 
 
 # ---------------------------------------------------------------- design + fit
+
+
+def lowpass_heat(q: np.ndarray, tau_s: float) -> np.ndarray:
+    """``q`` through a first-order lag with time constant ``tau_s`` seconds at
+    1 Hz, zero initial state: ``y_k = d·y_{k−1} + (1 − d)·q_k``, ``d = e^{−1/τ}``
+    (the exact response to an input held constant over each second). Works
+    on ``(n,)`` or ``(n, 4)`` arrays along axis 0."""
+    from scipy.signal import lfilter  # type: ignore[import-untyped]
+
+    if not np.isfinite(tau_s) or tau_s <= 0:
+        return q
+    d = float(np.exp(-1.0 / tau_s))
+    return np.asarray(lfilter([1.0 - d], [1.0, -d], q, axis=0))
 
 
 class _Design:
@@ -504,8 +543,17 @@ class _Design:
         fixed_cool: dict[str, float] | None = None,
         fit_w_road: bool | str = False,
         fit_sun: bool | str = False,
+        lag: bool | str = False,
+        fixed_lag: dict[str, float] | None = None,
+        anchor_nuisance: bool = False,
+        anchor_sigma_bar: float = ANCHOR_SIGMA_BAR,
     ):
         self.cells = cells
+        # heat-input lag: False | True / "car" (one tau_s per car) | "shared"
+        self.lag = lag
+        self.fixed_lag: dict[str, float] = dict(fixed_lag or {})
+        self.anchor_nuisance = anchor_nuisance
+        self.anchor_sigma_bar = anchor_sigma_bar
         self.fixed_a = fixed_a  # ablation: the gain is not a parameter
         self.fixed_b = fixed_b  # ablation: the cooling rate is not a parameter
         # cooling / sink parameters held at given values (rain cells reuse dry)
@@ -549,8 +597,16 @@ class _Design:
         troad: list[np.ndarray] = []
         suns: list[np.ndarray] = []
         n0 = 0
-        for s in stints:
+        self.stint_slices: list[tuple[int, int, int]] = []  # (start, stop, car index)
+        self.stint_keys: list[tuple[str, int]] = []
+        stint_i: list[np.ndarray] = []
+        p_abs_rows: list[np.ndarray] = []
+        for si, s in enumerate(stints):
             n = len(s.g2)
+            self.stint_slices.append((n0, n0 + n, self.cars.index(s.car)))
+            self.stint_keys.append((s.session_id, s.stint_id))
+            stint_i.append(np.full(n, si))
+            p_abs_rows.append(np.repeat((s.p_start + P_ATM_BAR)[None, :], n, axis=0))
             ss = np.zeros((n, 4), dtype=int)
             tt = np.zeros((n, 4))
             for j in range(4):
@@ -600,6 +656,8 @@ class _Design:
         self.t0 = np.concatenate(t0)
         self.cell = np.concatenate(cell_i)
         self.fin = np.isfinite(self.obs)
+        self.stint_idx = np.concatenate(stint_i)
+        self.p_abs_anchor = np.concatenate(p_abs_rows)  # (n, 4) anchor absolute pressure
         self.names: list[str] = []
         for car, cond in cells:
             a_car = "*" if share_a == "cars" else car
@@ -632,6 +690,56 @@ class _Design:
                     self.names += [
                         f"sh|{car}|{nme}" for nme in SHARE_PARAM_NAMES if self._share_free(car, nme)
                     ]
+        if lag == "shared":
+            if "*" not in self.fixed_lag:
+                self.names.append("lag|*")
+        elif lag:
+            self.names += [f"lag|{car}" for car in self.cars if car not in self.fixed_lag]
+        # one log-pressure offset per (stint, corner) that has observations
+        self.an_index = np.full((len(self.g2), 4), -1, dtype=int)
+        self.an_sigma: list[float] = []  # prior sd of each offset (log absolute pressure)
+        self.an_keys: list[tuple[str, int, str]] = []
+        if anchor_nuisance:
+            for si, (lo_, hi_, _ci) in enumerate(self.stint_slices):
+                for j, c in enumerate(CORNERS):
+                    if not (self.fin[lo_:hi_, j] & (self.cell[lo_:hi_] >= 0)).any():
+                        continue
+                    self.an_index[lo_:hi_, j] = len(self.an_keys)
+                    self.an_keys.append((*self.stint_keys[si], c))
+                    self.an_sigma.append(anchor_sigma_bar / float(self.p_abs_anchor[lo_, j]))
+            self.names += [f"an|{i}" for i in range(len(self.an_keys))]
+        self.n_data = int((self.fin & (self.cell >= 0)[:, None]).sum())
+
+    def lag_tau(self, x: np.ndarray) -> dict[str, float]:
+        """Per-car heat-input lag time constant (s); empty when the lag is off."""
+        out: dict[str, float] = {}
+        if "*" in self.fixed_lag:
+            out = {car: self.fixed_lag["*"] for car in self.cars}
+        if "lag|*" in self.names:
+            t = float(np.exp(x[self.names.index("lag|*")]))
+            out = {car: t for car in self.cars}
+        for car in self.cars:
+            if car in self.fixed_lag:
+                out[car] = self.fixed_lag[car]
+            elif f"lag|{car}" in self.names:
+                out[car] = float(np.exp(x[self.names.index(f"lag|{car}")]))
+        return out
+
+    def _lagged(self, q: np.ndarray, x: np.ndarray) -> np.ndarray:
+        taus = self.lag_tau(x)
+        if not taus:
+            return q
+        out = np.array(q, dtype=float, copy=True)
+        for lo_, hi_, ci in self.stint_slices:
+            out[lo_:hi_] = lowpass_heat(q[lo_:hi_], taus[self.cars[ci]])
+        return out
+
+    def anchor_delta(self, x: np.ndarray) -> np.ndarray:
+        """The fitted log-anchor-pressure offsets, one per ``an_keys`` entry."""
+        if not self.an_keys:
+            return np.zeros(0)
+        i0 = self.names.index("an|0")
+        return np.asarray(x[i0 : i0 + len(self.an_keys)], dtype=float)
 
     def _b_keys(self) -> tuple[str, ...]:
         if self.share_b in ("axle", "cars"):
@@ -760,12 +868,23 @@ class _Design:
 
     def observed(self, x: np.ndarray) -> np.ndarray:
         """The gas temperature observations, corrected for the speed effect
-        on the pressure reading when ``v_corr`` is on."""
-        if not self.v_corr and not self.fixed_kappa:
+        on the pressure reading when ``v_corr`` is on, and referred to the
+        nuisance-adjusted anchor pressure when ``anchor_nuisance`` is on
+        (``T_gas ∝ 1/P_anchor``, so a log offset δ scales the Kelvin value by
+        ``e^{−δ}``)."""
+        f: np.ndarray | float = 1.0
+        if self.v_corr or self.fixed_kappa:
+            kap = self.kappa(x)
+            k = np.array([kap.get(c, 0.0) for c in self.cars])[self.car_idx]
+            f = (1.0 + k[:, None] * self.v[:, None] ** 2) / (1.0 + k[:, None] * self.v_anchor**2)
+        if self.an_keys:
+            delta = self.anchor_delta(x)
+            g = np.ones_like(self.obs)
+            m = self.an_index >= 0
+            g[m] = np.exp(-delta[self.an_index[m]])
+            f = f * g
+        if isinstance(f, float):
             return self.obs
-        kap = self.kappa(x)
-        k = np.array([kap.get(c, 0.0) for c in self.cars])[self.car_idx]
-        f = (1.0 + k[:, None] * self.v[:, None] ** 2) / (1.0 + k[:, None] * self.v_anchor**2)
         return np.asarray((self.obs + T_ZERO_C_TO_K) * f - T_ZERO_C_TO_K)
 
     def _cool_names(self) -> list[str]:
@@ -890,6 +1009,7 @@ class _Design:
         q = self.heat_input(x)
         if self.logp is not None:
             q = q * np.exp(-self.p_exp(x) * self.logp)
+        q = self._lagged(q, x)
         teff = self.sink(x)
         T = self._integrate(a, b, q, teff)
         if self.cool_mode == "power":
@@ -919,6 +1039,10 @@ class _Design:
     def residuals(self, x: np.ndarray) -> np.ndarray:
         T = self.simulate(x)
         r: np.ndarray = (T - self.observed(x))[self.fin & (self.cell >= 0)[:, None]]
+        if self.an_keys:
+            # Gaussian prior on each anchor offset, in the residuals' K units.
+            prior = self.anchor_delta(x) / np.asarray(self.an_sigma) * ANCHOR_PRIOR_SIGMA_T_K
+            r = np.concatenate([r, prior])
         return r
 
     def bounds(
@@ -982,6 +1106,14 @@ class _Design:
                 x0l.append(SHARE_INIT[key])
                 lol.append(SHARE_BOUNDS[key][0])
                 hil.append(SHARE_BOUNDS[key][1])
+            elif nme.startswith("lag|"):  # log tau_s
+                x0l.append(np.log(LAG_INIT_S))
+                lol.append(np.log(LAG_BOUNDS_S[0]))
+                hil.append(np.log(LAG_BOUNDS_S[1]))
+            elif nme.startswith("an|"):  # linear log-pressure offset
+                x0l.append(0.0)
+                lol.append(-ANCHOR_DELTA_BOUND)
+                hil.append(ANCHOR_DELTA_BOUND)
         x0a, loa, hia = np.array(x0l), np.array(lol), np.array(hil)
         if warm:
             # Warm start (solver-space values by parameter name), clipped inside the bounds.
@@ -998,12 +1130,19 @@ class _Design:
 
         mask = self.fin & (self.cell >= 0)[:, None]
         row_car = np.repeat(self.car_idx[:, None], 4, axis=1)[mask]
-        n_res, n_par = row_car.size, len(self.names)
+        row_an = self.an_index[mask]
+        n_data = row_car.size
+        n_an = len(self.an_keys)
+        n_res, n_par = n_data + n_an, len(self.names)
         S = lil_matrix((n_res, n_par), dtype=np.int8)
         for j, nme in enumerate(self.names):
             parts = nme.split("|")
-            car = parts[1] if len(parts) > 1 and parts[1] in self.cars else None
-            rows = np.flatnonzero(row_car == self.cars.index(car)) if car else np.arange(n_res)
+            if parts[0] == "an":
+                i = int(parts[1])
+                rows = np.concatenate([np.flatnonzero(row_an == i), [n_data + i]])
+            else:
+                car = parts[1] if len(parts) > 1 and parts[1] in self.cars else None
+                rows = np.flatnonzero(row_car == self.cars.index(car)) if car else np.arange(n_data)
             S[rows, j] = 1
         return S.tocsr()
 
@@ -1271,6 +1410,9 @@ class CellFit:
     drive: dict[str, float] = field(default_factory=dict)  # per car drive-slip heat coefficient
     brake: dict[str, float] = field(default_factory=dict)  # per car brake-power heat coefficient
     share: dict[str, ShareParams] = field(default_factory=dict)  # per car bounded force shares
+    lag: dict[str, float] = field(default_factory=dict)  # per car heat-input lag tau_s (s)
+    # fitted log-anchor-pressure offsets per (session, stint, corner) (anchor_nuisance)
+    anchor_delta: dict[tuple[str, int, str], float] = field(default_factory=dict)
 
     def params_for(self, car: str, corner: str, condition: str) -> tuple[float, float] | None:
         """``(a, b)`` for the cell, falling back along the condition chain."""
@@ -1314,6 +1456,9 @@ def fit_cells(
     fit_w_road: bool | str = False,
     fit_sun: bool | str = False,
     fixed_cool: dict[str, float] | None = None,
+    lag: bool | str = False,
+    anchor_nuisance: bool = False,
+    anchor_sigma_bar: float = ANCHOR_SIGMA_BAR,
 ) -> CellFit:
     """Fit ``(a, b)`` per (car, corner, condition) on the given stints (dry
     first; rain cells after with ``b_rain ≥ b_dry`` and the per-car
@@ -1322,6 +1467,12 @@ def fit_cells(
     ``p_mode`` enables the pressure dependence of the heat input,
     ``q ∝ (P_ref / P)^n`` with one global exponent ``n`` fitted with the dry
     cells (or fixed at ``p_exp``) and held for the rain cells.
+
+    ``lag`` passes the heat input through a first-order tread-to-gas lag
+    (``"car"``/True: one time constant per car; ``"shared"``: one for all),
+    fitted with the dry cells and held for the rain cells.
+    ``anchor_nuisance`` gives every (stint, corner) a log offset on its
+    pit-exit anchor pressure with a Gaussian prior of ``anchor_sigma_bar``.
     """
     if p_mode is not None and p_mode not in P_MODES:
         raise ValueError(f"p_mode must be one of {P_MODES}; got {p_mode!r}")
@@ -1367,6 +1518,9 @@ def fit_cells(
         fit_w_road=fit_w_road,
         fit_sun=fit_sun,
         fixed_cool=fixed_cool,
+        lag=lag,
+        anchor_nuisance=anchor_nuisance,
+        anchor_sigma_bar=anchor_sigma_bar,
     )
     x0, lo, hi = d1.bounds({}, warm)
     res = least_squares(
@@ -1388,6 +1542,10 @@ def fit_cells(
     drive = d1.drive_coef(res.x)
     brake = d1.brake_coef(res.x)
     share_fit = d1.share_params(res.x)
+    lag_fit = d1.lag_tau(res.x)
+    an_fit: dict[tuple[str, int, str], float] = dict(
+        zip(d1.an_keys, (float(v) for v in d1.anchor_delta(res.x)))
+    )
     for i, (car, cond) in enumerate(dry_cells):
         for j, c in enumerate(CORNERS):
             fitted[(car, c, cond)] = (float(a[i, j]), float(b[i, j]))
@@ -1421,6 +1579,9 @@ def fit_cells(
             fixed_a=fixed_a,
             fixed_b=fixed_b,
             fixed_cool=cool_fixed,
+            fixed_lag=lag_fit,
+            anchor_nuisance=anchor_nuisance,
+            anchor_sigma_bar=anchor_sigma_bar,
         )
         b_lower = {}
         for car, cond in rain_cells:
@@ -1443,6 +1604,7 @@ def fit_cells(
         for i, (car, cond) in enumerate(rain_cells):
             for j, c in enumerate(CORNERS):
                 fitted[(car, c, cond)] = (float(a2[i, j]), float(b2[i, j]))
+        an_fit.update(zip(d2.an_keys, (float(v) for v in d2.anchor_delta(res2.x))))
     return CellFit(
         ab=fitted,
         cost_dry=float(res.cost),
@@ -1458,4 +1620,6 @@ def fit_cells(
         drive=drive,
         brake=brake,
         share=share_fit,
+        lag=lag_fit,
+        anchor_delta=an_fit,
     )

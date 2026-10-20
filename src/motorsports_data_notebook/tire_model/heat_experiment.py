@@ -36,8 +36,16 @@ import pandas as pd
 
 from ..tire_etl.paths import default_dataset_root
 from .energy_balance import P_ATM_BAR, T_ZERO_C_TO_K
-from .heat_input import BUILTIN_GEOMETRY, SHARE_PARAM_NAMES, HeatInput, share_heat_rate
+from .heat_input import (
+    BUILTIN_GEOMETRY,
+    CAR_FACTS,
+    DEFAULT_CAR_FACTS,
+    SHARE_PARAM_NAMES,
+    HeatInput,
+    share_heat_rate,
+)
 from .statespace import (
+    ANCHOR_SIGMA_BAR,
     CORNERS,
     P_REF_ABS_BAR,
     CellFit,
@@ -45,6 +53,7 @@ from .statespace import (
     build_stint_series,
     cooling_factor,
     fit_cells,
+    lowpass_heat,
     speed_pressure_factor,
     stint_log_pressure_ratio,
     COOL_MODES,
@@ -178,8 +187,8 @@ def _effective_q(s: StintSeries, j: int, fit: CellFit) -> np.ndarray:
     """``q`` for a corner, including the anchor-pressure factor when the fit
     used ``p_mode == "anchor"``."""
     q = _corner_q(s, j, fit)
-    if fit.p_mode == "anchor":
-        q = q * np.exp(-fit.p_exp * stint_log_pressure_ratio(s, "anchor")[:, j])
+    if fit.p_mode in ("anchor", "density"):
+        q = q * np.exp(-fit.p_exp * stint_log_pressure_ratio(s, fit.p_mode)[:, j])
     return q
 
 
@@ -188,15 +197,25 @@ def _corner_q(s: StintSeries, j: int, fit: CellFit) -> np.ndarray:
     bounded force-share model when the fit carries one)."""
     car = s.car.split("/", 1)[0]
     if fit.share and car in fit.share and s.lat_pos is not None:
-        return share_heat_rate(
-            fit.share[car], s.lat_pos, s.lat_neg, s.long_pos, s.long_neg, s.v, CORNERS[j]  # type: ignore[arg-type]
+        return _lagged(
+            share_heat_rate(
+                fit.share[car], s.lat_pos, s.lat_neg, s.long_pos, s.long_neg, s.v, CORNERS[j]  # type: ignore[arg-type]
+            ),
+            fit,
+            car,
         )
     q = s.q4[:, j] if s.q4 is not None else s.g2
     if s.q4_drive is not None and fit.drive.get(car):
         q = q + fit.drive[car] * s.q4_drive[:, j]
     if s.q4_brake is not None and fit.brake.get(car):
         q = q + fit.brake[car] * s.q4_brake[:, j]
-    return np.asarray(q)
+    return _lagged(np.asarray(q), fit, car)
+
+
+def _lagged(q: np.ndarray, fit: CellFit, car: str) -> np.ndarray:
+    """The fitted tread-to-gas lag of the car, from zero at pit exit."""
+    tau = fit.lag.get(car)
+    return lowpass_heat(q, tau) if tau else q
 
 
 def _b_series(s: StintSeries, fit: CellFit, b: float, j: int) -> float | np.ndarray:
@@ -478,6 +497,26 @@ def summarize(df: pd.DataFrame) -> dict[str, Any]:
     return out
 
 
+PRODUCTION_FORM = "gv:p=1:m=1"  # |g|·V (PHYSICAL_HEAT_INPUT)
+
+
+def production_share_fixed(cars: list[str] | None = None) -> dict[str, dict[str, float]]:
+    """The share parameters :func:`statespace.fit_physical` takes from the car
+    (so the harness fits only ``g_transfer`` per car, as production does)."""
+    out: dict[str, dict[str, float]] = {}
+    for car in cars or list(CAR_FACTS):
+        f = CAR_FACTS.get(car, DEFAULT_CAR_FACTS)
+        out[car] = {
+            "p_f": f.p_f,
+            "beta0": f.beta0,
+            "beta1": 0.0,
+            "g_x_transfer": float("inf"),
+            "eps_drive": 1.0,
+            "eps_brake": 1.0,
+        }
+    return out
+
+
 def run(
     root: Path,
     specs: list[str],
@@ -509,6 +548,9 @@ def run(
     fit_w_road: bool | str = False,
     fit_sun: bool | str = False,
     fixed_cool: dict[str, float] | None = None,
+    lag: bool | str = False,
+    anchor_nuisance: bool = False,
+    anchor_sigma_bar: float = ANCHOR_SIGMA_BAR,
 ) -> pd.DataFrame:
     t0 = time.time()
     laps_for_fit = prepare_laps_for_fit(root)
@@ -574,6 +616,9 @@ def run(
             fit_w_road=fit_w_road,
             fit_sun=fit_sun,
             fixed_cool=fixed_cool,
+            lag=lag,
+            anchor_nuisance=anchor_nuisance,
+            anchor_sigma_bar=anchor_sigma_bar,
         )
         frames = []
         if loto:
@@ -615,6 +660,9 @@ def run(
                 fit_w_road=fit_w_road,
                 fit_sun=fit_sun,
                 fixed_cool=fixed_cool,
+                lag=lag,
+                anchor_nuisance=anchor_nuisance,
+                anchor_sigma_bar=anchor_sigma_bar,
             )
             fit = fit_cells(train, warm=full.x_by_name, **kw)
             df = score_stints(test, fit)
@@ -626,6 +674,7 @@ def run(
             df.attrs["drive"] = dict(fit.drive)
             df.attrs["brake"] = dict(fit.brake)
             df.attrs["share"] = dict(fit.share)
+            df.attrs["lag"] = dict(fit.lag)
             frames.append(df)
         scored = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
         stab = stability_report(stints, full)
@@ -647,6 +696,8 @@ def run(
             + (" tie-gc" if share_tie_gc else "")
             + (f" share:{share}" if share != "none" else "")
             + (" split" if split_compound else "")
+            + (f" lag:{'shared' if lag == 'shared' else 'car'}" if lag else "")
+            + (f" anchor-nuisance:{anchor_sigma_bar:g}" if anchor_nuisance else "")
         )
         row: dict[str, Any] = {"form": tag, "label": heat.label(next(iter(g_ref), None))}
         row["p_exp"] = round(full.p_exp, 3)
@@ -668,6 +719,22 @@ def run(
                 for c in full.share
             }
         row["brake"] = {c: round(v, 3) for c, v in full.brake.items()}
+        if full.lag:
+            row["lag_s"] = {c: round(v, 1) for c, v in full.lag.items()}
+            row["lag_folds"] = {
+                c: [round(float(f.attrs.get("lag", {}).get(c, float("nan"))), 1) for f in frames]
+                for c in full.lag
+            }
+        if full.anchor_delta:
+            d = np.array(list(full.anchor_delta.values()))
+            # offsets in bar at a typical 2.9 bar absolute anchor, and how many sit on the rail
+            row["anchor_delta"] = {
+                "n": int(d.size),
+                "sd_bar": round(float(d.std() * 2.9), 4),
+                "mean_bar": round(float(d.mean() * 2.9), 4),
+                "p95_abs_bar": round(float(np.percentile(np.abs(d), 95) * 2.9), 4),
+                "at_bound": int((np.abs(d) >= 0.049).sum()),
+            }
         if frames:
             row["drive_folds"] = {
                 c: [round(float(f.attrs.get("drive", {}).get(c, float("nan"))), 2) for f in frames]
@@ -754,6 +821,10 @@ def _print_row(row: dict[str, Any]) -> None:
         f"drive coef: {row.get('drive')} folds {row.get('drive_folds')}   brake coef: {row.get('brake')}"
     )
     print(f"a dry: {row['a_dry']}")
+    if row.get("lag_s"):
+        print(f"heat-input lag tau_s (s): {row['lag_s']}  folds {row.get('lag_folds')}")
+    if row.get("anchor_delta"):
+        print(f"anchor offsets (bar at 2.9 bar abs): {row['anchor_delta']}")
     if row.get("share"):
         print(f"share model: {row['share']}")
         for c, folds in (row.get("share_folds") or {}).items():
@@ -795,9 +866,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out-dir", type=Path, default=None, help="write per-form held-out rows here")
     ap.add_argument(
         "--p-mode",
-        choices=["anchor", "instant"],
+        choices=["anchor", "instant", "density"],
         default=None,
-        help="pressure dependence of the heat input, q ∝ (P_ref/P)^n",
+        help="pressure dependence of the heat input, q ∝ (P_ref/P)^n: P the pit-exit "
+        "pressure, the live gas-law pressure, or the cold inflation (anchor P scaled to 20 C)",
     )
     ap.add_argument(
         "--p-exp", type=float, default=None, help="fix the exponent n instead of fitting it"
@@ -910,11 +982,46 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="fit a per-car speed-pressure constant: P_obs = P_gas / (1 + kappa*V^2)",
     )
+    ap.add_argument(
+        "--lag",
+        nargs="?",
+        const="car",
+        choices=["car", "shared"],
+        default=None,
+        help="tread-to-gas lag: the heat input through a first-order filter (tau_s fitted "
+        "per car, or one shared value)",
+    )
+    ap.add_argument(
+        "--anchor-nuisance",
+        action="store_true",
+        help="fit a log offset on every (stint, corner) pit-exit anchor pressure with a "
+        "Gaussian prior (the TPMS quantisation of the one anchor reading)",
+    )
+    ap.add_argument(
+        "--anchor-sigma-bar",
+        type=float,
+        default=ANCHOR_SIGMA_BAR,
+        help="prior sd of the anchor offset in bar (default: uniform half-step of 0.03 bar)",
+    )
+    ap.add_argument(
+        "--production",
+        action="store_true",
+        help="the schema-v5 production configuration (|g|·V, share model with the car facts "
+        "fixed and g_transfer tied, a per car, b per axle, kappa); other flags add to it",
+    )
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING)
     root = Path(args.dataset_root) if args.dataset_root else default_dataset_root()
     specs = args.form or ["g2", "sliding"]
+    share_fixed = _parse_share_fix(args.share_fix) or None
+    if args.production:
+        specs = args.form or [PRODUCTION_FORM]
+        args.v_corr = True
+        args.share = "a+axle"
+        args.share_model = True
+        args.share_tie_gc = True
+        share_fixed = {**production_share_fixed(), **(share_fixed or {})}
     res = run(
         root,
         specs,
@@ -936,7 +1043,7 @@ def main(argv: list[str] | None = None) -> int:
         brake_term=args.brake_term,
         loto=args.loto,
         share_model=args.share_model,
-        share_fixed=_parse_share_fix(args.share_fix) or None,
+        share_fixed=share_fixed,
         share_tie_gc=args.share_tie_gc,
         conditions_shared=args.conditions_shared,
         fixed_a=args.fix_a,
@@ -950,6 +1057,9 @@ def main(argv: list[str] | None = None) -> int:
             False if args.fit_sun is None else True if args.fit_sun == "shared" else args.fit_sun
         ),
         fixed_cool=({"w|road": args.w_road} if args.w_road is not None else None),
+        lag=(args.lag or False),
+        anchor_nuisance=args.anchor_nuisance,
+        anchor_sigma_bar=args.anchor_sigma_bar,
     )
     if args.out_dir is not None:
         res.to_json(args.out_dir / "summary.json", orient="records", indent=1)
