@@ -9,7 +9,7 @@ import customtkinter as ctk
 from tkinterdnd2 import DND_FILES
 
 from motorsports_data_notebook.desktop.loader import load_session
-from motorsports_data_notebook.profiles import get_logger_id
+from motorsports_data_notebook.profiles import get_logger_id, get_vehicle_name
 
 if TYPE_CHECKING:
     from motorsports_data_notebook._types import LogFile
@@ -57,6 +57,7 @@ class SessionPanel(ctk.CTkFrame):
         self._log: LogFile | None = None
         self._file_path: Path | None = None
         self._logger_id: str | None = None
+        self._vehicle_name: str | None = None
         self._lap_vars: dict[int, ctk.BooleanVar] = {}
 
         self._create_widgets()
@@ -225,14 +226,19 @@ class SessionPanel(ctk.CTkFrame):
             self._log = load_session(file_data)
             self._file_path = file_path
             self._logger_id = get_logger_id(self._log)
+            # The log is loaded from bytes (no file name), so pass the on-disk
+            # name for the Race Studio vehicle token fallback.
+            self._vehicle_name = get_vehicle_name(self._log, file_name=file_path.name)
 
             # Build file info with metadata
             info_parts = [f"File: {file_path.name}"]
             if self._logger_id:
                 info_parts.append(f"Logger: {self._logger_id}")
             metadata = getattr(self._log, "metadata", {}) or {}
-            vehicle = metadata.get("Vehicle Name") or metadata.get("vehicle_name")
-            driver = metadata.get("Driver Name") or metadata.get("driver_name")
+            vehicle = self._vehicle_name
+            driver = (
+                metadata.get("Driver") or metadata.get("Driver Name") or metadata.get("driver_name")
+            )
             if vehicle:
                 info_parts.append(f"Vehicle: {vehicle}")
             if driver:
@@ -249,6 +255,7 @@ class SessionPanel(ctk.CTkFrame):
             self._log = None
             self._file_path = None
             self._logger_id = None
+            self._vehicle_name = None
 
     def _populate_laps(self) -> None:
         """Populate the lap checkbox list."""
@@ -422,3 +429,13 @@ class SessionPanel(ctk.CTkFrame):
     def logger_id(self) -> str | None:
         """Get the logger serial number from the loaded file."""
         return self._logger_id
+
+    @property
+    def vehicle_name(self) -> str | None:
+        """Get the vehicle name (metadata or Race Studio file name) of the loaded file."""
+        return self._vehicle_name
+
+    @property
+    def profile_identity(self) -> tuple[str | None, str | None]:
+        """(logger_id, vehicle_name) pair that identifies the vehicle profile."""
+        return self._logger_id, self._vehicle_name

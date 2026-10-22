@@ -21,21 +21,30 @@ if TYPE_CHECKING:
 
 @dataclass
 class MotionRatios:
-    """Motion ratios for converting shock velocity to wheel velocity.
+    """Pot-to-wheel motion ratios for converting shock pot velocity to wheel velocity.
 
-    Motion ratio = shock_travel / wheel_travel
-    wheel_velocity = shock_velocity / motion_ratio
+    All suspension analysis in this package works from the logged shock pot
+    (stroke sensor) channel, so the ratio that matters is **pot travel per
+    wheel travel**, not the damper-to-wheel geometry ratio:
+
+        motion_ratio   = pot_travel / wheel_travel
+        wheel_velocity = pot_velocity / motion_ratio
+
+    On a car whose pot is mounted on the damper (Toyota 86 strut / multi-link)
+    the two coincide; on rocker/pushrod cars with a separately mounted stroke
+    sensor (KK-F) they differ, and the pot-to-wheel value from the measured
+    :class:`ShockCalibration` must be used here.
 
     Attributes
     ----------
     front_left : float
-        Front left motion ratio.
+        Front left pot/wheel motion ratio.
     front_right : float
-        Front right motion ratio.
+        Front right pot/wheel motion ratio.
     rear_left : float
-        Rear left motion ratio.
+        Rear left pot/wheel motion ratio.
     rear_right : float
-        Rear right motion ratio.
+        Rear right pot/wheel motion ratio.
     """
 
     front_left: float = 0.997
@@ -45,8 +54,10 @@ class MotionRatios:
 
     @classmethod
     def toyota_86_zn6(cls) -> "MotionRatios":
-        """Return default motion ratios for Toyota 86 ZN6.
+        """Return default pot/wheel motion ratios for Toyota 86 ZN6.
 
+        The shock pots are mounted on the dampers, so pot/wheel equals the
+        damper/wheel geometry ratio:
         Front (MacPherson strut): 0.997 (nearly 1:1)
         Rear (Multi-link): 0.768
         """
@@ -56,6 +67,106 @@ class MotionRatios:
             rear_left=0.768,
             rear_right=0.768,
         )
+
+
+@dataclass
+class AxleShockCalibration:
+    """Linear stroke-sensor calibration slopes for one axle.
+
+    Measured with the spring and anti-roll bar removed by moving the wheel
+    through its travel and recording wheel position, damper length and the
+    logger's stroke-sensor reading at each step; straight lines are fitted by
+    least squares. Only slopes are stored, so the zero references of the
+    measurements and the on-car zeroing of the pots do not matter.
+
+    Attributes
+    ----------
+    wheel_per_sensor : float
+        mm of wheel travel per mm of stroke-sensor travel (pot/wheel = 1 / this;
+        the only value the velocity analysis uses).
+    damper_per_sensor : float
+        mm of damper travel per mm of stroke-sensor travel.
+    damper_per_wheel_fit : float or None
+        mm of damper travel per mm of wheel travel, fitted **directly** from the
+        damper-vs-wheel points. Stored explicitly so other modeling (spring /
+        damper rates at the wheel) does not inherit the error of dividing two
+        fitted slopes. Falls back to ``damper_per_sensor / wheel_per_sensor``.
+    wheel_r2 : float or None
+        R² of the wheel-vs-sensor fit.
+    damper_r2 : float or None
+        R² of the damper-vs-sensor fit.
+    damper_wheel_r2 : float or None
+        R² of the direct damper-vs-wheel fit.
+    points : list[list[float]]
+        Raw calibration rows ``[wheel_mm, damper_mm, sensor_mm]`` (optional).
+    excluded_points : list[int]
+        0-based indices of rows left out of the fit (optional).
+    """
+
+    wheel_per_sensor: float
+    damper_per_sensor: float
+    damper_per_wheel_fit: float | None = None
+    wheel_r2: float | None = None
+    damper_r2: float | None = None
+    damper_wheel_r2: float | None = None
+    points: list[list[float]] = field(default_factory=list)
+    excluded_points: list[int] = field(default_factory=list)
+
+    @property
+    def pot_per_wheel(self) -> float:
+        """Pot travel per mm of wheel travel: the :class:`MotionRatios` value used in analysis."""
+        return 1.0 / self.wheel_per_sensor
+
+    @property
+    def damper_per_wheel(self) -> float:
+        """Damper travel per mm of wheel travel (the damper-to-wheel geometry ratio).
+
+        Returns the directly fitted :attr:`damper_per_wheel_fit` when available,
+        otherwise the ratio of the two sensor slopes. For spring/damper rate
+        modeling; the velocity analysis uses :attr:`pot_per_wheel`.
+        """
+        if self.damper_per_wheel_fit is not None:
+            return self.damper_per_wheel_fit
+        return self.damper_per_sensor / self.wheel_per_sensor
+
+    @property
+    def damper_per_sensor_ratio(self) -> float:
+        """Alias of :attr:`damper_per_sensor` (sensor-to-damper gain)."""
+        return self.damper_per_sensor
+
+    def describe(self) -> str:
+        """One-line summary."""
+        r2 = ""
+        if self.wheel_r2 is not None and self.damper_r2 is not None:
+            r2 = f", R² {self.wheel_r2:.3f}/{self.damper_r2:.3f}"
+            if self.damper_wheel_r2 is not None:
+                r2 += f"/{self.damper_wheel_r2:.3f}"
+        return (
+            f"pot/wheel {self.pot_per_wheel:.3f} (wheel/pot {self.wheel_per_sensor:.3f}), "
+            f"damper/pot {self.damper_per_sensor:.3f}, damper/wheel "
+            f"{self.damper_per_wheel:.3f}{r2}"
+        )
+
+
+@dataclass
+class ShockCalibration:
+    """Front and rear :class:`AxleShockCalibration` for one vehicle.
+
+    Left and right corners of an axle share the same slopes.
+    """
+
+    front: AxleShockCalibration
+    rear: AxleShockCalibration
+
+    def pot_wheel_ratios(self) -> MotionRatios:
+        """Pot/wheel ratios as :class:`MotionRatios` for the suspension analysis."""
+        f = self.front.pot_per_wheel
+        r = self.rear.pot_per_wheel
+        return MotionRatios(front_left=f, front_right=f, rear_left=r, rear_right=r)
+
+    def describe(self) -> str:
+        """Summary of both axles."""
+        return f"front: {self.front.describe()} | rear: {self.rear.describe()}"
 
 
 @dataclass
@@ -225,14 +336,14 @@ def compute_wheel_velocity(
     shock_velocity: np.ndarray,
     motion_ratio: float,
 ) -> np.ndarray:
-    """Convert shock velocity to wheel velocity using motion ratio.
+    """Convert shock pot velocity to wheel velocity using the pot/wheel motion ratio.
 
     Parameters
     ----------
     shock_velocity : np.ndarray
-        Shock velocity in mm/s.
+        Shock pot (stroke sensor) velocity in mm/s.
     motion_ratio : float
-        Motion ratio (shock_travel / wheel_travel).
+        Pot-to-wheel motion ratio (pot_travel / wheel_travel).
 
     Returns
     -------
@@ -503,7 +614,9 @@ def analyze_suspension_velocity(
         - "shock_rr": Rear right shock pot channel
         If None, uses SUSPENSION_CHANNEL_NAMES defaults.
     motion_ratios : MotionRatios, optional
-        Motion ratios for each corner. If None, uses Toyota 86 ZN6 defaults.
+        Pot-to-wheel motion ratios (pot_travel / wheel_travel) for each corner,
+        e.g. ``profile.motion_ratios`` / ``ShockCalibration.pot_wheel_ratios()``.
+        If None, uses Toyota 86 ZN6 defaults.
     velocity_ranges : VelocityRanges, optional
         Velocity thresholds for categorization. If None, uses defaults.
     smoothing_window : int, default=5
@@ -571,7 +684,7 @@ def analyze_suspension_velocity(
         rl_data = _process_corner_velocity(rl_vel, "RL", bin_size, max_velocity, velocity_ranges)
         rr_data = _process_corner_velocity(rr_vel, "RR", bin_size, max_velocity, velocity_ranges)
     else:
-        # Displacement channels (AIM): derive velocity and apply motion ratios
+        # Displacement channels (AIM): derive pot velocity, apply pot/wheel ratios
         timecodes = aligned[shock_fl_name].column("timecodes").to_numpy()
         fl_disp = aligned[shock_fl_name].column(shock_fl_name).to_numpy()
         fr_disp = aligned[shock_fr_name].column(shock_fr_name).to_numpy()
@@ -661,7 +774,8 @@ def analyze_suspension_velocity_multi_lap(
         - "shock_rr": Rear right shock pot channel
         If None, uses SUSPENSION_CHANNEL_NAMES defaults.
     motion_ratios : MotionRatios, optional
-        Motion ratios for each corner. If None, uses Toyota 86 ZN6 defaults.
+        Pot-to-wheel motion ratios (pot_travel / wheel_travel) for each corner.
+        If None, uses Toyota 86 ZN6 defaults.
     velocity_ranges : VelocityRanges, optional
         Velocity thresholds for categorization. If None, uses defaults.
     smoothing_window : int, default=5

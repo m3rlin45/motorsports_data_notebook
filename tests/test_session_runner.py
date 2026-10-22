@@ -49,7 +49,9 @@ class TestResolveProfile:
         """When no profile matches, returns DEFAULT_CHANNEL_NAMES."""
         log = MagicMock()
         log.metadata = {}
-        with patch("motorsports_data_notebook.session_runner.get_logger_id", return_value=None):
+        with patch(
+            "motorsports_data_notebook.session_runner.get_profile_for_log", return_value=None
+        ):
             channel_names, motion_ratios = resolve_profile(log)
         assert "gps_speed" in channel_names
         assert motion_ratios is None
@@ -66,32 +68,23 @@ class TestResolveProfile:
         mock_profile = MagicMock()
         mock_profile.channel_names = {"throttle": "TPS", "gps_speed": "GPS_Speed"}
         mock_profile.motion_ratios = MagicMock()
-        with (
-            patch(
-                "motorsports_data_notebook.session_runner.load_builtin_profiles",
-                return_value={"test_profile": mock_profile},
-            ),
-            patch(
-                "motorsports_data_notebook.session_runner.load_user_profiles",
-                return_value={},
-            ),
+        with patch(
+            "motorsports_data_notebook.session_runner.load_profile_definitions",
+            return_value={"test_profile": mock_profile},
         ):
             channel_names, motion_ratios = resolve_profile(log, profile_name="test_profile")
         assert channel_names == {"throttle": "TPS", "gps_speed": "GPS_Speed"}
         assert motion_ratios is mock_profile.motion_ratios
 
     def test_auto_detect_with_profile(self):
-        """Auto-detects profile from logger ID."""
+        """Auto-detects profile from logger ID + vehicle name."""
         log = MagicMock()
         mock_profile = MagicMock()
         mock_profile.channel_names = {"throttle": "PPS"}
         mock_profile.motion_ratios = None
-        with (
-            patch("motorsports_data_notebook.session_runner.get_logger_id", return_value="12345"),
-            patch(
-                "motorsports_data_notebook.session_runner.get_profile_for_logger",
-                return_value=mock_profile,
-            ),
+        with patch(
+            "motorsports_data_notebook.session_runner.get_profile_for_log",
+            return_value=mock_profile,
         ):
             channel_names, motion_ratios = resolve_profile(log)
         assert channel_names == {"throttle": "PPS"}

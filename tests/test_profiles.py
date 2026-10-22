@@ -17,12 +17,17 @@ from motorsports_data_notebook.profiles import (
     _profile_from_dict,
     _profile_to_dict,
     get_logger_id,
+    get_profile_for_log,
     get_profile_for_logger,
+    get_vehicle_name,
     is_iracing_session,
     load_builtin_profiles,
+    load_profile_definitions,
     load_user_profiles,
+    profile_key,
     save_profile_for_logger,
     save_user_profiles,
+    split_profile_key,
 )
 from motorsports_data_notebook.suspension import MotionRatios
 
@@ -419,11 +424,19 @@ class TestBuiltinProfiles:
                     isinstance(value, str) and value
                 ), f"Profile '{profile_id}' channel '{key}' must be a non-empty string"
 
-        # Every logger_map entry should reference an existing profile
-        for logger_id, profile_id in data["logger_map"].items():
-            assert (
-                profile_id in data["profiles"]
-            ), f"Logger '{logger_id}' references unknown profile '{profile_id}'"
+        # Every logger_map entry should reference existing profiles. Entries are
+        # either a profile id or {default: id, by_vehicle: {vehicle: id}}.
+        for logger_id, entry in data["logger_map"].items():
+            if isinstance(entry, dict):
+                referenced = [entry.get("default")] + list(entry.get("by_vehicle", {}).values())
+                referenced = [pid for pid in referenced if pid is not None]
+                assert referenced, f"Logger '{logger_id}' maps to no profiles"
+            else:
+                referenced = [entry]
+            for profile_id in referenced:
+                assert (
+                    profile_id in data["profiles"]
+                ), f"Logger '{logger_id}' references unknown profile '{profile_id}'"
 
 
 class TestGetLoggerIdIRacing:
@@ -504,3 +517,278 @@ class TestBuiltinIracingProfile:
         assert profile.motion_ratios.front_right == pytest.approx(1.0)
         assert profile.motion_ratios.rear_left == pytest.approx(1.0)
         assert profile.motion_ratios.rear_right == pytest.approx(1.0)
+
+
+# ── Shared loggers: vehicle name as second discriminator ─────────────────────
+
+
+class TestVehicleName:
+    """Tests for get_vehicle_name()."""
+
+    def test_metadata_vehicle_wins(self):
+        log = MockLogFile(
+            metadata={"Logger ID": 8401203, "Vehicle": "KK-F"},
+            file_name="CMD_KK-SII_Suzuka Car_Race_a_0358.xrk",
+        )
+        assert get_vehicle_name(log) == "KK-F"
+
+    def test_blank_metadata_falls_back_to_file_name(self):
+        """xrz exports have an empty Vehicle field; use the Race Studio file name."""
+        log = MockLogFile(
+            metadata={"Logger ID": 8401203, "Vehicle": ""},
+            file_name="/data/2026-10-02/CMD_KK-F_Suzuka West_Generic testing_a_0351.xrz",
+        )
+        assert get_vehicle_name(log) == "KK-F"
+
+    def test_file_name_with_underscored_track(self):
+        log = MockLogFile(
+            metadata={"Logger ID": 8401203},
+            file_name="CMD_KK-F_Tsukuba_Car_Race_a_0344.xrz",
+        )
+        assert get_vehicle_name(log) == "KK-F"
+
+    def test_explicit_file_name_argument(self):
+        """Logs loaded from bytes have no file name; the caller can pass one."""
+        log = MockLogFile(metadata={"Logger ID": 8401203}, file_name="")
+        assert get_vehicle_name(log, file_name="CMD_KK-SII_Fuji GP_Race_a_0001.xrz") == "KK-SII"
+
+    def test_non_racestudio_name_returns_none(self):
+        log = MockLogFile(metadata={"Logger ID": 1}, file_name="session.xrk")
+        assert get_vehicle_name(log) is None
+
+    def test_non_aim_file_does_not_parse_name(self):
+        log = MockLogFile(metadata={"session_info_yaml": "x"}, file_name="mx5_okayama_2024.ibt")
+        assert get_vehicle_name(log) is None
+
+    def test_no_metadata(self):
+        assert get_vehicle_name(object()) is None  # type: ignore[arg-type]
+
+
+class TestProfileKeys:
+    def test_profile_key_roundtrip(self):
+        assert profile_key("8401203", "KK-F") == "8401203/KK-F"
+        assert profile_key("8401203") == "8401203"
+        assert split_profile_key("8401203/KK-F") == ("8401203", "KK-F")
+        assert split_profile_key("8401203") == ("8401203", None)
+
+
+class TestVehicleLoggerMap:
+    """Nested logger_map entries: default + by_vehicle."""
+
+    def _write(self, tmp_path, logger_entry):
+        yaml_content = {
+            "profiles": {
+                "car_a": {"name": "Car A", "channel_names": {"throttle": "A_TPS"}},
+                "car_b": {"name": "Car B", "channel_names": {"throttle": "B_TPS"}},
+            },
+            "logger_map": {8401203: logger_entry},
+        }
+        path = tmp_path / "profiles.yaml"
+        with open(path, "w") as f:
+            yaml.dump(yaml_content, f)
+        return path
+
+    def test_nested_entry_resolves_default_and_vehicles(self, tmp_path):
+        path = self._write(
+            tmp_path, {"default": "car_a", "by_vehicle": {"KK-SII": "car_a", "KK-F": "car_b"}}
+        )
+        result = _load_profiles_file(path)
+        assert result["8401203"].name == "Car A"
+        assert result["8401203/KK-SII"].name == "Car A"
+        assert result["8401203/KK-F"].name == "Car B"
+
+    def test_nested_entry_without_default(self, tmp_path):
+        path = self._write(tmp_path, {"by_vehicle": {"KK-F": "car_b"}})
+        result = _load_profiles_file(path)
+        assert "8401203" not in result
+        assert result["8401203/KK-F"].name == "Car B"
+
+    def test_get_profile_for_logger_prefers_vehicle(self, tmp_path, monkeypatch):
+        path = self._write(
+            tmp_path, {"default": "car_a", "by_vehicle": {"KK-SII": "car_a", "KK-F": "car_b"}}
+        )
+        monkeypatch.setattr(
+            "motorsports_data_notebook.profiles._get_user_profiles_path", lambda: path
+        )
+        monkeypatch.setattr("motorsports_data_notebook.profiles.load_builtin_profiles", lambda: {})
+        assert get_profile_for_logger("8401203", "KK-F").name == "Car B"
+        assert get_profile_for_logger("8401203", "kk-f").name == "Car B"  # case-insensitive
+        assert get_profile_for_logger("8401203", "KK-SII").name == "Car A"
+        assert get_profile_for_logger("8401203").name == "Car A"
+        # Unknown vehicle falls back to the logger default
+        assert get_profile_for_logger("8401203", "Something Else").name == "Car A"
+
+    def test_get_profile_for_log_uses_vehicle(self, tmp_path, monkeypatch):
+        path = self._write(tmp_path, {"default": "car_a", "by_vehicle": {"KK-F": "car_b"}})
+        monkeypatch.setattr(
+            "motorsports_data_notebook.profiles._get_user_profiles_path", lambda: path
+        )
+        monkeypatch.setattr("motorsports_data_notebook.profiles.load_builtin_profiles", lambda: {})
+        log = MockLogFile(
+            metadata={"Logger ID": 8401203, "Vehicle": ""},
+            file_name="CMD_KK-F_Suzuka West_Generic testing_a_0351.xrz",
+        )
+        assert get_profile_for_log(log).name == "Car B"
+        log_b = MockLogFile(metadata={"Logger ID": 8401203}, file_name="")
+        assert get_profile_for_log(log_b).name == "Car A"
+        assert get_profile_for_log(MockLogFile(metadata={})) is None
+
+    def test_save_and_load_vehicle_specific(self, tmp_path, monkeypatch):
+        user_path = tmp_path / "config" / "profiles.yaml"
+        monkeypatch.setattr(
+            "motorsports_data_notebook.profiles._get_user_profiles_path", lambda: user_path
+        )
+        default = VehicleProfile(name="Car A", channel_names={"throttle": "A"})
+        kk_f = VehicleProfile(name="Car B", channel_names={"throttle": "B"})
+        save_profile_for_logger("8401203", default)
+        save_profile_for_logger("8401203", kk_f, vehicle="KK-F")
+
+        with open(user_path) as f:
+            raw = yaml.safe_load(f)
+        assert raw["logger_map"]["8401203"] == {"default": "car_a", "by_vehicle": {"KK-F": "car_b"}}
+
+        loaded = load_user_profiles()
+        assert loaded["8401203"].name == "Car A"
+        assert loaded["8401203/KK-F"].name == "Car B"
+
+    def test_load_profile_definitions_keyed_by_id(self, tmp_path, monkeypatch):
+        path = self._write(tmp_path, "car_a")
+        monkeypatch.setattr(
+            "motorsports_data_notebook.profiles._get_user_profiles_path", lambda: path
+        )
+        defs = load_profile_definitions()
+        assert defs["car_a"].name == "Car A"
+        assert defs["car_b"].name == "Car B"
+        assert "kk_f" in defs  # builtin definitions are included too
+
+
+class TestShockCalibrationProfiles:
+    """shock_calibration section: slopes kept, motion ratios derived."""
+
+    def test_motion_ratios_derived_from_calibration(self):
+        profile = _profile_from_dict(
+            {
+                "name": "Cal",
+                "shock_calibration": {
+                    "front": {"wheel_per_sensor": 1.25, "damper_per_sensor": 1.0},
+                    "rear": {"wheel_per_sensor": 2.0, "damper_per_sensor": 1.5},
+                },
+            }
+        )
+        assert profile.shock_calibration is not None
+        assert profile.motion_ratios.front_left == pytest.approx(0.8)
+        assert profile.motion_ratios.front_right == pytest.approx(0.8)
+        assert profile.motion_ratios.rear_left == pytest.approx(0.5)
+        assert profile.shock_calibration.front.pot_per_wheel == pytest.approx(0.8)
+        assert profile.shock_calibration.front.damper_per_wheel == pytest.approx(0.8)
+        assert profile.shock_calibration.rear.damper_per_wheel == pytest.approx(0.75)
+
+    def test_explicit_motion_ratios_override_calibration(self):
+        profile = _profile_from_dict(
+            {
+                "name": "Cal",
+                "motion_ratios": {"front_left": 0.9},
+                "shock_calibration": {
+                    "front": {"wheel_per_sensor": 1.25, "damper_per_sensor": 1.0},
+                    "rear": {"wheel_per_sensor": 2.0, "damper_per_sensor": 1.5},
+                },
+            }
+        )
+        assert profile.motion_ratios.front_left == pytest.approx(0.9)
+        assert profile.motion_ratios.front_right == pytest.approx(0.8)  # still derived
+
+    def test_invalid_calibration_ignored(self):
+        profile = _profile_from_dict(
+            {"name": "Bad", "shock_calibration": {"front": {"wheel_per_sensor": 1.0}}}
+        )
+        assert profile.shock_calibration is None
+        assert profile.motion_ratios.front_left == pytest.approx(0.997)
+
+    def test_roundtrip_keeps_slopes_points_and_r2(self):
+        from motorsports_data_notebook.suspension import AxleShockCalibration, ShockCalibration
+
+        cal = ShockCalibration(
+            front=AxleShockCalibration(
+                1.1433,
+                1.0406,
+                damper_per_wheel_fit=0.9082,
+                wheel_r2=0.9961,
+                damper_r2=0.9985,
+                damper_wheel_r2=0.9979,
+                points=[[401.4, 300.0, 10.2], [407.6, 295.0, 15.1]],
+            ),
+            rear=AxleShockCalibration(1.3484, 1.0407, excluded_points=[1, 2]),
+        )
+        original = VehicleProfile(name="KK-F", shock_calibration=cal)
+        restored = _profile_from_dict(_profile_to_dict(original))
+        assert restored.shock_calibration is not None
+        assert restored.shock_calibration.front.wheel_per_sensor == pytest.approx(1.1433)
+        assert restored.shock_calibration.front.wheel_r2 == pytest.approx(0.9961)
+        assert restored.shock_calibration.front.damper_per_wheel == pytest.approx(0.9082)
+        assert restored.shock_calibration.front.damper_wheel_r2 == pytest.approx(0.9979)
+        # no direct fit stored -> falls back to the ratio of slopes
+        assert restored.shock_calibration.rear.damper_per_wheel == pytest.approx(1.0407 / 1.3484)
+        assert restored.shock_calibration.front.points == [
+            [401.4, 300.0, 10.2],
+            [407.6, 295.0, 15.1],
+        ]
+        assert restored.shock_calibration.rear.excluded_points == [1, 2]
+        assert restored.shock_calibration.rear.wheel_r2 is None
+
+
+class TestBuiltinKKF:
+    """The KK-F shares logger 8401203 with the KK-SII."""
+
+    def test_kk_f_resolves_by_vehicle(self):
+        profile = get_profile_for_logger("8401203", "KK-F")
+        assert profile is not None
+        assert profile.name == "KK-F"
+        assert profile.channel_names["shock_fl"] == "LF_Shock_Pot"
+        # analysis motion ratios are pot/wheel = 1 / wheel_per_sensor from the calibration
+        assert profile.shock_calibration is not None
+        assert profile.motion_ratios.front_left == pytest.approx(1 / 1.1433, rel=1e-3)
+        assert profile.motion_ratios.rear_left == pytest.approx(1 / 1.3484, rel=1e-3)
+        # damper/wheel is the directly fitted slope, not the ratio of sensor slopes (0.910)
+        assert profile.shock_calibration.front.damper_per_wheel == pytest.approx(0.9082)
+        assert profile.shock_calibration.rear.damper_per_wheel == pytest.approx(0.7713)
+        assert profile.shock_calibration.front.damper_wheel_r2 == pytest.approx(0.9979)
+        assert profile.shock_calibration.rear.excluded_points == [1, 2]
+
+    def test_kk_sii_is_default_for_shared_logger(self):
+        assert get_profile_for_logger("8401203").name == "KK-SII"
+        assert get_profile_for_logger("8401203", "KK-SII").name == "KK-SII"
+        assert (
+            get_profile_for_logger("8401203", "KK-SII").channel_names["shock_rr"] == "RR_Shock_Pot"
+        )
+
+    def test_kk_f_from_xrz_file_name(self):
+        log = MockLogFile(
+            metadata={"Logger ID": 8401203, "Vehicle": ""},
+            file_name="CMD_KK-F_Tsukuba_Car_Race_a_0344.xrz",
+        )
+        assert get_profile_for_log(log).name == "KK-F"
+
+    def test_kk_f_from_xrk_metadata(self):
+        log = MockLogFile(metadata={"Logger ID": 8401203, "Vehicle": "KK-F"}, file_name="x.xrk")
+        assert get_profile_for_log(log).name == "KK-F"
+
+
+class TestBuiltin86PotWheel:
+    """The 86 profile uses the same pot/wheel convention via shock_calibration."""
+
+    def test_86_ratios_unchanged_and_from_calibration(self):
+        profile = get_profile_for_logger("6701209")
+        assert profile is not None and profile.name == "Toyota 86 ZN6"
+        assert profile.shock_calibration is not None
+        assert profile.shock_calibration.front.damper_per_sensor == pytest.approx(1.0)
+        assert profile.shock_calibration.front.damper_per_wheel == pytest.approx(0.997)
+        assert profile.shock_calibration.rear.damper_per_wheel == pytest.approx(0.768)
+        assert profile.motion_ratios.front_left == pytest.approx(0.997)
+        assert profile.motion_ratios.rear_left == pytest.approx(0.768)
+        assert profile.motion_ratios == profile.shock_calibration.pot_wheel_ratios()
+
+    def test_every_builtin_profile_has_calibration(self):
+        for key, profile in load_builtin_profiles().items():
+            if key == "iracing" or key == "15074" or key == "6603435":
+                continue  # no shock pots (GPS-only / velocity channels)
+            assert profile.shock_calibration is not None, key

@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     import ipywidgets as widgets
 
     from ._types import LogFile
+    from .profiles import VehicleProfile
 
 
 class FileUpload:
@@ -440,22 +441,42 @@ class SessionPicker:
         if self._log is None:
             return
 
-        from .profiles import get_logger_id, get_profile_for_logger
+        from .profiles import get_logger_id, get_profile_for_log, get_vehicle_name
 
         logger_id = get_logger_id(self._log)
         if not logger_id:
             return
 
-        profile = get_profile_for_logger(logger_id)
+        profile = get_profile_for_log(self._log)
         if profile:
             if self._channel_picker is not None:
                 self._channel_picker.set_channel_values(profile.channel_names)
             if self._tire_picker is not None:
                 self._tire_picker.set_channel_values(profile.channel_names)
+            vehicle = get_vehicle_name(self._log)
+            source = f"logger {logger_id}" + (f", vehicle {vehicle}" if vehicle else "")
             self._file_status.value += (
                 f"<br><span style='color: green;'><b>✓</b> Profile: {profile.name} "
-                f"(logger {logger_id})</span>"
+                f"({source})</span>"
             )
+
+    def get_profile(self) -> "VehicleProfile | None":
+        """Return the vehicle profile resolved for the loaded session, if any.
+
+        Resolution uses the logger ID plus the vehicle name (file metadata or
+        Race Studio file name), so a logger shared between cars resolves to
+        the right car's channel names and motion ratios.
+
+        Returns
+        -------
+        VehicleProfile | None
+            The matching profile, or None if no file is loaded or no profile matches.
+        """
+        if self._log is None:
+            return None
+        from .profiles import get_profile_for_log
+
+        return get_profile_for_log(self._log)
 
     def _update_channel_picker(self) -> None:
         """Update the channel picker with available channels from loaded log."""

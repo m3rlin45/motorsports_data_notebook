@@ -11,7 +11,7 @@ Standalone desktop application for motorsports telemetry analysis combining susp
 
 ### Suspension Tab
 - **2x2 velocity histogram** for all four shock corners (FL, FR, RL, RR)
-- **Configurable motion ratios** per corner
+- **Configurable pot/wheel motion ratios** per corner
 - **Detailed statistics** with bump/rebound breakdown per wheel
 
 ### Driver Consistency Tab
@@ -156,11 +156,15 @@ python -m inferno_analyzer
 
 When loading a session, the app detects the logger serial number and auto-populates channel names and motion ratios from a saved profile. Click **Save Profile** to save the current configuration for that logger.
 
+A logger shared between cars (same serial number, different Race Studio configuration, e.g. the SW4 used on both the KK-SII and the KK-F) is disambiguated by the **vehicle name**: the `Vehicle` metadata field (present in `.xrk` files) or, when that is empty (`.xrz` exports), the vehicle token of the Race Studio file name (`CMD_<Vehicle>_<Track>_…`). Profiles are then saved and looked up per logger + vehicle, falling back to the logger's default profile.
+
+The analysis uses the **pot-to-wheel** motion ratio (pot travel / wheel travel) applied to the logged shock pot channel: wheel velocity = pot velocity / ratio. Every profile stores a `shock_calibration` block with the per-axle slopes (`wheel_per_sensor`, `damper_per_sensor`, optional R² and raw points); the pot/wheel ratio derives as `1 / wheel_per_sensor`, the damper/wheel geometry ratio is stored as its own directly fitted slope (`damper_per_wheel`) for spring/damper-rate modeling, and Save Profile carries the block over. Fit a new calibration table with `scripts/fit_shock_calibration.py`.
+
 ### Configuration
 
 The config panel (right column) swaps content based on the active tab:
 
-- **Suspension tab**: Motion ratios per corner, shock pot channel names
+- **Suspension tab**: Pot/wheel motion ratios per corner, shock pot channel names
 - **Driver tab**: Corner detection threshold, throttle threshold, sustain time, channel names
 
 ## Architecture

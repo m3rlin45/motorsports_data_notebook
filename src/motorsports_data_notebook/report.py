@@ -21,7 +21,7 @@ from motorsports_data_notebook.driver_analysis import (
     find_throttle_acceptance_from_arrays,
     prepare_throttle_acceptance,
 )
-from motorsports_data_notebook.profiles import get_logger_id, get_profile_for_logger
+from motorsports_data_notebook.profiles import get_logger_id, get_profile_for_log
 from motorsports_data_notebook.suspension import analyze_suspension_velocity_multi_lap
 from motorsports_data_notebook.tire_grip import analyze_tire_grip_multi_lap
 from motorsports_data_notebook.zones import (
@@ -892,7 +892,7 @@ def generate_session_report(
 
     # ── 1. Session metadata ──────────────────────────────────────────────────
     logger_id = get_logger_id(log)
-    profile = get_profile_for_logger(logger_id) if logger_id else None
+    profile = get_profile_for_log(log)
     laps_df = log.laps.to_pandas()
 
     # ── 2. Lap time analysis ─────────────────────────────────────────────────
