@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Chart spec model + IChartSurface. Depends on Avalonia only for the
+    `Control` type a surface exposes; it must never reference a chart library.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="$(AvaloniaVersion)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="InfernoAnalyzer.Tests" />
+  </ItemGroup>
+
+</Project>
