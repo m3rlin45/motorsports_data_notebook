@@ -20,7 +20,6 @@ import pyarrow as pa
 
 from .aggregates import compute_corner_aggregates, compute_lap_dynamics
 from .discovery import SessionCandidate, parse_filename, scan_aim_tree
-from .filters import FilterConfig, apply_filters
 from .layouts import LayoutDetection, apply_layout_correction, detect_layout
 from .stints import assign_stint_ids
 
@@ -74,79 +73,6 @@ def _session_id_for_paths(paths_and_mtimes: list[tuple[Path, int]]) -> str:
     for p, m in sorted(paths_and_mtimes, key=lambda pm: str(pm[0].resolve())):
         h.update(f"{p.resolve()}|{m}|".encode())
     return h.hexdigest()[:16]
-
-
-def _stale_prefix_len(arr: np.ndarray) -> int:
-    """Return the count of leading stale-sensor samples in ``arr``.
-
-    A TPMS module that's still asleep reports its last pre-sleep ADC value
-    bit-for-bit identical sample to sample; once it wakes up, ±1-LSB
-    sensor noise gives every sample a different float value. So the
-    sleeping signature is a *sustained* run of strictly-equal values at
-    the head of the series.
-
-    Walk forward from the first finite sample to the first one whose
-    value differs bit-exactly. If that gap is 0 or 1 sample, the sensor
-    was awake from the start — return 0. Otherwise return the length of
-    the constant prefix. An entirely flat array returns its full length
-    (sensor never woke up for the whole session).
-    """
-    if arr.size <= 1:
-        return 0
-    finite_mask = ~np.isnan(arr)
-    if not finite_mask.any():
-        return 0
-    first_idx = int(np.argmax(finite_mask))
-    baseline = arr[first_idx]
-    for i in range(first_idx + 1, arr.size):
-        if np.isnan(arr[i]):
-            continue
-        if arr[i] != baseline:
-            return i if i - first_idx >= 2 else 0
-    return arr.size  # flat from first_idx to end → all-stale
-
-
-def mask_stale_session_prefix(ts: pa.Table) -> pa.Table:
-    """Mask the leading stale-sensor samples in each TPMS channel as NaN.
-
-    Operates session-wide (across every lap in this timeseries), because
-    the sensor wake-up only happens once per physical run, not on every
-    lap. The decision is made **per corner**: a corner's pressure and
-    temperature come from one module in one radio packet, so the first
-    change on *either* stream proves the module is awake, and from that
-    sample on the other stream's (possibly still constant — the values are
-    quantised to 1 °C / 0.03 bar) reading is a real reading. Both streams
-    are therefore unmasked from the earlier of their two first-change
-    points. Different corners still wake independently.
-    """
-    new_table = ts
-    for c in CORNERS:
-        names = [
-            n for n in (f"tpms_press_{c}_bar", f"tpms_temp_{c}_c") if n in new_table.schema.names
-        ]
-        if not names:
-            continue
-        arrays = {
-            n: new_table.column(new_table.schema.get_field_index(n))
-            .to_numpy(zero_copy_only=False)
-            .astype(np.float64)
-            for n in names
-        }
-        stale = {n: _stale_prefix_len(a) for n, a in arrays.items()}
-        # A stream that never changes (stale_len == its length) cannot
-        # vouch for the module; take the earliest *real* change.
-        proven = [v for n, v in stale.items() if v < arrays[n].size]
-        corner_stale = min(proven) if proven else max(stale.values())
-        for n in names:
-            if corner_stale == 0:
-                continue
-            idx = new_table.schema.get_field_index(n)
-            field = new_table.schema.field(idx)
-            arr = arrays[n]
-            arr[:corner_stale] = np.nan
-            new_col = pa.array(arr.astype(field.type.to_pandas_dtype()), type=field.type)
-            new_table = new_table.set_column(idx, n, new_col)
-    return new_table
 
 
 def _resolve_channels(profile_channel_names: dict[str, str], keys: list[str]) -> dict[str, str]:
@@ -723,13 +649,6 @@ def extract_session(
     # Rename AIM channel names to canonical snake_case (and derive surf means).
     timeseries = _rename_to_canonical(timeseries, profile_names=channel_names)
 
-    # Mask the leading stale-sensor prefix on each TPMS channel before any
-    # per-lap stats are computed. This is a *session*-level operation: the
-    # sensor only wakes up once per physical run, so we don't want to
-    # re-detect "staleness" per lap (mid-session bit-exact runs are coincidence,
-    # not sleep).
-    timeseries = mask_stale_session_prefix(timeseries)
-
     # Prepend session_id column.
     session_id_col = pa.array([session_id] * len(timeseries))
     timeseries = timeseries.add_column(0, "session_id", session_id_col)
@@ -750,9 +669,6 @@ def extract_session(
     # out-lap and carry the new ids onto the timeseries.
     laps_rows, timeseries = _restint_at_pit_exits(laps_rows, timeseries)
 
-    # Apply filters.
-    laps_rows = apply_filters(laps_rows, FilterConfig())
-
     has_tpms = any(f"tpms_press_{c}_bar" in timeseries.schema.names for c in CORNERS)
     has_surface_temp = any(f"surf_temp_{c}_mean_c" in timeseries.schema.names for c in CORNERS)
     status = "ok" if has_tpms else "partial"
@@ -768,7 +684,6 @@ def extract_session(
         logger_id=logger_id,
         profile_name=profile_name,
         n_laps=len(laps_rows),
-        n_tire_usable=int(sum(laps_rows.column("tire_usable").to_pylist())),
         has_tpms=has_tpms,
         has_surface_temp=has_surface_temp,
         has_ambient=False,  # AIM logs rarely carry a dedicated ambient channel in this fleet
@@ -863,7 +778,6 @@ def _build_empty_session_row(
         logger_id="",
         profile_name="",
         n_laps=0,
-        n_tire_usable=0,
         has_tpms=False,
         has_surface_temp=False,
         has_ambient=False,
@@ -890,7 +804,6 @@ def _build_session_row(
     logger_id: str,
     profile_name: str,
     n_laps: int,
-    n_tire_usable: int,
     has_tpms: bool,
     has_surface_temp: bool,
     has_ambient: bool,
@@ -940,7 +853,6 @@ def _build_session_row(
             "status": [status],
             "error_msg": pa.array([error_msg], type=pa.string()),
             "n_laps": pa.array([n_laps], type=pa.int32()),
-            "n_tire_usable_laps": pa.array([n_tire_usable], type=pa.int32()),
             "has_tpms": [has_tpms],
             "has_surface_temp": [has_surface_temp],
             "has_ambient_temp": [has_ambient],

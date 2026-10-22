@@ -39,6 +39,7 @@ from .predict import (
     _lookup_outlap,
     predict_cold_pressure,
 )
+from .cleaning import clean_laps
 from .warmup_table import (
     CORNERS as _WT_CORNERS,
     W_ROAD,
@@ -63,6 +64,7 @@ def run_validation(dataset_root: Path | None = None) -> int:
         [pq.read_table(f).to_pandas() for f in sorted(laps_dir(root).glob("*.parquet"))],
         ignore_index=True,
     )
+    laps = clean_laps(root, laps)
 
     # Merge notes -> sessions for track/car/ambient
     merged = notes.merge(
@@ -165,6 +167,7 @@ def _load_sessions_and_laps(root: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
         [pq.read_table(f).to_pandas() for f in sorted(laps_dir(root).glob("*.parquet"))],
         ignore_index=True,
     )
+    laps = clean_laps(root, laps)
     return sessions, laps
 
 

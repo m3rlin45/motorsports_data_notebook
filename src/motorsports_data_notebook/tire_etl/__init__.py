@@ -26,7 +26,11 @@ from __future__ import annotations
 # ("Generic testing", "Race") now resolve via Venue metadata + GPS. New
 # session columns: venue_meta, layout_id, track_declared_canonical,
 # track_resolution, lap_source, beacon_gate, n_laps_logger.
-EXTRACTOR_VERSION = "0.10.1"
+# 0.11.0: the extractor writes raw data only. The stale-TPMS prefix mask
+# and the per-lap usability filters (tire_usable / exclude_reason,
+# n_tire_usable_laps) moved to the model package (tire_model/cleaning.py),
+# so a cleaning rule can change without re-extracting. Dataset schema 4.
+EXTRACTOR_VERSION = "0.11.0"
 
 from .extract import extract_session, run_extract  # noqa: E402
 from .notes_parser import run_enrich_notes  # noqa: E402
