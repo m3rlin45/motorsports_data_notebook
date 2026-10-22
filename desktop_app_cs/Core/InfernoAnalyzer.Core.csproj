@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Data model, profiles and analysis kernels. No UI dependencies, NativeAOT
+    clean: YAML is read through YamlDotNet's representation model (no
+    reflection-based deserialisation).
+  -->
+  <PropertyGroup>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="YamlDotNet" Version="$(YamlDotNetVersion)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Linked, not copied: the Python package's file is the single source of truth. -->
+    <EmbeddedResource Include="..\..\src\motorsports_data_notebook\data\builtin_profiles.yaml" LogicalName="builtin_profiles.yaml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="InfernoAnalyzer.Tests" />
+  </ItemGroup>
+
+</Project>
