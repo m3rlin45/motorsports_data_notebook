@@ -34,6 +34,7 @@ from ..tire_etl.paths import (
     weather_dir,
 )
 from . import wetness as _wetness
+from .cleaning import clean_laps
 from .energy_balance import P_ATM_BAR, T_ZERO_C_TO_K, t_effective_c, t_road_proxy_c
 
 logger = logging.getLogger(__name__)
@@ -364,11 +365,13 @@ def alias_condition_seeds(seeds: dict[str, dict[str, str]]) -> dict[str, dict[st
 
 
 def _load_filtered_laps(root: Path) -> pd.DataFrame:
-    """Read laps + sessions, filter to ok + has_tpms + tire_usable.
+    """Read laps + sessions, clean, filter to ok + has_tpms + tire_usable.
 
-    Car labels are alias-pooled here (see CAR_FIT_ALIASES) so every
-    consumer — the fit, held-out evaluation, sensor audit — sees the
-    pooled car names.
+    The dataset on disk is raw: :func:`cleaning.clean_laps` masks the TPMS
+    wake-up samples, rebuilds the per-lap TPMS summaries and sets
+    ``tire_usable`` here. Car labels are alias-pooled (see CAR_FIT_ALIASES)
+    so every consumer — the fit, held-out evaluation, sensor audit — sees
+    the pooled car names.
     """
     laps_files = sorted((laps_dir(root)).glob("*.parquet"))
     sessions_files = sorted((sessions_dir(root)).glob("*.parquet"))
@@ -382,6 +385,7 @@ def _load_filtered_laps(root: Path) -> pd.DataFrame:
     sessions = pa.concat_tables(
         [pq.read_table(f) for f in sessions_files], promote_options="default"
     ).to_pandas()
+    laps = clean_laps(root, laps)
 
     sessions_keep = sessions[(sessions["status"] == "ok") & sessions["has_tpms"]]
     cols_from_sessions = ["session_id", "track_canonical", "car", "session_start_utc", "date"]

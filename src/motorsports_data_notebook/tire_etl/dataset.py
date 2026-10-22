@@ -111,18 +111,27 @@ def _anti_join_and_concat(
     new_rows: pa.Table,
     *,
     key: str = "session_id",
+    drop_ids: set[str] | None = None,
 ) -> pa.Table:
-    """Return ``existing`` rows with matching session_id removed, then concat ``new_rows``."""
+    """Return ``existing`` rows with matching session_id removed, then concat ``new_rows``.
+
+    ``drop_ids`` are removed from ``existing`` even when ``new_rows`` is empty:
+    a session whose re-extraction produced no lap rows (it became a zero-lap
+    error) must not keep the rows of an earlier run.
+    """
     if existing is None or len(existing) == 0:
         return new_rows
-    if len(new_rows) == 0:
-        return existing
-    incoming_ids = set(new_rows.column(key).to_pylist())
+    incoming_ids = set(new_rows.column(key).to_pylist()) if len(new_rows) > 0 else set()
+    incoming_ids |= set(drop_ids or ())
     if not incoming_ids:
+        if len(new_rows) == 0:
+            return existing
         return pa.concat_tables([existing, new_rows], promote_options="default")
     # Filter out rows from existing whose key is in the incoming set.
     mask = pc.invert(pc.is_in(existing.column(key), pa.array(list(incoming_ids))))
     keep = existing.filter(mask)
+    if len(new_rows) == 0:
+        return keep
     # Align schemas before concat (missing columns become null), then put the
     # columns in the incoming rows' order so every partition shares one
     # column order — pa.concat_tables without promotion (used by readers)
@@ -186,12 +195,16 @@ def upsert_session(
     merged_sessions = _sort_sessions(merged_sessions)
     _atomic_write_parquet(merged_sessions, sess_path)
 
-    # Laps partition.
-    if len(result.laps_rows) > 0:
-        laps_path = laps_dir(dataset_root) / f"{partition}.parquet"
-        existing_laps = _read_partition(laps_path)
-        merged_laps = _anti_join_and_concat(existing_laps, result.laps_rows)
-        merged_laps = _sort_laps(merged_laps)
+    # Laps partition. Rewritten even when this extraction produced no laps,
+    # so a session that turned into a zero-lap error drops its earlier rows.
+    laps_path = laps_dir(dataset_root) / f"{partition}.parquet"
+    existing_laps = _read_partition(laps_path)
+    if len(result.laps_rows) > 0 or existing_laps is not None:
+        merged_laps = _anti_join_and_concat(
+            existing_laps, result.laps_rows, drop_ids={str(session_id)}
+        )
+        if len(merged_laps) > 0:
+            merged_laps = _sort_laps(merged_laps)
         _atomic_write_parquet(merged_laps, laps_path)
 
     extractor_version = result.session_row.column("extractor_version")[0].as_py()
