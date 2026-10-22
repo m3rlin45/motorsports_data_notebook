@@ -34,6 +34,7 @@ from ._util import validate_channel_names as _validate_channel_names
 
 if TYPE_CHECKING:
     from ._types import LogFile
+    from .roll_gradient import TrackWidths
     from .suspension import MotionRatios, ShockCalibration
 
 
@@ -91,12 +92,15 @@ class VehicleProfile:
         pot mm), kept for reference and future use. When a profile file defines
         it without explicit ``motion_ratios``, the pot/wheel ratios are derived
         from it.
+    track_widths : TrackWidths or None
+        Front/rear track widths in mm, used by the roll gradient analysis.
     """
 
     name: str
     channel_names: dict[str, str] = field(default_factory=lambda: DEFAULT_CHANNEL_NAMES.copy())
     motion_ratios: MotionRatios = field(default_factory=lambda: _default_motion_ratios())
     shock_calibration: ShockCalibration | None = None
+    track_widths: TrackWidths | None = None
 
     def get_channel_subset(self, keys: list[str]) -> dict[str, str]:
         """Return a subset of channel_names for the given canonical keys.
@@ -179,6 +183,11 @@ def _profile_to_dict(profile: VehicleProfile) -> dict:
             "front": _axle_calibration_to_dict(profile.shock_calibration.front),
             "rear": _axle_calibration_to_dict(profile.shock_calibration.rear),
         }
+    if profile.track_widths is not None:
+        data["track_width_mm"] = {
+            "front": float(profile.track_widths.front_mm),
+            "rear": float(profile.track_widths.rear_mm),
+        }
     return data
 
 
@@ -224,11 +233,22 @@ def _profile_from_dict(data: dict) -> VehicleProfile:
         rear_right=float(ratios_data.get("rear_right", defaults.rear_right)),
     )
 
+    track_widths = None
+    tw_data = data.get("track_width_mm")
+    if isinstance(tw_data, dict):
+        from .roll_gradient import TrackWidths
+
+        try:
+            track_widths = TrackWidths(front_mm=tw_data["front"], rear_mm=tw_data["rear"])
+        except (KeyError, TypeError, ValueError):
+            track_widths = None
+
     return VehicleProfile(
         name=data.get("name", "Unknown"),
         channel_names=channel_names,
         motion_ratios=motion_ratios,
         shock_calibration=shock_calibration,
+        track_widths=track_widths,
     )
 
 
