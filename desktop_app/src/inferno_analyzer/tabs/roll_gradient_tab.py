@@ -1,0 +1,164 @@
+"""Roll gradient tab — front/rear roll vs lateral G and roll ratio from shock pots."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
+
+import customtkinter as ctk
+
+from motorsports_data_notebook.roll_gradient import analyze_roll_gradient_multi_lap
+from inferno_analyzer.roll_gradient.widgets.chart_view import ChartView
+from inferno_analyzer.roll_gradient.widgets.stats_panel import StatsPanel
+from inferno_analyzer.tabs.base_tab import BaseAnalysisTab
+
+if TYPE_CHECKING:
+    from motorsports_data_notebook._types import LogFile
+    from motorsports_data_notebook.roll_gradient import TrackWidths
+    from motorsports_data_notebook.suspension import MotionRatios
+
+    from inferno_analyzer.app import InfernoAnalyzerApp
+
+
+@dataclass
+class RollGradientParams:
+    session_a: LogFile
+    laps_a: list[int]
+    session_b: LogFile | None
+    laps_b: list[int]
+    channel_names_a: dict[str, str]
+    channel_names_b: dict[str, str]
+    motion_ratios_a: MotionRatios
+    motion_ratios_b: MotionRatios
+    track_widths_a: TrackWidths
+    track_widths_b: TrackWidths
+    min_lateral_g: float
+
+
+class RollGradientTab(BaseAnalysisTab):
+    """Tab for roll gradient / roll ratio analysis.
+
+    Pot/wheel motion ratios are read from the Suspension tab's config panel;
+    track widths and channel names from this tab's own panel.
+    """
+
+    def __init__(self, app: InfernoAnalyzerApp, tab_frame: ctk.CTkFrame) -> None:
+        super().__init__(app, tab_frame)
+
+    # ------------------------------------------------------------------
+    # Abstract method implementations
+    # ------------------------------------------------------------------
+
+    def _create_tab_widgets(self) -> None:
+        self.chart_view = ChartView(
+            self.tab_frame,
+            on_min_g_changed=self.on_selection_changed,
+            on_stats_click=self.toggle_stats_window,
+        )
+
+    def _layout_tab_widgets(self) -> None:
+        self.chart_view.pack(fill="both", expand=True)
+
+    def _get_analysis_params(self) -> RollGradientParams | None:
+        session_a = self.app.session_a_panel.log
+        if session_a is None:
+            return None
+
+        laps_a = self.app.session_a_panel.get_selected_laps()
+        if not laps_a:
+            self._update_status("Select laps to analyze")
+            return None
+
+        session_b = self.app.session_b_panel.log
+        laps_b: list[int] = []
+        if session_b is not None:
+            laps_b = self.app.session_b_panel.get_selected_laps()
+            if not laps_b:
+                self._update_status("Select laps from Session B")
+                return None
+
+        config_panel = self.app.roll_gradient_config_panel
+        track_a = config_panel.get_track_widths_a()
+        if track_a is None:
+            self._update_status("Enter front/rear track width (mm) for Session A")
+            return None
+        track_b = config_panel.get_track_widths_b() if session_b is not None else track_a
+        if track_b is None:
+            self._update_status("Enter front/rear track width (mm) for Session B")
+            return None
+
+        suspension_panel = self.app.suspension_config_panel
+        return RollGradientParams(
+            session_a=session_a,
+            laps_a=laps_a,
+            session_b=session_b,
+            laps_b=laps_b,
+            channel_names_a=config_panel.get_channel_names_a(),
+            channel_names_b=config_panel.get_channel_names_b(),
+            motion_ratios_a=suspension_panel.get_motion_ratios_a(),
+            motion_ratios_b=suspension_panel.get_motion_ratios_b(),
+            track_widths_a=track_a,
+            track_widths_b=track_b,
+            min_lateral_g=self.chart_view.get_min_lateral_g(),
+        )
+
+    def _analysis_worker(self, params: RollGradientParams) -> None:
+        self._result_a = analyze_roll_gradient_multi_lap(
+            params.session_a,
+            params.laps_a,
+            channel_names=params.channel_names_a,
+            motion_ratios=params.motion_ratios_a,
+            track_widths=params.track_widths_a,
+            min_lateral_g=params.min_lateral_g,
+        )
+
+        if params.laps_b and params.session_b is not None:
+            self._result_b = analyze_roll_gradient_multi_lap(
+                params.session_b,
+                params.laps_b,
+                channel_names=params.channel_names_b,
+                motion_ratios=params.motion_ratios_b,
+                track_widths=params.track_widths_b,
+                min_lateral_g=params.min_lateral_g,
+            )
+        else:
+            self._result_b = None
+
+        self.app.after(0, self._on_analysis_complete)
+
+    def _display_results(self) -> None:
+        if self._result_a is None:
+            self._update_status("Error: No analysis results")
+            return
+
+        if self._result_b is not None:
+            label_a = self.app.session_a_panel.get_session_label()
+            label_b = self.app.session_b_panel.get_session_label()
+            self.chart_view.update_comparison_chart(
+                self._result_a, self._result_b, label_a=label_a, label_b=label_b
+            )
+        else:
+            self.chart_view.update_chart(self._result_a, title="Roll Gradient")
+
+        result = self._result_a
+        self._update_status(
+            f"Front {result.front.abs_gradient_deg_per_g:.2f} deg/g, "
+            f"rear {result.rear.abs_gradient_deg_per_g:.2f} deg/g, "
+            f"roll ratio {result.roll_ratio:.2f}"
+        )
+
+    def _display_stats(self) -> None:
+        if self._result_a is None or self.stats_panel is None:
+            return
+
+        label_a = self.app.session_a_panel.get_session_label()
+        if self._result_b is not None:
+            label_b = self.app.session_b_panel.get_session_label()
+            self.stats_panel.update_stats(
+                self._result_a, self._result_b, label_a=label_a, label_b=label_b
+            )
+        else:
+            self.stats_panel.update_stats(self._result_a, label_a=label_a)
+
+    def _create_stats_panel(self, parent: ctk.CTkFrame) -> Any:
+        return StatsPanel(parent)
