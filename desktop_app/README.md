@@ -14,6 +14,11 @@ Standalone desktop application for motorsports telemetry analysis combining susp
 - **Configurable pot/wheel motion ratios** per corner
 - **Detailed statistics** with bump/rebound breakdown per wheel
 
+### Roll Gradient Tab
+- **Front and rear roll gradient** (deg per g) from the left/right shock pot difference, in wheel space (pot/wheel ratios from the Suspension tab) over the front/rear **track width** (profile-backed)
+- **Roll ratio** (front roll / rear roll) fitted from the per-sample scatter
+- **Three scatter plots** with binned means and fit lines, plus a **track map**: hover the map to highlight the corresponding samples on all three scatters
+
 ### Driver Consistency Tab
 - **Throttle acceptance** analysis across detected corners
 - **Braking point consistency** visualization
@@ -166,6 +171,7 @@ The config panel (right column) swaps content based on the active tab:
 
 - **Suspension tab**: Pot/wheel motion ratios per corner, shock pot channel names
 - **Driver tab**: Corner detection threshold, throttle threshold, sustain time, channel names
+- **Roll Gradient tab**: Front/rear track width (mm), shock pot + lateral G (+ optional GPS) channel names
 
 ## Architecture
 

@@ -20,8 +20,12 @@ from motorsports_data_notebook.profiles import (
 )
 
 from inferno_analyzer.driver.widgets.config_panel import ConfigPanel as DriverConfigPanel
+from inferno_analyzer.roll_gradient.widgets.config_panel import (
+    ConfigPanel as RollGradientConfigPanel,
+)
 from inferno_analyzer.suspension.widgets.config_panel import ConfigPanel as SuspensionConfigPanel
 from inferno_analyzer.tabs.driver_tab import DriverTab
+from inferno_analyzer.tabs.roll_gradient_tab import RollGradientTab
 from inferno_analyzer.tabs.suspension_tab import SuspensionTab
 from inferno_analyzer.tabs.tire_grip_tab import TireGripTab
 from inferno_analyzer.tire_grip.widgets.config_panel import ConfigPanel as TireGripConfigPanel
@@ -112,6 +116,12 @@ class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
             on_save_profile=self._on_save_profile,
         )
 
+        self.roll_gradient_config_panel = RollGradientConfigPanel(
+            self._config_container,
+            on_config_changed=self._on_selection_changed,
+            on_save_profile=self._on_save_profile,
+        )
+
         # Collapse button (top-right of top_frame)
         self._collapse_btn = ctk.CTkButton(
             self.top_frame,
@@ -150,11 +160,13 @@ class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
         self.tabview.add("Suspension")
         self.tabview.add("Driver Consistency")
         self.tabview.add("Tire Grip")
+        self.tabview.add("Roll Gradient")
 
         # Create tab instances
         self.suspension_tab = SuspensionTab(self, self.tabview.tab("Suspension"))
         self.driver_tab = DriverTab(self, self.tabview.tab("Driver Consistency"))
         self.tire_grip_tab = TireGripTab(self, self.tabview.tab("Tire Grip"))
+        self.roll_gradient_tab = RollGradientTab(self, self.tabview.tab("Roll Gradient"))
 
     def _layout_widgets(self) -> None:
         """Arrange widgets in the window."""
@@ -187,6 +199,7 @@ class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
             "Suspension": self.suspension_config_panel,
             "Driver Consistency": self.driver_config_panel,
             "Tire Grip": self.tire_grip_config_panel,
+            "Roll Gradient": self.roll_gradient_config_panel,
         }
         for panel in panels.values():
             panel.pack_forget()
@@ -200,6 +213,8 @@ class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
             return self.suspension_config_panel
         if isinstance(tab, TireGripTab):
             return self.tire_grip_config_panel
+        if isinstance(tab, RollGradientTab):
+            return self.roll_gradient_config_panel
         return self.driver_config_panel
 
     # ------------------------------------------------------------------
@@ -228,6 +243,8 @@ class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
             return self.driver_tab
         elif self._active_tab_name == "Tire Grip":
             return self.tire_grip_tab
+        elif self._active_tab_name == "Roll Gradient":
+            return self.roll_gradient_tab
         return None
 
     # ------------------------------------------------------------------
@@ -250,12 +267,14 @@ class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
                 self.suspension_config_panel.set_from_profile(profile)
                 self.driver_config_panel.set_from_profile(profile)
                 self.tire_grip_config_panel.set_from_profile(profile)
+                self.roll_gradient_config_panel.set_from_profile(profile)
 
         # Notify all tabs (driver tab auto-sets throttle threshold after
         # profile has already set channel names)
         self.suspension_tab.on_session_loaded()
         self.driver_tab.on_session_a_loaded()
         self.tire_grip_tab.on_session_loaded()
+        self.roll_gradient_tab.on_session_loaded()
 
         # Update status on active config panel
         active_tab = self._get_active_tab()
@@ -278,6 +297,7 @@ class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
         self.suspension_config_panel.show_session_b_controls()
         self.driver_config_panel.show_session_b_controls()
         self.tire_grip_config_panel.show_session_b_controls()
+        self.roll_gradient_config_panel.show_session_b_controls()
 
         # Check if Session B has a different vehicle profile (logger + vehicle)
         logger_id_b, vehicle_b = self.session_b_panel.profile_identity
@@ -294,11 +314,14 @@ class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
                 self.driver_config_panel.set_from_profile_b(profile_b)
                 self.tire_grip_config_panel.set_sync(False)
                 self.tire_grip_config_panel.set_from_profile_b(profile_b)
+                self.roll_gradient_config_panel.set_sync(False)
+                self.roll_gradient_config_panel.set_from_profile_b(profile_b)
 
         # Mark all tabs stale; driver tab also auto-sets B's throttle threshold
         self.suspension_tab.on_session_loaded()
         self.driver_tab.on_session_b_loaded()
         self.tire_grip_tab.on_session_loaded()
+        self.roll_gradient_tab.on_session_loaded()
 
         active_tab = self._get_active_tab()
         if active_tab is not None:
@@ -317,6 +340,8 @@ class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
         self.driver_config_panel.update_available_channels_b(channels_b)
         self.tire_grip_config_panel.update_available_channels_a(channels_a)
         self.tire_grip_config_panel.update_available_channels_b(channels_b)
+        self.roll_gradient_config_panel.update_available_channels_a(channels_a)
+        self.roll_gradient_config_panel.update_available_channels_b(channels_b)
 
     def _on_selection_changed(self) -> None:
         """Handle lap selection or config change — route to active tab."""
@@ -356,13 +381,17 @@ class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
             tire_grip_profile = self.tire_grip_config_panel.get_vehicle_profile_b(
                 name=session_label
             )
+            roll_profile = self.roll_gradient_config_panel.get_vehicle_profile_b(name=session_label)
         else:
             profile = self.suspension_config_panel.get_vehicle_profile(name=session_label)
             driver_profile = self.driver_config_panel.get_vehicle_profile(name=session_label)
             tire_grip_profile = self.tire_grip_config_panel.get_vehicle_profile(name=session_label)
+            roll_profile = self.roll_gradient_config_panel.get_vehicle_profile(name=session_label)
 
         profile.channel_names.update(driver_profile.channel_names)
         profile.channel_names.update(tire_grip_profile.channel_names)
+        profile.channel_names.update(roll_profile.channel_names)
+        profile.track_widths = roll_profile.track_widths
         # Save per vehicle when known so loggers shared between cars stay separate
         save_profile_for_logger(logger_id, profile, vehicle)
 
@@ -396,7 +425,9 @@ class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
         """Update the collapsed bar text with current session info."""
         # Session A
         if self.session_a_panel.log is not None:
-            a_name = self.session_a_panel._file_path.name if self.session_a_panel._file_path else "?"
+            a_name = (
+                self.session_a_panel._file_path.name if self.session_a_panel._file_path else "?"
+            )
             a_selected = len(self.session_a_panel.get_selected_laps())
             a_total = len(self.session_a_panel._lap_vars)
             a_text = f"A: {a_name} ({a_selected}/{a_total} laps)"
@@ -405,7 +436,9 @@ class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
 
         # Session B
         if self.session_b_panel.log is not None:
-            b_name = self.session_b_panel._file_path.name if self.session_b_panel._file_path else "?"
+            b_name = (
+                self.session_b_panel._file_path.name if self.session_b_panel._file_path else "?"
+            )
             b_selected = len(self.session_b_panel.get_selected_laps())
             b_total = len(self.session_b_panel._lap_vars)
             b_text = f"B: {b_name} ({b_selected}/{b_total} laps)"
@@ -413,4 +446,3 @@ class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
             b_text = "B: No file"
 
         self._collapsed_label.configure(text=f"{a_text}  |  {b_text}")
-
