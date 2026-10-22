@@ -1,4 +1,8 @@
-"""Configuration panel for motion ratios and channel names."""
+"""Configuration panel for pot/wheel motion ratios and channel names.
+
+The ratios shown are pot travel / wheel travel, i.e. what the analysis divides
+the logged shock pot channel by (wheel_velocity = pot_velocity / ratio).
+"""
 
 from __future__ import annotations
 
@@ -12,6 +16,7 @@ from motorsports_data_notebook.suspension import MotionRatios
 
 if TYPE_CHECKING:
     from motorsports_data_notebook.profiles import VehicleProfile
+    from motorsports_data_notebook.suspension import ShockCalibration
 
 # Display labels for channels used by the suspension analysis
 _CHANNEL_DISPLAY_NAMES = {
@@ -50,6 +55,10 @@ class ConfigPanel(BaseConfigPanel):
             on_config_changed=on_config_changed,
         )
         self._default_ratios = MotionRatios.toyota_86_zn6()
+        # Measured stroke-sensor calibration from the loaded profile (per session),
+        # carried through Save Profile so the slopes are not lost on re-save.
+        self._shock_calibration_a: ShockCalibration | None = None
+        self._shock_calibration_b: ShockCalibration | None = None
         self._create_ratio_widgets()
         self._create_save_profile_btn()
         self._layout_widgets()
@@ -66,7 +75,7 @@ class ConfigPanel(BaseConfigPanel):
         self.ratios_frame = ctk.CTkFrame(self)
         self.ratios_label = ctk.CTkLabel(
             self.ratios_frame,
-            text="Motion Ratios:",
+            text="Pot/Wheel Motion Ratios:",
             font=ctk.CTkFont(size=12, weight="bold"),
         )
 
@@ -181,6 +190,7 @@ class ConfigPanel(BaseConfigPanel):
             val = getattr(profile.motion_ratios, attr)
             self._ratio_entries_a[corner].delete(0, "end")
             self._ratio_entries_a[corner].insert(0, f"{val:.3f}")
+        self._shock_calibration_a = profile.shock_calibration
 
         # Set channel names (explicitly target A entries)
         for key, entry in self._channel_entries_a.items():
@@ -209,6 +219,7 @@ class ConfigPanel(BaseConfigPanel):
             val = getattr(profile.motion_ratios, attr)
             self._ratio_entries_b[corner].delete(0, "end")
             self._ratio_entries_b[corner].insert(0, f"{val:.3f}")
+        self._shock_calibration_b = profile.shock_calibration
 
     def get_vehicle_profile(self, name: str) -> VehicleProfile:
         """Build a VehicleProfile from Session A's current field values.
@@ -229,6 +240,7 @@ class ConfigPanel(BaseConfigPanel):
             name=name,
             channel_names=self.get_channel_names_a(),
             motion_ratios=self.get_motion_ratios_a(),
+            shock_calibration=self._shock_calibration_a,
         )
 
     def get_vehicle_profile_b(self, name: str) -> VehicleProfile:
@@ -246,10 +258,14 @@ class ConfigPanel(BaseConfigPanel):
         """
         from motorsports_data_notebook.profiles import VehicleProfile
 
+        calibration = self._shock_calibration_b
+        if self._sync_with_a or self._ratio_entries_b is None:
+            calibration = self._shock_calibration_a
         return VehicleProfile(
             name=name,
             channel_names=self.get_channel_names_b(),
             motion_ratios=self.get_motion_ratios_b(),
+            shock_calibration=calibration,
         )
 
     def _reset_ratios(self) -> None:

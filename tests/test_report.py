@@ -285,7 +285,7 @@ class TestGenerateSessionReport:
             "shock_rr": "RR_Shock_Pot",
         }
 
-    @patch("motorsports_data_notebook.report.get_profile_for_logger", return_value=None)
+    @patch("motorsports_data_notebook.report.get_profile_for_log", return_value=None)
     @patch("motorsports_data_notebook.report.get_logger_id", return_value=None)
     def test_minimal_report_no_channels(self, mock_logger, mock_profile):
         """Report should work with just lap times when no channels are available."""
@@ -303,7 +303,7 @@ class TestGenerateSessionReport:
         assert report.suspension is None
         assert report.tire_grip is None
 
-    @patch("motorsports_data_notebook.report.get_profile_for_logger", return_value=None)
+    @patch("motorsports_data_notebook.report.get_profile_for_log", return_value=None)
     @patch("motorsports_data_notebook.report.get_logger_id", return_value="12345")
     @patch("motorsports_data_notebook.report.identify_corners")
     def test_corners_detected(self, mock_corners, mock_logger, mock_profile):
@@ -353,7 +353,7 @@ class TestGenerateSessionReport:
         assert len(report.corners) == 2
         assert report.track_length_m == pytest.approx(dist_arr[-1])
 
-    @patch("motorsports_data_notebook.report.get_profile_for_logger", return_value=None)
+    @patch("motorsports_data_notebook.report.get_profile_for_log", return_value=None)
     @patch("motorsports_data_notebook.report.get_logger_id", return_value=None)
     def test_skipped_analyses_recorded(self, mock_logger, mock_profile):
         """All skipped analyses should have explanations."""
@@ -366,7 +366,7 @@ class TestGenerateSessionReport:
         assert "suspension" in report.skipped_analyses
         assert "tire_grip" in report.skipped_analyses
 
-    @patch("motorsports_data_notebook.report.get_profile_for_logger", return_value=None)
+    @patch("motorsports_data_notebook.report.get_profile_for_log", return_value=None)
     @patch("motorsports_data_notebook.report.get_logger_id", return_value=None)
     def test_lap_time_summary(self, mock_logger, mock_profile):
         """Lap time summary should correctly compute stats."""

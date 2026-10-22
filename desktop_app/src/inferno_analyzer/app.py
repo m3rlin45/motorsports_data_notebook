@@ -240,11 +240,12 @@ class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
         self._channels_a = channels
         self._update_available_channels()
 
-        # Auto-populate config from vehicle profile if logger ID is known
-        logger_id = self.session_a_panel.logger_id
+        # Auto-populate config from vehicle profile if logger ID is known.
+        # The vehicle name disambiguates loggers shared between cars.
+        logger_id, vehicle = self.session_a_panel.profile_identity
         profile = None
         if logger_id:
-            profile = get_profile_for_logger(logger_id)
+            profile = get_profile_for_logger(logger_id, vehicle)
             if profile:
                 self.suspension_config_panel.set_from_profile(profile)
                 self.driver_config_panel.set_from_profile(profile)
@@ -262,9 +263,8 @@ class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
             if profile:
                 active_tab._update_status(f"Loaded: {file_path.name} (profile: {profile.name})")
             elif logger_id:
-                active_tab._update_status(
-                    f"Loaded: {file_path.name} (logger {logger_id}, no profile)"
-                )
+                ident = f"logger {logger_id}" + (f", vehicle {vehicle}" if vehicle else "")
+                active_tab._update_status(f"Loaded: {file_path.name} ({ident}, no profile)")
             else:
                 active_tab._update_status(f"Loaded: {file_path.name}")
 
@@ -279,13 +279,14 @@ class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
         self.driver_config_panel.show_session_b_controls()
         self.tire_grip_config_panel.show_session_b_controls()
 
-        # Check if Session B has a different vehicle profile
-        logger_id_b = self.session_b_panel.logger_id
-        logger_id_a = self.session_a_panel.logger_id
+        # Check if Session B has a different vehicle profile (logger + vehicle)
+        logger_id_b, vehicle_b = self.session_b_panel.profile_identity
+        identity_a = self.session_a_panel.profile_identity
+        identity_b = (logger_id_b, vehicle_b)
         profile_b = None
         if logger_id_b:
-            profile_b = get_profile_for_logger(logger_id_b)
-            if profile_b and logger_id_b != logger_id_a:
+            profile_b = get_profile_for_logger(logger_id_b, vehicle_b)
+            if profile_b and identity_b != identity_a:
                 # Different vehicle — unsync and populate B from its profile
                 self.suspension_config_panel.set_sync(False)
                 self.suspension_config_panel.set_from_profile_b(profile_b)
@@ -302,7 +303,7 @@ class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
         active_tab = self._get_active_tab()
         if active_tab is not None:
             status = f"Loaded comparison: {file_path.name}"
-            if profile_b and logger_id_b != logger_id_a:
+            if profile_b and identity_b != identity_a:
                 status += f" (profile: {profile_b.name})"
             active_tab._update_status(status)
 
@@ -336,10 +337,10 @@ class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
         saving_b = active_config is not None and active_config.active_session == "B"
 
         if saving_b:
-            logger_id = self.session_b_panel.logger_id
+            logger_id, vehicle = self.session_b_panel.profile_identity
             session_panel = self.session_b_panel
         else:
-            logger_id = self.session_a_panel.logger_id
+            logger_id, vehicle = self.session_a_panel.profile_identity
             session_panel = self.session_a_panel
 
         if not logger_id:
@@ -362,10 +363,12 @@ class InfernoAnalyzerApp(ctk.CTk, TkinterDnD.DnDWrapper):
 
         profile.channel_names.update(driver_profile.channel_names)
         profile.channel_names.update(tire_grip_profile.channel_names)
-        save_profile_for_logger(logger_id, profile)
+        # Save per vehicle when known so loggers shared between cars stay separate
+        save_profile_for_logger(logger_id, profile, vehicle)
 
         if active_tab is not None:
-            active_tab._update_status(f"Profile saved for logger {logger_id}")
+            ident = f"logger {logger_id}" + (f" / {vehicle}" if vehicle else "")
+            active_tab._update_status(f"Profile saved for {ident}")
 
     # ------------------------------------------------------------------
     # Collapsible top panel

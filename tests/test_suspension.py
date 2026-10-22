@@ -909,3 +909,31 @@ class TestAnalyzeSuspensionVelocityMultiLap:
         result = analyze_suspension_velocity_multi_lap(log, [1], velocity_ranges=custom_ranges)
 
         assert result.velocity_ranges == custom_ranges
+
+
+class TestShockCalibration:
+    """Tests for AxleShockCalibration / ShockCalibration."""
+
+    def test_derived_ratios(self):
+        from motorsports_data_notebook.suspension import AxleShockCalibration
+
+        axle = AxleShockCalibration(wheel_per_sensor=1.25, damper_per_sensor=1.0)
+        assert axle.pot_per_wheel == pytest.approx(0.8)
+        assert axle.damper_per_wheel == pytest.approx(0.8)
+        assert "damper/wheel 0.800" in axle.describe()
+
+    def test_pot_wheel_ratios_is_pot_per_wheel(self):
+        from motorsports_data_notebook.suspension import AxleShockCalibration, ShockCalibration
+
+        cal = ShockCalibration(
+            front=AxleShockCalibration(1.1433, 1.0406),
+            rear=AxleShockCalibration(1.3484, 1.0407),
+        )
+        ratios = cal.pot_wheel_ratios()
+        assert ratios.front_left == ratios.front_right == pytest.approx(1 / 1.1433)
+        assert ratios.rear_left == ratios.rear_right == pytest.approx(1 / 1.3484)
+        # Using them in the analysis gives wheel velocity = pot velocity * wheel_per_sensor
+        shock_vel = np.array([10.0, -20.0])
+        assert compute_wheel_velocity(shock_vel, ratios.rear_left) == pytest.approx(
+            shock_vel * 1.3484
+        )
