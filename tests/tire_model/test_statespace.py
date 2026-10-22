@@ -34,21 +34,28 @@ def _make_stint(
     p_start: float = P_START,
     p_exp: float = 0.0,
     kappa: float = 0.0,
+    lag_s: float = 0.0,
+    anchor_error_bar: float = 0.0,
 ) -> pd.DataFrame:
     """Write one session's timeseries parquet and return its lap rows.
 
     ``p_exp`` > 0 generates the data with the pressure-dependent heat input
-    ``q · (P_ref / P(t))^n`` where ``P(t)`` is the gas-law pressure."""
+    ``q · (P_ref / P(t))^n`` where ``P(t)`` is the gas-law pressure. ``lag_s``
+    > 0 heats the gas with ``q`` through a first-order lag of that time
+    constant, from zero at the stint start (the tread-to-gas lag).
+    ``anchor_error_bar`` is added to the recorded anchor pressure (a wrong
+    pit-exit reading; the series itself stays true)."""
     n_s = n_laps * LAP_S
     t_1hz = np.arange(n_s)
     g2 = 0.4 + 0.8 * np.sin(2 * np.pi * t_1hz / LAP_S) ** 2  # constant within each second
+    q_eff = ss.lowpass_heat(g2, lag_s) if lag_s else g2
     a, b = TRUE_K / TRUE_TAU, 1.0 / TRUE_TAU
     T = np.empty(n_s + 1)
     T[0] = T_START
     for i in range(n_s):
         p_abs = (p_start + P_ATM_BAR) * (T[i] + T_ZERO_C_TO_K) / (T_START + T_ZERO_C_TO_K)
         pf = (ss.P_REF_ABS_BAR / p_abs) ** p_exp
-        teq = T_EFF + a * g2[i] * pf / b
+        teq = T_EFF + a * q_eff[i] * pf / b
         T[i + 1] = teq + (T[i] - teq) * np.exp(-b)
     # gas-law pressure from the anchor (T_START, p_start), sampled at 5 Hz;
     # read at speed it sits below the gas-law value by (1 + κ v²)
@@ -107,7 +114,7 @@ def _make_stint(
     for c in CORNERS:
         laps[f"t_anchor_{c}"] = t_anchor_s
         laps[f"t_start_{c}"] = float(T[i0])
-        laps[f"p_start_{c}"] = float(p_true[i0])  # first live reading (at its speed)
+        laps[f"p_start_{c}"] = float(p_true[i0]) + anchor_error_bar  # first live reading
     return laps
 
 
@@ -197,3 +204,75 @@ def test_recovers_speed_pressure_constant(tmp_path: Path) -> None:
     terms = ss.stint_speed_terms(tmp_path, laps)
     assert len(terms) == 24 and terms["speed_end_ms"].between(14.0, 41.0).all()
     assert terms["speed_anchor_fl_ms"].notna().all()
+
+
+def test_recovers_heat_input_lag(tmp_path: Path) -> None:
+    """Gas heated through a tread-to-gas lag: the lag's time constant is
+    recovered per car and tau / K are not biased by it."""
+    true_lag = 90.0
+    laps = pd.concat(
+        [
+            _make_stint(tmp_path, "s_a", "tsukuba_2000", 12, quantise=False, lag_s=true_lag),
+            _make_stint(tmp_path, "s_b", "fuji", 12, quantise=False, lag_s=true_lag),
+        ],
+        ignore_index=True,
+    )
+    stints = ss.build_stint_series(tmp_path, laps)
+    fit = ss.fit_cells(stints, lag="car")
+    assert fit.lag["FJ"] == pytest.approx(true_lag, rel=0.15)
+    for c in CORNERS:
+        a, b = fit.ab[("FJ", c, "dry")]
+        assert 1.0 / b == pytest.approx(TRUE_TAU, rel=0.05)
+        assert a / b == pytest.approx(TRUE_K, rel=0.05)
+    # the same data fitted without the lag is biased (the lag is not a free lunch)
+    plain = ss.fit_cells(stints)
+    a0, b0 = plain.ab[("FJ", "fl", "dry")]
+    assert not plain.lag
+    assert abs(1.0 / b0 - TRUE_TAU) > abs(1.0 / fit.ab[("FJ", "fl", "dry")][1] - TRUE_TAU)
+
+
+def test_lowpass_heat_is_the_exact_first_order_response() -> None:
+    q = np.r_[np.zeros(5), np.ones(200)]
+    y = ss.lowpass_heat(q, 50.0)
+    assert y[:5] == pytest.approx(0.0)
+    # step response from zero: 1 − e^{−k/τ} after k seconds of input
+    assert y[5 + 50 - 1] == pytest.approx(1 - np.exp(-50 / 50.0), rel=0.02)
+    assert ss.lowpass_heat(q, 0.0) is q  # no lag → untouched
+    y2 = ss.lowpass_heat(np.repeat(q[:, None], 4, axis=1), 50.0)
+    assert y2.shape == (205, 4) and y2[:, 2] == pytest.approx(y)
+
+
+def test_anchor_nuisance_absorbs_a_wrong_anchor_reading(tmp_path: Path) -> None:
+    """A pit-exit anchor pressure that is half a TPMS quantum high refers the
+    whole gas-temperature observable low; without the nuisance the fit bends
+    tau / K to follow it, with it the offset lands on δ and the constants
+    come back."""
+    err_bar = 0.015
+    laps = pd.concat(
+        [
+            _make_stint(
+                tmp_path, "s_a", "tsukuba_2000", 12, quantise=False, anchor_error_bar=err_bar
+            ),
+            _make_stint(tmp_path, "s_b", "fuji", 12, quantise=False, anchor_error_bar=err_bar),
+        ],
+        ignore_index=True,
+    )
+    stints = ss.build_stint_series(tmp_path, laps)
+    plain = ss.fit_cells(stints)
+    fit = ss.fit_cells(stints, anchor_nuisance=True)
+    assert len(fit.anchor_delta) == 8  # 2 stints × 4 corners
+    # T_gas ∝ 1 / P_anchor: the offset that undoes the wrong reading is
+    # log((P_true + P_atm) / (P_wrong + P_atm)) ≈ −err / P_abs
+    p_abs = P_START + P_ATM_BAR
+    expected = float(np.log(p_abs / (p_abs + err_bar)))
+    for (sid, stint, c), d in fit.anchor_delta.items():
+        assert sid in ("s_a", "s_b") and stint == 1 and c in CORNERS
+        assert d == pytest.approx(expected, abs=0.25 * abs(expected))
+    for c in CORNERS:
+        a, b = fit.ab[("FJ", c, "dry")]
+        assert 1.0 / b == pytest.approx(TRUE_TAU, rel=0.03)
+        assert a / b == pytest.approx(TRUE_K, rel=0.03)
+    a0, b0 = plain.ab[("FJ", "fl", "dry")]
+    assert abs(a0 / b0 - TRUE_K) > abs(
+        fit.ab[("FJ", "fl", "dry")][0] / fit.ab[("FJ", "fl", "dry")][1] - TRUE_K
+    )
