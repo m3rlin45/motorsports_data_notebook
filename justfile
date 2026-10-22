@@ -106,6 +106,41 @@ tire-web-serve:
     @echo "Open http://localhost:8080/tire_pressure_calculator/web/"
     python3 -m http.server 8080
 
+# C# desktop analyzer (desktop_app_cs/) — see desktop_app_cs/PLAN.md
+cs-build:
+    cd desktop_app_cs && dotnet build InfernoAnalyzer.slnx
+
+cs-test:
+    cd desktop_app_cs && dotnet test Tests/InfernoAnalyzer.Tests.csproj
+
+cs-format:
+    cd desktop_app_cs && dotnet format InfernoAnalyzer.slnx
+
+# Run the spike window (optional: path to a fixture JSON)
+cs-run *ARGS:
+    cd desktop_app_cs && dotnet run --project App/InfernoAnalyzer.App.csproj -- {{ARGS}}
+
+# Regenerate App/fixtures/laps.json from the sample session (two fastest laps, speed timebase)
+cs-fixture *ARGS:
+    uv run python desktop_app_cs/tools/extract_fixture.py \
+        "workspace_template/data/CMD_Inferno 86_Fuji GP Sh_Generic testing_a_2248.xrz" {{ARGS}}
+
+# High-density stress fixture: every top lap on the 500 Hz shock-pot timebase (~0.8 M points/channel)
+cs-fixture-dense:
+    uv run python desktop_app_cs/tools/extract_fixture.py \
+        "workspace_template/data/CMD_Inferno 86_Fuji GP Sh_Generic testing_a_2248.xrz" \
+        --top 20 --timebase LF_Shock_Pot --out desktop_app_cs/App/fixtures/laps_dense.json
+
+# Windows single-file exe cross-compiled from Linux (trimmed, not AOT)
+cs-publish-win:
+    cd desktop_app_cs && dotnet publish App/InfernoAnalyzer.App.csproj -c Release -r win-x64 --self-contained \
+        -p:PublishAot=false -p:PublishTrimmed=true -p:TrimMode=full \
+        -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+
+# Linux NativeAOT binary (requires clang, zlib1g-dev)
+cs-publish-linux:
+    cd desktop_app_cs && dotnet publish App/InfernoAnalyzer.App.csproj -c Release -r linux-x64 --self-contained
+
 # Wheel building
 build-wheel:
     #!/usr/bin/env bash
