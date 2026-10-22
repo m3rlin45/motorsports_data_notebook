@@ -127,6 +127,7 @@ just cs-run              # launch the spike window (WSLg / X11 / Windows)
 just cs-run path.json    # ... with another fixture, e.g. App/fixtures/laps_dense.json
 just cs-fixture          # regenerate App/fixtures/laps.json (laps 14 & 12 + neighbours, 25 Hz)
 just cs-fixture-dense    # 13 top laps on the 500 Hz shock-pot timebase (git-ignored)
+just cs-profiles-fixture # regenerate Tests/Fixtures/profiles.json from the Python profiles module
 just cs-publish-win      # trimmed single-file win-x64 exe (cross-compiled)
 just cs-publish-linux    # linux-x64 NativeAOT binary
 ```
@@ -187,3 +188,21 @@ First by-eye pass (2026-10-23) and what changed in response:
 above the user judged look, hover and pan/zoom "good". ScottPlot 5 stays the
 charting backend; the `IChartSurface` seam remains the escape hatch.
 Next: Phase 1 (libxrk FFI + profiles loader).
+
+### Phase 1 — in progress
+
+**Profiles (done 2026-10-23).** `Core/Profiles/` ports `profiles.py`:
+`ChannelKeys` (defaults), `VehicleProfile`, `MotionRatios`, `TrackWidths`,
+`ShockCalibration`, `ProfileKey`, `ProfilesYaml` (parse + write through
+YamlDotNet's representation model, so NativeAOT-safe), `ProfileStore`
+(embedded `builtin_profiles.yaml`, linked from the Python package so there is
+one source of truth; user `profiles.yaml` at the same XDG/APPDATA path Python
+uses, so both apps share edits) and `LogIdentity` (logger ID + vehicle name
+from metadata / Race Studio file name). Parity: `tools/extract_profiles_fixture.py`
+dumps Python's resolution of every builtin key plus lookup and vehicle-name
+cases to `Tests/Fixtures/profiles.json`; `ProfilesParityTests` replays them.
+One quirk reproduced on purpose: an empty `Logger ID` is "absent" for the
+logger lookup but "present" for the file-name vehicle fallback.
+
+**Data layer (next).** `libxrk-ffi` / `libibt-ffi` crates, `Core/Io`.
+

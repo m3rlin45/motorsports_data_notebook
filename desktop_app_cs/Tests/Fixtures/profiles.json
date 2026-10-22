@@ -1,0 +1,931 @@
+{
+ "builtin": {
+  "6519522": {
+   "name": "Toyota 86 ZN6",
+   "channel_names": {
+    "throttle": "PPS",
+    "brake": "BrakePress",
+    "brake_rear": "",
+    "gps_speed": "GPS Speed",
+    "gps_latitude": "GPS Latitude",
+    "gps_longitude": "GPS Longitude",
+    "lateral_g": "LateralAcc",
+    "inline_g": "InlineAcc",
+    "steering": "SteerAngle",
+    "shock_fl": "LF_Shock_Pot",
+    "shock_fr": "RF_Shock_Pot",
+    "shock_rl": "LR_Shock_Pot",
+    "shock_rr": "RR_Shock_Pot",
+    "tpms_press_fl": "TPMS_Press_LF",
+    "tpms_press_fr": "TPMS_Press_RF",
+    "tpms_press_rl": "TPMS_Press_LR",
+    "tpms_press_rr": "TPMS_Press_RR",
+    "tpms_temp_fl": "TPMS_Temp_LF",
+    "tpms_temp_fr": "TPMS_Temp_RF",
+    "tpms_temp_rl": "TPMS_Temp_LR",
+    "tpms_temp_rr": "TPMS_Temp_RR",
+    "tire_temp_fl_1": "FL_Ch1",
+    "tire_temp_fl_2": "FL_Ch2",
+    "tire_temp_fl_3": "FL_Ch3",
+    "tire_temp_fl_4": "FL_Ch4",
+    "tire_temp_fl_5": "FL_Ch5",
+    "tire_temp_fl_6": "FL_Ch6",
+    "tire_temp_fl_7": "FL_Ch7",
+    "tire_temp_fl_8": "FL_Ch8",
+    "tire_temp_fr_1": "FR_Ch1",
+    "tire_temp_fr_2": "FR_Ch2",
+    "tire_temp_fr_3": "FR_Ch3",
+    "tire_temp_fr_4": "FR_Ch4",
+    "tire_temp_fr_5": "FR_Ch5",
+    "tire_temp_fr_6": "FR_Ch6",
+    "tire_temp_fr_7": "FR_Ch7",
+    "tire_temp_fr_8": "FR_Ch8",
+    "tire_temp_rl_1": "RL_Ch1",
+    "tire_temp_rl_2": "RL_Ch2",
+    "tire_temp_rl_3": "RL_Ch3",
+    "tire_temp_rl_4": "RL_Ch4",
+    "tire_temp_rl_5": "RL_Ch5",
+    "tire_temp_rl_6": "RL_Ch6",
+    "tire_temp_rl_7": "RL_Ch7",
+    "tire_temp_rl_8": "RL_Ch8",
+    "tire_temp_rr_1": "RR_Ch1",
+    "tire_temp_rr_2": "RR_Ch2",
+    "tire_temp_rr_3": "RR_Ch3",
+    "tire_temp_rr_4": "RR_Ch4",
+    "tire_temp_rr_5": "RR_Ch5",
+    "tire_temp_rr_6": "RR_Ch6",
+    "tire_temp_rr_7": "RR_Ch7",
+    "tire_temp_rr_8": "RR_Ch8"
+   },
+   "motion_ratios": {
+    "front_left": 0.9970000269190007,
+    "front_right": 0.9970000269190007,
+    "rear_left": 0.7680001966080503,
+    "rear_right": 0.7680001966080503
+   },
+   "shock_calibration": {
+    "front": {
+     "wheel_per_sensor": 1.003009,
+     "damper_per_sensor": 1.0,
+     "damper_per_wheel_fit": 0.997,
+     "pot_per_wheel": 0.9970000269190007,
+     "damper_per_wheel": 0.997,
+     "wheel_r2": null,
+     "damper_r2": null,
+     "damper_wheel_r2": null,
+     "points": [],
+     "excluded_points": []
+    },
+    "rear": {
+     "wheel_per_sensor": 1.302083,
+     "damper_per_sensor": 1.0,
+     "damper_per_wheel_fit": 0.768,
+     "pot_per_wheel": 0.7680001966080503,
+     "damper_per_wheel": 0.768,
+     "wheel_r2": null,
+     "damper_r2": null,
+     "damper_wheel_r2": null,
+     "points": [],
+     "excluded_points": []
+    }
+   },
+   "track_widths": {
+    "front_mm": 1520.0,
+    "rear_mm": 1540.0
+   }
+  },
+  "6701209": {
+   "name": "Toyota 86 ZN6",
+   "channel_names": {
+    "throttle": "PPS",
+    "brake": "BrakePress",
+    "brake_rear": "",
+    "gps_speed": "GPS Speed",
+    "gps_latitude": "GPS Latitude",
+    "gps_longitude": "GPS Longitude",
+    "lateral_g": "LateralAcc",
+    "inline_g": "InlineAcc",
+    "steering": "SteerAngle",
+    "shock_fl": "LF_Shock_Pot",
+    "shock_fr": "RF_Shock_Pot",
+    "shock_rl": "LR_Shock_Pot",
+    "shock_rr": "RR_Shock_Pot",
+    "tpms_press_fl": "TPMS_Press_LF",
+    "tpms_press_fr": "TPMS_Press_RF",
+    "tpms_press_rl": "TPMS_Press_LR",
+    "tpms_press_rr": "TPMS_Press_RR",
+    "tpms_temp_fl": "TPMS_Temp_LF",
+    "tpms_temp_fr": "TPMS_Temp_RF",
+    "tpms_temp_rl": "TPMS_Temp_LR",
+    "tpms_temp_rr": "TPMS_Temp_RR",
+    "tire_temp_fl_1": "FL_Ch1",
+    "tire_temp_fl_2": "FL_Ch2",
+    "tire_temp_fl_3": "FL_Ch3",
+    "tire_temp_fl_4": "FL_Ch4",
+    "tire_temp_fl_5": "FL_Ch5",
+    "tire_temp_fl_6": "FL_Ch6",
+    "tire_temp_fl_7": "FL_Ch7",
+    "tire_temp_fl_8": "FL_Ch8",
+    "tire_temp_fr_1": "FR_Ch1",
+    "tire_temp_fr_2": "FR_Ch2",
+    "tire_temp_fr_3": "FR_Ch3",
+    "tire_temp_fr_4": "FR_Ch4",
+    "tire_temp_fr_5": "FR_Ch5",
+    "tire_temp_fr_6": "FR_Ch6",
+    "tire_temp_fr_7": "FR_Ch7",
+    "tire_temp_fr_8": "FR_Ch8",
+    "tire_temp_rl_1": "RL_Ch1",
+    "tire_temp_rl_2": "RL_Ch2",
+    "tire_temp_rl_3": "RL_Ch3",
+    "tire_temp_rl_4": "RL_Ch4",
+    "tire_temp_rl_5": "RL_Ch5",
+    "tire_temp_rl_6": "RL_Ch6",
+    "tire_temp_rl_7": "RL_Ch7",
+    "tire_temp_rl_8": "RL_Ch8",
+    "tire_temp_rr_1": "RR_Ch1",
+    "tire_temp_rr_2": "RR_Ch2",
+    "tire_temp_rr_3": "RR_Ch3",
+    "tire_temp_rr_4": "RR_Ch4",
+    "tire_temp_rr_5": "RR_Ch5",
+    "tire_temp_rr_6": "RR_Ch6",
+    "tire_temp_rr_7": "RR_Ch7",
+    "tire_temp_rr_8": "RR_Ch8"
+   },
+   "motion_ratios": {
+    "front_left": 0.9970000269190007,
+    "front_right": 0.9970000269190007,
+    "rear_left": 0.7680001966080503,
+    "rear_right": 0.7680001966080503
+   },
+   "shock_calibration": {
+    "front": {
+     "wheel_per_sensor": 1.003009,
+     "damper_per_sensor": 1.0,
+     "damper_per_wheel_fit": 0.997,
+     "pot_per_wheel": 0.9970000269190007,
+     "damper_per_wheel": 0.997,
+     "wheel_r2": null,
+     "damper_r2": null,
+     "damper_wheel_r2": null,
+     "points": [],
+     "excluded_points": []
+    },
+    "rear": {
+     "wheel_per_sensor": 1.302083,
+     "damper_per_sensor": 1.0,
+     "damper_per_wheel_fit": 0.768,
+     "pot_per_wheel": 0.7680001966080503,
+     "damper_per_wheel": 0.768,
+     "wheel_r2": null,
+     "damper_r2": null,
+     "damper_wheel_r2": null,
+     "points": [],
+     "excluded_points": []
+    }
+   },
+   "track_widths": {
+    "front_mm": 1520.0,
+    "rear_mm": 1540.0
+   }
+  },
+  "15074": {
+   "name": "Honda Civic EK9",
+   "channel_names": {
+    "throttle": "PPS",
+    "brake": "BrakePress",
+    "brake_rear": "",
+    "gps_speed": "GPS Speed",
+    "gps_latitude": "GPS Latitude",
+    "gps_longitude": "GPS Longitude",
+    "lateral_g": "LateralAcc",
+    "inline_g": "InlineAcc",
+    "steering": "SteerAngle",
+    "shock_fl": "LF_Shock_Pot",
+    "shock_fr": "RF_Shock_Pot",
+    "shock_rl": "LR_Shock_Pot",
+    "shock_rr": "RR_Shock_Pot",
+    "tpms_press_fl": "TPMS_Press_LF",
+    "tpms_press_fr": "TPMS_Press_RF",
+    "tpms_press_rl": "TPMS_Press_LR",
+    "tpms_press_rr": "TPMS_Press_RR",
+    "tpms_temp_fl": "TPMS_Temp_LF",
+    "tpms_temp_fr": "TPMS_Temp_RF",
+    "tpms_temp_rl": "TPMS_Temp_LR",
+    "tpms_temp_rr": "TPMS_Temp_RR",
+    "tire_temp_fl_1": "FL_Ch1",
+    "tire_temp_fl_2": "FL_Ch2",
+    "tire_temp_fl_3": "FL_Ch3",
+    "tire_temp_fl_4": "FL_Ch4",
+    "tire_temp_fl_5": "FL_Ch5",
+    "tire_temp_fl_6": "FL_Ch6",
+    "tire_temp_fl_7": "FL_Ch7",
+    "tire_temp_fl_8": "FL_Ch8",
+    "tire_temp_fr_1": "FR_Ch1",
+    "tire_temp_fr_2": "FR_Ch2",
+    "tire_temp_fr_3": "FR_Ch3",
+    "tire_temp_fr_4": "FR_Ch4",
+    "tire_temp_fr_5": "FR_Ch5",
+    "tire_temp_fr_6": "FR_Ch6",
+    "tire_temp_fr_7": "FR_Ch7",
+    "tire_temp_fr_8": "FR_Ch8",
+    "tire_temp_rl_1": "RL_Ch1",
+    "tire_temp_rl_2": "RL_Ch2",
+    "tire_temp_rl_3": "RL_Ch3",
+    "tire_temp_rl_4": "RL_Ch4",
+    "tire_temp_rl_5": "RL_Ch5",
+    "tire_temp_rl_6": "RL_Ch6",
+    "tire_temp_rl_7": "RL_Ch7",
+    "tire_temp_rl_8": "RL_Ch8",
+    "tire_temp_rr_1": "RR_Ch1",
+    "tire_temp_rr_2": "RR_Ch2",
+    "tire_temp_rr_3": "RR_Ch3",
+    "tire_temp_rr_4": "RR_Ch4",
+    "tire_temp_rr_5": "RR_Ch5",
+    "tire_temp_rr_6": "RR_Ch6",
+    "tire_temp_rr_7": "RR_Ch7",
+    "tire_temp_rr_8": "RR_Ch8"
+   },
+   "motion_ratios": {
+    "front_left": 1.0,
+    "front_right": 1.0,
+    "rear_left": 1.0,
+    "rear_right": 1.0
+   },
+   "shock_calibration": null,
+   "track_widths": null
+  },
+  "6603435": {
+   "name": "Super FJ",
+   "channel_names": {
+    "throttle": "ACCEL",
+    "brake": "BRK",
+    "brake_rear": "",
+    "gps_speed": "GPS Speed",
+    "gps_latitude": "GPS Latitude",
+    "gps_longitude": "GPS Longitude",
+    "lateral_g": "LateralAcc",
+    "inline_g": "InlineAcc",
+    "steering": "steering",
+    "shock_fl": "LF_Shock_Pot",
+    "shock_fr": "RF_Shock_Pot",
+    "shock_rl": "LR_Shock_Pot",
+    "shock_rr": "RR_Shock_Pot",
+    "tpms_press_fl": "TPMS_Press_LF",
+    "tpms_press_fr": "TPMS_Press_RF",
+    "tpms_press_rl": "TPMS_Press_LR",
+    "tpms_press_rr": "TPMS_Press_RR",
+    "tpms_temp_fl": "TPMS_Temp_LF",
+    "tpms_temp_fr": "TPMS_Temp_RF",
+    "tpms_temp_rl": "TPMS_Temp_LR",
+    "tpms_temp_rr": "TPMS_Temp_RR",
+    "tire_temp_fl_1": "FL_Ch1",
+    "tire_temp_fl_2": "FL_Ch2",
+    "tire_temp_fl_3": "FL_Ch3",
+    "tire_temp_fl_4": "FL_Ch4",
+    "tire_temp_fl_5": "FL_Ch5",
+    "tire_temp_fl_6": "FL_Ch6",
+    "tire_temp_fl_7": "FL_Ch7",
+    "tire_temp_fl_8": "FL_Ch8",
+    "tire_temp_fr_1": "FR_Ch1",
+    "tire_temp_fr_2": "FR_Ch2",
+    "tire_temp_fr_3": "FR_Ch3",
+    "tire_temp_fr_4": "FR_Ch4",
+    "tire_temp_fr_5": "FR_Ch5",
+    "tire_temp_fr_6": "FR_Ch6",
+    "tire_temp_fr_7": "FR_Ch7",
+    "tire_temp_fr_8": "FR_Ch8",
+    "tire_temp_rl_1": "RL_Ch1",
+    "tire_temp_rl_2": "RL_Ch2",
+    "tire_temp_rl_3": "RL_Ch3",
+    "tire_temp_rl_4": "RL_Ch4",
+    "tire_temp_rl_5": "RL_Ch5",
+    "tire_temp_rl_6": "RL_Ch6",
+    "tire_temp_rl_7": "RL_Ch7",
+    "tire_temp_rl_8": "RL_Ch8",
+    "tire_temp_rr_1": "RR_Ch1",
+    "tire_temp_rr_2": "RR_Ch2",
+    "tire_temp_rr_3": "RR_Ch3",
+    "tire_temp_rr_4": "RR_Ch4",
+    "tire_temp_rr_5": "RR_Ch5",
+    "tire_temp_rr_6": "RR_Ch6",
+    "tire_temp_rr_7": "RR_Ch7",
+    "tire_temp_rr_8": "RR_Ch8"
+   },
+   "motion_ratios": {
+    "front_left": 1.0,
+    "front_right": 1.0,
+    "rear_left": 1.0,
+    "rear_right": 1.0
+   },
+   "shock_calibration": null,
+   "track_widths": null
+  },
+  "8401203": {
+   "name": "KK-SII",
+   "channel_names": {
+    "throttle": "Throttle",
+    "brake": "F_BRK",
+    "brake_rear": "R_BRK",
+    "gps_speed": "GPS Speed",
+    "gps_latitude": "GPS Latitude",
+    "gps_longitude": "GPS Longitude",
+    "lateral_g": "GPS_LateralAcc",
+    "inline_g": "GPS_InlineAcc",
+    "steering": "Steering",
+    "shock_fl": "LF_Shock_Pot",
+    "shock_fr": "RF_Shock_Pot",
+    "shock_rl": "LR_Shock_Pot",
+    "shock_rr": "RR_Shock_Pot",
+    "tpms_press_fl": "TPMS_Press_LF",
+    "tpms_press_fr": "TPMS_Press_RF",
+    "tpms_press_rl": "TPMS_Press_LR",
+    "tpms_press_rr": "TPMS_Press_RR",
+    "tpms_temp_fl": "TPMS_Temp_LF",
+    "tpms_temp_fr": "TPMS_Temp_RF",
+    "tpms_temp_rl": "TPMS_Temp_LR",
+    "tpms_temp_rr": "TPMS_Temp_RR",
+    "tire_temp_fl_1": "FL_Ch1",
+    "tire_temp_fl_2": "FL_Ch2",
+    "tire_temp_fl_3": "FL_Ch3",
+    "tire_temp_fl_4": "FL_Ch4",
+    "tire_temp_fl_5": "FL_Ch5",
+    "tire_temp_fl_6": "FL_Ch6",
+    "tire_temp_fl_7": "FL_Ch7",
+    "tire_temp_fl_8": "FL_Ch8",
+    "tire_temp_fr_1": "FR_Ch1",
+    "tire_temp_fr_2": "FR_Ch2",
+    "tire_temp_fr_3": "FR_Ch3",
+    "tire_temp_fr_4": "FR_Ch4",
+    "tire_temp_fr_5": "FR_Ch5",
+    "tire_temp_fr_6": "FR_Ch6",
+    "tire_temp_fr_7": "FR_Ch7",
+    "tire_temp_fr_8": "FR_Ch8",
+    "tire_temp_rl_1": "RL_Ch1",
+    "tire_temp_rl_2": "RL_Ch2",
+    "tire_temp_rl_3": "RL_Ch3",
+    "tire_temp_rl_4": "RL_Ch4",
+    "tire_temp_rl_5": "RL_Ch5",
+    "tire_temp_rl_6": "RL_Ch6",
+    "tire_temp_rl_7": "RL_Ch7",
+    "tire_temp_rl_8": "RL_Ch8",
+    "tire_temp_rr_1": "RR_Ch1",
+    "tire_temp_rr_2": "RR_Ch2",
+    "tire_temp_rr_3": "RR_Ch3",
+    "tire_temp_rr_4": "RR_Ch4",
+    "tire_temp_rr_5": "RR_Ch5",
+    "tire_temp_rr_6": "RR_Ch6",
+    "tire_temp_rr_7": "RR_Ch7",
+    "tire_temp_rr_8": "RR_Ch8"
+   },
+   "motion_ratios": {
+    "front_left": 1.0,
+    "front_right": 1.0,
+    "rear_left": 1.0,
+    "rear_right": 1.0
+   },
+   "shock_calibration": {
+    "front": {
+     "wheel_per_sensor": 1.0,
+     "damper_per_sensor": 1.0,
+     "damper_per_wheel_fit": 1.0,
+     "pot_per_wheel": 1.0,
+     "damper_per_wheel": 1.0,
+     "wheel_r2": null,
+     "damper_r2": null,
+     "damper_wheel_r2": null,
+     "points": [],
+     "excluded_points": []
+    },
+    "rear": {
+     "wheel_per_sensor": 1.0,
+     "damper_per_sensor": 1.0,
+     "damper_per_wheel_fit": 1.0,
+     "pot_per_wheel": 1.0,
+     "damper_per_wheel": 1.0,
+     "wheel_r2": null,
+     "damper_r2": null,
+     "damper_wheel_r2": null,
+     "points": [],
+     "excluded_points": []
+    }
+   },
+   "track_widths": {
+    "front_mm": 1498.0,
+    "rear_mm": 1503.0
+   }
+  },
+  "8401203/KK-SII": {
+   "name": "KK-SII",
+   "channel_names": {
+    "throttle": "Throttle",
+    "brake": "F_BRK",
+    "brake_rear": "R_BRK",
+    "gps_speed": "GPS Speed",
+    "gps_latitude": "GPS Latitude",
+    "gps_longitude": "GPS Longitude",
+    "lateral_g": "GPS_LateralAcc",
+    "inline_g": "GPS_InlineAcc",
+    "steering": "Steering",
+    "shock_fl": "LF_Shock_Pot",
+    "shock_fr": "RF_Shock_Pot",
+    "shock_rl": "LR_Shock_Pot",
+    "shock_rr": "RR_Shock_Pot",
+    "tpms_press_fl": "TPMS_Press_LF",
+    "tpms_press_fr": "TPMS_Press_RF",
+    "tpms_press_rl": "TPMS_Press_LR",
+    "tpms_press_rr": "TPMS_Press_RR",
+    "tpms_temp_fl": "TPMS_Temp_LF",
+    "tpms_temp_fr": "TPMS_Temp_RF",
+    "tpms_temp_rl": "TPMS_Temp_LR",
+    "tpms_temp_rr": "TPMS_Temp_RR",
+    "tire_temp_fl_1": "FL_Ch1",
+    "tire_temp_fl_2": "FL_Ch2",
+    "tire_temp_fl_3": "FL_Ch3",
+    "tire_temp_fl_4": "FL_Ch4",
+    "tire_temp_fl_5": "FL_Ch5",
+    "tire_temp_fl_6": "FL_Ch6",
+    "tire_temp_fl_7": "FL_Ch7",
+    "tire_temp_fl_8": "FL_Ch8",
+    "tire_temp_fr_1": "FR_Ch1",
+    "tire_temp_fr_2": "FR_Ch2",
+    "tire_temp_fr_3": "FR_Ch3",
+    "tire_temp_fr_4": "FR_Ch4",
+    "tire_temp_fr_5": "FR_Ch5",
+    "tire_temp_fr_6": "FR_Ch6",
+    "tire_temp_fr_7": "FR_Ch7",
+    "tire_temp_fr_8": "FR_Ch8",
+    "tire_temp_rl_1": "RL_Ch1",
+    "tire_temp_rl_2": "RL_Ch2",
+    "tire_temp_rl_3": "RL_Ch3",
+    "tire_temp_rl_4": "RL_Ch4",
+    "tire_temp_rl_5": "RL_Ch5",
+    "tire_temp_rl_6": "RL_Ch6",
+    "tire_temp_rl_7": "RL_Ch7",
+    "tire_temp_rl_8": "RL_Ch8",
+    "tire_temp_rr_1": "RR_Ch1",
+    "tire_temp_rr_2": "RR_Ch2",
+    "tire_temp_rr_3": "RR_Ch3",
+    "tire_temp_rr_4": "RR_Ch4",
+    "tire_temp_rr_5": "RR_Ch5",
+    "tire_temp_rr_6": "RR_Ch6",
+    "tire_temp_rr_7": "RR_Ch7",
+    "tire_temp_rr_8": "RR_Ch8"
+   },
+   "motion_ratios": {
+    "front_left": 1.0,
+    "front_right": 1.0,
+    "rear_left": 1.0,
+    "rear_right": 1.0
+   },
+   "shock_calibration": {
+    "front": {
+     "wheel_per_sensor": 1.0,
+     "damper_per_sensor": 1.0,
+     "damper_per_wheel_fit": 1.0,
+     "pot_per_wheel": 1.0,
+     "damper_per_wheel": 1.0,
+     "wheel_r2": null,
+     "damper_r2": null,
+     "damper_wheel_r2": null,
+     "points": [],
+     "excluded_points": []
+    },
+    "rear": {
+     "wheel_per_sensor": 1.0,
+     "damper_per_sensor": 1.0,
+     "damper_per_wheel_fit": 1.0,
+     "pot_per_wheel": 1.0,
+     "damper_per_wheel": 1.0,
+     "wheel_r2": null,
+     "damper_r2": null,
+     "damper_wheel_r2": null,
+     "points": [],
+     "excluded_points": []
+    }
+   },
+   "track_widths": {
+    "front_mm": 1498.0,
+    "rear_mm": 1503.0
+   }
+  },
+  "8401203/KK-F": {
+   "name": "KK-F",
+   "channel_names": {
+    "throttle": "Throttle_PCT",
+    "brake": "P_Brake_Actual",
+    "brake_rear": "",
+    "gps_speed": "GPS Speed",
+    "gps_latitude": "GPS Latitude",
+    "gps_longitude": "GPS Longitude",
+    "lateral_g": "GPS_LateralAcc",
+    "inline_g": "GPS_InlineAcc",
+    "steering": "steering",
+    "shock_fl": "LF_Shock_Pot",
+    "shock_fr": "RF_Shock_Pot",
+    "shock_rl": "LR_Shock_Pot",
+    "shock_rr": "RR_Shock_Pot",
+    "tpms_press_fl": "TPMS_Press_LF",
+    "tpms_press_fr": "TPMS_Press_RF",
+    "tpms_press_rl": "TPMS_Press_LR",
+    "tpms_press_rr": "TPMS_Press_RR",
+    "tpms_temp_fl": "TPMS_Temp_LF",
+    "tpms_temp_fr": "TPMS_Temp_RF",
+    "tpms_temp_rl": "TPMS_Temp_LR",
+    "tpms_temp_rr": "TPMS_Temp_RR",
+    "tire_temp_fl_1": "FL_Ch1",
+    "tire_temp_fl_2": "FL_Ch2",
+    "tire_temp_fl_3": "FL_Ch3",
+    "tire_temp_fl_4": "FL_Ch4",
+    "tire_temp_fl_5": "FL_Ch5",
+    "tire_temp_fl_6": "FL_Ch6",
+    "tire_temp_fl_7": "FL_Ch7",
+    "tire_temp_fl_8": "FL_Ch8",
+    "tire_temp_fr_1": "FR_Ch1",
+    "tire_temp_fr_2": "FR_Ch2",
+    "tire_temp_fr_3": "FR_Ch3",
+    "tire_temp_fr_4": "FR_Ch4",
+    "tire_temp_fr_5": "FR_Ch5",
+    "tire_temp_fr_6": "FR_Ch6",
+    "tire_temp_fr_7": "FR_Ch7",
+    "tire_temp_fr_8": "FR_Ch8",
+    "tire_temp_rl_1": "RL_Ch1",
+    "tire_temp_rl_2": "RL_Ch2",
+    "tire_temp_rl_3": "RL_Ch3",
+    "tire_temp_rl_4": "RL_Ch4",
+    "tire_temp_rl_5": "RL_Ch5",
+    "tire_temp_rl_6": "RL_Ch6",
+    "tire_temp_rl_7": "RL_Ch7",
+    "tire_temp_rl_8": "RL_Ch8",
+    "tire_temp_rr_1": "RR_Ch1",
+    "tire_temp_rr_2": "RR_Ch2",
+    "tire_temp_rr_3": "RR_Ch3",
+    "tire_temp_rr_4": "RR_Ch4",
+    "tire_temp_rr_5": "RR_Ch5",
+    "tire_temp_rr_6": "RR_Ch6",
+    "tire_temp_rr_7": "RR_Ch7",
+    "tire_temp_rr_8": "RR_Ch8"
+   },
+   "motion_ratios": {
+    "front_left": 0.8746610688358262,
+    "front_right": 0.8746610688358262,
+    "rear_left": 0.7416196974191634,
+    "rear_right": 0.7416196974191634
+   },
+   "shock_calibration": {
+    "front": {
+     "wheel_per_sensor": 1.1433,
+     "damper_per_sensor": 1.0406,
+     "damper_per_wheel_fit": 0.9082,
+     "pot_per_wheel": 0.8746610688358262,
+     "damper_per_wheel": 0.9082,
+     "wheel_r2": 0.9961,
+     "damper_r2": 0.9985,
+     "damper_wheel_r2": 0.9979,
+     "points": [
+      [
+       401.4,
+       300.0,
+       10.2
+      ],
+      [
+       407.6,
+       295.0,
+       15.1
+      ],
+      [
+       414.3,
+       290.0,
+       19.0
+      ],
+      [
+       420.0,
+       285.0,
+       24.2
+      ],
+      [
+       425.4,
+       280.0,
+       30.1
+      ],
+      [
+       429.7,
+       275.0,
+       34.6
+      ],
+      [
+       436.0,
+       270.0,
+       38.4
+      ],
+      [
+       440.3,
+       265.0,
+       42.7
+      ],
+      [
+       446.9,
+       260.0,
+       48.6
+      ],
+      [
+       451.3,
+       255.0,
+       53.7
+      ]
+     ],
+     "excluded_points": []
+    },
+    "rear": {
+     "wheel_per_sensor": 1.3484,
+     "damper_per_sensor": 1.0407,
+     "damper_per_wheel_fit": 0.7713,
+     "pot_per_wheel": 0.7416196974191634,
+     "damper_per_wheel": 0.7713,
+     "wheel_r2": 0.9987,
+     "damper_r2": 0.9986,
+     "damper_wheel_r2": 0.9987,
+     "points": [
+      [
+       385.9,
+       301.2,
+       8.2
+      ],
+      [
+       394.0,
+       299.0,
+       10.4
+      ],
+      [
+       401.5,
+       288.5,
+       10.8
+      ],
+      [
+       412.9,
+       280.0,
+       28.9
+      ],
+      [
+       418.7,
+       276.0,
+       33.5
+      ],
+      [
+       427.6,
+       269.1,
+       40.3
+      ],
+      [
+       437.5,
+       262.2,
+       45.9
+      ],
+      [
+       439.1,
+       261.1,
+       47.8
+      ],
+      [
+       440.1,
+       259.2,
+       48.7
+      ],
+      [
+       452.2,
+       249.2,
+       57.9
+      ]
+     ],
+     "excluded_points": [
+      1,
+      2
+     ]
+    }
+   },
+   "track_widths": {
+    "front_mm": 1498.0,
+    "rear_mm": 1503.0
+   }
+  },
+  "iracing": {
+   "name": "iRacing",
+   "channel_names": {
+    "throttle": "Throttle",
+    "brake": "Brake",
+    "brake_rear": "",
+    "gps_speed": "Speed",
+    "gps_latitude": "Lat",
+    "gps_longitude": "Lon",
+    "lateral_g": "LatAccel",
+    "inline_g": "LongAccel",
+    "steering": "SteeringWheelAngle",
+    "shock_fl": "LFshockVel",
+    "shock_fr": "RFshockVel",
+    "shock_rl": "LRshockVel",
+    "shock_rr": "RRshockVel",
+    "tpms_press_fl": "LFpressure",
+    "tpms_press_fr": "RFpressure",
+    "tpms_press_rl": "LRpressure",
+    "tpms_press_rr": "RRpressure",
+    "tpms_temp_fl": "LFtempM",
+    "tpms_temp_fr": "RFtempM",
+    "tpms_temp_rl": "LRtempM",
+    "tpms_temp_rr": "RRtempM",
+    "tire_temp_fl_1": "LFtempL",
+    "tire_temp_fl_2": "LFtempM",
+    "tire_temp_fl_3": "LFtempR",
+    "tire_temp_fl_4": "FL_Ch4",
+    "tire_temp_fl_5": "FL_Ch5",
+    "tire_temp_fl_6": "FL_Ch6",
+    "tire_temp_fl_7": "FL_Ch7",
+    "tire_temp_fl_8": "FL_Ch8",
+    "tire_temp_fr_1": "RFtempL",
+    "tire_temp_fr_2": "RFtempM",
+    "tire_temp_fr_3": "RFtempR",
+    "tire_temp_fr_4": "FR_Ch4",
+    "tire_temp_fr_5": "FR_Ch5",
+    "tire_temp_fr_6": "FR_Ch6",
+    "tire_temp_fr_7": "FR_Ch7",
+    "tire_temp_fr_8": "FR_Ch8",
+    "tire_temp_rl_1": "LRtempL",
+    "tire_temp_rl_2": "LRtempM",
+    "tire_temp_rl_3": "LRtempR",
+    "tire_temp_rl_4": "RL_Ch4",
+    "tire_temp_rl_5": "RL_Ch5",
+    "tire_temp_rl_6": "RL_Ch6",
+    "tire_temp_rl_7": "RL_Ch7",
+    "tire_temp_rl_8": "RL_Ch8",
+    "tire_temp_rr_1": "RRtempL",
+    "tire_temp_rr_2": "RRtempM",
+    "tire_temp_rr_3": "RRtempR",
+    "tire_temp_rr_4": "RR_Ch4",
+    "tire_temp_rr_5": "RR_Ch5",
+    "tire_temp_rr_6": "RR_Ch6",
+    "tire_temp_rr_7": "RR_Ch7",
+    "tire_temp_rr_8": "RR_Ch8"
+   },
+   "motion_ratios": {
+    "front_left": 1.0,
+    "front_right": 1.0,
+    "rear_left": 1.0,
+    "rear_right": 1.0
+   },
+   "shock_calibration": null,
+   "track_widths": null
+  }
+ },
+ "definitions": [
+  "honda_ek9",
+  "iracing",
+  "kk_f",
+  "kk_s2",
+  "super_fj",
+  "toyota_86_zn6"
+ ],
+ "lookups": [
+  {
+   "logger_id": "6519522",
+   "vehicle": null,
+   "name": "Toyota 86 ZN6"
+  },
+  {
+   "logger_id": "6701209",
+   "vehicle": null,
+   "name": "Toyota 86 ZN6"
+  },
+  {
+   "logger_id": "15074",
+   "vehicle": null,
+   "name": "Honda Civic EK9"
+  },
+  {
+   "logger_id": "6603435",
+   "vehicle": null,
+   "name": "Super FJ"
+  },
+  {
+   "logger_id": "8401203",
+   "vehicle": null,
+   "name": "KK-SII"
+  },
+  {
+   "logger_id": "8401203",
+   "vehicle": "KK-F",
+   "name": "KK-F"
+  },
+  {
+   "logger_id": "8401203",
+   "vehicle": "kk-f",
+   "name": "KK-F"
+  },
+  {
+   "logger_id": "8401203",
+   "vehicle": "KK-SII",
+   "name": "KK-SII"
+  },
+  {
+   "logger_id": "8401203",
+   "vehicle": "Something Else",
+   "name": "KK-SII"
+  },
+  {
+   "logger_id": "iracing",
+   "vehicle": null,
+   "name": "iRacing"
+  },
+  {
+   "logger_id": "999999",
+   "vehicle": null,
+   "name": null
+  },
+  {
+   "logger_id": "999999",
+   "vehicle": "KK-F",
+   "name": null
+  }
+ ],
+ "vehicle_names": [
+  {
+   "metadata": {
+    "Logger ID": "8401203",
+    "Vehicle": "KK-F"
+   },
+   "file_name": "CMD_KK-SII_Suzuka Car_Race_a_0358.xrk",
+   "logger_id": "8401203",
+   "vehicle": "KK-F",
+   "profile": "KK-F"
+  },
+  {
+   "metadata": {
+    "Logger ID": "8401203",
+    "Vehicle": ""
+   },
+   "file_name": "/data/2026-10-02/CMD_KK-F_Suzuka West_Generic testing_a_0351.xrz",
+   "logger_id": "8401203",
+   "vehicle": "KK-F",
+   "profile": "KK-F"
+  },
+  {
+   "metadata": {
+    "Logger ID": "8401203"
+   },
+   "file_name": "CMD_KK-F_Tsukuba_Car_Race_a_0344.xrz",
+   "logger_id": "8401203",
+   "vehicle": "KK-F",
+   "profile": "KK-F"
+  },
+  {
+   "metadata": {
+    "Logger ID": "8401203"
+   },
+   "file_name": "",
+   "logger_id": "8401203",
+   "vehicle": null,
+   "profile": "KK-SII"
+  },
+  {
+   "metadata": {
+    "Logger ID": "1"
+   },
+   "file_name": "session.xrk",
+   "logger_id": "1",
+   "vehicle": null,
+   "profile": null
+  },
+  {
+   "metadata": {
+    "session_info_yaml": "x"
+   },
+   "file_name": "mx5_okayama_2024.ibt",
+   "logger_id": "iracing",
+   "vehicle": null,
+   "profile": "iRacing"
+  },
+  {
+   "metadata": {},
+   "file_name": "CMD_KK-F_Tsukuba_Car_Race_a_0344.xrz",
+   "logger_id": null,
+   "vehicle": null,
+   "profile": null
+  },
+  {
+   "metadata": {
+    "logger_id": "6701209",
+    "Vehicle Name": "  Inferno 86 "
+   },
+   "file_name": "",
+   "logger_id": "6701209",
+   "vehicle": "Inferno 86",
+   "profile": "Toyota 86 ZN6"
+  },
+  {
+   "metadata": {
+    "Logger ID": ""
+   },
+   "file_name": "CMD_KK-F_Tsukuba_Car_Race_a_0344.xrz",
+   "logger_id": null,
+   "vehicle": "KK-F",
+   "profile": null
+  }
+ ]
+}

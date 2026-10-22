@@ -19,6 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Core\InfernoAnalyzer.Core.csproj" />
     <ProjectReference Include="..\Charting\InfernoAnalyzer.Charting.csproj" />
     <ProjectReference Include="..\App\InfernoAnalyzer.App.csproj" />
   </ItemGroup>
