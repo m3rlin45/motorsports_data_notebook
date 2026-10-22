@@ -130,6 +130,10 @@ cs-fixture *ARGS:
     uv run python desktop_app_cs/tools/extract_fixture.py \
         "workspace_template/data/CMD_Inferno 86_Fuji GP Sh_Generic testing_a_2248.xrz" {{ARGS}}
 
+# Python-parity fixture for the C# profiles loader (Tests/Fixtures/profiles.json)
+cs-profiles-fixture:
+    uv run python desktop_app_cs/tools/extract_profiles_fixture.py
+
 # High-density stress fixture: every top lap on the 500 Hz shock-pot timebase (~0.8 M points/channel)
 cs-fixture-dense:
     uv run python desktop_app_cs/tools/extract_fixture.py \
