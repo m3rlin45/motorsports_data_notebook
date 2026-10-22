@@ -20,6 +20,9 @@
 # and `motion_ratios` are derived from it (pot/wheel). An explicit
 # `motion_ratios` entry overrides the derived value (e.g. asymmetric L/R).
 # Fit a measured table with scripts/fit_shock_calibration.py.
+#
+# `track_width_mm` (front/rear, hub centre to hub centre) is used by the roll
+# gradient analysis: roll = atan((wheel_left - wheel_right) / track).
 
 profiles:
   toyota_86_zn6:
@@ -89,6 +92,9 @@ profiles:
         wheel_per_sensor: 1.302083   # 1 / 0.768
         damper_per_sensor: 1.0
         damper_per_wheel: 0.768
+    track_width_mm:
+      front: 1520   # ZN6 factory spec
+      rear: 1540
 
   honda_ek9:
     name: Honda Civic EK9
@@ -158,21 +164,28 @@ profiles:
         wheel_per_sensor: 1.0
         damper_per_sensor: 1.0
         damper_per_wheel: 1.0
+    # MYST KK-S published figures (front 1498 / rear 1503 mm); verify on the car
+    track_width_mm:
+      front: 1498
+      rear: 1503
 
   kk_f:
     name: KK-F
-    # Same SW4 logger / Race Studio config family as the KK-SII (shared logger
-    # 8401203, "SW4_FJ1500 Inferno" config), 100 mm stroke sensors on all corners.
+    # Shares SW4 logger 8401203 with the KK-SII but runs its own config with the
+    # MYST ECU stream (channel set taken from the 2026-09-27 Tsukuba race file):
+    # throttle/brake come from the ECU (Throttle_PCT %, P_Brake_Actual bar; the
+    # ECU's Pbrake_Value is sign-inverted and not mapped), no separate rear brake
+    # pressure, and the SW4 "steering" channel is uncalibrated (0-0.5 deg).
+    # 100 mm stroke sensors on all corners.
     channel_names:
-      throttle: Throttle
-      brake: F_BRK
-      brake_rear: R_BRK
+      throttle: Throttle_PCT
+      brake: P_Brake_Actual
       gps_speed: GPS Speed
       gps_latitude: GPS Latitude
       gps_longitude: GPS Longitude
       lateral_g: GPS_LateralAcc
       inline_g: GPS_InlineAcc
-      steering: Steering
+      steering: steering
       shock_fl: LF_Shock_Pot
       shock_fr: RF_Shock_Pot
       shock_rl: LR_Shock_Pot
@@ -236,6 +249,11 @@ profiles:
           - [440.1, 259.2, 48.7]
           - [452.2, 249.2, 57.9]
         excluded_points: [1, 2]
+    # ASSUMED equal to the KK-S (1498 / 1503 mm) until measured. JAF FJ1500
+    # rules only bound it (tread >= 1200 mm, overall width <= 1700 mm).
+    track_width_mm:
+      front: 1498
+      rear: 1503
 
   iracing:
     name: iRacing

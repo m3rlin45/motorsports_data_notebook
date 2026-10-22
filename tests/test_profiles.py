@@ -792,3 +792,42 @@ class TestBuiltin86PotWheel:
             if key == "iracing" or key == "15074" or key == "6603435":
                 continue  # no shock pots (GPS-only / velocity channels)
             assert profile.shock_calibration is not None, key
+
+
+class TestTrackWidthsProfiles:
+    """track_width_mm section round-trips and the builtin cars carry it."""
+
+    def test_roundtrip(self):
+        from motorsports_data_notebook.roll_gradient import TrackWidths
+
+        original = VehicleProfile(name="Car", track_widths=TrackWidths(1520, 1540))
+        restored = _profile_from_dict(_profile_to_dict(original))
+        assert restored.track_widths is not None
+        assert restored.track_widths.front_mm == pytest.approx(1520)
+        assert restored.track_widths.rear_mm == pytest.approx(1540)
+
+    def test_missing_or_invalid_is_none(self):
+        assert _profile_from_dict({"name": "x"}).track_widths is None
+        assert (
+            _profile_from_dict(
+                {"name": "x", "track_width_mm": {"front": 0, "rear": 1}}
+            ).track_widths
+            is None
+        )
+        assert (
+            _profile_from_dict({"name": "x", "track_width_mm": {"front": 1500}}).track_widths
+            is None
+        )
+
+    def test_builtin_values(self):
+        t86 = get_profile_for_logger("6701209").track_widths
+        assert (t86.front_mm, t86.rear_mm) == (1520, 1540)
+        kkf = get_profile_for_logger("8401203", "KK-F")
+        assert (kkf.track_widths.front_mm, kkf.track_widths.rear_mm) == (1498, 1503)
+        # KK-F channel set from the Tsukuba race config (not the KK-SII names)
+        assert kkf.channel_names["throttle"] == "Throttle_PCT"
+        assert kkf.channel_names["brake"] == "P_Brake_Actual"
+        assert kkf.channel_names["brake_rear"] == ""
+        kks = get_profile_for_logger("8401203", "KK-SII")
+        assert kks.channel_names["throttle"] == "Throttle"
+        assert kks.channel_names["brake"] == "F_BRK"
