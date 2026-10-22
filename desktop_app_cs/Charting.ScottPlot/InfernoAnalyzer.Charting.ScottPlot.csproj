@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The ScottPlot backend: the only project allowed to reference ScottPlot. -->
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="$(AvaloniaVersion)" />
+    <PackageReference Include="ScottPlot.Avalonia" Version="$(ScottPlotVersion)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Charting\InfernoAnalyzer.Charting.csproj" />
+  </ItemGroup>
+
+</Project>
