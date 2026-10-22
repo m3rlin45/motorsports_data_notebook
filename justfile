@@ -125,6 +125,14 @@ cs-fixture *ARGS:
     uv run python desktop_app_cs/tools/extract_fixture.py \
         "workspace_template/data/CMD_Inferno 86_Fuji GP Sh_Generic testing_a_2248.xrz" {{ARGS}}
 
+# Build the libxrk/libibt FFI libraries for this machine (needs cargo); add RIDS="--rids linux-x64 win-x64" for cross builds
+cs-native *ARGS:
+    python3 desktop_app_cs/tools/build_native.py {{ARGS}}
+
+# Python-parity fixture for the C# session loader (Tests/Fixtures/session_86.json; Rust backend, as the C# port binds)
+cs-session-fixture *ARGS:
+    LIBXRK_BACKEND=rust uv run python desktop_app_cs/tools/extract_session_fixture.py {{ARGS}}
+
 # Python-parity fixture for the C# profiles loader (Tests/Fixtures/profiles.json)
 cs-profiles-fixture:
     uv run python desktop_app_cs/tools/extract_profiles_fixture.py

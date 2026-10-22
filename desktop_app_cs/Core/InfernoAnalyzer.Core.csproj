@@ -7,9 +7,21 @@
   -->
   <PropertyGroup>
     <IsAotCompatible>true</IsAotCompatible>
+    <!-- Source-generated P/Invoke into the libxrk/libibt FFI libraries. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
+    <!--
+      Native parser libraries built by tools/build_native.py into native/runtimes/<rid>/native/
+      (git-ignored). Copied under runtimes/ in every consuming project's output; NativeLoader
+      resolves them from there (or next to the executable after publish).
+    -->
+    <None Include="..\native\runtimes\**\*" Link="runtimes\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Apache.Arrow" Version="$(ApacheArrowVersion)" />
     <PackageReference Include="YamlDotNet" Version="$(YamlDotNetVersion)" />
   </ItemGroup>
 

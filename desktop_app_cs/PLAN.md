@@ -128,6 +128,8 @@ just cs-run path.json    # ... with another fixture, e.g. App/fixtures/laps_dens
 just cs-fixture          # regenerate App/fixtures/laps.json (laps 14 & 12 + neighbours, 25 Hz)
 just cs-fixture-dense    # 13 top laps on the 500 Hz shock-pot timebase (git-ignored)
 just cs-profiles-fixture # regenerate Tests/Fixtures/profiles.json from the Python profiles module
+just cs-session-fixture  # regenerate Tests/Fixtures/session_86.json (Rust backend)
+just cs-native           # build the libxrk/libibt FFI libraries into native/runtimes/<rid>/native/
 just cs-publish-win      # trimmed single-file win-x64 exe (cross-compiled)
 just cs-publish-linux    # linux-x64 NativeAOT binary
 ```
@@ -204,5 +206,45 @@ cases to `Tests/Fixtures/profiles.json`; `ProfilesParityTests` replays them.
 One quirk reproduced on purpose: an empty `Logger ID` is "absent" for the
 logger lookup but "present" for the file-name vehicle fallback.
 
-**Data layer (next).** `libxrk-ffi` / `libibt-ffi` crates, `Core/Io`.
+**Data layer (done 2026-10-23, pending the parser PRs).**
+
+- `crates/libxrk-ffi` (lib `xrk_ffi`) and `crates/libibt-ffi` (lib `ibt_ffi`)
+  in the parser repositories: a session is parsed once into one Arrow
+  `RecordBatch` per channel plus the laps batch behind an opaque handle;
+  `*_channel_stream` / `*_laps_stream` export through the Arrow C Data
+  Interface (`ArrowArrayStream`), `*_metadata_json` gives the Python
+  `LogFile.metadata` dict as JSON, every entry point is `catch_unwind`-safe
+  and reports errors through an owned string. Rust round-trip tests drive the
+  ABI as a foreign caller on each repo's sample. Both build as cdylib +
+  staticlib for linux-x64 and (cross-compiled with mingw) win-x64. The crates
+  sit in local commits in scratchpad clones (`libxrk` 015ad78a, `libibt`
+  6e8fb20c) — **opening those PRs needs the user** (blocked by the agent's
+  permission policy); `tools/build_native.py` pins the same commit hashes, so
+  the pins hold once the branches are pushed.
+- `Core/Io`: `NativeLoader` (resolves `runtimes/<rid>/native/` or the exe
+  dir), source-generated `LibraryImport` bindings (`XrkNative`, `IbtNative`),
+  `NativeSessionReader` (Arrow C stream → `Channel`/`Lap`, metadata JSON
+  flattened to strings), `XrkReader` / `IbtReader`, `LogFile` with the Python
+  `select_channels` / `filter_by_time_range` / `filter_by_lap` /
+  `resample_to_timecodes` / `resample_to_channel` semantics (numpy.interp for
+  `interpolate == "True"` channels, forward-fill otherwise, interpolated
+  float32 channels rounded back to single precision as Python's Arrow cast
+  does), and `SessionLoader` = `load_session` (speed channel from the profile
+  **by logger ID only**, `speed_kmh`, per-lap `distance_m`, lap-type filter,
+  `clean_laps`). Values are widened to `double[]` on import (one copy; the
+  zero-copy slice idea is deferred until a kernel needs it).
+- Parity: `tools/extract_session_fixture.py` dumps per-channel summaries,
+  raw laps, scalar metadata and the `load_session` outcome for the Fuji 86
+  sample (Rust backend) and for libibt's `test.ibt`; `SessionParityTests`
+  checks 100 channels, laps, metadata, derived channels, and replays the lap
+  pipeline against the spike's `laps.json` to its rounding. The IBT test is
+  opt-in (`INFERNO_IBT_SAMPLE`, the 70 MB sample is not in this repo).
+  Tolerances: 1e-9 relative on GPS-derived channels, because libxrk master
+  (what the FFI builds) reorders the GPS float arithmetic vs the 0.13.0 wheel.
+- Build: `just cs-native` (host) or `--rids linux-x64 win-x64`; CI installs
+  Rust and builds the libraries before the C# test/publish jobs. The App does
+  not reference `Core` yet (Phase 3 wires it in), so publishes are unchanged.
+
+Phase 1 is complete once the two parser PRs are merged (then re-pin to the
+tagged releases).
 

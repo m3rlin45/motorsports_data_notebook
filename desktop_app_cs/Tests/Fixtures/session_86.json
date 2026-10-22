@@ -1,0 +1,2422 @@
+{
+ "sample": "CMD_Inferno 86_Fuji GP Sh_Generic testing_a_2248.xrz",
+ "channel_order": [
+  "BrakeSw",
+  "FL_Ch7",
+  "RL_Ch3",
+  "FR_Ch5",
+  "IntakeAirT",
+  "FL_Ch2",
+  "ClutchSw",
+  "TPMS_Temp_LR",
+  "TPS",
+  "RR_Shock_Pot",
+  "VerticalAcc",
+  "FL_Ch5",
+  "RollRate",
+  "AmbientTemp",
+  "LF_Shock_Pot",
+  "FR_Ch2",
+  "TPMS_ALM_LR",
+  "RR_Ch3",
+  "TPMS_Temp_LF",
+  "FR_Ch6",
+  "Best Today Diff",
+  "RR_Ch1",
+  "Ref Lap Diff",
+  "RR_Ch6",
+  "OilTemp",
+  "FL_Ch8",
+  "BrakePress",
+  "YawRate",
+  "FR_Ch1",
+  "FR_Ch8",
+  "RL_Ch1",
+  "RR_Ch5",
+  "FL_Ch3",
+  "RR_Ch4",
+  "ECT",
+  "External Voltage",
+  "RPM",
+  "FL_Ch4",
+  "RR_Ch7",
+  "FL_Ch1",
+  "RR_Ch8",
+  "RL_Ch7",
+  "SpeedAverage",
+  "TPMS_Press_RR",
+  "Best Run Diff",
+  "FL_Ch6",
+  "PPS",
+  "FR_Ch4",
+  "Predictive Time",
+  "WheelSpdFR",
+  "FR_Ch7",
+  "PitchRate",
+  "WheelSpdRL",
+  "FR_Ch3",
+  "RL_Ch2",
+  "TPMS_Volt_LF",
+  "Baro",
+  "RR_Ch2",
+  "TPMS_ALM_LF",
+  "MAP",
+  "TPMS_Press_RF",
+  "RL_Ch8",
+  "TPMS_ALM_RR",
+  "Lambda",
+  "LR_Shock_Pot",
+  "TPMS_Press_LR",
+  "Gear",
+  "TPMS_Volt_RF",
+  "RL_Ch6",
+  "WheelSpdRR",
+  "TPMS_Temp_RR",
+  "RL_Ch5",
+  "TPMS_ALM_RF",
+  "TPMS_Temp_RF",
+  "TPMS_Volt_RR",
+  "LoggerTemp",
+  "LateralAcc",
+  "CAT1",
+  "TPMS_Volt_LR",
+  "RF_Shock_Pot",
+  "SteerAngle",
+  "Prev Lap Diff",
+  "Luminosity",
+  "WheelSpdFL",
+  "InlineAcc",
+  "CH",
+  "TPMS_Press_LF",
+  "RL_Ch4",
+  "GPS Speed",
+  "GPS Latitude",
+  "GPS Longitude",
+  "GPS Altitude",
+  "GPS_Satellites",
+  "GPS_Fix",
+  "GPS_pDOP",
+  "GPS_Position_Accuracy",
+  "GPS_Velocity_Accuracy",
+  "GPS_InlineAcc",
+  "GPS_LateralAcc",
+  "GPS_Yaw_Rate"
+ ],
+ "channels": {
+  "BrakeSw": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 21617,
+    "first": 349.0,
+    "last": 2161492.0,
+    "sum": 23366449712.0,
+    "min": 349.0,
+    "max": 2161492.0
+   },
+   "values": {
+    "length": 21617,
+    "first": 1.0,
+    "last": 1.0,
+    "sum": 2922.0,
+    "min": 0.0,
+    "max": 1.0
+   }
+  },
+  "FL_Ch7": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 21565,
+    "first": 318.0,
+    "last": 2161456.0,
+    "sum": 23309122545.0,
+    "min": 318.0,
+    "max": 2161456.0
+   },
+   "values": {
+    "length": 21565,
+    "first": 44.000003814697266,
+    "last": 54.20000457763672,
+    "sum": 1237231.8871440887,
+    "min": 19.40000343322754,
+    "max": 97.4000015258789
+   }
+  },
+  "RL_Ch3": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 21568,
+    "first": 313.0,
+    "last": 2161453.0,
+    "sum": 23312493822.0,
+    "min": 313.0,
+    "max": 2161453.0
+   },
+   "values": {
+    "length": 21568,
+    "first": 38.30000305175781,
+    "last": 45.80000305175781,
+    "sum": 1298487.588607788,
+    "min": 26.90000343322754,
+    "max": 113.9000015258789
+   }
+  },
+  "FR_Ch5": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 21568,
+    "first": 330.0,
+    "last": 2161470.0,
+    "sum": 23312871602.0,
+    "min": 330.0,
+    "max": 2161470.0
+   },
+   "values": {
+    "length": 21568,
+    "first": 57.30000305175781,
+    "last": 49.000003814697266,
+    "sum": 1159757.685350418,
+    "min": 18.700002670288086,
+    "max": 103.70000457763672
+   }
+  },
+  "IntakeAirT": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 100396,
+    "first": 267.0,
+    "last": 2161554.0,
+    "sum": 108604422150.0,
+    "min": 267.0,
+    "max": 2161554.0
+   },
+   "values": {
+    "length": 100396,
+    "first": 46.0,
+    "last": 19.0,
+    "sum": 879604.0,
+    "min": 6.0,
+    "max": 46.0
+   }
+  },
+  "FL_Ch2": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 21565,
+    "first": 267.0,
+    "last": 2161505.0,
+    "sum": 23311169857.0,
+    "min": 267.0,
+    "max": 2161505.0
+   },
+   "values": {
+    "length": 21565,
+    "first": 46.10000228881836,
+    "last": 51.40000534057617,
+    "sum": 1139809.6846351624,
+    "min": 23.500003814697266,
+    "max": 96.50000762939453
+   }
+  },
+  "ClutchSw": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 54029,
+    "first": 277.0,
+    "last": 2161548.0,
+    "sum": 58400629801.0,
+    "min": 277.0,
+    "max": 2161548.0
+   },
+   "values": {
+    "length": 54029,
+    "first": 1.0,
+    "last": 1.0,
+    "sum": 11316.0,
+    "min": 0.0,
+    "max": 1.0
+   }
+  },
+  "TPMS_Temp_LR": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 10807,
+    "first": 332.0,
+    "last": 2161386.0,
+    "sum": 11680840785.0,
+    "min": 332.0,
+    "max": 2161386.0
+   },
+   "values": {
+    "length": 10807,
+    "first": 49.0,
+    "last": 52.0,
+    "sum": 553465.0,
+    "min": 43.0,
+    "max": 54.0
+   }
+  },
+  "TPS": {
+   "units": "%",
+   "dec_pts": 2,
+   "interpolate": true,
+   "timecodes": {
+    "length": 100396,
+    "first": 277.0,
+    "last": 2161565.0,
+    "sum": 108605501046.0,
+    "min": 277.0,
+    "max": 2161565.0
+   },
+   "values": {
+    "length": 100396,
+    "first": 16.450000762939453,
+    "last": 15.979999542236328,
+    "sum": 6768421.035404205,
+    "min": 15.979999542236328,
+    "max": 96.3499984741211
+   }
+  },
+  "RR_Shock_Pot": {
+   "units": "mm",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 1080650,
+    "first": 292.0,
+    "last": 2161590.0,
+    "sum": 1168118891940.0,
+    "min": 292.0,
+    "max": 2161590.0
+   },
+   "values": {
+    "length": 1080650,
+    "first": -1.0673828125,
+    "last": 2.287109375,
+    "sum": -3312773.6755371094,
+    "min": -32.34375,
+    "max": 35.375
+   }
+  },
+  "VerticalAcc": {
+   "units": "g",
+   "dec_pts": 2,
+   "interpolate": true,
+   "timecodes": {
+    "length": 108060,
+    "first": 0.0,
+    "last": 2161180.0,
+    "sum": 116768555400.0,
+    "min": 0.0,
+    "max": 2161180.0
+   },
+   "values": {
+    "length": 108060,
+    "first": -1.0,
+    "last": -1.0009765625,
+    "sum": -108578.47802734375,
+    "min": -1.5166015625,
+    "max": -0.5361328125
+   }
+  },
+  "FL_Ch5": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 21565,
+    "first": 318.0,
+    "last": 2161456.0,
+    "sum": 23309122545.0,
+    "min": 318.0,
+    "max": 2161456.0
+   },
+   "values": {
+    "length": 21565,
+    "first": 46.000003814697266,
+    "last": 54.30000305175781,
+    "sum": 1160872.9854049683,
+    "min": 22.100004196166992,
+    "max": 109.4000015258789
+   }
+  },
+  "RollRate": {
+   "units": "deg/s",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 108060,
+    "first": 200.0,
+    "last": 2161380.0,
+    "sum": 116790167400.0,
+    "min": 200.0,
+    "max": 2161380.0
+   },
+   "values": {
+    "length": 108060,
+    "first": -0.1357421875,
+    "last": -0.058990478515625,
+    "sum": -18818.593603909016,
+    "min": -15.2578125,
+    "max": 17.890625
+   }
+  },
+  "AmbientTemp": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 100396,
+    "first": 267.0,
+    "last": 2161554.0,
+    "sum": 108604422150.0,
+    "min": 267.0,
+    "max": 2161554.0
+   },
+   "values": {
+    "length": 100396,
+    "first": 6.0,
+    "last": 6.0,
+    "sum": 602376.0,
+    "min": 6.0,
+    "max": 6.0
+   }
+  },
+  "LF_Shock_Pot": {
+   "units": "mm",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 1080650,
+    "first": 292.0,
+    "last": 2161590.0,
+    "sum": 1168118891940.0,
+    "min": 292.0,
+    "max": 2161590.0
+   },
+   "values": {
+    "length": 1080650,
+    "first": -0.91357421875,
+    "last": -0.15087890625,
+    "sum": 1071392.2241210938,
+    "min": -18.90625,
+    "max": 30.8125
+   }
+  },
+  "FR_Ch2": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 21568,
+    "first": 329.0,
+    "last": 2161468.0,
+    "sum": 23312841101.0,
+    "min": 329.0,
+    "max": 2161468.0
+   },
+   "values": {
+    "length": 21568,
+    "first": 54.10000228881836,
+    "last": 55.40000534057617,
+    "sum": 1167082.4854831696,
+    "min": 21.100004196166992,
+    "max": 92.00000762939453
+   }
+  },
+  "TPMS_ALM_LR": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 10807,
+    "first": 332.0,
+    "last": 2161386.0,
+    "sum": 11680840785.0,
+    "min": 332.0,
+    "max": 2161386.0
+   },
+   "values": {
+    "length": 10807,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "RR_Ch3": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 21561,
+    "first": 266.0,
+    "last": 2161409.0,
+    "sum": 23302998371.0,
+    "min": 266.0,
+    "max": 2161409.0
+   },
+   "values": {
+    "length": 21561,
+    "first": 38.500003814697266,
+    "last": 46.60000228881836,
+    "sum": 1178901.4850292206,
+    "min": 27.700002670288086,
+    "max": 110.80000305175781
+   }
+  },
+  "TPMS_Temp_LF": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 10807,
+    "first": 332.0,
+    "last": 2161386.0,
+    "sum": 11680840785.0,
+    "min": 332.0,
+    "max": 2161386.0
+   },
+   "values": {
+    "length": 10807,
+    "first": 62.0,
+    "last": 55.0,
+    "sum": 604942.0,
+    "min": 47.0,
+    "max": 62.0
+   }
+  },
+  "FR_Ch6": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 21568,
+    "first": 330.0,
+    "last": 2161470.0,
+    "sum": 23312871602.0,
+    "min": 330.0,
+    "max": 2161470.0
+   },
+   "values": {
+    "length": 21568,
+    "first": 55.40000534057617,
+    "last": 49.30000305175781,
+    "sum": 1192472.7863845825,
+    "min": 16.60000228881836,
+    "max": 109.70000457763672
+   }
+  },
+  "Best Today Diff": {
+   "units": "ms",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 15,
+    "first": 150453.0,
+    "last": 1924187.0,
+    "sum": 15598724.0,
+    "min": 150453.0,
+    "max": 1924187.0
+   },
+   "values": {
+    "length": 15,
+    "first": -12290.0,
+    "last": -12290.0,
+    "sum": -184350.0,
+    "min": -12290.0,
+    "max": -12290.0
+   }
+  },
+  "RR_Ch1": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 21561,
+    "first": 266.0,
+    "last": 2161409.0,
+    "sum": 23302998371.0,
+    "min": 266.0,
+    "max": 2161409.0
+   },
+   "values": {
+    "length": 21561,
+    "first": 32.90000534057617,
+    "last": 37.40000534057617,
+    "sum": 895396.6819458008,
+    "min": 27.40000343322754,
+    "max": 73.30000305175781
+   }
+  },
+  "Ref Lap Diff": {
+   "units": "ms",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 15,
+    "first": 150453.0,
+    "last": 1924187.0,
+    "sum": 15598724.0,
+    "min": 150453.0,
+    "max": 1924187.0
+   },
+   "values": {
+    "length": 15,
+    "first": -12290.0,
+    "last": -12290.0,
+    "sum": -184350.0,
+    "min": -12290.0,
+    "max": -12290.0
+   }
+  },
+  "RR_Ch6": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 21561,
+    "first": 317.0,
+    "last": 2161410.0,
+    "sum": 23306321038.0,
+    "min": 317.0,
+    "max": 2161410.0
+   },
+   "values": {
+    "length": 21561,
+    "first": 38.000003814697266,
+    "last": 49.70000457763672,
+    "sum": 1304381.0886955261,
+    "min": 29.100004196166992,
+    "max": 121.30000305175781
+   }
+  },
+  "OilTemp": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 10806,
+    "first": 298.0,
+    "last": 2161449.0,
+    "sum": 11679919200.0,
+    "min": 298.0,
+    "max": 2161449.0
+   },
+   "values": {
+    "length": 10806,
+    "first": 93.0,
+    "last": 95.0,
+    "sum": 1071363.0,
+    "min": 87.0,
+    "max": 105.0
+   }
+  },
+  "FL_Ch8": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 21565,
+    "first": 318.0,
+    "last": 2161456.0,
+    "sum": 23309122545.0,
+    "min": 318.0,
+    "max": 2161456.0
+   },
+   "values": {
+    "length": 21565,
+    "first": 51.10000228881836,
+    "last": 42.60000228881836,
+    "sum": 809404.5811347961,
+    "min": 25.100004196166992,
+    "max": 54.80000305175781
+   }
+  },
+  "BrakePress": {
+   "units": "bar",
+   "dec_pts": 2,
+   "interpolate": true,
+   "timecodes": {
+    "length": 36024,
+    "first": 269.0,
+    "last": 2161564.0,
+    "sum": 38939003944.0,
+    "min": 269.0,
+    "max": 2161564.0
+   },
+   "values": {
+    "length": 36024,
+    "first": 9.142000198364258,
+    "last": 18.284000396728516,
+    "sum": 178579.82881236076,
+    "min": 0.0,
+    "max": 101.86799621582031
+   }
+  },
+  "YawRate": {
+   "units": "deg/s",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 108060,
+    "first": 200.0,
+    "last": 2161380.0,
+    "sum": 116790167400.0,
+    "min": 200.0,
+    "max": 2161380.0
+   },
+   "values": {
+    "length": 108060,
+    "first": 0.01168060302734375,
+    "last": 0.03363037109375,
+    "sum": 262475.3353577256,
+    "min": -43.25,
+    "max": 47.9375
+   }
+  },
+  "FR_Ch1": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 21568,
+    "first": 329.0,
+    "last": 2161468.0,
+    "sum": 23312841101.0,
+    "min": 329.0,
+    "max": 2161468.0
+   },
+   "values": {
+    "length": 21568,
+    "first": 57.80000305175781,
+    "last": 39.20000457763672,
+    "sum": 705928.2780666351,
+    "min": 23.800003051757812,
+    "max": 58.500003814697266
+   }
+  },
+  "FR_Ch8": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 21568,
+    "first": 330.0,
+    "last": 2161470.0,
+    "sum": 23312871602.0,
+    "min": 330.0,
+    "max": 2161470.0
+   },
+   "values": {
+    "length": 21568,
+    "first": 55.500003814697266,
+    "last": 48.40000534057617,
+    "sum": 1091755.2838230133,
+    "min": 19.600004196166992,
+    "max": 92.9000015258789
+   }
+  },
+  "RL_Ch1": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 21568,
+    "first": 313.0,
+    "last": 2161453.0,
+    "sum": 23312493822.0,
+    "min": 313.0,
+    "max": 2161453.0
+   },
+   "values": {
+    "length": 21568,
+    "first": 41.20000457763672,
+    "last": 48.20000457763672,
+    "sum": 1220278.5863361359,
+    "min": 31.800003051757812,
+    "max": 86.20000457763672
+   }
+  },
+  "RR_Ch5": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 21561,
+    "first": 317.0,
+    "last": 2161410.0,
+    "sum": 23306321038.0,
+    "min": 317.0,
+    "max": 2161410.0
+   },
+   "values": {
+    "length": 21561,
+    "first": 37.500003814697266,
+    "last": 48.70000457763672,
+    "sum": 1287533.5882663727,
+    "min": 28.300003051757812,
+    "max": 111.80000305175781
+   }
+  },
+  "FL_Ch3": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 21565,
+    "first": 267.0,
+    "last": 2161505.0,
+    "sum": 23311169857.0,
+    "min": 267.0,
+    "max": 2161505.0
+   },
+   "values": {
+    "length": 21565,
+    "first": 45.40000534057617,
+    "last": 50.30000305175781,
+    "sum": 1232537.7865047455,
+    "min": 17.800003051757812,
+    "max": 111.00000762939453
+   }
+  },
+  "RR_Ch4": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 21561,
+    "first": 266.0,
+    "last": 2161409.0,
+    "sum": 23302998371.0,
+    "min": 266.0,
+    "max": 2161409.0
+   },
+   "values": {
+    "length": 21561,
+    "first": 39.60000228881836,
+    "last": 50.40000534057617,
+    "sum": 1167931.184337616,
+    "min": 32.90000534057617,
+    "max": 103.70000457763672
+   }
+  },
+  "ECT": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 100395,
+    "first": 287.0,
+    "last": 2161554.0,
+    "sum": 108604421883.0,
+    "min": 287.0,
+    "max": 2161554.0
+   },
+   "values": {
+    "length": 100395,
+    "first": 89.0,
+    "last": 91.0,
+    "sum": 9168146.0,
+    "min": 87.0,
+    "max": 93.0
+   }
+  },
+  "External Voltage": {
+   "units": "V",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 2161,
+    "first": 650.0,
+    "last": 2160650.0,
+    "sum": 2335284650.0,
+    "min": 650.0,
+    "max": 2160650.0
+   },
+   "values": {
+    "length": 2161,
+    "first": 14.46399974822998,
+    "last": 14.479999542236328,
+    "sum": 31709.096034049988,
+    "min": 12.815999984741211,
+    "max": 14.935999870300293
+   }
+  },
+  "RPM": {
+   "units": "rpm",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 54029,
+    "first": 277.0,
+    "last": 2161548.0,
+    "sum": 58400629801.0,
+    "min": 277.0,
+    "max": 2161548.0
+   },
+   "values": {
+    "length": 54029,
+    "first": 712.0,
+    "last": 732.0,
+    "sum": 323377319.0,
+    "min": 537.0,
+    "max": 8091.0
+   }
+  },
+  "FL_Ch4": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 21565,
+    "first": 267.0,
+    "last": 2161505.0,
+    "sum": 23311169857.0,
+    "min": 267.0,
+    "max": 2161505.0
+   },
+   "values": {
+    "length": 21565,
+    "first": 45.500003814697266,
+    "last": 48.90000534057617,
+    "sum": 1229351.6871032715,
+    "min": 17.300003051757812,
+    "max": 115.30000305175781
+   }
+  },
+  "RR_Ch7": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 21561,
+    "first": 317.0,
+    "last": 2161410.0,
+    "sum": 23306321038.0,
+    "min": 317.0,
+    "max": 2161410.0
+   },
+   "values": {
+    "length": 21561,
+    "first": 38.000003814697266,
+    "last": 49.500003814697266,
+    "sum": 1283738.7884426117,
+    "min": 30.600004196166992,
+    "max": 98.60000610351562
+   }
+  },
+  "FL_Ch1": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 21565,
+    "first": 267.0,
+    "last": 2161505.0,
+    "sum": 23311169857.0,
+    "min": 267.0,
+    "max": 2161505.0
+   },
+   "values": {
+    "length": 21565,
+    "first": 45.90000534057617,
+    "last": 46.500003814697266,
+    "sum": 1067752.9843597412,
+    "min": 21.100004196166992,
+    "max": 92.30000305175781
+   }
+  },
+  "RR_Ch8": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 21561,
+    "first": 317.0,
+    "last": 2161410.0,
+    "sum": 23306321038.0,
+    "min": 317.0,
+    "max": 2161410.0
+   },
+   "values": {
+    "length": 21561,
+    "first": 39.60000228881836,
+    "last": 49.40000534057617,
+    "sum": 1168757.284992218,
+    "min": 33.500003814697266,
+    "max": 93.10000610351562
+   }
+  },
+  "RL_Ch7": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 21568,
+    "first": 314.0,
+    "last": 2161455.0,
+    "sum": 23312524908.0,
+    "min": 314.0,
+    "max": 2161455.0
+   },
+   "values": {
+    "length": 21568,
+    "first": 38.000003814697266,
+    "last": 44.30000305175781,
+    "sum": 1170397.2856884003,
+    "min": 27.600004196166992,
+    "max": 96.50000762939453
+   }
+  },
+  "SpeedAverage": {
+   "units": "km/h",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 36024,
+    "first": 269.0,
+    "last": 2161564.0,
+    "sum": 38939003944.0,
+    "min": 269.0,
+    "max": 2161564.0
+   },
+   "values": {
+    "length": 36024,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 4214351.593474865,
+    "min": 0.0,
+    "max": 203.11874389648438
+   }
+  },
+  "TPMS_Press_RR": {
+   "units": "bar",
+   "dec_pts": 2,
+   "interpolate": true,
+   "timecodes": {
+    "length": 10807,
+    "first": 332.0,
+    "last": 2161386.0,
+    "sum": 11680840785.0,
+    "min": 332.0,
+    "max": 2161386.0
+   },
+   "values": {
+    "length": 10807,
+    "first": 1.7899999618530273,
+    "last": 1.8799999952316284,
+    "sum": 20025.219583392143,
+    "min": 1.71999990940094,
+    "max": 1.9799998998641968
+   }
+  },
+  "Best Run Diff": {
+   "units": "ms",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 963,
+    "first": 150453.0,
+    "last": 2080362.0,
+    "sum": 1114676265.0,
+    "min": 150453.0,
+    "max": 2080362.0
+   },
+   "values": {
+    "length": 963,
+    "first": -12290.0,
+    "last": 36591.0,
+    "sum": 892574.0,
+    "min": -12290.0,
+    "max": 36591.0
+   }
+  },
+  "FL_Ch6": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 21565,
+    "first": 318.0,
+    "last": 2161456.0,
+    "sum": 23309122545.0,
+    "min": 318.0,
+    "max": 2161456.0
+   },
+   "values": {
+    "length": 21565,
+    "first": 45.30000305175781,
+    "last": 50.000003814697266,
+    "sum": 1193975.885755539,
+    "min": 19.700002670288086,
+    "max": 103.70000457763672
+   }
+  },
+  "PPS": {
+   "units": "%",
+   "dec_pts": 2,
+   "interpolate": true,
+   "timecodes": {
+    "length": 54029,
+    "first": 277.0,
+    "last": 2161548.0,
+    "sum": 58400629801.0,
+    "min": 277.0,
+    "max": 2161548.0
+   },
+   "values": {
+    "length": 54029,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 3240134.8085386753,
+    "min": 0.0,
+    "max": 99.99998474121094
+   }
+  },
+  "FR_Ch4": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 21568,
+    "first": 329.0,
+    "last": 2161468.0,
+    "sum": 23312841101.0,
+    "min": 329.0,
+    "max": 2161468.0
+   },
+   "values": {
+    "length": 21568,
+    "first": 55.30000305175781,
+    "last": 51.70000457763672,
+    "sum": 1174864.285270691,
+    "min": 21.500003814697266,
+    "max": 98.9000015258789
+   }
+  },
+  "Predictive Time": {
+   "units": "ms",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 963,
+    "first": 150453.0,
+    "last": 2080362.0,
+    "sum": 1114676265.0,
+    "min": 150453.0,
+    "max": 2080362.0
+   },
+   "values": {
+    "length": 963,
+    "first": -12290.0,
+    "last": 161647.0,
+    "sum": 122191980.0,
+    "min": -12290.0,
+    "max": 161647.0
+   }
+  },
+  "WheelSpdFR": {
+   "units": "km/h",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 36024,
+    "first": 270.0,
+    "last": 2161565.0,
+    "sum": 38939030020.0,
+    "min": 270.0,
+    "max": 2161565.0
+   },
+   "values": {
+    "length": 36024,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 4158289.469797492,
+    "min": 0.0,
+    "max": 201.99374389648438
+   }
+  },
+  "FR_Ch7": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 21568,
+    "first": 330.0,
+    "last": 2161470.0,
+    "sum": 23312871602.0,
+    "min": 330.0,
+    "max": 2161470.0
+   },
+   "values": {
+    "length": 21568,
+    "first": 57.10000228881836,
+    "last": 51.000003814697266,
+    "sum": 1106249.6841392517,
+    "min": 22.600004196166992,
+    "max": 96.60000610351562
+   }
+  },
+  "PitchRate": {
+   "units": "deg/s",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 108060,
+    "first": 200.0,
+    "last": 2161380.0,
+    "sum": 116790167400.0,
+    "min": 200.0,
+    "max": 2161380.0
+   },
+   "values": {
+    "length": 108060,
+    "first": 0.10498046875,
+    "last": 0.06329345703125,
+    "sum": 8582.822310864925,
+    "min": -33.71875,
+    "max": 21.171875
+   }
+  },
+  "WheelSpdRL": {
+   "units": "km/h",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 36024,
+    "first": 270.0,
+    "last": 2161565.0,
+    "sum": 38939030020.0,
+    "min": 270.0,
+    "max": 2161565.0
+   },
+   "values": {
+    "length": 36024,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 4216417.036121964,
+    "min": 0.0,
+    "max": 203.0625
+   }
+  },
+  "FR_Ch3": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 21568,
+    "first": 329.0,
+    "last": 2161468.0,
+    "sum": 23312841101.0,
+    "min": 329.0,
+    "max": 2161468.0
+   },
+   "values": {
+    "length": 21568,
+    "first": 54.60000228881836,
+    "last": 51.80000305175781,
+    "sum": 1226482.9870986938,
+    "min": 17.10000228881836,
+    "max": 97.20000457763672
+   }
+  },
+  "RL_Ch2": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 21568,
+    "first": 313.0,
+    "last": 2161453.0,
+    "sum": 23312493822.0,
+    "min": 313.0,
+    "max": 2161453.0
+   },
+   "values": {
+    "length": 21568,
+    "first": 39.500003814697266,
+    "last": 47.10000228881836,
+    "sum": 1225178.386636734,
+    "min": 29.600004196166992,
+    "max": 91.70000457763672
+   }
+  },
+  "TPMS_Volt_LF": {
+   "units": "mV",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 10807,
+    "first": 332.0,
+    "last": 2161386.0,
+    "sum": 11680840785.0,
+    "min": 332.0,
+    "max": 2161386.0
+   },
+   "values": {
+    "length": 10807,
+    "first": 2900.0,
+    "last": 3000.0,
+    "sum": 32097900.0,
+    "min": 2900.0,
+    "max": 3000.0
+   }
+  },
+  "Baro": {
+   "units": "bar",
+   "dec_pts": 2,
+   "interpolate": true,
+   "timecodes": {
+    "length": 100395,
+    "first": 277.0,
+    "last": 2161545.0,
+    "sum": 108603339481.0,
+    "min": 277.0,
+    "max": 2161545.0
+   },
+   "values": {
+    "length": 100395,
+    "first": 0.9399999976158142,
+    "last": 0.949999988079071,
+    "sum": 94460.50967556238,
+    "min": 0.9399999976158142,
+    "max": 0.949999988079071
+   }
+  },
+  "RR_Ch2": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 21561,
+    "first": 266.0,
+    "last": 2161409.0,
+    "sum": 23302998371.0,
+    "min": 266.0,
+    "max": 2161409.0
+   },
+   "values": {
+    "length": 21561,
+    "first": 37.90000534057617,
+    "last": 45.20000457763672,
+    "sum": 1125840.5841579437,
+    "min": 28.100004196166992,
+    "max": 100.10000610351562
+   }
+  },
+  "TPMS_ALM_LF": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 10807,
+    "first": 332.0,
+    "last": 2161386.0,
+    "sum": 11680840785.0,
+    "min": 332.0,
+    "max": 2161386.0
+   },
+   "values": {
+    "length": 10807,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "MAP": {
+   "units": "bar",
+   "dec_pts": 2,
+   "interpolate": true,
+   "timecodes": {
+    "length": 100396,
+    "first": 277.0,
+    "last": 2161565.0,
+    "sum": 108605501046.0,
+    "min": 277.0,
+    "max": 2161565.0
+   },
+   "values": {
+    "length": 100396,
+    "first": 0.3100000023841858,
+    "last": 0.2800000011920929,
+    "sum": 69818.83791007102,
+    "min": 0.07000000029802322,
+    "max": 0.949999988079071
+   }
+  },
+  "TPMS_Press_RF": {
+   "units": "bar",
+   "dec_pts": 2,
+   "interpolate": true,
+   "timecodes": {
+    "length": 10807,
+    "first": 332.0,
+    "last": 2161386.0,
+    "sum": 11680840785.0,
+    "min": 332.0,
+    "max": 2161386.0
+   },
+   "values": {
+    "length": 10807,
+    "first": 1.8199999332427979,
+    "last": 1.8499999046325684,
+    "sum": 20008.42938041687,
+    "min": 1.71999990940094,
+    "max": 1.9799998998641968
+   }
+  },
+  "RL_Ch8": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 21568,
+    "first": 314.0,
+    "last": 2161455.0,
+    "sum": 23312524908.0,
+    "min": 314.0,
+    "max": 2161455.0
+   },
+   "values": {
+    "length": 21568,
+    "first": 33.70000457763672,
+    "last": 38.70000457763672,
+    "sum": 947508.2823505402,
+    "min": 25.700002670288086,
+    "max": 75.9000015258789
+   }
+  },
+  "TPMS_ALM_RR": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 10807,
+    "first": 332.0,
+    "last": 2161386.0,
+    "sum": 11680840785.0,
+    "min": 332.0,
+    "max": 2161386.0
+   },
+   "values": {
+    "length": 10807,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "Lambda": {
+   "units": "lambda",
+   "dec_pts": 2,
+   "interpolate": true,
+   "timecodes": {
+    "length": 100395,
+    "first": 277.0,
+    "last": 2161545.0,
+    "sum": 108603339481.0,
+    "min": 277.0,
+    "max": 2161545.0
+   },
+   "values": {
+    "length": 100395,
+    "first": 0.9950319528579712,
+    "last": 0.9954894781112671,
+    "sum": 87165.84776300192,
+    "min": 0.749567985534668,
+    "max": 1.393239974975586
+   }
+  },
+  "LR_Shock_Pot": {
+   "units": "mm",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 1080650,
+    "first": 292.0,
+    "last": 2161590.0,
+    "sum": 1168118891940.0,
+    "min": 292.0,
+    "max": 2161590.0
+   },
+   "values": {
+    "length": 1080650,
+    "first": 1.220703125,
+    "last": -2.44140625,
+    "sum": 1895147.435546875,
+    "min": -29.75,
+    "max": 30.046875
+   }
+  },
+  "TPMS_Press_LR": {
+   "units": "bar",
+   "dec_pts": 2,
+   "interpolate": true,
+   "timecodes": {
+    "length": 10807,
+    "first": 332.0,
+    "last": 2161386.0,
+    "sum": 11680840785.0,
+    "min": 332.0,
+    "max": 2161386.0
+   },
+   "values": {
+    "length": 10807,
+    "first": 1.8199999332427979,
+    "last": 1.8799999952316284,
+    "sum": 20089.739642620087,
+    "min": 1.71999990940094,
+    "max": 1.9799998998641968
+   }
+  },
+  "Gear": {
+   "units": "gear",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 10806,
+    "first": 298.0,
+    "last": 2161450.0,
+    "sum": 11679921934.0,
+    "min": 298.0,
+    "max": 2161450.0
+   },
+   "values": {
+    "length": 10806,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 31063.0,
+    "min": 0.0,
+    "max": 6.0
+   }
+  },
+  "TPMS_Volt_RF": {
+   "units": "mV",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 10807,
+    "first": 332.0,
+    "last": 2161386.0,
+    "sum": 11680840785.0,
+    "min": 332.0,
+    "max": 2161386.0
+   },
+   "values": {
+    "length": 10807,
+    "first": 2900.0,
+    "last": 3000.0,
+    "sum": 31894600.0,
+    "min": 2900.0,
+    "max": 3000.0
+   }
+  },
+  "RL_Ch6": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 21568,
+    "first": 314.0,
+    "last": 2161455.0,
+    "sum": 23312524908.0,
+    "min": 314.0,
+    "max": 2161455.0
+   },
+   "values": {
+    "length": 21568,
+    "first": 38.40000534057617,
+    "last": 45.90000534057617,
+    "sum": 1232783.7866134644,
+    "min": 27.500003814697266,
+    "max": 113.4000015258789
+   }
+  },
+  "WheelSpdRR": {
+   "units": "km/h",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 36024,
+    "first": 270.0,
+    "last": 2161565.0,
+    "sum": 38939030020.0,
+    "min": 270.0,
+    "max": 2161565.0
+   },
+   "values": {
+    "length": 36024,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 4213289.4251025915,
+    "min": 0.0,
+    "max": 203.2312469482422
+   }
+  },
+  "TPMS_Temp_RR": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 10807,
+    "first": 332.0,
+    "last": 2161386.0,
+    "sum": 11680840785.0,
+    "min": 332.0,
+    "max": 2161386.0
+   },
+   "values": {
+    "length": 10807,
+    "first": 48.0,
+    "last": 51.0,
+    "sum": 535287.0,
+    "min": 42.0,
+    "max": 53.0
+   }
+  },
+  "RL_Ch5": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 21568,
+    "first": 314.0,
+    "last": 2161455.0,
+    "sum": 23312524908.0,
+    "min": 314.0,
+    "max": 2161455.0
+   },
+   "values": {
+    "length": 21568,
+    "first": 38.90000534057617,
+    "last": 48.20000457763672,
+    "sum": 1212377.5848751068,
+    "min": 29.600004196166992,
+    "max": 107.50000762939453
+   }
+  },
+  "TPMS_ALM_RF": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 10807,
+    "first": 332.0,
+    "last": 2161386.0,
+    "sum": 11680840785.0,
+    "min": 332.0,
+    "max": 2161386.0
+   },
+   "values": {
+    "length": 10807,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "TPMS_Temp_RF": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 10807,
+    "first": 332.0,
+    "last": 2161386.0,
+    "sum": 11680840785.0,
+    "min": 332.0,
+    "max": 2161386.0
+   },
+   "values": {
+    "length": 10807,
+    "first": 59.0,
+    "last": 51.0,
+    "sum": 572809.0,
+    "min": 47.0,
+    "max": 59.0
+   }
+  },
+  "TPMS_Volt_RR": {
+   "units": "mV",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 10807,
+    "first": 332.0,
+    "last": 2161386.0,
+    "sum": 11680840785.0,
+    "min": 332.0,
+    "max": 2161386.0
+   },
+   "values": {
+    "length": 10807,
+    "first": 2900.0,
+    "last": 3000.0,
+    "sum": 32300800.0,
+    "min": 2900.0,
+    "max": 3000.0
+   }
+  },
+  "LoggerTemp": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 2161,
+    "first": 650.0,
+    "last": 2160650.0,
+    "sum": 2335284650.0,
+    "min": 650.0,
+    "max": 2160650.0
+   },
+   "values": {
+    "length": 2161,
+    "first": 35.09375,
+    "last": 37.25,
+    "sum": 81100.75,
+    "min": 35.09375,
+    "max": 38.15625
+   }
+  },
+  "LateralAcc": {
+   "units": "g",
+   "dec_pts": 2,
+   "interpolate": true,
+   "timecodes": {
+    "length": 108060,
+    "first": 0.0,
+    "last": 2161180.0,
+    "sum": 116768555400.0,
+    "min": 0.0,
+    "max": 2161180.0
+   },
+   "values": {
+    "length": 108060,
+    "first": -0.00809478759765625,
+    "last": 0.03167724609375,
+    "sum": 11606.41085267067,
+    "min": -1.962890625,
+    "max": 1.529296875
+   }
+  },
+  "CAT1": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 100396,
+    "first": 267.0,
+    "last": 2161554.0,
+    "sum": 108604422150.0,
+    "min": 267.0,
+    "max": 2161554.0
+   },
+   "values": {
+    "length": 100396,
+    "first": 274.20001220703125,
+    "last": 542.6000366210938,
+    "sum": 71066650.81433105,
+    "min": 274.20001220703125,
+    "max": 754.1000366210938
+   }
+  },
+  "TPMS_Volt_LR": {
+   "units": "mV",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 10807,
+    "first": 332.0,
+    "last": 2161386.0,
+    "sum": 11680840785.0,
+    "min": 332.0,
+    "max": 2161386.0
+   },
+   "values": {
+    "length": 10807,
+    "first": 2900.0,
+    "last": 3000.0,
+    "sum": 31760100.0,
+    "min": 2900.0,
+    "max": 3000.0
+   }
+  },
+  "RF_Shock_Pot": {
+   "units": "mm",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 1080650,
+    "first": 292.0,
+    "last": 2161590.0,
+    "sum": 1168118891940.0,
+    "min": 292.0,
+    "max": 2161590.0
+   },
+   "values": {
+    "length": 1080650,
+    "first": 0.91552734375,
+    "last": -2.8984375,
+    "sum": -441061.5349121094,
+    "min": -16.625,
+    "max": 36.59375
+   }
+  },
+  "SteerAngle": {
+   "units": "deg",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 21614,
+    "first": 329.0,
+    "last": 2161544.0,
+    "sum": 23363398667.0,
+    "min": 329.0,
+    "max": 2161544.0
+   },
+   "values": {
+    "length": 21614,
+    "first": -3.6000001430511475,
+    "last": -31.600000381469727,
+    "sum": 107073.80195733905,
+    "min": -189.6999969482422,
+    "max": 356.8000183105469
+   }
+  },
+  "Prev Lap Diff": {
+   "units": "ms",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 15,
+    "first": 150453.0,
+    "last": 1924187.0,
+    "sum": 15598724.0,
+    "min": 150453.0,
+    "max": 1924187.0
+   },
+   "values": {
+    "length": 15,
+    "first": -12290.0,
+    "last": -12290.0,
+    "sum": -184350.0,
+    "min": -12290.0,
+    "max": -12290.0
+   }
+  },
+  "Luminosity": {
+   "units": "%",
+   "dec_pts": 2,
+   "interpolate": true,
+   "timecodes": {
+    "length": 2161,
+    "first": 650.0,
+    "last": 2160650.0,
+    "sum": 2335284650.0,
+    "min": 650.0,
+    "max": 2160650.0
+   },
+   "values": {
+    "length": 2161,
+    "first": 14.2421875,
+    "last": 15.5390625,
+    "sum": 37979.59765625,
+    "min": 7.80859375,
+    "max": 29.59375
+   }
+  },
+  "WheelSpdFL": {
+   "units": "km/h",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 36024,
+    "first": 270.0,
+    "last": 2161565.0,
+    "sum": 38939030020.0,
+    "min": 270.0,
+    "max": 2161565.0
+   },
+   "values": {
+    "length": 36024,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 4164112.3571630716,
+    "min": 0.0,
+    "max": 202.27499389648438
+   }
+  },
+  "InlineAcc": {
+   "units": "g",
+   "dec_pts": 2,
+   "interpolate": true,
+   "timecodes": {
+    "length": 108060,
+    "first": 0.0,
+    "last": 2161180.0,
+    "sum": 116768555400.0,
+    "min": 0.0,
+    "max": 2161180.0
+   },
+   "values": {
+    "length": 108060,
+    "first": -0.0265350341796875,
+    "last": -0.003253936767578125,
+    "sum": 163.6423344016075,
+    "min": -1.37109375,
+    "max": 1.4912109375
+   }
+  },
+  "CH": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 10807,
+    "first": 332.0,
+    "last": 2161386.0,
+    "sum": 11680840785.0,
+    "min": 332.0,
+    "max": 2161386.0
+   },
+   "values": {
+    "length": 10807,
+    "first": 1.0,
+    "last": 1.0,
+    "sum": 10807.0,
+    "min": 1.0,
+    "max": 1.0
+   }
+  },
+  "TPMS_Press_LF": {
+   "units": "bar",
+   "dec_pts": 2,
+   "interpolate": true,
+   "timecodes": {
+    "length": 10807,
+    "first": 332.0,
+    "last": 2161386.0,
+    "sum": 11680840785.0,
+    "min": 332.0,
+    "max": 2161386.0
+   },
+   "values": {
+    "length": 10807,
+    "first": 1.8199999332427979,
+    "last": 1.8499999046325684,
+    "sum": 20111.21951842308,
+    "min": 1.71999990940094,
+    "max": 2.009999990463257
+   }
+  },
+  "RL_Ch4": {
+   "units": "C",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 21568,
+    "first": 313.0,
+    "last": 2161453.0,
+    "sum": 23312493822.0,
+    "min": 313.0,
+    "max": 2161453.0
+   },
+   "values": {
+    "length": 21568,
+    "first": 38.70000457763672,
+    "last": 47.30000305175781,
+    "sum": 1247644.0873718262,
+    "min": 27.700002670288086,
+    "max": 100.70000457763672
+   }
+  },
+  "GPS Speed": {
+   "units": "m/s",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 54031,
+    "first": 266.0,
+    "last": 2161511.0,
+    "sum": 58401737324.0,
+    "min": 266.0,
+    "max": 2161511.0
+   },
+   "values": {
+    "length": 54031,
+    "first": 0.03,
+    "last": 0.0,
+    "sum": 1793457.4455511314,
+    "min": 0.0,
+    "max": 58.17432681174747
+   }
+  },
+  "GPS Latitude": {
+   "units": "deg",
+   "dec_pts": 4,
+   "interpolate": true,
+   "timecodes": {
+    "length": 54031,
+    "first": 266.0,
+    "last": 2161511.0,
+    "sum": 58401737324.0,
+    "min": 266.0,
+    "max": 2161511.0
+   },
+   "values": {
+    "length": 54031,
+    "first": 35.37384615761559,
+    "last": 35.370284309814714,
+    "sum": 1911064.5258919487,
+    "min": 35.36468995615883,
+    "max": 35.376308337766545
+   }
+  },
+  "GPS Longitude": {
+   "units": "deg",
+   "dec_pts": 4,
+   "interpolate": true,
+   "timecodes": {
+    "length": 54031,
+    "first": 266.0,
+    "last": 2161511.0,
+    "sum": 58401737324.0,
+    "min": 266.0,
+    "max": 2161511.0
+   },
+   "values": {
+    "length": 54031,
+    "first": 138.9300531063398,
+    "last": 138.92537086816313,
+    "sum": 7506350.866492033,
+    "min": 138.92003112825086,
+    "max": 138.9339038168774
+   }
+  },
+  "GPS Altitude": {
+   "units": "m",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 54031,
+    "first": 266.0,
+    "last": 2161511.0,
+    "sum": 58401737324.0,
+    "min": 266.0,
+    "max": 2161511.0
+   },
+   "values": {
+    "length": 54031,
+    "first": 619.9986869466887,
+    "last": 625.2562449506721,
+    "sum": 32968447.32633528,
+    "min": 587.9507110392749,
+    "max": 628.2788970347206
+   }
+  },
+  "GPS_Satellites": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 54031,
+    "first": 266.0,
+    "last": 2161511.0,
+    "sum": 58401737324.0,
+    "min": 266.0,
+    "max": 2161511.0
+   },
+   "values": {
+    "length": 54031,
+    "first": 12.0,
+    "last": 14.0,
+    "sum": 714474.0,
+    "min": 8.0,
+    "max": 16.0
+   }
+  },
+  "GPS_Fix": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 54031,
+    "first": 266.0,
+    "last": 2161511.0,
+    "sum": 58401737324.0,
+    "min": 266.0,
+    "max": 2161511.0
+   },
+   "values": {
+    "length": 54031,
+    "first": 3.0,
+    "last": 3.0,
+    "sum": 162093.0,
+    "min": 3.0,
+    "max": 3.0
+   }
+  },
+  "GPS_pDOP": {
+   "units": "",
+   "dec_pts": 2,
+   "interpolate": false,
+   "timecodes": {
+    "length": 54031,
+    "first": 266.0,
+    "last": 2161511.0,
+    "sum": 58401737324.0,
+    "min": 266.0,
+    "max": 2161511.0
+   },
+   "values": {
+    "length": 54031,
+    "first": 1.399999976158142,
+    "last": 1.3899999856948853,
+    "sum": 69570.70006430149,
+    "min": 1.059999942779541,
+    "max": 2.4600000381469727
+   }
+  },
+  "GPS_Position_Accuracy": {
+   "units": "m",
+   "dec_pts": 2,
+   "interpolate": true,
+   "timecodes": {
+    "length": 54031,
+    "first": 266.0,
+    "last": 2161511.0,
+    "sum": 58401737324.0,
+    "min": 266.0,
+    "max": 2161511.0
+   },
+   "values": {
+    "length": 54031,
+    "first": 0.46000000834465027,
+    "last": 0.2800000011920929,
+    "sum": 14445.43001921475,
+    "min": 0.20000000298023224,
+    "max": 0.46000000834465027
+   }
+  },
+  "GPS_Velocity_Accuracy": {
+   "units": "m/s",
+   "dec_pts": 2,
+   "interpolate": true,
+   "timecodes": {
+    "length": 54031,
+    "first": 266.0,
+    "last": 2161511.0,
+    "sum": 58401737324.0,
+    "min": 266.0,
+    "max": 2161511.0
+   },
+   "values": {
+    "length": 54031,
+    "first": 0.10999999940395355,
+    "last": 0.07999999821186066,
+    "sum": 6412.619985032827,
+    "min": 0.05000000074505806,
+    "max": 0.2800000011920929
+   }
+  },
+  "GPS_InlineAcc": {
+   "units": "g",
+   "dec_pts": 2,
+   "interpolate": true,
+   "timecodes": {
+    "length": 54031,
+    "first": 266.0,
+    "last": 2161511.0,
+    "sum": 58401737324.0,
+    "min": 266.0,
+    "max": 2161511.0
+   },
+   "values": {
+    "length": 54031,
+    "first": 0.0,
+    "last": -0.05698440223932266,
+    "sum": 0.18520090716720006,
+    "min": -1.533431887626648,
+    "max": 1.0892566442489624
+   }
+  },
+  "GPS_LateralAcc": {
+   "units": "g",
+   "dec_pts": 2,
+   "interpolate": true,
+   "timecodes": {
+    "length": 54031,
+    "first": 266.0,
+    "last": 2161511.0,
+    "sum": 58401737324.0,
+    "min": 266.0,
+    "max": 2161511.0
+   },
+   "values": {
+    "length": 54031,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 7683.6291961026345,
+    "min": -2.031755208969116,
+    "max": 2.213367462158203
+   }
+  },
+  "GPS_Yaw_Rate": {
+   "units": "deg/s",
+   "dec_pts": 1,
+   "interpolate": true,
+   "timecodes": {
+    "length": 54031,
+    "first": 266.0,
+    "last": 2161511.0,
+    "sum": 58401737324.0,
+    "min": 266.0,
+    "max": 2161511.0
+   },
+   "values": {
+    "length": 54031,
+    "first": 0.0,
+    "last": 947.4325561523438,
+    "sum": 93272.68722591977,
+    "min": -4500.0,
+    "max": 4419.7763671875
+   }
+  }
+ },
+ "laps_raw": [
+  {
+   "num": 0,
+   "start_time": 0,
+   "end_time": 150454,
+   "lap_type": "out"
+  },
+  {
+   "num": 1,
+   "start_time": 150454,
+   "end_time": 279602,
+   "lap_type": "full"
+  },
+  {
+   "num": 2,
+   "start_time": 279602,
+   "end_time": 406240,
+   "lap_type": "full"
+  },
+  {
+   "num": 3,
+   "start_time": 406240,
+   "end_time": 532797,
+   "lap_type": "full"
+  },
+  {
+   "num": 4,
+   "start_time": 532797,
+   "end_time": 659283,
+   "lap_type": "full"
+  },
+  {
+   "num": 5,
+   "start_time": 659283,
+   "end_time": 787773,
+   "lap_type": "full"
+  },
+  {
+   "num": 6,
+   "start_time": 787773,
+   "end_time": 913776,
+   "lap_type": "full"
+  },
+  {
+   "num": 7,
+   "start_time": 913776,
+   "end_time": 1041398,
+   "lap_type": "full"
+  },
+  {
+   "num": 8,
+   "start_time": 1041398,
+   "end_time": 1168323,
+   "lap_type": "full"
+  },
+  {
+   "num": 9,
+   "start_time": 1168323,
+   "end_time": 1294676,
+   "lap_type": "full"
+  },
+  {
+   "num": 10,
+   "start_time": 1294676,
+   "end_time": 1420573,
+   "lap_type": "full"
+  },
+  {
+   "num": 11,
+   "start_time": 1420573,
+   "end_time": 1547568,
+   "lap_type": "full"
+  },
+  {
+   "num": 12,
+   "start_time": 1547568,
+   "end_time": 1672956,
+   "lap_type": "full"
+  },
+  {
+   "num": 13,
+   "start_time": 1672956,
+   "end_time": 1799132,
+   "lap_type": "full"
+  },
+  {
+   "num": 14,
+   "start_time": 1799132,
+   "end_time": 1924188,
+   "lap_type": "full"
+  },
+  {
+   "num": 15,
+   "start_time": 1924188,
+   "end_time": 2161607,
+   "lap_type": "in"
+  }
+ ],
+ "metadata": {
+  "Driver": "CMD",
+  "Vehicle": "Inferno 86",
+  "Log Date": "11/01/2025",
+  "Log Time": "10:39:06",
+  "Session": "",
+  "Series": "",
+  "Venue": "Fuji GP Sh",
+  "Odo/Usr 1 Distance (km)": "5313.42",
+  "Odo/Usr 1 Time": "79:29:53",
+  "Odo/Usr 3 Distance (km)": "5313.42",
+  "Odo/Usr 3 Time": "79:29:53",
+  "Odo/Usr 2 Distance (km)": "5313.42",
+  "Odo/Usr 2 Time": "79:29:53",
+  "Odo/System Distance (km)": "5313.42",
+  "Odo/System Time": "79:29:53",
+  "Odo/Usr 4 Distance (km)": "5313.42",
+  "Odo/Usr 4 Time": "79:29:53",
+  "Logger ID": "6701209",
+  "Logger Model ID": "649",
+  "Logger Model": "MXP 1.3",
+  "Device Name": "Inferno 86 v2",
+  "GPS Receiver": "GPS",
+  "Vehicle Electronics Type": "0"
+ },
+ "session": {
+  "laps": [
+   {
+    "num": 1,
+    "lap_time_s": 129.148
+   },
+   {
+    "num": 2,
+    "lap_time_s": 126.638
+   },
+   {
+    "num": 3,
+    "lap_time_s": 126.557
+   },
+   {
+    "num": 4,
+    "lap_time_s": 126.486
+   },
+   {
+    "num": 5,
+    "lap_time_s": 128.49
+   },
+   {
+    "num": 6,
+    "lap_time_s": 126.003
+   },
+   {
+    "num": 7,
+    "lap_time_s": 127.622
+   },
+   {
+    "num": 8,
+    "lap_time_s": 126.925
+   },
+   {
+    "num": 9,
+    "lap_time_s": 126.353
+   },
+   {
+    "num": 10,
+    "lap_time_s": 125.897
+   },
+   {
+    "num": 11,
+    "lap_time_s": 126.995
+   },
+   {
+    "num": 12,
+    "lap_time_s": 125.388
+   },
+   {
+    "num": 13,
+    "lap_time_s": 126.176
+   },
+   {
+    "num": 14,
+    "lap_time_s": 125.056
+   }
+  ],
+  "speed_kmh": {
+   "length": 54031,
+   "first": 0.108,
+   "last": 0.0,
+   "sum": 6456446.803984073,
+   "min": 0.0,
+   "max": 209.4275765222909
+  },
+  "distance_m": {
+   "length": 54031,
+   "first": 0.0,
+   "last": 4528.914611453233,
+   "sum": 129141455.4989816,
+   "min": 0.0,
+   "max": 4528.914611453233
+  },
+  "lap_end_distance_m": {
+   "1": 4500.424385459205,
+   "2": 4499.195776848252,
+   "3": 4510.822354846101,
+   "4": 4500.5631602350395,
+   "5": 4502.291065936277,
+   "6": 4508.0174150224275,
+   "7": 4518.400723918081,
+   "8": 4505.111266772394,
+   "9": 4502.4598360619175,
+   "10": 4504.622062572714,
+   "11": 4490.21875595457,
+   "12": 4491.37673140751,
+   "13": 4495.088003929275,
+   "14": 4494.803809527287
+  }
+ }
+}

@@ -19,6 +19,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build parser FFI libraries
+        run: python3 desktop_app_cs/tools/build_native.py --rids linux-x64
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -37,6 +43,12 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build parser FFI libraries
+        run: python desktop_app_cs/tools/build_native.py --rids win-x64
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -68,6 +80,12 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y clang zlib1g-dev
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build parser FFI libraries
+        run: python3 desktop_app_cs/tools/build_native.py --rids linux-x64
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4

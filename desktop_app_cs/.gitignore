@@ -4,3 +4,5 @@ obj/
 .vs/
 # Stress fixture (tens of MB); regenerate with `just cs-fixture-dense`
 App/fixtures/laps_dense.json
+# Native parser libraries and their source checkouts (tools/build_native.py)
+native/
