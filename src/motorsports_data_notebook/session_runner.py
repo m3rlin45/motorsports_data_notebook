@@ -16,10 +16,8 @@ import numpy as np
 from motorsports_data_notebook._util import MergedLogFile, load_session
 from motorsports_data_notebook.profiles import (
     DEFAULT_CHANNEL_NAMES,
-    get_logger_id,
-    get_profile_for_logger,
-    load_builtin_profiles,
-    load_user_profiles,
+    get_profile_for_log,
+    load_profile_definitions,
 )
 from motorsports_data_notebook.report import generate_session_report
 
@@ -60,15 +58,15 @@ def resolve_profile(
         If an explicit profile name is given but not found.
     """
     if profile_name:
-        all_profiles = {**load_builtin_profiles(), **load_user_profiles()}
+        all_profiles = load_profile_definitions()
         profile = all_profiles.get(profile_name)
         if profile is None:
             available = ", ".join(sorted(all_profiles))
             raise ValueError(f"Profile '{profile_name}' not found. Available: {available}")
         return profile.channel_names, profile.motion_ratios
 
-    logger_id = get_logger_id(log)
-    profile = get_profile_for_logger(logger_id) if logger_id else None
+    # Auto-detect from logger ID + vehicle name (shared loggers map per vehicle)
+    profile = get_profile_for_log(log)
     if profile:
         return profile.channel_names, profile.motion_ratios
     return DEFAULT_CHANNEL_NAMES.copy(), None
