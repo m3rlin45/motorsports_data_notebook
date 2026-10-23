@@ -636,8 +636,9 @@ def get_vehicle_name(log: LogFile, file_name: str | None = None) -> str | None:
         val = metadata.get(key)
         if isinstance(val, str) and val.strip():
             return val.strip()
-    # Only AIM files follow the Race Studio naming scheme
-    if metadata.get("Logger ID") is None and metadata.get("logger_id") is None:
+    # Only AIM files follow the Race Studio naming scheme; "present" means the
+    # same thing as in get_logger_id (an empty logger ID counts as absent).
+    if not (metadata.get("Logger ID") or metadata.get("logger_id")):
         return None
     log_file_name = getattr(log, "file_name", None)
     if isinstance(log_file_name, str) and log_file_name:
