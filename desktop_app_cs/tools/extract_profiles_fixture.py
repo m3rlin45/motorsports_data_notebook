@@ -38,7 +38,10 @@ LOOKUPS = [
 
 VEHICLE_CASES = [
     ({"Logger ID": 8401203, "Vehicle": "KK-F"}, "CMD_KK-SII_Suzuka Car_Race_a_0358.xrk"),
-    ({"Logger ID": 8401203, "Vehicle": ""}, "/data/2026-10-02/CMD_KK-F_Suzuka West_Generic testing_a_0351.xrz"),
+    (
+        {"Logger ID": 8401203, "Vehicle": ""},
+        "/data/2026-10-02/CMD_KK-F_Suzuka West_Generic testing_a_0351.xrz",
+    ),
     ({"Logger ID": 8401203}, "CMD_KK-F_Tsukuba_Car_Race_a_0344.xrz"),
     ({"Logger ID": 8401203}, ""),
     ({"Logger ID": 1}, "session.xrk"),
@@ -115,14 +118,18 @@ def main() -> int:
                 "file_name": file_name,
                 "logger_id": P.get_logger_id(MockLog(metadata, file_name)),
                 "vehicle": P.get_vehicle_name(MockLog(metadata, file_name)),
-                "profile": (p.name if (p := P.get_profile_for_log(MockLog(metadata, file_name))) else None),
+                "profile": (
+                    p.name if (p := P.get_profile_for_log(MockLog(metadata, file_name))) else None
+                ),
             }
             for metadata, file_name in VEHICLE_CASES
         ],
     }
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(fixture, indent=1) + "\n")
-    print(f"wrote {OUT}: {len(builtin)} builtin keys, {len(definitions)} definitions", file=sys.stderr)
+    print(
+        f"wrote {OUT}: {len(builtin)} builtin keys, {len(definitions)} definitions", file=sys.stderr
+    )
     return 0
 
 

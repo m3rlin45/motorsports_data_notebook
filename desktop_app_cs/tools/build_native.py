@@ -33,8 +33,18 @@ NATIVE = ROOT / "desktop_app_cs" / "native"
 
 # Pinned parser commits: the ones carrying the FFI crates.
 PARSERS = {
-    "libxrk": {"repo": "m3rlin45/libxrk", "ref": "015ad78a5e61ae96b32aa45b7a785633af48a670", "crate": "libxrk-ffi", "lib": "xrk_ffi"},
-    "libibt": {"repo": "m3rlin45/libibt", "ref": "6e8fb20c980be4be34589f19820daad7ac43eea7", "crate": "libibt-ffi", "lib": "ibt_ffi"},
+    "libxrk": {
+        "repo": "m3rlin45/libxrk",
+        "ref": "015ad78a5e61ae96b32aa45b7a785633af48a670",
+        "crate": "libxrk-ffi",
+        "lib": "xrk_ffi",
+    },
+    "libibt": {
+        "repo": "m3rlin45/libibt",
+        "ref": "6e8fb20c980be4be34589f19820daad7ac43eea7",
+        "crate": "libibt-ffi",
+        "lib": "ibt_ffi",
+    },
 }
 
 # .NET runtime identifier -> (rust target triple, shared-library file name pattern)
@@ -102,12 +112,26 @@ def build(name: str, spec: dict, source: Path, rid: str, out_root: Path) -> Path
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--rids", nargs="+", default=[host_rid()], choices=sorted(RIDS), help="runtimes to build (default: host)")
-    parser.add_argument("--only", nargs="+", choices=sorted(PARSERS), help="parsers to build (default: all)")
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "--rids",
+        nargs="+",
+        default=[host_rid()],
+        choices=sorted(RIDS),
+        help="runtimes to build (default: host)",
+    )
+    parser.add_argument(
+        "--only", nargs="+", choices=sorted(PARSERS), help="parsers to build (default: all)"
+    )
     parser.add_argument("--out", type=Path, default=NATIVE / "runtimes")
     for name in PARSERS:
-        parser.add_argument(f"--source-{name}", type=Path, help=f"local {name} checkout to build instead of the pinned ref")
+        parser.add_argument(
+            f"--source-{name}",
+            type=Path,
+            help=f"local {name} checkout to build instead of the pinned ref",
+        )
     args = parser.parse_args(argv)
 
     for name, spec in PARSERS.items():

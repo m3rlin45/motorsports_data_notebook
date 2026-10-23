@@ -31,14 +31,13 @@ public static class SessionLoader
 
     /// <summary>
     /// Apply the derived channels and lap cleaning to a parsed session. The
-    /// speed channel is resolved from the profile by logger ID alone, as the
-    /// Python code does (it does not consult the vehicle name here).
+    /// speed channel comes from the profile resolved by logger ID plus
+    /// vehicle name, like every other consumer.
     /// </summary>
     public static LogFile PostProcess(LogFile log, ProfileStore profiles, IReadOnlyList<string> lapTypes)
     {
         var speedName = ChannelKeys.DefaultChannelNames["gps_speed"];
-        var loggerId = LogIdentity.GetLoggerId(log.Metadata);
-        if (loggerId is not null && profiles.GetProfileForLogger(loggerId) is { } profile
+        if (profiles.GetProfileForLog(log.Metadata, log.FileName) is { } profile
             && profile.ChannelNames.TryGetValue("gps_speed", out var fromProfile))
         {
             speedName = fromProfile;

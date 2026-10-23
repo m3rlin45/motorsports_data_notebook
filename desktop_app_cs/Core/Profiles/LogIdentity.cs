@@ -42,9 +42,9 @@ public static class LogIdentity
             }
         }
 
-        // Only AIM files follow the Race Studio naming scheme. Python tests the
-        // key for `is None` here (an empty value still counts), unlike GetLoggerId.
-        if (!(metadata.ContainsKey("Logger ID") || metadata.ContainsKey("logger_id")) || string.IsNullOrEmpty(fileName))
+        // Only AIM files follow the Race Studio naming scheme ("present" means
+        // the same as in GetLoggerId: an empty logger ID counts as absent).
+        if (LoggerIdValue(metadata) is null || string.IsNullOrEmpty(fileName))
         {
             return null;
         }
