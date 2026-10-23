@@ -91,8 +91,9 @@ from `.xrk` metadata or the `CMD_<Vehicle>_` file-name token) and derive motion
 ratios from `shock_calibration` exactly as `profiles.py` does. Only
 `toyota_86_zn6`, `kk_s2` and `kk_f` carry `shock_calibration`/`track_width_mm`;
 `honda_ek9`, `super_fj` and `iracing` fall back to default motion ratios and
-have no roll-gradient track widths. Known Python quirk not to copy: the speed
-channel for `distance_m` is resolved by logger ID alone, ignoring the vehicle.
+have no roll-gradient track widths. (Two Python quirks were fixed on both
+sides on 2026-10-24: the speed channel for `distance_m` now resolves by
+logger ID plus vehicle, and an empty logger ID counts as absent everywhere.)
 
 Rust crib (GitHub, open and stale since 2026-04, `desktop_app_rs/`, egui 0.33 +
 arrow 57, no Roll Gradient tab): #57 workspace → #58 data model + XRK/IBT
@@ -203,8 +204,6 @@ uses, so both apps share edits) and `LogIdentity` (logger ID + vehicle name
 from metadata / Race Studio file name). Parity: `tools/extract_profiles_fixture.py`
 dumps Python's resolution of every builtin key plus lookup and vehicle-name
 cases to `Tests/Fixtures/profiles.json`; `ProfilesParityTests` replays them.
-One quirk reproduced on purpose: an empty `Logger ID` is "absent" for the
-logger lookup but "present" for the file-name vehicle fallback.
 
 **Data layer (done 2026-10-23, pending the parser PRs).**
 
@@ -230,8 +229,8 @@ logger lookup but "present" for the file-name vehicle fallback.
   `interpolate == "True"` channels, forward-fill otherwise, interpolated
   float32 channels rounded back to single precision as Python's Arrow cast
   does), and `SessionLoader` = `load_session` (speed channel from the profile
-  **by logger ID only**, `speed_kmh`, per-lap `distance_m`, lap-type filter,
-  `clean_laps`). Values are widened to `double[]` on import (one copy; the
+  by logger ID plus vehicle, `speed_kmh`, per-lap `distance_m`, lap-type
+  filter, `clean_laps`). Values are widened to `double[]` on import (one copy; the
   zero-copy slice idea is deferred until a kernel needs it).
 - Parity: `tools/extract_session_fixture.py` dumps per-channel summaries,
   raw laps, scalar metadata and the `load_session` outcome for the Fuji 86

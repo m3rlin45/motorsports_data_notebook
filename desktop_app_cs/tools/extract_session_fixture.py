@@ -23,7 +23,9 @@ from pathlib import Path
 
 import numpy as np
 
-DEFAULT_SAMPLE = Path("workspace_template/data/CMD_Inferno 86_Fuji GP Sh_Generic testing_a_2248.xrz")
+DEFAULT_SAMPLE = Path(
+    "workspace_template/data/CMD_Inferno 86_Fuji GP Sh_Generic testing_a_2248.xrz"
+)
 DEFAULT_OUT = Path("desktop_app_cs/Tests/Fixtures/session_86.json")
 
 
@@ -40,7 +42,9 @@ def summary(values: np.ndarray) -> dict:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("sample", type=Path, nargs="?", default=DEFAULT_SAMPLE)
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     args = parser.parse_args(argv)
@@ -116,7 +120,10 @@ def main(argv: list[str] | None = None) -> int:
     }
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(fixture, indent=1) + "\n")
-    print(f"wrote {OUT}: {len(channels)} channels, {len(laps_raw)} raw laps, {len(laps_clean)} clean laps", file=sys.stderr)
+    print(
+        f"wrote {OUT}: {len(channels)} channels, {len(laps_raw)} raw laps, {len(laps_clean)} clean laps",
+        file=sys.stderr,
+    )
     return 0
 
 

@@ -172,3 +172,53 @@ def test_clean_laps_keeps_lap_zero_when_asked() -> None:
     )
     assert clean_laps(laps).column("num").to_pylist() == [1, 2]
     assert clean_laps(laps, drop_lap_zero=False).column("num").to_pylist() == [0, 1, 2]
+
+
+class TestPostProcessSessionProfile:
+    """The derived speed channel uses the profile resolved by logger ID + vehicle."""
+
+    @staticmethod
+    def _log(speed_channel: str):
+        import pyarrow as pa
+
+        from libxrk.base import LogFile
+
+        timecodes = pa.array([0, 1000, 2000], type=pa.int64())
+        channels = {
+            speed_channel: pa.table(
+                {"timecodes": timecodes, speed_channel: pa.array([10.0, 10.0, 10.0])}
+            ),
+        }
+        laps = pa.table(
+            {
+                "num": pa.array([1], type=pa.int32()),
+                "start_time": pa.array([0], type=pa.int64()),
+                "end_time": pa.array([3000], type=pa.int64()),
+                "lap_type": pa.array(["full"]),
+            }
+        )
+        return LogFile(
+            channels=channels,
+            laps=laps,
+            metadata={"Logger ID": 8401203, "Vehicle": "KK-F"},
+            file_name="CMD_KK-F_Tsukuba_Car_Race_a_0344.xrz",
+        )
+
+    def test_speed_channel_resolves_with_the_vehicle_name(self, monkeypatch):
+        from motorsports_data_notebook import profiles
+        from motorsports_data_notebook._util import _post_process_session
+
+        seen = {}
+
+        def fake_lookup(logger_id, vehicle=None):
+            seen["args"] = (logger_id, vehicle)
+            return profiles.VehicleProfile(name="Car", channel_names={"gps_speed": "Vehicle Speed"})
+
+        monkeypatch.setattr(profiles, "get_profile_for_logger", fake_lookup)
+
+        result = _post_process_session(self._log("Vehicle Speed"))
+
+        assert seen["args"] == ("8401203", "KK-F")
+        assert "speed_kmh" in result.channels
+        assert "distance_m" in result.channels
+        assert result.channels["speed_kmh"].column("speed_kmh").to_pylist() == [36.0, 36.0, 36.0]

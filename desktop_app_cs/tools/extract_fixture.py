@@ -57,7 +57,9 @@ def _timecodes_to_seconds(timecodes: np.ndarray, lap_time_s: float) -> np.ndarra
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("session", type=Path)
     parser.add_argument("--laps", type=int, nargs="+")
     parser.add_argument("--top", type=int)
@@ -108,7 +110,9 @@ def main(argv: list[str] | None = None) -> int:
         for key, name in channel_names.items():
             display = DISPLAY_NAMES.get(key, name)
             series[display] = np.round(column(name), 3).tolist()
-            units.setdefault(display, forced_units.get(name) or get_channel_unit(aligned[name], name))
+            units.setdefault(
+                display, forced_units.get(name) or get_channel_unit(aligned[name], name)
+            )
 
         dumped[num] = {
             "num": num,
@@ -139,7 +143,9 @@ def main(argv: list[str] | None = None) -> int:
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(fixture, separators=(",", ":")))
     total = sum(len(lap["time_s"]) for lap in laps_out)
-    print(f"wrote {args.out} ({total} samples/channel across {len(laps_out)} laps)", file=sys.stderr)
+    print(
+        f"wrote {args.out} ({total} samples/channel across {len(laps_out)} laps)", file=sys.stderr
+    )
     return 0
 
 
