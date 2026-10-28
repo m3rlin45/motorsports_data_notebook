@@ -133,6 +133,10 @@ cs-native *ARGS:
 cs-session-fixture *ARGS:
     LIBXRK_BACKEND=rust uv run python desktop_app_cs/tools/extract_session_fixture.py {{ARGS}}
 
+# Python-parity fixture for one C# analysis kernel, e.g. `just cs-kernel-fixture corners` (Tests/Fixtures/<module>_86.json)
+cs-kernel-fixture MODULE:
+    LIBXRK_BACKEND=rust uv run python desktop_app_cs/tools/extract_kernel_fixture.py --module {{MODULE}}
+
 # Python-parity fixture for the C# profiles loader (Tests/Fixtures/profiles.json)
 cs-profiles-fixture:
     uv run python desktop_app_cs/tools/extract_profiles_fixture.py
