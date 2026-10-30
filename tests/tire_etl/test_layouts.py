@@ -147,6 +147,93 @@ def test_registry_is_consistent() -> None:
             assert lay.track_canonical == venue.venue_id
             for g in lay.gates:
                 assert g in venue.gates
+        # Layouts that cross exactly the same gates are indistinguishable by
+        # geometry alone: each must carry a distinct nominal lap length so the
+        # measured lap length can separate them (#209).
+        by_gates: dict[tuple[str, ...], list] = {}
+        for lay in venue.layouts:
+            by_gates.setdefault(tuple(sorted(lay.gates)), []).append(lay)
+        for group in by_gates.values():
+            if len(group) > 1:
+                lengths = [lay.lap_length_m for lay in group]
+                assert all(x is not None for x in lengths), group
+                assert len(set(lengths)) == len(lengths), group
+
+
+FUJI = VENUES["fuji"]
+FUJI_SF = FUJI.gates["sf"]
+
+
+def _fuji_loop(length_m: float, n_laps: int = 4):
+    """A loop through the Fuji S/F whose GPS path length is ``length_m``.
+
+    The loop's shape (a straight leg through the gate and a bulged return)
+    is built once at unit scale, measured, and scaled so the lap length is
+    exact for the given ``length_m``: path length is linear in the scale.
+    """
+
+    def build(scale: float):
+        start = _offset(FUJI_SF.lat, FUJI_SF.lon, -scale / 2, 0.0)
+        end = _offset(FUJI_SF.lat, FUJI_SF.lon, scale / 2, 0.0)
+        return _loop_through([start, (FUJI_SF.lat, FUJI_SF.lon), end], bulge_m=scale * 0.9)
+
+    probe = np.array(build(1000.0))
+    k = math.pi / 180.0
+    xy = np.column_stack(
+        [
+            (probe[:, 1] - probe[0, 1]) * k * _EARTH_R * math.cos(probe[0, 0] * k),
+            (probe[:, 0] - probe[0, 0]) * k * _EARTH_R,
+        ]
+    )
+    closed = np.vstack([xy, xy[:1]])
+    unit_len = float(np.hypot(*np.diff(closed, axis=0).T).sum())
+    return _resample_const_speed(build(1000.0 * length_m / unit_len), n_laps)
+
+
+def test_fuji_lap_length_measures_the_loop() -> None:
+    from motorsports_data_notebook.tire_etl.layouts import median_lap_length_m
+
+    t, lat, lon = _fuji_loop(4500.0, 5)
+    med = median_lap_length_m(GpsTrace(t, lat, lon), FUJI_SF)
+    assert med is not None and med == pytest.approx(4500.0, rel=0.05)
+
+
+def test_fuji_gp_laps_declared_as_short_resolve_to_gp() -> None:
+    """A "Fuji GP Sh" session with 4.5 km laps is the GP course (#209)."""
+    t, lat, lon = _fuji_loop(4500.0, 5)
+    laps = _logger_laps_at(t, lat, lon, FUJI_SF)
+    det = detect_layout(_FakeLog(t, lat, lon, laps), declared_track_raw="Fuji GP Sh")
+    assert det.venue_id == "fuji"
+    assert det.declared_layout_id == "fuji_short"
+    assert det.layout_id == "fuji_gp"
+    assert det.track_canonical == "fuji"
+    assert det.track_resolution == TRACK_RES_GPS_OVERRIDE
+    assert det.lap_source == LAP_SOURCE_LOGGER  # the beacon was on the right line
+    assert det.lap_length_m == pytest.approx(4500.0, rel=0.05)
+    assert "measured lap length" in det.note
+
+
+def test_fuji_short_laps_declared_as_gp_resolve_to_short() -> None:
+    t, lat, lon = _fuji_loop(1500.0, 6)
+    laps = _logger_laps_at(t, lat, lon, FUJI_SF)
+    det = detect_layout(_FakeLog(t, lat, lon, laps), declared_track_raw="Fuji GP")
+    assert det.layout_id == "fuji_short"
+    assert det.track_canonical == "fuji"
+    assert det.track_resolution == TRACK_RES_GPS_OVERRIDE
+    assert det.lap_length_m == pytest.approx(1500.0, rel=0.05)
+
+
+def test_fuji_single_crossing_falls_back_to_declared_variant() -> None:
+    """Without two S/F crossings there is no lap length; the declaration stands."""
+    t, lat, lon = _fuji_loop(4500.0, 2)
+    times = gate_crossings(GpsTrace(t, lat, lon), FUJI_SF)
+    cut = int(np.searchsorted(t, times[0] + 5_000))
+    t, lat, lon = t[:cut], lat[:cut], lon[:cut]
+    det = detect_layout(_FakeLog(t, lat, lon), declared_track_raw="Fuji GP Sh")
+    assert det.gate_crossings["sf"] == 1
+    assert det.layout_id == "fuji_short"
+    assert det.lap_length_m is None
+    assert det.track_resolution == TRACK_RES_DECLARED
 
 
 def test_find_venue_and_gate_crossings_full_course() -> None:

@@ -51,7 +51,10 @@ Idempotent: only files that are new, changed, or extracted with an older
 re-extracted (~360 files, 15–25 minutes): run the command with a 30-minute
 timeout, or in the background and poll the `extracted=` counter in its log.
 Output ends with
-`extract: scanned=N skipped=N extracted=N errors=N pruned_sessions=N`. The
+`extract: scanned=N skipped=N extracted=N errors=N pruned_sessions=N superseded_files=N`
+(`superseded_files` counts manifest rows replaced because the same recording
+now appears under another spelling or extension — a lowercase `.xrk` next to
+the `.xrz` an earlier run extracted; the old spelling's session is pruned). The
 exit code is 1 whenever *any* file errored (never hide it behind a pipe), and
 that is normal: every file with no full lap is an error, and after a full
 re-extract that is ~70 of ~390 files. List them and confirm each has
@@ -86,8 +89,12 @@ trace, not the filename. The AIM dash can be set to the wrong circuit *variant*
 start/finish gates and the layouts that cross them); the extractor picks the
 layout actually driven, coerces `track_canonical` to it, and when the logger's
 lap beacon sat on the wrong line it re-splits laps at the correct start/finish.
-Every session row records how it was resolved (`track_resolution`, `lap_source`,
-`layout_id`, `beacon_gate`, `n_laps_logger`).
+Layouts that cross exactly the same gates (Fuji GP vs Short) are separated by
+the measured GPS lap length against the registry's nominal `lap_length_m`, not
+by the dash variant name — every "Fuji GP Sh" session so far lapped the 4.5 km
+GP course (#209). Every session row records how it was resolved
+(`track_resolution`, `lap_source`, `layout_id`, `beacon_gate`, `n_laps_logger`,
+`lap_length_m`).
 
 ## 2. Audit the reconciliation
 
@@ -97,14 +104,16 @@ cd /home/m3rlin45/code/motorsports_data_notebook && just tire-track-audit --sinc
 
 After an extractor bump the run **without** `--since` is mandatory —
 historical sessions may have been reconciled for the first time (expect roughly
-40–45 rows: ~13 re-split, ~13 variant overrides, ~8 GPS-supplied tracks; the
-exact counts drift by a few as fragments gain or lose their single lap). Read every
-row. Expected and fine:
+60–65 rows: ~13 re-split, ~32 variant overrides of which 19 are "Fuji GP Sh"
+sessions resolved to the GP course by lap length, ~8 GPS-supplied tracks, and
+the four 2025-07-22..24 "Generic testing" road drives with laps and no venue
+that make the command exit 1 every run; the exact counts drift by a few as
+fragments gain or lose their single lap). Read every row. Expected and fine:
 
 | `track_resolution` | `lap_source` | Meaning |
 |---|---|---|
 | `gps_override` | `gps_resplit` | Wrong dash variant; laps rebuilt at the real S/F. Check `n_laps` ≈ `n_laps_logger` (−1 per file is normal: the offset beacon loses a partial lap at each end; `n_laps_logger` sums all files of a merged session). `n_laps = 0` with `n_laps_logger ≥ 1` is a fragment whose only lap was split on the wrong line and was dropped on purpose. |
-| `gps_override` | `logger` | Wrong variant *label* but the beacon already sat on the real S/F (e.g. "Motegi East" selected, main-line beacon). Nothing to do. |
+| `gps_override` | `logger` | Wrong variant *label* but the beacon already sat on the real S/F (e.g. "Motegi East" selected, main-line beacon; "Fuji GP Sh" with a 4.5 km `lap_length_m`, i.e. the GP course). Nothing to do. |
 | `gps_override` or `declared` | `logger_unverified` with laps | Beacon not matched to any gate (no GPS fix at the lap starts) and no re-split possible; logger laps kept. Sanity-check lap times against the venue's normal. |
 | `declared` | `gps_resplit` | Variant was right but the beacon was not on any gate (GPS gaps / odd beacon placement); laps rebuilt. Check lap times. |
 | `gps` | `logger` | Filename/Venue had no track; GPS supplied it. |

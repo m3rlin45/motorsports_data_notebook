@@ -224,3 +224,30 @@ def test_upsert_with_no_laps_drops_the_sessions_earlier_lap_rows(tmp_path: Path)
     upsert_session(root, other)
     upsert_session(root, errored)
     assert pq.read_table(laps_path).column("session_id").to_pylist() == ["sess_b"]
+
+
+def test_remove_manifest_entries_drops_only_named_paths(tmp_path) -> None:
+    from motorsports_data_notebook.tire_etl.dataset import (
+        _write_manifest,
+        load_manifest,
+        remove_manifest_entries,
+    )
+
+    entries = [
+        {
+            "xrk_path": "/aim/2026-10-24/CMD_KK-F_X_a_0370.xrz",
+            "session_id": "a",
+            "date": "2026-10-24",
+        },
+        {
+            "xrk_path": "/aim/2026-10-24/CMD_KK-F_X_a_0376.xrk",
+            "session_id": "b",
+            "date": "2026-10-24",
+        },
+    ]
+    _write_manifest(tmp_path, entries)
+    assert (
+        remove_manifest_entries(tmp_path, ["/aim/2026-10-24/CMD_KK-F_X_a_0370.xrz", "/nope"]) == 1
+    )
+    assert list(load_manifest(tmp_path)) == ["/aim/2026-10-24/CMD_KK-F_X_a_0376.xrk"]
+    assert remove_manifest_entries(tmp_path, ["/nope"]) == 0

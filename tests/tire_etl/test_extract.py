@@ -180,3 +180,15 @@ def test_restint_at_pit_exits_splits_short_pit_visits() -> None:
     laps3 = laps.set_column(1, "stint_id", pa.array([1, 1, 1, 2, 2, 3], type=pa.int16()))
     out3, _ = _restint_at_pit_exits(laps3, ts)
     assert out3.column("stint_id").to_pylist() == [1, 1, 1, 2, 2, 3]
+
+
+def test_car_name_takes_vehicle_metadata_spelling_only_for_case_differences() -> None:
+    from motorsports_data_notebook.tire_etl.extract import _car_name
+
+    assert _car_name("kk-f", "KK-F") == "KK-F"
+    assert _car_name("KK-F", "KK-F") == "KK-F"
+    assert _car_name("KK-F", "") == "KK-F"
+    assert _car_name("KK-F", None) == "KK-F"
+    assert _car_name("Inferno 86", "KK-F") == "Inferno 86"  # substance differs: filename wins
+    assert _car_name(None, "KK-F") == "KK-F"
+    assert _car_name(None, None) is None

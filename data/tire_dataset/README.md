@@ -17,7 +17,10 @@ deltas show up in PR diffs.
   `track_resolution` (`declared` / `gps` / `gps_override`), `layout_id`,
   `lap_source` (`logger` / `gps_resplit` when laps were rebuilt at the correct
   start/finish / `logger_unverified`), `beacon_gate`, `n_laps_logger`,
-  `venue_meta`, `track_declared_canonical`. Review with `just tire-track-audit`.
+  `venue_meta`, `track_declared_canonical`, and (schema v5) `lap_length_m`, the
+  median GPS path length per lap at the resolved start/finish: layouts that
+  share every gate (Fuji GP vs Short) are separated by it, not by the dash
+  variant name. Review with `just tire-track-audit`.
   (`n_tire_usable_laps` was dropped in schema v4; usability is a training-time
   decision.)
 - `laps/YYYY-MM.parquet` — one row per lap (summary stats derived from

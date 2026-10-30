@@ -44,6 +44,7 @@ def _cmd_extract(args: argparse.Namespace) -> int:
         f"extract: scanned={counts['scanned']} skipped={counts['skipped']}"
         f" extracted={counts['extracted']} errors={counts['errors']}"
         f" pruned_sessions={counts.get('pruned_sessions', 0)}"
+        f" superseded_files={counts.get('superseded', 0)}"
     )
     return 0 if counts["errors"] == 0 else 1
 
@@ -140,8 +141,8 @@ def _cmd_audit_tracks(args: argparse.Namespace) -> int:
         where.append(f"date >= DATE '{_parse_since(args.since)}'")
     sql = f"""
         SELECT date, car, track AS filename_track, venue_meta, layout_id, track_canonical,
-               track_resolution, lap_source, beacon_gate, n_laps_logger, n_laps, status,
-               session_id
+               track_resolution, lap_source, beacon_gate, round(lap_length_m) AS lap_length_m,
+               n_laps_logger, n_laps, status, session_id
         FROM sessions
         WHERE {' AND '.join(where)}
         ORDER BY date, session_id

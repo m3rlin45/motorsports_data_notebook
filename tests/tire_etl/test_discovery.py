@@ -70,6 +70,20 @@ def test_scan_prefers_xrk_over_xrz(tmp_path: Path) -> None:
     assert results[0].path.suffix == ".xrk"
 
 
+def test_scan_prefers_xrk_over_xrz_regardless_of_case(tmp_path: Path) -> None:
+    """A lowercase .xrk and an uppercase .xrz of one run are one recording."""
+    d = tmp_path / "2026-10-24"
+    d.mkdir()
+    (d / "cmd_kk-f_tsukuba_car_generic testing_a_0370.xrk").write_bytes(b"\x00")
+    (d / "CMD_KK-F_Tsukuba_Car_Generic testing_a_0370.xrz").write_bytes(b"\x00")
+    (d / "CMD_KK-F_Tsukuba_Car_Generic testing_a_0376.xrk").write_bytes(b"\x00")
+    results = sorted(scan_aim_tree(tmp_path), key=lambda c: c.run_num or 0)
+    assert [c.path.name for c in results] == [
+        "cmd_kk-f_tsukuba_car_generic testing_a_0370.xrk",
+        "CMD_KK-F_Tsukuba_Car_Generic testing_a_0376.xrk",
+    ]
+
+
 def test_scan_since_filter(tmp_path: Path) -> None:
     _mk(tmp_path, "CMD_Inferno 86_Tsukuba_a_0001.xrk", "2025-01-01")
     _mk(tmp_path, "CMD_Inferno 86_Tsukuba_a_0002.xrk", "2026-04-01")
