@@ -84,7 +84,7 @@ public sealed class CircuitPredictor
             if (target <= 0)
                 throw new ArgumentOutOfRangeException(
                     nameof(targetLapTimeS), target, "target lap time must be > 0");
-            var pace = _model.ComputeG2PaceScale(track, car, cond, lap.ValueSeconds, target);
+            var pace = _model.ComputeG2PaceScale(track, car, cond, lap.ValueSeconds, target, corner);
             g2Scale = pace.Scale;
             g2PaceSource = pace.Source;
             g2Value *= g2Scale;

@@ -778,7 +778,8 @@ Fitted tables:
   `speed_exp`, `geometry_by_car`, `drive_by_car`, `brake_by_car`
 - `g2_typ_by_track_car_cond` — ⟨q⟩ lookup; each entry carries the
   per-corner `q_typ_by_corner` (schema v5) and may carry a
-  `g2_vs_lap_time` piecewise-linear curve (see §2.10)
+  `g2_vs_lap_time` piecewise-linear curve with per-corner series
+  `g2_by_corner` (the simulated faster lap, §2.10)
 - `lap_time_typ_by_track_car_cond` — typical lap time lookup
 - `corner_defaults_by_car_corner_cond` — steady-state median hot temp +
   hot pressure, used by the calculators to prefill the corner-card targets
@@ -794,7 +795,7 @@ Config + provenance:
   car). All predictors resolve an input car through this map before any
   lookup, so raw names keep working; the fitted tables carry only pooled
   labels.
-- `g2_lap_time_model` — pace-scaling method, default exponent, multiplier clamp
+- `g2_lap_time_model` — pace-scaling method (`uniform_scaled_lap_shares`), physics fallback exponent, multiplier clamp
 - `energy_balance` — the `w_road` config + T_road proxy formula
 - `gay_lussac`, `conditions`, `corners`, `priors_when_no_fit`,
   `min_samples_per_bucket` — constants the consumers sanity-check against
@@ -809,37 +810,62 @@ buckets gained samples or changed coefficients. All three calculators read
 this same file: the Python CLI, the C# Avalonia heads (embedded at build),
 and the static web app (fetched at deploy).
 
-### 2.10 Target lap time (schema v3)
+### 2.10 Target lap time: the simulated faster lap
 
-Tire energy scales strongly with pace: within a (track, car, condition)
-bucket, `log(g²_lap)` vs `log(lap_time)` is close to a power law (slopes
-−2.4…−3.6, |r| 0.8–0.97 on the 2026-08 dataset; pure v²-scaling physics
-would give −4). Schema v3 exposes that as an optional prediction input: a
-**target lap time** sets both the time-on-track clock (`t = N × target`)
-and a multiplier on ⟨g²⟩.
+A **target lap time** is an optional prediction input that sets both the
+time-on-track clock (`t = N × target`) and a multiplier on each corner's
+typical heat input ⟨q⟩. The multiplier answers a counterfactual — the same
+car on the same circuit lapping at a different pace — and since 2026-10-30
+it comes from the logged laps themselves, simulated per second through the
+production heat equations (`tire_model/pace_sim.py`), with nothing fitted:
 
-The pace→energy mapping is fitted **sector-wise** (`tire_model/sectors.py`)
-so one bad turn on an otherwise aggressive lap can't skew it: each lap is
-split into 3 distance-based sectors from the timeseries (same
-`(lat² + long²)·dt` integrand as `heat_proxy`), and for each curve sample
-at total time T the 15 nearest laps by lap time contribute *median* sector
-times and median sector g² (rescaled to sum to T, recombined as
-`g²(T) = Σ g²_s·t_s / T`). The artifact stores the result as a small
-piecewise-linear `g2_vs_lap_time` curve per ⟨g²⟩ entry; prediction scales
-`g2_typ` by `curve(target)/curve(lap_time_typ)` so an omitted target (or
-target == typical pace) reproduces v2 behavior exactly. Buckets without a
-curve fall back to the pooled sector-fit exponent
-(`g2_lap_time_model.default_exponent`); the multiplier is clamped to
-`multiplier_clamp` either way, and interpolation clamps at the curve
-endpoints (no extrapolation beyond the fastest pace ever driven).
+1. For each (track, car, condition) bucket take the 15 training laps
+   nearest its typical lap time, sample by sample (speed `V`, lateral g,
+   longitudinal g, duration `dt`).
+2. Scale the whole lap uniformly to the target lap time with the speed
+   multiplier `m = T_lap / T_target`: `V' = m·V`, `lat' = m²·lat` (same line,
+   same corner radius), longitudinal g unchanged (braking and traction at
+   their limits), `dt' = dt / m`. The lap time is then exactly `T_lap / m`.
+3. Push the rescaled samples through the per-corner force shares of the
+   schema-v5 heat input (`q_i = V·|F_i|`, §2.0) and take each corner's
+   lap-mean heat relative to the unscaled lap.
 
-Held-out CV evidence (predicting with only the lap's time instead of its
-measured g²): on the KK-SII an accurate target recovers ≈half the gap
-between the pooled-⟨g²⟩ prediction and the measured-g² oracle
-(−0.35…−0.5 °C MAE per corner). On the Inferno 86 pace-conditioning
-currently *hurts* — that car's heat does not track measured g²
-proportionally (even the oracle underperforms a constant), so leave the
-target blank there until the per-car g² sensitivity is modeled.
+The median over the reference laps, on a grid of 9 lap times from 0.75 to
+1.5 × typical, is stored as the bucket's `g2_vs_lap_time` curve: `g2` is the
+corner mean (for consumers without per-corner curves), `g2_by_corner` one
+series per corner. Prediction scales each corner's ⟨q⟩ by
+`curve_i(target) / curve_i(lap_time_typ)`, so an omitted target (or target
+== typical pace) changes nothing; the multiplier is clamped to
+`multiplier_clamp` (0.4–2.5). A bucket with fewer than 5 simulable laps
+falls back to the physics exponent `default_exponent = 3`
+(`q = V·|F|` with `F ∝ V²`). Because the extra lateral force lands mostly
+on the loaded outer tyre, the left tyres respond more than the right on
+these clockwise circuits (FL ≈ 2.3× vs RR ≈ 1.9× at 0.75 × typical).
+
+**Why this transform.** `just tire-pace-check` is the within-session test
+of the simulation itself: per session, how much hotter the fastest clean
+laps (1.5–6 % under the session's median) ran each corner than the median
+laps — observed from the per-second heat model's own per-lap intensities —
+against what the simulation predicts for that lap-time gap. On the
+2026-10 dataset (37 sessions) uniform scaling is unbiased on all four
+corners (|bias| ≤ 0.005 in log ratio, slope of observed on predicted ≈ 1.0).
+The alternatives were rejected on the same test: scaling only the
+corner-limited samples over-predicts the heat by 1–3 % (a faster lap is
+faster everywhere); a dynamically consistent point-mass lap with braking
+and traction held at the logged lap's limits over-predicts by 1–2 % (a
+median lap is not at those limits); the previous sector kNN-median curve
+(pooled per-lap laps, where slow laps are slow for non-cornering reasons)
+reproduced only 0.6 of the observed slope and was clamped at the fastest
+lap ever driven; a fitted lap-time exponent of 4 — the between-session
+holdout optimum — over-predicts by 4 %, i.e. it absorbed day effects
+(cold track, damp patches) rather than pace. On the 5-fold calculator
+holdout the simulated lap scores the same as the old curve
+(0.048/0.047/0.044/0.038 bar hot-pressure MAE vs 0.049/0.047/0.045/0.038)
+while being several times more responsive: at Fuji in the FJ a 5 % faster
+target now moves the predicted hot temperature by ≈ 5 °C instead of 0.4 °C.
+The residual held-out bias still leans with session pace (slower sessions
+over-predicted); together with the within-session result that points at
+day conditions the model does not yet carry, not at the pace physics.
 
 ### 2.11 Tire compound (one tire per run)
 
@@ -1389,8 +1415,8 @@ just tire-predict --track tsukuba_2000 --car KK-SII --lap 5 --ambient 18 --hot-a
 just tire-predict --track tsukuba_2000 --car KK-SII --lap 5 --ambient 15 \
                   --condition damp --hot-all 1.5
 
-# Predict with a target lap time (scales tire energy via the sector-fit
-# g² vs lap-time curve and sets time-on-track t = N × target)
+# Predict with a target lap time (scales each corner's heat input along the
+# simulated-lap curve and sets time-on-track t = N × target)
 just tire-predict --track tsukuba_2000 --car KK-SII --lap 5 --ambient 15 \
                   --hot-all 1.7 --target-lap-time 60
 
@@ -1455,7 +1481,7 @@ two-node pressure/tread residuals, and the fitted constants per fold. See
 |---|---|
 | `src/motorsports_data_notebook/tire_model/energy_balance.py` | Pure physics functions (T_eff, warmup_curve, Gay-Lussac, T_road proxy, discretized recurrence) |
 | `src/motorsports_data_notebook/tire_model/warmup_table.py` | Data prep + two-pass scipy fit + JSON serializer + sensor audit + blacklist |
-| `src/motorsports_data_notebook/tire_model/sectors.py` | Sector-wise pace model: per-lap sector split + kNN-median `g2_vs_lap_time` curves |
+| `src/motorsports_data_notebook/tire_model/pace_sim.py` | Pace model: the logged laps simulated per second at other lap times through the force shares → per-corner `g2_vs_lap_time` curves; `tire-pace-check` |
 | `src/motorsports_data_notebook/tire_model/compounds.py` | Compound label loading (sidecar + notes fallback, wheel-set mapping, condition seeds) |
 | `src/motorsports_data_notebook/tire_model/compound_infer.py` | Decomposed compound K: EM with partial supervision, forced selection |
 | `src/motorsports_data_notebook/tire_model/predict.py` | `predict_cold_pressure(...)` and the fallback chain for K / τ / ⟨q⟩ |

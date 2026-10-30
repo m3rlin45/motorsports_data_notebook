@@ -98,6 +98,10 @@ tire-predict *ARGS:
 tire-predict-validate *ARGS:
     uv run python -m motorsports_data_notebook.tire_model.cli validate {{ARGS}}
 
+# Within-session check of the simulated-lap pace model (observed vs simulated fast-lap heat)
+tire-pace-check *ARGS:
+    uv run python -m motorsports_data_notebook.tire_model.cli pace-check {{ARGS}}
+
 # Held-out validation: train without N sessions, predict per-lap T_hot, report residuals
 tire-predict-holdout *ARGS:
     uv run python -m motorsports_data_notebook.tire_model.cli holdout {{ARGS}}

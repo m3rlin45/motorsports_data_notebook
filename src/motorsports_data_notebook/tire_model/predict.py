@@ -247,7 +247,7 @@ def _interp_clamped(x: float, xs: list[float], ys: list[float]) -> float:
 def _lookup_g2_pace_curve(
     model: dict[str, Any], track: str, car: str, condition: str
 ) -> dict[str, Any] | None:
-    """The bucket's sector-fit ``g2_vs_lap_time`` curve, via the condition chain."""
+    """The bucket's simulated-lap ``g2_vs_lap_time`` curve, via the condition chain."""
     table = model.get("g2_typ_by_track_car_cond", [])
     for cond in _condition_chain(condition):
         for r in table:
@@ -264,12 +264,16 @@ def _g2_pace_scale(
     condition: str,
     lap_time_typ_s: float,
     target_lap_time_s: float,
+    corner: str | None = None,
 ) -> tuple[float, str]:
-    """Multiplier on g2_typ for a target lap time. Returns (scale, source).
+    """Multiplier on the typical heat input for a target lap time. Returns
+    (scale, source).
 
-    Preferred: ratio along the bucket's sector-fit curve (anchored at
-    lap_time_typ_s so no-target and target==typical agree exactly).
-    Fallback: pooled sector exponent. Clamped either way.
+    Preferred: ratio along the bucket's simulated-lap curve (``pace_sim``),
+    the corner's own series when ``corner`` is given and the curve carries
+    ``g2_by_corner``, else the corner-mean ``g2``; anchored at
+    lap_time_typ_s so no-target and target==typical agree exactly.
+    Fallback: the physics exponent. Clamped either way.
     """
     pace_cfg = model.get("g2_lap_time_model", {})
     clamp = pace_cfg.get("multiplier_clamp", {})
@@ -279,7 +283,11 @@ def _g2_pace_scale(
     curve = _lookup_g2_pace_curve(model, track, car, condition)
     if curve is not None:
         xs = [float(v) for v in curve["lap_time_s"]]
-        ys = [float(v) for v in curve["g2"]]
+        series = curve["g2"]
+        by_corner = curve.get("g2_by_corner")
+        if corner is not None and isinstance(by_corner, dict) and corner in by_corner:
+            series = by_corner[corner]
+        ys = [float(v) for v in series]
         ref = _interp_clamped(lap_time_typ_s, xs, ys)
         if ref > 0:
             scale = _interp_clamped(target_lap_time_s, xs, ys) / ref
@@ -454,14 +462,15 @@ def predict_cold_pressure(
     t_start_c = t_cold_c
 
     # Target-lap-time feature: pace sets both time-on-track and tire energy.
-    g2_scale = 1.0
+    # The heat multiplier is per corner (the simulated lap's force shares
+    # load the corners differently); the clock is shared.
     g2_pace_source: str | None = None
     lap_time_for_clock_s = lap_time_typ_s
+    target: float | None = None
     if target_lap_time_s is not None:
         target = float(target_lap_time_s)
         if target <= 0:
             raise ValueError(f"target_lap_time_s must be > 0; got {target_lap_time_s!r}")
-        g2_scale, g2_pace_source = _g2_pace_scale(model, track, car, cond, lap_time_typ_s, target)
         lap_time_for_clock_s = target
 
     # Time at end of flying lap N (the out-lap is a separate segment)
@@ -480,6 +489,11 @@ def predict_cold_pressure(
         g2_typ, g2_n, _g2_source = _lookup_g2(model, track, car, cond, corner)
         if g2_typ_override is not None:
             g2_typ = float(g2_typ_override)
+        g2_scale = 1.0
+        if target is not None:
+            g2_scale, g2_pace_source = _g2_pace_scale(
+                model, track, car, cond, lap_time_typ_s, target, corner
+            )
         g2_typ = g2_typ * g2_scale
         out_time_s = 0.0
         out_g2 = 0.0

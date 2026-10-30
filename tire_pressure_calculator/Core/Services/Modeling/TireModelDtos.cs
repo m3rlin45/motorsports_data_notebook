@@ -75,12 +75,16 @@ public sealed record MultiplierClampDto(
     [property: JsonPropertyName("max")] double Max
 );
 
-/// <summary>Piecewise-linear g² vs lap-time curve (sector-fit, see
-/// src/motorsports_data_notebook/tire_model/sectors.py).</summary>
+/// <summary>Piecewise-linear heat-input vs lap-time curve: the bucket's
+/// logged laps simulated at other lap times (see
+/// src/motorsports_data_notebook/tire_model/pace_sim.py).</summary>
 public sealed record G2CurveDto(
     [property: JsonPropertyName("lap_time_s")] IReadOnlyList<double> LapTimeS,
     [property: JsonPropertyName("g2")] IReadOnlyList<double> G2,
-    [property: JsonPropertyName("n_laps")] int NLaps
+    [property: JsonPropertyName("n_laps")] int NLaps,
+    // Simulated-lap curves: one series per corner keyed "fl"/"fr"/"rl"/"rr";
+    // g2 stays as the corner mean for consumers without it.
+    [property: JsonPropertyName("g2_by_corner")] Dictionary<string, double[]>? G2ByCorner = null
 );
 
 public sealed record GayLussacConfigDto(

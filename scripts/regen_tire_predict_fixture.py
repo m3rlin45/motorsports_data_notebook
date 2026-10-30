@@ -95,9 +95,10 @@ CASES: list[tuple[str, dict]] = [
             "target_hot_pressure_bar": 1.7,
         },
     ),
-    # Target-lap-time feature (schema v3): fast target on a curve-covered
-    # bucket, slow target on the same bucket, and a target on a bucket
-    # without a curve (motegi) to pin the default-exponent fallback.
+    # Target-lap-time feature: fast target on a curve-covered bucket, slow
+    # target on the same bucket, a third curve-covered bucket (the
+    # simulated-lap curves are per corner, so each corner's g2_scale is
+    # pinned), and an unknown track to pin the default-exponent fallback.
     (
         "tsukuba_KKSII_dry_lap5_target60",
         {
@@ -123,7 +124,7 @@ CASES: list[tuple[str, dict]] = [
         },
     ),
     (
-        "motegi_Inferno_dry_target_exponent_fallback",
+        "motegi_Inferno_dry_target_per_corner_curve",
         {
             "track": "motegi",
             "car": "Inferno 86",
@@ -132,6 +133,18 @@ CASES: list[tuple[str, dict]] = [
             "ambient_temp_c": 20.0,
             "target_hot_pressure_bar": 1.7,
             "target_lap_time_s": 120.0,
+        },
+    ),
+    (
+        "unknown_track_FJ_dry_target_exponent_fallback",
+        {
+            "track": "no_such_circuit",
+            "car": "FJ",
+            "lap_within_stint": 5,
+            "track_condition": "dry",
+            "ambient_temp_c": 20.0,
+            "target_hot_pressure_bar": 1.7,
+            "target_lap_time_s": 80.0,
         },
     ),
     # Compound-aware K: the fitted compound replaces the pooled K on every
@@ -221,13 +234,14 @@ def _run_case(label: str, inputs: dict) -> dict:
     return {
         "label": label,
         "inputs": inputs,
-        "g2_scale": any_p.g2_scale,
         "g2_pace_source": any_p.g2_pace_source,
         "corners": {
             c: {
                 "cold_pressure_bar": predictions[c].cold_pressure_bar,
                 "predicted_hot_temp_c": predictions[c].predicted_hot_temp_c,
                 "K_source_bucket": list(predictions[c].K_source_bucket),
+                # Per corner: the simulated-lap pace curve loads the corners differently.
+                "g2_scale": predictions[c].g2_scale,
             }
             for c in CORNERS
         },

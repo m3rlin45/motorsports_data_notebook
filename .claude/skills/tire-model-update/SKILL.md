@@ -205,7 +205,14 @@ cd /home/m3rlin45/code/motorsports_data_notebook && just tire-build-warmup-table
 cd /home/m3rlin45/code/motorsports_data_notebook && just tire-predict-holdout --n-folds 5 2>&1 | tail -40
 cd /home/m3rlin45/code/motorsports_data_notebook && just tire-predict-holdout --n-folds 5 --inputs oracle 2>&1 | tail -40
 cd /home/m3rlin45/code/motorsports_data_notebook && just tire-predict-validate 2>&1 | tail -20
+cd /home/m3rlin45/code/motorsports_data_notebook && just tire-pace-check 2>&1 | tail -22
 ```
+
+`tire-pace-check` is the within-session test of the target-lap-time model
+(docs §2.10): observed vs simulated per-corner heat of each session's
+fastest clean laps. Expect |bias_log| ≤ 0.01 and slope ≈ 1 on every corner;
+a corner drifting past ±0.02 means the force shares changed how a faster
+lap loads it — report it with the holdout numbers.
 
 **Out-laps and the cleaned table (dataset schema 4).** The committed laps
 table is raw: no TPMS masking and no `tire_usable` column. The model cleans
