@@ -292,6 +292,33 @@ cleaned table for DuckDB queries. Before schema 4 the extractor applied
 steps 1 and 3 and committed the result, which is why the 2026-10 anchor
 fix first looked like a dataset rebuild.
 
+### 1.0b Layouts by measured lap length, one row per recording (schema 5, 2026-10-30)
+
+Every "Fuji GP Sh" session in the dataset (19 sessions, Inferno 86 and
+SFJ, 2025-07 to 2025-12) lapped the 4.56 km GP course: the GPS path per
+lap is 4,499–4,528 m and lap times are 117–131 s, where the real short
+course is about 1.5 km. The registry listed GP and Short with the same
+start/finish gate and let the dash variant name break the tie, so the
+sessions carried `layout_id = fuji_short` (#209). Both pool into
+`track_canonical = fuji`, which is why the model never noticed. Since
+extractor 0.12.0 a layout can declare a nominal `lap_length_m`, and the
+detector measures the median GPS path length between consecutive S/F
+crossings and picks the layout whose nominal length is nearest; the dash
+name only breaks ties the geometry cannot. The measurement is recorded
+per session as `lap_length_m` (2,083 m at Tsukuba, 2,391 m at Sodegaura,
+4,514 m at Fuji, 4,753 m at Motegi, 5,760 m at Suzuka), so a future
+mislabelled variant is visible in `just tire-track-audit` without
+re-deriving it.
+
+The same bump makes discovery case-insensitive: the AIM tree is a
+Windows volume, and a recording that arrives as a lowercase `.xrk` next
+to the uppercase `.xrz` of the same run (2026-10-24, KK-F Tsukuba
+0370–0372) was being extracted twice as two sessions and a second car
+named `kk-f`. One `.xrk` now wins per stem regardless of case, the
+manifest row of the superseded spelling is dropped (and its session
+pruned), and the car name takes the logger's `Vehicle` spelling when
+the filename token differs only in case.
+
 ## 2. Modeling approach
 
 ### 2.1 Energy balance on a lumped tire mass

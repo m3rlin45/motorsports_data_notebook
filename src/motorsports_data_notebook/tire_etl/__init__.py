@@ -30,7 +30,12 @@ from __future__ import annotations
 # and the per-lap usability filters (tire_usable / exclude_reason,
 # n_tire_usable_laps) moved to the model package (tire_model/cleaning.py),
 # so a cleaning rule can change without re-extracting. Dataset schema 4.
-EXTRACTOR_VERSION = "0.11.0"
+# 0.12.0: layouts that cross the same gates (Fuji GP vs Short) are told
+# apart by the measured GPS lap length against the registry's nominal
+# lap_length_m instead of the dash variant name; every "Fuji GP Sh" session
+# so far was a GP-course session (#209). New session column: lap_length_m
+# (median GPS path length per lap at the resolved S/F). Dataset schema 5.
+EXTRACTOR_VERSION = "0.12.0"
 
 from .extract import extract_session, run_extract  # noqa: E402
 from .notes_parser import run_enrich_notes  # noqa: E402

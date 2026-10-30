@@ -90,12 +90,16 @@ def scan_aim_tree(
     """Walk ``aim_root`` and return parsed session candidates.
 
     Prefers ``.xrk`` over ``.xrz`` when both exist for the same session (xrk
-    is the loss-less raw format; xrz is compressed).
+    is the loss-less raw format; xrz is compressed). The match is
+    case-insensitive on the stem: the AIM tree lives on a Windows volume
+    where ``cmd_kk-f_..._a_0370.xrk`` and ``CMD_KK-F_..._a_0370.xrz`` are
+    the same recording, and extracting both would count the session twice.
     """
     if not aim_root.exists():
         return []
 
     candidates: dict[Path, SessionCandidate] = {}
+    picked_stems: set[tuple[Path, str]] = set()
     # Two passes: collect xrk first, then xrz only where no xrk exists.
     for ext in (".xrk", ".xrz"):
         for p in sorted(aim_root.rglob(f"*{ext}")):
@@ -103,18 +107,22 @@ def scan_aim_tree(
             if any(seg.startswith(".tmp.") for seg in p.parts):
                 continue
             # If xrk already picked this session, skip the xrz.
-            if ext == ".xrz":
-                xrk = p.with_suffix(".xrk")
-                if xrk in candidates:
-                    continue
+            if ext == ".xrz" and stem_key(p) in picked_stems:
+                continue
             cand = parse_filename(p)
             if since is not None and cand.date < since:
                 continue
             if only_car is not None and (cand.car or "") != only_car:
                 continue
             candidates[p] = cand
+            picked_stems.add(stem_key(p))
 
     return list(candidates.values())
+
+
+def stem_key(path: Path) -> tuple[Path, str]:
+    """Identity of a recording regardless of extension and letter case."""
+    return (path.parent, path.stem.lower())
 
 
 def group_split_sessions(

@@ -525,7 +525,11 @@ def extract_session(
             else det.track_resolution
         ),
     )
-    cand = replace(cand, track_canonical=det.track_canonical)
+    cand = replace(
+        cand,
+        track_canonical=det.track_canonical,
+        car=_car_name(cand.car, _vehicle_meta(logs[0])),
+    )
     empty_session = _build_empty_session_row(
         session_id=session_id,
         path=primary_path,
@@ -757,6 +761,34 @@ def _estimate_ts_rate(ts: pa.Table) -> float:
     return 1.0 / median if median > 0 else 0.0
 
 
+def _vehicle_meta(log) -> str | None:
+    """The Race Studio ``Vehicle`` metadata of a log, or None when absent/blank."""
+    try:
+        value = (log.metadata or {}).get("Vehicle")
+    except Exception:  # noqa: BLE001 — metadata is best-effort
+        return None
+    value = (value or "").strip()
+    return value or None
+
+
+def _car_name(filename_car: str | None, vehicle_meta: str | None) -> str | None:
+    """Car name for the session row: the filename token in the logger's spelling.
+
+    Race Studio names the file after the ``Vehicle`` metadata, so the two
+    normally agree. When they differ only in letter case (a recording that
+    reached the AIM tree as ``cmd_kk-f_...xrk`` next to the ``CMD_KK-F_...``
+    files of the same day) the metadata spelling wins, otherwise the model
+    would see a separate ``kk-f`` car. A token that differs in substance
+    stays as written in the filename — the filename is the operator's
+    classification, the metadata only its spelling.
+    """
+    if filename_car is None:
+        return vehicle_meta
+    if vehicle_meta and vehicle_meta.casefold() == filename_car.casefold():
+        return vehicle_meta
+    return filename_car
+
+
 def _build_empty_session_row(
     *,
     session_id: str,
@@ -842,6 +874,7 @@ def _build_session_row(
             "lap_source": pa.array([lay.lap_source if lay else None], type=pa.string()),
             "beacon_gate": pa.array([lay.beacon_gate if lay else None], type=pa.string()),
             "n_laps_logger": pa.array([lay.n_laps_logger if lay else None], type=pa.int32()),
+            "lap_length_m": pa.array([lay.lap_length_m if lay else None], type=pa.float64()),
             "session_type": [cand.session_type],
             "run_num": pa.array([cand.run_num], type=pa.int32()),
             "logger_id": [logger_id],
@@ -1100,13 +1133,40 @@ def run_extract(
     its own manifest row (so re-runs detect when any file changed) pointing
     at its (sub)group's session_id.
     """
-    from .dataset import load_manifest, prune_orphan_sessions, upsert_session
-    from .discovery import group_split_sessions
+    from .dataset import (
+        load_manifest,
+        prune_orphan_sessions,
+        remove_manifest_entries,
+        upsert_session,
+    )
+    from .discovery import group_split_sessions, stem_key
 
     existing = load_manifest(dataset_root)
     counts = {"scanned": 0, "skipped": 0, "extracted": 0, "errors": 0}
 
     candidates = scan_aim_tree(aim_root, since=since, only_car=only_car)
+    # A recording the scan now lists under another spelling (the lowercase
+    # .xrk that appeared next to the .xrz an earlier run extracted) supersedes
+    # the manifest row of the old spelling; left in place, both spellings
+    # would stay in the dataset and the session would be counted twice. Only
+    # a same-stem replacement is removed here — a file that merely vanished
+    # from the tree keeps its row, so an unmounted or half-synced AIM drive
+    # cannot empty the dataset.
+    scanned_by_stem = {stem_key(c.path): str(c.path) for c in candidates}
+    scanned_paths = set(scanned_by_stem.values())
+    superseded = [
+        old
+        for old in existing
+        if old not in scanned_paths and stem_key(Path(old)) in scanned_by_stem
+    ]
+    for old in superseded:
+        logger.info(
+            "manifest: %s superseded by %s",
+            Path(old).name,
+            Path(scanned_by_stem[stem_key(Path(old))]).name,
+        )
+        del existing[old]
+    counts["superseded"] = remove_manifest_entries(dataset_root, superseded)
     groups = group_split_sessions(candidates)
     from . import EXTRACTOR_VERSION
 

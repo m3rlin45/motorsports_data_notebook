@@ -25,6 +25,11 @@ This module resolves all three from the GPS trace itself:
 - :func:`detect_layout` finds the venue from the GPS centroid, counts
   crossings of every gate, picks the most specific layout whose gates were
   all crossed, and checks where the logger's lap beacon actually sits.
+  Layouts that share every gate (Fuji GP vs Short) are told apart by the
+  **measured lap length** — the median GPS path length between consecutive
+  start/finish crossings — against each layout's nominal ``lap_length_m``.
+  The dash variant name only breaks a tie the geometry cannot (and is
+  recorded as ``declared_layout_id`` either way).
 - When the beacon is not on the resolved layout's S/F, :func:`resplit_laps`
   rebuilds the laps table from GPS crossings of the correct gate.
 
@@ -75,6 +80,10 @@ class Layout:
     track_canonical: str
     gates: tuple[str, ...]
     display: str
+    lap_length_m: float | None = None
+    """Nominal lap length (m) of the layout, when it is needed to separate
+    layouts of one venue that cross exactly the same gates. ``None`` for
+    layouts whose gate set is already unique within the venue."""
 
     @property
     def sf_gate(self) -> str:
@@ -120,10 +129,16 @@ VENUES: dict[str, Venue] = {
         venue_id="fuji",
         gates={"sf": Gate("sf", 35.37218, 138.92709)},
         layouts=(
-            # GP and Short share the main-straight S/F; geometry alone cannot
-            # separate them, so the declared variant breaks the tie.
-            Layout("fuji_gp", "fuji", ("sf",), "Fuji Speedway GP"),
-            Layout("fuji_short", "fuji", ("sf",), "Fuji Speedway Short"),
+            # Both layouts list the main-straight S/F, so the gate set cannot
+            # separate them: the measured lap length does (GP 4,563 m, Short
+            # about 1.5 km). Every "Fuji GP Sh" session in the dataset so far
+            # lapped the GP course (4,490-4,550 m of GPS path per lap), so the
+            # declared variant is never trusted here (#209). The real short
+            # course's own S/F has not been measured yet; a genuine short-course
+            # session would cross no registered gate and surface in the track
+            # audit as unverified.
+            Layout("fuji_gp", "fuji", ("sf",), "Fuji Speedway GP", lap_length_m=4563.0),
+            Layout("fuji_short", "fuji", ("sf",), "Fuji Speedway Short", lap_length_m=1475.0),
         ),
         default_layout="fuji_gp",
     ),
@@ -353,6 +368,32 @@ def nearest_gate_to_points(
     return best_name, best_d
 
 
+def lap_path_lengths_m(trace: GpsTrace, gate: Gate) -> np.ndarray:
+    """GPS path length (m) of every interval between consecutive crossings of ``gate``.
+
+    The trace's cumulative path length is interpolated at the crossing
+    times, so a lap's length is independent of pace and of the sample rate
+    (unlike lap *time*, which cannot separate a 4.5 km GP lap in a slow car
+    from a 1.5 km short-course lap in a fast one). GPS dropouts shorten a
+    lap, spurious double crossings make near-zero intervals: callers take the
+    median.
+    """
+    times = gate_crossings(trace, gate)
+    if times.size < 2:
+        return np.empty(0, dtype=np.float64)
+    xy = _local_xy(trace.lat, trace.lon, gate.lat, gate.lon)
+    seg = np.hypot(*np.diff(xy, axis=0).T)
+    cum = np.concatenate([[0.0], np.cumsum(seg)])
+    at = np.interp(times, trace.t_ms.astype(np.float64), cum)
+    return np.diff(at)
+
+
+def median_lap_length_m(trace: GpsTrace, gate: Gate) -> float | None:
+    """Median :func:`lap_path_lengths_m`, or None without two crossings."""
+    lengths = lap_path_lengths_m(trace, gate)
+    return float(np.median(lengths)) if lengths.size else None
+
+
 # --------------------------------------------------------------------------
 # Detection
 # --------------------------------------------------------------------------
@@ -378,6 +419,7 @@ class LayoutDetection:
     lap_source: str
     beacon_gate: str | None
     beacon_dist_m: float | None
+    lap_length_m: float | None = None  # median GPS path length per lap at the resolved S/F
     gate_crossings: dict[str, int] = field(default_factory=dict)
     n_laps_logger: int = 0
     resplit_laps: pa.Table | None = None
@@ -407,9 +449,19 @@ def _logger_lap_start_positions(log, trace: GpsTrace) -> tuple[np.ndarray, np.nd
 
 
 def _pick_layout(
-    venue: Venue, crossings: dict[str, int], declared_layout_id: str | None
+    venue: Venue,
+    crossings: dict[str, int],
+    declared_layout_id: str | None,
+    lap_lengths: dict[str, float] | None = None,
 ) -> tuple[Layout | None, str]:
-    """Most specific layout whose gates were all crossed; declared breaks ties."""
+    """Most specific layout whose gates were all crossed.
+
+    Ties between layouts with the same gate count are broken by the measured
+    lap length (``lap_lengths``: gate name -> median lap path length in m)
+    against the layouts' nominal ``lap_length_m`` when every tied layout
+    declares one, else by the declared variant, the venue default and
+    finally registry order.
+    """
     matching = [lay for lay in venue.layouts if all(crossings.get(g, 0) >= 1 for g in lay.gates)]
     if not matching:
         return None, "no layout matched the gate crossings"
@@ -417,6 +469,10 @@ def _pick_layout(
     best = [lay for lay in matching if len(lay.gates) == best_n]
     if len(best) == 1:
         return best[0], "unique gate-set match"
+    measured = (lap_lengths or {}).get(best[0].sf_gate)
+    if measured is not None and all(lay.lap_length_m is not None for lay in best):
+        lay = min(best, key=lambda l: abs((l.lap_length_m or 0.0) - measured))
+        return lay, f"gate-set tie broken by measured lap length ({measured:.0f} m)"
     for lay in best:
         if lay.layout_id == declared_layout_id:
             return lay, "gate-set tie broken by declared variant"
@@ -553,7 +609,13 @@ def detect_layout(
         )
 
     crossings = {name: int(gate_crossings(trace, g).size) for name, g in venue.gates.items()}
-    layout, why = _pick_layout(venue, crossings, declared_layout)
+    lap_lengths: dict[str, float] = {}
+    for name, g in venue.gates.items():
+        if crossings[name] >= 2:
+            med = median_lap_length_m(trace, g)
+            if med is not None:
+                lap_lengths[name] = med
+    layout, why = _pick_layout(venue, crossings, declared_layout, lap_lengths)
     if layout is None:
         # Never completed a lap through any gate: trust the declaration if it
         # belongs to this venue, else the venue default.
@@ -618,6 +680,7 @@ def detect_layout(
         lap_source=lap_source,
         beacon_gate=beacon_gate,
         beacon_dist_m=beacon_dist,
+        lap_length_m=lap_lengths.get(layout.sf_gate),
         gate_crossings=crossings,
         n_laps_logger=n_logger,
         resplit_laps=resplit,

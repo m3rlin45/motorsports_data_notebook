@@ -89,6 +89,23 @@ def _update_manifest(dataset_root: Path, new_entry: dict) -> None:
     _write_manifest(dataset_root, list(existing.values()))
 
 
+def remove_manifest_entries(dataset_root: Path, xrk_paths: list[str]) -> int:
+    """Drop the manifest rows of ``xrk_paths``; returns how many were removed.
+
+    The session rows those entries pointed at become orphans for
+    :func:`prune_orphan_sessions` unless another manifest row still
+    references the same ``session_id``.
+    """
+    existing = load_manifest(dataset_root)
+    removed = 0
+    for p in xrk_paths:
+        if existing.pop(p, None) is not None:
+            removed += 1
+    if removed:
+        _write_manifest(dataset_root, list(existing.values()))
+    return removed
+
+
 def _partition_for_date(date_str: str) -> str:
     return date_str[:7]  # YYYY-MM
 
