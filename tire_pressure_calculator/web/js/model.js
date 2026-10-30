@@ -340,6 +340,16 @@ export class TireModel {
     return null;
   }
 
+  // Team hot-pressure target for (car, compound) from
+  // hot_pressure_targets.yaml (bar gauge), or null when the artifact has
+  // none for that pair (caller falls back to the measured median).
+  lookupTargetHotPressure(car, compound) {
+    if (!compound) return null;
+    const rows = this.dto.target_hot_pressure_by_car_compound ?? [];
+    const hit = rows.find((r) => r.car === car && r.compound === compound);
+    return hit ? { targetHotPressureBar: hit.target_hot_pressure_bar } : null;
+  }
+
   // ---- Target-lap-time pace scaling (schema v3) ----
 
   lookupG2PaceCurve(track, car, condition) {

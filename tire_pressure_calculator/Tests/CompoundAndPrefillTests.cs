@@ -89,7 +89,90 @@ public class CompoundAndPrefillTests : IDisposable
         var vm = new MainViewModel(Model); // in-memory storage is empty
         var d = Model.LookupCornerDefaults(vm.SelectedCar!, "fl", vm.SelectedCondition);
         Assert.Equal(Math.Round(d!.Value.HotTempC, 1), vm.FrontLeft.TargetHotTemp);
-        Assert.Equal(Math.Round(d!.Value.HotPressureBar, 2), vm.FrontLeft.TargetHotPressure);
+        // The hot-pressure target comes from the team table for the
+        // selected (car, compound), not the measured median.
+        var target = Model.LookupTargetHotPressure(vm.SelectedCar!, vm.SelectedCompound);
+        Assert.NotNull(target);
+        Assert.Equal(Math.Round(target!.Value, 2), vm.FrontLeft.TargetHotPressure);
+    }
+
+    [Fact]
+    public void HotPressureTarget_FollowsCarAndCompound_TeamTable()
+    {
+        var vm = new MainViewModel(Model);
+        vm.SelectedCar = "FJ";
+        vm.SelectedCompound = "DRY";
+        Assert.Equal(1.5, vm.FrontLeft.TargetHotPressure);
+        Assert.Equal(1.5, vm.RearRight.TargetHotPressure);
+        vm.SelectedCompound = "WET";
+        Assert.Equal(1.7, vm.RearLeft.TargetHotPressure);
+
+        vm.SelectedCar = "Inferno 86";
+        vm.SelectedCompound = "A052";
+        Assert.Equal(1.8, vm.FrontRight.TargetHotPressure);
+        vm.SelectedCompound = "RE-71RS";
+        Assert.Equal(2.0, vm.FrontRight.TargetHotPressure);
+        vm.SelectedCompound = "A050";
+        Assert.Equal(1.5, vm.FrontRight.TargetHotPressure);
+        // The hot temp prefill still follows the measured median.
+        var d = Model.LookupCornerDefaults("Inferno 86", "fr", vm.SelectedCondition);
+        Assert.Equal(Math.Round(d!.Value.HotTempC, 1), vm.FrontRight.TargetHotTemp);
+    }
+
+    // ---------- Targets remembered per configuration ----------
+
+    [Fact]
+    public void TunedTargets_ComeBack_WhenTheConfigurationIsReopened()
+    {
+        var vm = new MainViewModel(Model);
+        vm.SelectedCar = "Inferno 86";
+        vm.SelectedCompound = "A052";
+        Assert.Equal(1.8, vm.FrontLeft.TargetHotPressure);
+        vm.FrontLeft.TargetHotPressure = 2.0;
+        vm.FrontLeft.TargetHotTemp = 95.0;
+
+        vm.SelectedCar = "FJ"; // first open of FJ / DRY / dry: defaults
+        Assert.Equal(1.5, vm.FrontLeft.TargetHotPressure);
+
+        vm.SelectedCar = "Inferno 86";
+        vm.SelectedCompound = "A052";
+        Assert.Equal(2.0, vm.FrontLeft.TargetHotPressure);
+        Assert.Equal(95.0, vm.FrontLeft.TargetHotTemp);
+        Assert.Equal(1.8, vm.FrontRight.TargetHotPressure); // untouched corners keep their default
+
+        // A different condition is a different configuration: first open -> defaults.
+        vm.SelectedCondition = "wet";
+        Assert.Equal(1.8, vm.FrontLeft.TargetHotPressure);
+        vm.SelectedCondition = "dry";
+        Assert.Equal(2.0, vm.FrontLeft.TargetHotPressure);
+    }
+
+    [Fact]
+    public void TunedTargets_SurviveReload_AndResetClearsThem()
+    {
+        var vm1 = new MainViewModel(Model);
+        vm1.SelectedCar = "Inferno 86";
+        vm1.SelectedCompound = "RE-71RS";
+        vm1.RearRight.TargetHotPressure = 2.3;
+        vm1.SelectedCar = "FJ";
+
+        var vm2 = new MainViewModel(Model); // same in-memory storage
+        vm2.SelectedCar = "Inferno 86";
+        vm2.SelectedCompound = "RE-71RS";
+        Assert.Equal(2.3, vm2.RearRight.TargetHotPressure);
+
+        vm2.ResetCommand.Execute(null);
+        vm2.SelectedCar = "Inferno 86";
+        vm2.SelectedCompound = "RE-71RS";
+        Assert.Equal(2.0, vm2.RearRight.TargetHotPressure);
+    }
+
+    [Fact]
+    public void LookupTargetHotPressure_UnknownPairOrNoCompound_IsNull()
+    {
+        Assert.Null(Model.LookupTargetHotPressure("Inferno 86", "NS-2R"));
+        Assert.Null(Model.LookupTargetHotPressure("FJ", null));
+        Assert.Equal(2.0, Model.LookupTargetHotPressure("Inferno 86", "RE-71RS"));
     }
 
     [Fact]

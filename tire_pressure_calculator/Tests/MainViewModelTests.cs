@@ -109,9 +109,12 @@ public class MainViewModelTests
         var model = TirePressureCalculator.Services.Modeling.TireModelLoader
             .LoadEmbedded(typeof(MainViewModel).Assembly);
         var fl = model.LookupCornerDefaults(vm.SelectedCar!, "fl", "dry");
-        var rr = model.LookupCornerDefaults(vm.SelectedCar!, "rr", "dry");
         Assert.Equal(Math.Round(fl!.Value.HotTempC, 1), vm.FrontLeft.TargetHotTemp);
-        Assert.Equal(Math.Round(rr!.Value.HotPressureBar, 2), vm.RearRight.TargetHotPressure);
+        // The hot-pressure target follows the team table for the reset
+        // selection (first car, first compound).
+        var target = model.LookupTargetHotPressure(vm.SelectedCar!, vm.SelectedCompound);
+        Assert.NotNull(target);
+        Assert.Equal(Math.Round(target!.Value, 2), vm.RearRight.TargetHotPressure);
     }
 
     [Fact]

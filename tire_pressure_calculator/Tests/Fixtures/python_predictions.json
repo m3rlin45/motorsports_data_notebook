@@ -489,7 +489,7 @@
       },
       "fr": {
         "cold_pressure_bar": 1.4809119885094466,
-        "predicted_hot_temp_c": 48.06453872242665,
+        "predicted_hot_temp_c": 48.06453872242663,
         "K_source_bucket": [
           "Inferno 86",
           "A050",
@@ -499,7 +499,7 @@
       },
       "rl": {
         "cold_pressure_bar": 1.450372639924634,
-        "predicted_hot_temp_c": 52.06788197264173,
+        "predicted_hot_temp_c": 52.06788197264172,
         "K_source_bucket": [
           "Inferno 86",
           "A050",
@@ -509,7 +509,7 @@
       },
       "rr": {
         "cold_pressure_bar": 1.466697234874423,
-        "predicted_hot_temp_c": 49.91559099887654,
+        "predicted_hot_temp_c": 49.91559099887653,
         "K_source_bucket": [
           "Inferno 86",
           "A050",
@@ -535,7 +535,7 @@
     "corners": {
       "fl": {
         "cold_pressure_bar": 1.4609229767881966,
-        "predicted_hot_temp_c": 50.673625329411095,
+        "predicted_hot_temp_c": 50.67362532941112,
         "K_source_bucket": [
           "Inferno 86",
           "A052",
@@ -555,7 +555,7 @@
       },
       "rl": {
         "cold_pressure_bar": 1.4451589689798965,
-        "predicted_hot_temp_c": 52.761325238891665,
+        "predicted_hot_temp_c": 52.76132523889167,
         "K_source_bucket": [
           "Inferno 86",
           "A052",
@@ -565,7 +565,7 @@
       },
       "rr": {
         "cold_pressure_bar": 1.4617913713152202,
-        "predicted_hot_temp_c": 50.55939685853674,
+        "predicted_hot_temp_c": 50.55939685853675,
         "K_source_bucket": [
           "Inferno 86",
           "A052",

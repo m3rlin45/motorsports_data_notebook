@@ -26,6 +26,7 @@ public sealed record TireModelDto(
     [property: JsonPropertyName("g2_lap_time_model")] G2LapTimeModelDto? G2LapTimeModel = null,
     [property: JsonPropertyName("K_by_car_compound_corner_cond")] IReadOnlyList<KCompoundEntryDto>? KByCarCompoundCornerCond = null,
     [property: JsonPropertyName("corner_defaults_by_car_corner_cond")] IReadOnlyList<CornerDefaultsEntryDto>? CornerDefaultsByCarCornerCond = null,
+    [property: JsonPropertyName("target_hot_pressure_by_car_compound")] IReadOnlyList<TargetHotPressureEntryDto>? TargetHotPressureByCarCompound = null,
     [property: JsonPropertyName("car_aliases")] IReadOnlyDictionary<string, string>? CarAliases = null,
     [property: JsonPropertyName("data_through_date")] string? DataThroughDate = null,
     [property: JsonPropertyName("data_through_local")] string? DataThroughLocal = null
@@ -50,6 +51,14 @@ public sealed record CornerDefaultsEntryDto(
     [property: JsonPropertyName("hot_temp_c")] double HotTempC,
     [property: JsonPropertyName("hot_pressure_bar")] double HotPressureBar,
     [property: JsonPropertyName("n_laps_used")] int NLapsUsed
+);
+
+/// <summary>Team hot-pressure target per (car, compound), bar gauge
+/// (data/tire_dataset/hot_pressure_targets.yaml; additive).</summary>
+public sealed record TargetHotPressureEntryDto(
+    [property: JsonPropertyName("car")] string Car,
+    [property: JsonPropertyName("compound")] string Compound,
+    [property: JsonPropertyName("target_hot_pressure_bar")] double TargetHotPressureBar
 );
 
 // ---- Target-lap-time feature (schema v3) ----

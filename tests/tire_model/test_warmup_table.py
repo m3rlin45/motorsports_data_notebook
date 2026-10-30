@@ -417,3 +417,30 @@ def test_per_corner_q_lookup_and_outlap_corners() -> None:
     assert corners[("t", "c", "dry")] == {"fl": 0.4, "fr": 0.2, "rl": 0.3, "rr": 0.1}
     mv, g2_mean, n_out = base[("t", "c", "dry")]
     assert mv == 60.0 and g2_mean == pytest.approx(0.25) and n_out == 1
+
+
+def test_load_hot_pressure_targets_reads_car_compound_table(tmp_path) -> None:
+    (tmp_path / "hot_pressure_targets.yaml").write_text(
+        "targets:\n  FJ:\n    DRY: 1.5\n    WET: 1.7\n  Inferno 86:\n    A052: 1.8\n    A050: null\n"
+    )
+    assert wt.load_hot_pressure_targets(tmp_path) == {
+        ("FJ", "DRY"): 1.5,
+        ("FJ", "WET"): 1.7,
+        ("Inferno 86", "A052"): 1.8,
+    }
+    assert wt.load_hot_pressure_targets(tmp_path / "missing") == {}
+    (tmp_path / "hot_pressure_targets.yaml").write_text("targets:\n  FJ:\n    DRY: 15\n")
+    with pytest.raises(ValueError):
+        wt.load_hot_pressure_targets(tmp_path)
+
+
+def test_committed_hot_pressure_targets_match_the_team_numbers() -> None:
+    from motorsports_data_notebook.tire_etl.paths import default_dataset_root
+
+    assert wt.load_hot_pressure_targets(default_dataset_root()) == {
+        ("FJ", "DRY"): 1.5,
+        ("FJ", "WET"): 1.7,
+        ("Inferno 86", "A052"): 1.8,
+        ("Inferno 86", "RE-71RS"): 2.0,
+        ("Inferno 86", "A050"): 1.5,
+    }
