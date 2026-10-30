@@ -2,8 +2,9 @@
 // in model.js; this file owns DOM, settings persistence, and localization.
 
 import {
-  TireModel, predictCorner, adjustedHotTempC, cornerColdPressureBar,
+  TireModel, predictCorner, predictCornerTrajectory, adjustedHotTempC, cornerColdPressureBar,
 } from './model.js';
+import { renderPressureChart } from './chart.js';
 import { STRINGS, resolveLanguage } from './strings.js';
 
 // Same key AND JSON shape as the .NET heads (C# AppSettings serialized with
@@ -109,17 +110,22 @@ let model = null; // TireModel | null
 let modelLoadSettled = false; // suppress the "unavailable" warning while fetching
 let lang = resolveLanguage(settings.UiLanguage, navigator.language);
 const predictions = { fl: null, fr: null, rl: null, rr: null }; // predicted hot °C
+// Preview: the corner cards show pressure-over-stint charts instead of
+// their fields. A view state, not a setting (never persisted); only
+// meaningful in Circuit Prediction mode.
+let preview = false;
 
 const t = (key) => STRINGS[lang][key] ?? STRINGS.en[key] ?? key;
 
 const isPredictionMode = () => settings.Mode === MODE_PREDICTION && model !== null;
+const isPreview = () => preview && isPredictionMode();
 
 // ---- DOM handles ----
 
 const $ = (id) => document.getElementById(id);
 const els = {
-  modeLabel: $('modeLabel'), modeToggle: $('modeToggle'), modeContent: $('modeContent'),
-  modelUnavailable: $('modelUnavailable'),
+  modeToggle: $('modeToggle'), modeContent: $('modeContent'),
+  modelUnavailable: $('modelUnavailable'), previewBtn: $('previewBtn'),
   langLabel: $('langLabel'), langSelect: $('langSelect'),
   cornerGrid: $('cornerGrid'),
   resetBtn: $('resetBtn'),
@@ -175,12 +181,17 @@ function buildCornerCards() {
           <div class="box box-target"><input class="in-bar" inputmode="decimal" autocomplete="off" enterkeyhint="done"></div>
         </div>
       </div>
+      <div class="corner-chart preview-only">
+        <div class="chart-axis-host"></div>
+        <div class="chart-scroll"><div class="chart-plot-host"></div></div>
+      </div>
       <hr>
       <div class="setcold">
         <span class="setcold-label" data-str="SetCold"></span>
         <span class="setcold-value">—</span>
       </div>`;
     els.cornerGrid.appendChild(section);
+    chartResizeObserver?.observe(section.querySelector('.chart-scroll'));
 
     const cs = settings[c.settingsKey];
     bindNumberInput(section.querySelector('.in-current'), {
@@ -247,29 +258,77 @@ document.addEventListener('keydown', (e) => {
 
 // ---- Prediction ----
 
-function refreshPredictions() {
+// Inputs for predictCorner / predictCornerTrajectory for one corner, or
+// null when the prediction cannot run.
+function cornerInputs(c) {
   const p = settings.Prediction;
+  if (!isPredictionMode() || !p.Track || !p.Car) return null;
+  return {
+    track: p.Track,
+    car: p.Car,
+    condition: p.Condition,
+    lapWithinStint: p.LapWithinStint,
+    ambientTempC: p.AmbientTempC,
+    trackTempC: p.TrackTempC,
+    cloudCoverPct: p.CloudCoverPct,
+    corner: c.id,
+    targetHotPressureBar: settings[c.settingsKey].TargetHotPressure,
+    coldTireTempC: settings[c.settingsKey].CurrentTemp,
+    targetLapTimeS: p.TargetLapTimeS,
+    compound: p.Compound,
+  };
+}
+
+function refreshPredictions() {
   for (const c of CORNERS) {
     predictions[c.id] = null;
-    if (!isPredictionMode() || !p.Track || !p.Car) continue;
+    const inputs = cornerInputs(c);
+    if (!inputs) continue;
     try {
-      const result = predictCorner(model, {
-        track: p.Track,
-        car: p.Car,
-        condition: p.Condition,
-        lapWithinStint: p.LapWithinStint,
-        ambientTempC: p.AmbientTempC,
-        trackTempC: p.TrackTempC,
-        cloudCoverPct: p.CloudCoverPct,
-        corner: c.id,
-        targetHotPressureBar: settings[c.settingsKey].TargetHotPressure,
-        coldTireTempC: settings[c.settingsKey].CurrentTemp,
-        targetLapTimeS: p.TargetLapTimeS,
-        compound: p.Compound,
-      });
+      const result = predictCorner(model, inputs);
       predictions[c.id] = result.predictedHotTempC;
     } catch {
       predictions[c.id] = null;
+    }
+  }
+}
+
+// ---- Preview charts ----
+
+// Charts are sized from their scroll container, so they follow the
+// viewport (and the grid's row height) instead of a fixed pixel size.
+const chartResizeObserver = typeof ResizeObserver === 'function'
+  ? new ResizeObserver(() => { if (isPreview()) renderCharts(); })
+  : null;
+
+function renderCharts() {
+  for (const c of CORNERS) {
+    const card = els.cornerGrid.querySelector(`[data-corner="${c.id}"]`);
+    const scroll = card.querySelector('.chart-scroll');
+    const axisHost = card.querySelector('.chart-axis-host');
+    const plotHost = card.querySelector('.chart-plot-host');
+    const inputs = cornerInputs(c);
+    const width = scroll.clientWidth;
+    const height = scroll.clientHeight;
+    if (!inputs || width < 20 || height < 20) {
+      axisHost.innerHTML = '';
+      plotHost.innerHTML = '';
+      continue;
+    }
+    try {
+      const trajectory = predictCornerTrajectory(model, inputs);
+      const { axisSvg, plotSvg } = renderPressureChart(trajectory, {
+        targetBar: inputs.targetHotPressureBar,
+        lapWithinStint: inputs.lapWithinStint,
+        viewportWidth: width,
+        height,
+        labels: { lap: t('ChartLapAxis'), out: t('ChartOutLap') },
+      });
+      axisHost.innerHTML = axisSvg;
+      plotHost.innerHTML = plotSvg;
+    } catch {
+      axisHost.innerHTML = '';
+      plotHost.innerHTML = '';
     }
   }
 }
@@ -281,7 +340,6 @@ function applyStrings() {
   for (const el of document.querySelectorAll('[data-str]')) {
     el.textContent = t(el.dataset.str);
   }
-  els.modeLabel.textContent = t('ModeLabel');
   els.modelUnavailable.textContent = t('ModelUnavailable').trim();
   els.langLabel.textContent = t('LanguageLabel');
   els.resetBtn.textContent = t('ResetButton');
@@ -437,6 +495,14 @@ function render() {
   els.modeContent.textContent = prediction ? t('ModePrediction') : t('ModeManual');
   els.modelUnavailable.hidden = model !== null || !modelLoadSettled;
 
+  // Preview swaps the corner fields for charts and hides the setup
+  // (inputs panel + bottom bar) until the user comes back to it.
+  const inPreview = isPreview();
+  document.body.classList.toggle('preview', inPreview);
+  els.previewBtn.hidden = !prediction;
+  els.previewBtn.textContent = inPreview ? t('SetupButton') : t('PreviewButton');
+  els.previewBtn.setAttribute('aria-pressed', String(inPreview));
+
   // Bottom bar: temp adjust only in manual mode.
   els.adjustGroup.hidden = prediction;
   els.adjustSlider.value = String(settings.TempAdjustPercent);
@@ -478,6 +544,8 @@ function render() {
     } catch { /* out-of-range temps -> show 0 */ }
     card.querySelector('.setcold-value').textContent = `${cold.toFixed(3)} bar`;
   }
+
+  if (inPreview) renderCharts();
 }
 
 // ---- Event wiring ----
@@ -486,8 +554,20 @@ function wireEvents() {
   els.modeToggle.addEventListener('click', () => {
     if (model === null) return;
     settings.Mode = isPredictionMode() ? MODE_MANUAL : MODE_PREDICTION;
+    preview = false; // Preview belongs to Circuit Prediction; a mode change is a setup action
     saveSettings();
     render();
+  });
+
+  els.previewBtn.addEventListener('click', () => {
+    preview = !preview;
+    render();
+    // Entering Preview always starts at pit exit, whatever was scrolled
+    // to last time (after render, once the containers are displayed —
+    // a hidden element's scroll offset cannot be set).
+    if (preview) {
+      for (const scroll of els.cornerGrid.querySelectorAll('.chart-scroll')) scroll.scrollLeft = 0;
+    }
   });
 
   els.langSelect.addEventListener('change', () => {

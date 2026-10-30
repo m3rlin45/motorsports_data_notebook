@@ -553,3 +553,53 @@ export function predictCorner(model, {
     tAfterOutlapC,
   };
 }
+
+// ---- Stint trajectory (Preview) ----
+
+// Temperature and gauge pressure of one corner over a stint, from pit
+// exit at the recommended cold pressure: what the gauge would read as
+// the car runs. The temperature follows the same two-stage warm-up as
+// predictCorner (out-lap, then flying laps at the target pace); the
+// pressure follows it by Gay-Lussac from the cold set point, so it
+// reaches the target hot pressure exactly at the end of the target lap
+// and keeps rising past it as the tire keeps warming.
+//
+// `horizonLaps` flying laps are covered (default: five times the target
+// lap, at least ten laps); `samplesPerLap` points per lap plus every lap
+// boundary. Returns the underlying prediction, the clock lap time, the
+// time at the end of each lap (index 0 = end of the out-lap), the target
+// lap's time, and the sampled points.
+export function predictCornerTrajectory(model, inputs, { horizonLaps = null, samplesPerLap = 20 } = {}) {
+  const p = predictCorner(model, inputs);
+  const lapS = p.targetLapTimeS ?? p.lapTimeTypS;
+  const laps = horizonLaps ?? Math.max(10, inputs.lapWithinStint * 5);
+  const totalS = p.outlapTimeS + laps * lapS;
+  const pColdAbs = p.coldPressureBar + model.pAtmBar;
+  const tColdK = p.tColdC + T_ZERO_C_TO_K;
+
+  const tempAt = (t) => (t <= p.outlapTimeS
+    ? warmupCurveC(t, p.tEffC, p.kKelvinPerG2, p.outlapG2, p.tauSec, p.tStartC)
+    : warmupCurveC(t - p.outlapTimeS, p.tEffC, p.kKelvinPerG2, p.g2Typ, p.tauSec, p.tAfterOutlapC));
+  const pressureAt = (tempC) => pColdAbs * (tempC + T_ZERO_C_TO_K) / tColdK - model.pAtmBar;
+
+  const lapEndsS = [];
+  for (let k = 0; k <= laps; k++) lapEndsS.push(p.outlapTimeS + k * lapS);
+
+  const times = new Set([0, p.outlapTimeS, ...lapEndsS]);
+  const step = lapS / samplesPerLap;
+  for (let t = 0; t < totalS; t += step) times.add(t);
+  const points = [...times].filter((t) => t <= totalS).sort((a, b) => a - b).map((t) => {
+    const tempC = tempAt(t);
+    return { t, tempC, pressureBar: pressureAt(tempC) };
+  });
+
+  return {
+    prediction: p,
+    lapTimeS: lapS,
+    outlapS: p.outlapTimeS,
+    lapEndsS,
+    targetTimeS: p.outlapTimeS + inputs.lapWithinStint * lapS,
+    totalS,
+    points,
+  };
+}

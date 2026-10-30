@@ -12,7 +12,7 @@ import { readFileSync } from 'node:fs';
 import {
   TireModel, predictCorner, conditionChain,
   gayLussacColdPressureBar, tRoadProxyC, tEffectiveC, warmupCurveC,
-  adjustedHotTempC, cornerColdPressureBar, roundTo,
+  adjustedHotTempC, cornerColdPressureBar, roundTo, predictCornerTrajectory,
 } from '../js/model.js';
 
 const readJson = (relPath) =>
@@ -458,4 +458,44 @@ test('dataThrough prefers the local time, then the date, then the fit date', () 
   assert.equal(legacy.dataThrough, modelDto.fit_at_utc.slice(0, 10));
   const bare = new TireModel({ ...legacy.dto, fit_at_utc: undefined });
   assert.equal(bare.dataThrough, null);
+});
+
+test('stint trajectory: starts at the cold set point, hits the target at lap N, keeps rising', () => {
+  const model = new TireModel(modelDto);
+  const inputs = {
+    track: model.availableTracks[0], car: model.availableCars[0], condition: 'dry',
+    lapWithinStint: 5, ambientTempC: 20, cloudCoverPct: 50, corner: 'fl',
+    targetHotPressureBar: 1.8, coldTireTempC: 20,
+  };
+  const traj = predictCornerTrajectory(model, inputs);
+  const p = traj.prediction;
+  assert.equal(traj.lapTimeS, p.lapTimeTypS);
+  assert.equal(traj.lapEndsS.length, 26); // out-lap end + 25 flying laps (5 × target, min 10)
+  assert.ok(Math.abs(traj.lapEndsS[0] - traj.outlapS) < 1e-9);
+  assert.ok(Math.abs(traj.targetTimeS - (traj.outlapS + 5 * traj.lapTimeS)) < 1e-9);
+  // Starts at the recommended cold pressure at the typed tire temperature.
+  assert.equal(traj.points[0].t, 0);
+  assert.ok(Math.abs(traj.points[0].pressureBar - p.coldPressureBar) < 1e-9);
+  assert.ok(Math.abs(traj.points[0].tempC - p.tStartC) < 1e-9);
+  // Exactly the target hot pressure / predicted hot temp at the end of lap N.
+  const atTarget = traj.points.find((pt) => Math.abs(pt.t - traj.targetTimeS) < 1e-9);
+  assert.ok(atTarget, 'target lap boundary is sampled');
+  assert.ok(Math.abs(atTarget.pressureBar - 1.8) < 1e-9);
+  assert.ok(Math.abs(atTarget.tempC - p.predictedHotTempC) < 1e-9);
+  // Every lap end is sampled; the points are time-ordered; warm-up is monotone.
+  for (const tEnd of traj.lapEndsS) {
+    assert.ok(traj.points.some((pt) => Math.abs(pt.t - tEnd) < 1e-9), `lap end ${tEnd} sampled`);
+  }
+  for (let i = 1; i < traj.points.length; i++) {
+    assert.ok(traj.points[i].t > traj.points[i - 1].t);
+    assert.ok(traj.points[i].pressureBar >= traj.points[i - 1].pressureBar - 1e-9);
+  }
+  const last = traj.points[traj.points.length - 1];
+  assert.ok(last.pressureBar > 1.8, 'pressure keeps rising past the target lap');
+  assert.ok(Math.abs(last.t - traj.totalS) < 1e-9);
+  // A target lap time rescales the clock.
+  const paced = predictCornerTrajectory(model, { ...inputs, targetLapTimeS: p.lapTimeTypS * 1.1 });
+  assert.ok(Math.abs(paced.lapTimeS - p.lapTimeTypS * 1.1) < 1e-9);
+  // An explicit horizon is honoured.
+  assert.equal(predictCornerTrajectory(model, inputs, { horizonLaps: 7 }).lapEndsS.length, 8);
 });
