@@ -33,6 +33,10 @@ export const STRINGS = {
     TempAdjustFormat: 'Temp adjust: {0}%',
     PredictedHotPrefix: 'Predicted hot',
     LastUpdatedFormat: 'Model data: {0}',
+    PreviewButton: 'Preview',
+    SetupButton: 'Setup',
+    ChartLapAxis: 'Lap',
+    ChartOutLap: 'Out',
   },
   ja: {
     LanguageLabel: '言語:',
@@ -64,6 +68,10 @@ export const STRINGS = {
     TempAdjustFormat: '温度補正: {0}%',
     PredictedHotPrefix: '予測温間',
     LastUpdatedFormat: 'モデルデータ: {0}',
+    PreviewButton: 'プレビュー',
+    SetupButton: 'セットアップ',
+    ChartLapAxis: 'ラップ',
+    ChartOutLap: 'アウト',
   },
 };
 
