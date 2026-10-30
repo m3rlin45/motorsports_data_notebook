@@ -124,8 +124,8 @@ def main(argv: list[str] | None = None) -> int:
         "--target-lap-time",
         type=float,
         default=None,
-        help="Target pace for the stint in seconds. Scales tire energy via the "
-        "sector-fit g² vs lap-time curve and sets time-on-track (t = N × target).",
+        help="Target pace for the stint in seconds. Scales each corner's heat input "
+        "along the simulated-lap curve and sets time-on-track (t = N × target).",
     )
     p_predict.add_argument(
         "--compound",
@@ -149,6 +149,15 @@ def main(argv: list[str] | None = None) -> int:
         help="MAE report vs. notes-recorded cold pressures (uses production model).",
     )
     _add_dataset_root_arg(p_validate)
+
+    p_pace = sub.add_parser(
+        "pace-check",
+        help=(
+            "Within-session check of the simulated-lap pace model: observed vs simulated "
+            "per-corner heat of each session's fastest clean laps (uses production model)."
+        ),
+    )
+    _add_dataset_root_arg(p_pace)
 
     p_audit = sub.add_parser(
         "audit-sensors",
@@ -227,6 +236,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_validate(args)
     if args.cmd == "holdout":
         return _cmd_holdout(args)
+    if args.cmd == "pace-check":
+        return _cmd_pace_check(args)
     if args.cmd == "audit-sensors":
         return _cmd_audit_sensors(args)
     if args.cmd == "infer-compounds":
@@ -432,6 +443,12 @@ def _cmd_validate(args: argparse.Namespace) -> int:
     from .validate import run_validation  # local import keeps CLI cold-load fast
 
     return run_validation(dataset_root=args.dataset_root)
+
+
+def _cmd_pace_check(args: argparse.Namespace) -> int:
+    from .validate import run_pace_check
+
+    return run_pace_check(dataset_root=args.dataset_root)
 
 
 def _cmd_holdout(args: argparse.Namespace) -> int:

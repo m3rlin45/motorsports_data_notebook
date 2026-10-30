@@ -285,15 +285,17 @@ public sealed class TireModel
     }
 
     /// <summary>
-    /// Multiplier on g2_typ for a target lap time; mirrors the Python
-    /// predictor's <c>_g2_pace_scale</c>. Preferred: ratio along the
-    /// bucket's sector-fit curve (anchored at lap_time_typ so
-    /// target == typical scales by exactly 1). Fallback: the pooled
-    /// sector exponent. Clamped either way.
+    /// Multiplier on the typical heat input for a target lap time; mirrors
+    /// the Python predictor's <c>_g2_pace_scale</c>. Preferred: ratio along
+    /// the bucket's simulated-lap curve — the corner's own series when
+    /// <paramref name="corner"/> is given and the curve carries
+    /// <c>g2_by_corner</c>, else the corner mean (anchored at lap_time_typ
+    /// so target == typical scales by exactly 1). Fallback: the physics
+    /// exponent. Clamped either way.
     /// </summary>
     public G2PaceScale ComputeG2PaceScale(
         string track, string car, string condition,
-        double lapTimeTypS, double targetLapTimeS)
+        double lapTimeTypS, double targetLapTimeS, string? corner = null)
     {
         double clampMin = Dto.G2LapTimeModel?.MultiplierClamp?.Min ?? 0.4;
         double clampMax = Dto.G2LapTimeModel?.MultiplierClamp?.Max ?? 2.5;
@@ -301,10 +303,14 @@ public sealed class TireModel
         var curve = LookupG2PaceCurve(track, car, condition);
         if (curve is not null)
         {
-            double reference = InterpClamped(lapTimeTypS, curve.LapTimeS, curve.G2);
+            IReadOnlyList<double> series = curve.G2;
+            if (corner is not null && curve.G2ByCorner is not null
+                && curve.G2ByCorner.TryGetValue(corner, out var own))
+                series = own;
+            double reference = InterpClamped(lapTimeTypS, curve.LapTimeS, series);
             if (reference > 0)
             {
-                double curveScale = InterpClamped(targetLapTimeS, curve.LapTimeS, curve.G2) / reference;
+                double curveScale = InterpClamped(targetLapTimeS, curve.LapTimeS, series) / reference;
                 return new G2PaceScale(
                     Math.Min(clampMax, Math.Max(clampMin, curveScale)), "curve");
             }

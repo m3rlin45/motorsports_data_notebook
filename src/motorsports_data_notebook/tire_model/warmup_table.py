@@ -79,14 +79,13 @@ MIN_LAPS_FOR_K_BUCKET = 5  # per (car, track, corner) bucket to factor in Pass 2
 CORNER_DEFAULTS_MIN_LAP_IN_STINT = 4
 CORNER_DEFAULTS_MIN_LAPS = 5
 
-# ---- Target-lap-time feature: g² as a function of pace ----
-# Energy into the tires scales strongly with pace (log(g²) vs log(lap time)
-# slopes of -2.4…-3.6, |r| 0.8-0.97 on the 2026-08 dataset; pure v²-scaling
-# physics would give -4). Fitted sector-wise — see tire_model.sectors — so
-# one bad turn on an otherwise aggressive lap can't skew the mapping. Each
-# ⟨g²⟩ bucket carries a piecewise-linear g2_vs_lap_time curve; buckets
-# without one fall back to the pooled sector-fit exponent below.
-G2_LAP_TIME_EXPONENT_FALLBACK = 3.0  # used when even the pooled sector fit is empty
+# ---- Target-lap-time feature: heat input as a function of pace ----
+# Each ⟨q⟩ bucket carries a piecewise-linear g2_vs_lap_time curve with one
+# series per corner: the bucket's reference laps simulated per second at
+# other lap times through the fitted force shares (tire_model.pace_sim).
+# Buckets without a curve fall back to the physics exponent below
+# (q = V·|F| with F ∝ V²; pace_sim.DEFAULT_EXPONENT).
+G2_LAP_TIME_EXPONENT_FALLBACK = 3.0
 # Prediction-time clamp on the g² multiplier so an unrealistic target lap
 # time can't extrapolate the asymptote into nonsense.
 G2_SCALE_MULTIPLIER_CLAMP = (0.4, 2.5)
@@ -211,9 +210,6 @@ def build_warmup_table(
     g2_lookup = _build_g2_typ(flying)
     corner_defaults = _build_corner_defaults(flying)
     outlap_lookup = _build_outlap_typ(laps)
-    from .sectors import build_pace_model
-
-    g2_curves, g2_exponent_default = build_pace_model(root, flying, speed_weighted=True)
 
     laps_for_fit = _laps_for_fit(laps, g2_lookup)
 
@@ -245,6 +241,14 @@ def build_warmup_table(
     )
     laps_for_fit = apply_speed_correction(root, laps_for_fit, kappa_by_car)
     q_corner_lookup = _build_q_typ_per_corner(_flying_laps(laps_for_fit))
+    # Pace model: the training laps nearest each bucket's typical lap time,
+    # simulated per second at other lap times through the fitted force
+    # shares (pace_sim). Built after the fit because it needs the shares.
+    from .pace_sim import DEFAULT_EXPONENT as _PACE_EXPONENT
+    from .pace_sim import build_pace_model
+
+    g2_curves = build_pace_model(root, _flying_laps(laps_for_fit), pf.share)
+    g2_exponent_default = _PACE_EXPONENT
     g2_lookup = {
         key: (float(np.mean(list(per.values()))), n) for key, (per, n) in q_corner_lookup.items()
     }
@@ -1231,9 +1235,10 @@ def _assemble_model(
 ) -> dict[str, Any]:
     """Build the in-memory model dict that matches the JSON artifact schema.
 
-    Schema version 3: adds the target-lap-time feature — a per-bucket
-    ``g2_lap_time_exponent`` on each ⟨g²⟩ entry plus the top-level
-    ``g2_lap_time_model`` block (default exponent + multiplier clamp).
+    Schema version 3 added the target-lap-time feature — a per-bucket
+    ``g2_vs_lap_time`` curve on each ⟨g²⟩ entry plus the top-level
+    ``g2_lap_time_model`` block (default exponent + multiplier clamp); the
+    curves now carry per-corner series (``g2_by_corner``, additive).
     Version 2 keyed K and τ_sec by (car, corner, condition) and the ⟨g²⟩ +
     lap_time_typ lookups by (track, car, condition).
     """
@@ -1292,12 +1297,17 @@ def _assemble_model(
             )
         ),
         "g2_lap_time_model": {
-            "method": "sector_knn_median_curve",
+            "method": "uniform_scaled_lap_shares",
             "formula": (
-                "g2 = g2_typ * interp(target_lap_time_s, g2_vs_lap_time) / "
-                "interp(lap_time_typ_s, g2_vs_lap_time); buckets without a curve "
-                "fall back to g2_typ * (lap_time_typ_s / target_lap_time_s) ** "
-                "default_exponent. The multiplier is clamped either way."
+                "q_i = q_typ_i * interp(target_lap_time_s, g2_vs_lap_time.g2_by_corner[i]) / "
+                "interp(lap_time_typ_s, g2_vs_lap_time.g2_by_corner[i]) (g2 = the corner mean "
+                "for consumers without per-corner curves). Each curve point is the median over "
+                "the bucket's reference laps of the per-corner heat input of the logged lap "
+                "scaled uniformly to that lap time (V' = m V, lat' = m^2 lat, long unchanged, "
+                "dt' = dt / m, m = T_lap / T_target) through the heat_input force shares, "
+                "relative to the unscaled lap. Buckets without a curve fall back to "
+                "q_typ * (lap_time_typ_s / target_lap_time_s) ** default_exponent "
+                "(heat = V * |F| with F ~ V^2). The multiplier is clamped either way."
             ),
             "default_exponent": g2_exponent_default,
             "multiplier_clamp": {
