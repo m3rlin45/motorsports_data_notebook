@@ -38,6 +38,13 @@ public class PredictionSettings
     public string? Compound { get; set; }
 }
 
+/// <summary>A corner card's targets as remembered for one configuration.</summary>
+public class CornerTargets
+{
+    public double TargetHotTemp { get; set; }
+    public double TargetHotPressure { get; set; }
+}
+
 public class AppSettings
 {
     public CornerSettings FrontLeft { get; set; } = new();
@@ -45,10 +52,19 @@ public class AppSettings
     public CornerSettings RearLeft { get; set; } = new();
     public CornerSettings RearRight { get; set; } = new();
     public double TempAdjustPercent { get; set; }
-    public AppMode Mode { get; set; } = AppMode.Manual;
+    /// <summary>Circuit Prediction by default; the view model drops to
+    /// Manual when no model is available.</summary>
+    public AppMode Mode { get; set; } = AppMode.CircuitPrediction;
     public PredictionSettings Prediction { get; set; } = new();
     /// <summary>UI language preference: "auto", "en", or "ja".</summary>
     public string UiLanguage { get; set; } = "auto";
+
+    /// <summary>Corner targets remembered per configuration
+    /// ("car|compound|condition" -> corner id "fl".."rr" -> targets). A
+    /// configuration is prefilled from the model / team table the first
+    /// time it is opened and after Reset; otherwise the targets the user
+    /// left for it come back. Same shape as the web app's TargetMemory.</summary>
+    public Dictionary<string, Dictionary<string, CornerTargets>> TargetMemory { get; set; } = new();
 
     /// <summary>True when these settings came from storage (vs factory
     /// defaults). First run prefills the corner targets from the model; a

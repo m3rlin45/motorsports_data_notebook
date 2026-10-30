@@ -194,6 +194,16 @@ public sealed class TireModel
         return null;
     }
 
+    /// <summary>Team hot-pressure target for (car, compound) in bar gauge,
+    /// or null when the artifact has none for that pair (the caller falls
+    /// back to the measured median).</summary>
+    public double? LookupTargetHotPressure(string car, string? compound)
+    {
+        if (compound is null) return null;
+        var rows = Dto.TargetHotPressureByCarCompound ?? Array.Empty<TargetHotPressureEntryDto>();
+        return rows.FirstOrDefault(r => r.Car == car && r.Compound == compound)?.TargetHotPressureBar;
+    }
+
     /// <summary>Per-corner value from a v5 map, else the entry's corner
     /// mean. A null corner (or a map without that corner) keeps the mean,
     /// so pre-v5 artifacts produce identical numbers.</summary>

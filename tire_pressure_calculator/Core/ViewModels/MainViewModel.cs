@@ -147,7 +147,7 @@ public class MainViewModel : INotifyPropertyChanged
             _settings.Save();
             RefreshCompounds();
             SnapTargetLap();
-            SnapCornerTargets();
+            LoadTargetsForSelection();
             RefreshPredictions();
         }
     }
@@ -163,7 +163,7 @@ public class MainViewModel : INotifyPropertyChanged
             _settings.Prediction.Condition = value;
             _settings.Save();
             SnapTargetLap();
-            SnapCornerTargets();
+            LoadTargetsForSelection();
             RefreshPredictions();
         }
     }
@@ -295,6 +295,7 @@ public class MainViewModel : INotifyPropertyChanged
             OnPropertyChanged();
             _settings.Prediction.Compound = value;
             _settings.Save();
+            LoadTargetsForSelection();
             RefreshPredictions();
         }
     }
@@ -386,7 +387,10 @@ public class MainViewModel : INotifyPropertyChanged
 
         RefreshCompounds();
         if (_targetLapTimeS is null) SnapTargetLap();
-        if (!_settings.LoadedFromStorage) SnapCornerTargets();
+        // First run prefills; saved settings keep the active configuration's
+        // fields (restored from memory when it has an entry).
+        LoadTargetsForSelection(keepCurrent: _settings.LoadedFromStorage);
+        _settings.Save();
 
         ResetCommand = new RelayCommand(() =>
         {
@@ -405,13 +409,16 @@ public class MainViewModel : INotifyPropertyChanged
             AmbientTempC = 20.0;
             TrackTempC = null;
             CloudCoverPct = 50.0;
+            // Every configuration is prefilled afresh after Reset.
+            _settings.TargetMemory = new();
+            _activeTargetKey = null;
             // Forced defaults: first compound, typical lap, car prefills.
             // The Selected* setters above may have early-returned when the
             // value didn't change, so snap explicitly.
             RefreshCompounds();
             SelectedCompound = AvailableCompounds.FirstOrDefault();
             SnapTargetLap();
-            SnapCornerTargets();
+            LoadTargetsForSelection();
         });
 
         RefreshPredictions();
@@ -446,6 +453,12 @@ public class MainViewModel : INotifyPropertyChanged
             s.CurrentTemp = vm.CurrentTemp;
             s.TargetHotTemp = vm.TargetHotTemp;
             s.TargetHotPressure = vm.TargetHotPressure;
+            if (!_applyingTargets
+                && (e.PropertyName == nameof(TireCornerViewModel.TargetHotTemp)
+                    || e.PropertyName == nameof(TireCornerViewModel.TargetHotPressure)))
+            {
+                StashTargets(); // an edit belongs to the active configuration
+            }
             _settings.Save();
             // The corner's current tire temperature is the warmup curve's
             // initial condition, so editing it changes the predicted hot
@@ -492,26 +505,90 @@ public class MainViewModel : INotifyPropertyChanged
         if (typ.ValueSeconds > 0) TargetLapTimeS = Math.Round(typ.ValueSeconds, 1);
     }
 
-    /// <summary>Corner-card prefills follow the car: target hot temp and hot
-    /// pressure snap to the model's steady-state medians for the selected
-    /// (car, condition). Buckets missing from the artifact keep whatever the
-    /// fields currently hold.</summary>
+    // ---- Corner targets per configuration ----
+
+    /// <summary>The configuration whose targets the corner cards show.</summary>
+    private string? _activeTargetKey;
+    /// <summary>True while targets are being restored / prefilled, so the
+    /// corner change hook does not stash them as user edits.</summary>
+    private bool _applyingTargets;
+
+    private IEnumerable<(string Id, TireCornerViewModel Vm)> CornerVms() => new[]
+    {
+        ("fl", FrontLeft), ("fr", FrontRight), ("rl", RearLeft), ("rr", RearRight),
+    };
+
+    private string? TargetKey() =>
+        _selectedCar is null ? null : $"{_selectedCar}|{_selectedCompound ?? ""}|{_selectedCondition}";
+
+    /// <summary>Remember the corner cards' targets for the active configuration.</summary>
+    private void StashTargets()
+    {
+        if (_activeTargetKey is null) return;
+        var mem = new Dictionary<string, CornerTargets>();
+        foreach (var (id, vm) in CornerVms())
+        {
+            mem[id] = new CornerTargets
+            {
+                TargetHotTemp = vm.TargetHotTemp, TargetHotPressure = vm.TargetHotPressure,
+            };
+        }
+        _settings.TargetMemory[_activeTargetKey] = mem;
+    }
+
+    /// <summary>After any car / compound / condition change (and at
+    /// construction): stash the targets of the configuration being left,
+    /// then show the new one's remembered targets, or its defaults when it
+    /// is opened for the first time. <paramref name="keepCurrent"/> (saved
+    /// settings from before the memory existed) adopts the fields as they
+    /// are instead of prefilling.</summary>
+    private void LoadTargetsForSelection(bool keepCurrent = false)
+    {
+        StashTargets();
+        _activeTargetKey = TargetKey();
+        if (_activeTargetKey is null || _tireModel is null) return;
+        if (_settings.TargetMemory.TryGetValue(_activeTargetKey, out var mem))
+        {
+            _applyingTargets = true;
+            try
+            {
+                foreach (var (id, vm) in CornerVms())
+                {
+                    if (!mem.TryGetValue(id, out var t)) continue;
+                    vm.TargetHotTemp = t.TargetHotTemp;
+                    vm.TargetHotPressure = t.TargetHotPressure;
+                }
+            }
+            finally { _applyingTargets = false; }
+        }
+        else if (!keepCurrent)
+        {
+            SnapCornerTargets();
+        }
+        StashTargets();
+    }
+
+    /// <summary>Defaults for a configuration: the target hot temp is the
+    /// model's steady-state median for the selected (car, condition); the
+    /// target hot pressure the team's target for the selected (car,
+    /// compound), else that median. Buckets missing from the artifact keep
+    /// whatever the fields currently hold.</summary>
     private void SnapCornerTargets()
     {
         if (_tireModel is null || _selectedCar is null) return;
-        foreach (var (corner, vm) in new[]
-                 {
-                     ("fl", FrontLeft), ("fr", FrontRight),
-                     ("rl", RearLeft), ("rr", RearRight),
-                 })
+        var target = _tireModel.LookupTargetHotPressure(_selectedCar, _selectedCompound);
+        _applyingTargets = true;
+        try
         {
-            if (_tireModel.LookupCornerDefaults(_selectedCar, corner, _selectedCondition)
-                is CornerDefaultsLookup d)
+            foreach (var (corner, vm) in CornerVms())
             {
-                vm.TargetHotTemp = Math.Round(d.HotTempC, 1);
-                vm.TargetHotPressure = Math.Round(d.HotPressureBar, 2);
+                var d = _tireModel.LookupCornerDefaults(_selectedCar, corner, _selectedCondition);
+                if (d is CornerDefaultsLookup med) vm.TargetHotTemp = Math.Round(med.HotTempC, 1);
+                if (target is double bar) vm.TargetHotPressure = Math.Round(bar, 2);
+                else if (d is CornerDefaultsLookup med2) vm.TargetHotPressure = Math.Round(med2.HotPressureBar, 2);
             }
         }
+        finally { _applyingTargets = false; }
     }
 
     /// <summary>

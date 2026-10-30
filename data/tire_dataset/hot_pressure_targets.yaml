@@ -1,0 +1,21 @@
+# Team hot-pressure targets, bar gauge, per (car, tire compound).
+#
+# The calculators prefill each corner card's "target hot pressure" from
+# this table whenever the car or compound selection changes (and on first
+# run); the user can still edit the value. A (car, compound) missing here
+# falls back to the model's measured steady-state median
+# (corner_defaults_by_car_corner_cond). `just tire-build-warmup-table`
+# copies the table into tire_model.json (target_hot_pressure_by_car_compound),
+# which both the web and the .NET heads read, so editing this file and
+# rebuilding the model is enough to change the prefills everywhere.
+#
+# Car names are the model's pooled labels (KK-F / KK-SII -> FJ); compound
+# names are the canonical ones from tire_model.compounds.
+targets:
+  FJ:
+    DRY: 1.5
+    WET: 1.7
+  Inferno 86:
+    A052: 1.8
+    RE-71RS: 2.0
+    A050: 1.5

@@ -321,6 +321,7 @@ def build_warmup_table(
         k_by_compound=k_by_compound,
         compound_multipliers=compound_multipliers,
         corner_defaults=corner_defaults,
+        hot_pressure_targets=load_hot_pressure_targets(root),
         data_through_date=_data_through[0],
         data_through_local=_data_through[1],
         outlap_lookup=outlap_lookup,
@@ -682,6 +683,34 @@ def detect_suspect_corners(laps: pd.DataFrame) -> pd.DataFrame:
                 }
             )
     return pd.DataFrame(candidates)
+
+
+def load_hot_pressure_targets(dataset_root: Path) -> dict[tuple[str, str], float]:
+    """Team hot-pressure targets per (car, compound) from ``hot_pressure_targets.yaml``.
+
+    UI prefill values for the calculators' target hot pressure, keyed by
+    the model's pooled car label and canonical compound name. A missing
+    file yields an empty table (the calculators then fall back to the
+    measured steady-state medians).
+    """
+    path = dataset_root / "hot_pressure_targets.yaml"
+    if not path.exists():
+        return {}
+    import yaml  # local import to keep top-of-module deps minimal
+
+    data = yaml.safe_load(path.read_text()) or {}
+    out: dict[tuple[str, str], float] = {}
+    for car, by_compound in (data.get("targets") or {}).items():
+        for compound, bar in (by_compound or {}).items():
+            if bar is None:
+                continue
+            value = float(bar)
+            if not (0.3 <= value <= 5.0):
+                raise ValueError(
+                    f"hot_pressure_targets.yaml: {car}/{compound} = {value} bar is not a gauge pressure"
+                )
+            out[(str(car), str(compound))] = value
+    return out
 
 
 def load_sensor_blacklist(dataset_root: Path) -> set[tuple[str, str]]:
@@ -1191,6 +1220,7 @@ def _assemble_model(
     k_by_compound: dict[tuple[str, str, str, str], "FitParam"] | None = None,
     compound_multipliers: dict[str, dict[str, float]] | None = None,
     corner_defaults: dict[tuple[str, str, str], tuple[float, float, int]] | None = None,
+    hot_pressure_targets: dict[tuple[str, str], float] | None = None,
     data_through_date: str | None = None,
     data_through_local: str | None = None,
     outlap_lookup: dict[tuple[str, str, str], tuple[float, float, int]] | None = None,
@@ -1211,6 +1241,7 @@ def _assemble_model(
     k_by_compound = k_by_compound or {}
     compound_multipliers = compound_multipliers or {}
     corner_defaults = corner_defaults or {}
+    hot_pressure_targets = hot_pressure_targets or {}
 
     def _g2_entry(track: str, car: str, cond: str, value: float, n: int) -> dict[str, Any]:
         entry: dict[str, Any] = {
@@ -1419,6 +1450,13 @@ def _assemble_model(
                 "n_laps_used": n,
             }
             for (car, corner, cond), (temp, press, n) in sorted(corner_defaults.items())
+        ],
+        # Team targets (data/tire_dataset/hot_pressure_targets.yaml): the
+        # calculators prefill a corner's target hot pressure from this by
+        # (car, compound) before falling back to the measured median above.
+        "target_hot_pressure_by_car_compound": [
+            {"car": car, "compound": compound, "target_hot_pressure_bar": bar}
+            for (car, compound), bar in sorted(hot_pressure_targets.items())
         ],
         # Typical out-lap (pit exit to the first start/finish crossing):
         # rolling time and g², integrated first from the typed pit-exit
