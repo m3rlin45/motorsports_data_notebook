@@ -49,12 +49,12 @@ run-clean: clean run
 tire-etl *ARGS:
     uv run python -m motorsports_data_notebook.tire_etl.cli extract {{ARGS}}
 
-# Parse run-notes into structured JSON via `claude -p`, then re-match them
-# to sessions (matching must re-run even on cached parses — session IDs
-# change when the extractor is bumped).
+# One `claude -p` (Sonnet) call per track day over the run-notes .txt files
+# and the sessions' RaceStudio "Long Comment"s: matches notes to sessions,
+# extracts cold pressures / tire compound / track condition. Cached per day
+# in data/tire_dataset/session_notes/; rebuilds notes_matches.parquet.
 tire-notes *ARGS:
     uv run python -m motorsports_data_notebook.tire_etl.cli enrich-notes {{ARGS}}
-    uv run python -m motorsports_data_notebook.tire_etl.cli match-notes
 
 # Review sessions whose track/laps were reconciled from GPS (wrong dash variant,
 # missing track token, re-split laps) or are still unresolved

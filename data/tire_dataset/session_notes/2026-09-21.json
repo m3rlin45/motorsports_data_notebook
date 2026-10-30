@@ -1,0 +1,230 @@
+{
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|2efde049a6d892a1aa81facc802f505af61bf27f",
+  "_model": "claude-sonnet-5-5",
+  "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
+  "_extracted_at": "2026-10-29T00:23:53.666935+00:00",
+  "_notes_files": [],
+  "_sessions": [
+    "1db9b80e32b983a6",
+    "bc245bd13f1f397d",
+    "8a35b6998acb3c4e",
+    "79fb9b14ad04199e",
+    "24c5844684e14f08",
+    "b6574d5a1000d178",
+    "6166ec6dcd8a9f1b",
+    "cd527d1afb97850e"
+  ],
+  "input": "DATE: 2026-09-21 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=1db9b80e32b983a6 start=08:20 car=\"KK-SII\" track=suzuka laps=6 type=\"一般テスト\" comment=\"wet\"\n2. session_id=bc245bd13f1f397d start=09:35 car=\"KK-SII\" track=suzuka laps=11 type=\"一般テスト\" comment=\"\"\n3. session_id=8a35b6998acb3c4e start=11:05 car=\"KK-SII\" track=suzuka laps=6 type=\"一般テスト\" comment=\"\"\n4. session_id=79fb9b14ad04199e start=11:39 car=\"KK-SII\" track=suzuka laps=4 type=\"一般テスト\" comment=\"\"\n5. session_id=24c5844684e14f08 start=14:19 car=\"KK-SII\" track=suzuka laps=10 type=\"一般テスト\" comment=\"\"\n6. session_id=b6574d5a1000d178 start=15:50 car=\"KK-SII\" track=suzuka laps=2 type=\"一般テスト\" comment=\"\"\n7. session_id=6166ec6dcd8a9f1b start=16:06 car=\"KK-SII\" track=suzuka laps=5 type=\"一般テスト\" comment=\"\"\n8. session_id=cd527d1afb97850e start=23:02 car=\"KK-SII\" track=suzuka laps=7 type=\"一般テスト\" comment=\"wet\"\n",
+  "data": {
+    "sessions": [
+      {
+        "session_id": "1db9b80e32b983a6",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "wet",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "bc245bd13f1f397d",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "8a35b6998acb3c4e",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "79fb9b14ad04199e",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "24c5844684e14f08",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "b6574d5a1000d178",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "6166ec6dcd8a9f1b",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "cd527d1afb97850e",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "wet",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": ""
+      }
+    ]
+  }
+}

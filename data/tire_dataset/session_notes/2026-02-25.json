@@ -1,0 +1,176 @@
+{
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|683819b73523be0f241d463297fbddc7091f8640",
+  "_model": "claude-sonnet-5-5",
+  "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
+  "_extracted_at": "2026-10-29T00:23:14.814132+00:00",
+  "_notes_files": [],
+  "_sessions": [
+    "a9934a2c070a6038",
+    "f75cc533c41632c7",
+    "511a39dcc00b3d74",
+    "7e7e9143dd41917f",
+    "64a17f17be6c7fd8",
+    "95594534aa20b99f"
+  ],
+  "input": "DATE: 2026-02-25 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=a9934a2c070a6038 start=09:48 car=\"KK-SII\" track=fuji laps=5 type=\"Generic testing\" comment=\"RAIN AND FOG\"\n2. session_id=f75cc533c41632c7 start=11:06 car=\"KK-SII\" track=fuji laps=14 type=\"Generic testing\" comment=\"RAIN\"\n3. session_id=511a39dcc00b3d74 start=13:27 car=\"KK-SII\" track=fuji laps=2 type=\"Generic testing\" comment=\"\"\n4. session_id=7e7e9143dd41917f start=13:46 car=\"KK-SII\" track=fuji laps=11 type=\"Generic testing\" comment=\"\"\n5. session_id=64a17f17be6c7fd8 start=14:59 car=\"KK-SII\" track=fuji laps=10 type=\"Generic testing\" comment=\"\"\n6. session_id=95594534aa20b99f start=15:26 car=\"KK-SII\" track=fuji laps=4 type=\"Generic testing\" comment=\"\"\n",
+  "data": {
+    "sessions": [
+      {
+        "session_id": "a9934a2c070a6038",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": "Rain and fog",
+        "ambient_temp_c": null,
+        "track_condition": "wet",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "f75cc533c41632c7",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": "Rain",
+        "ambient_temp_c": null,
+        "track_condition": "wet",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "511a39dcc00b3d74",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "7e7e9143dd41917f",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "64a17f17be6c7fd8",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "95594534aa20b99f",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": ""
+      }
+    ]
+  }
+}

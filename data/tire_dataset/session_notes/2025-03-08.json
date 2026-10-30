@@ -1,0 +1,95 @@
+{
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|f21274a5cfa4c55abafb9315556b3610ea8eafdd",
+  "_model": "claude-sonnet-5-5",
+  "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
+  "_extracted_at": "2026-10-29T00:21:10.611217+00:00",
+  "_notes_files": [],
+  "_sessions": [
+    "9eaa8cd142548a9d",
+    "fcf6485751619f8c",
+    "2dac432ad17cec4e"
+  ],
+  "input": "DATE: 2025-03-08 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=9eaa8cd142548a9d start=09:09 car=\"Inferno 86\" track=sodegaura laps=17 type=\"\" comment=\"First 6 laps are CMD\"\n2. session_id=fcf6485751619f8c start=10:31 car=\"Inferno 86\" track=sodegaura laps=15 type=\"\" comment=\"\"\n3. session_id=2dac432ad17cec4e start=11:29 car=\"Inferno 86\" track=sodegaura laps=19 type=\"\" comment=\"\"\n",
+  "data": {
+    "sessions": [
+      {
+        "session_id": "9eaa8cd142548a9d",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": "First 6 laps are CMD"
+      },
+      {
+        "session_id": "fcf6485751619f8c",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "2dac432ad17cec4e",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": ""
+      }
+    ]
+  }
+}

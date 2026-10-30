@@ -1,0 +1,70 @@
+{
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|bd7491c3db0c9837c970d4ac310dd8ad3f4711e4",
+  "_model": "claude-sonnet-5-5",
+  "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
+  "_extracted_at": "2026-10-29T00:23:29.670853+00:00",
+  "_notes_files": [],
+  "_sessions": [
+    "42baea607f3feaaa",
+    "a5194f46fc604add"
+  ],
+  "input": "DATE: 2026-05-13 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=42baea607f3feaaa start=13:03 car=\"KK-SII\" track=tsukuba_2000 laps=20 type=\"Car Generic testing\" comment=\"\"\n2. session_id=a5194f46fc604add start=14:44 car=\"KK-SII\" track=tsukuba_2000 laps=17 type=\"Car Qualifying testing\" comment=\"stiffened rear to 1.5 / rear 1.25\"\n",
+  "data": {
+    "sessions": [
+      {
+        "session_id": "42baea607f3feaaa",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "a5194f46fc604add",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": "qualifying",
+        "setup_changes": [
+          "stiffened rear to 1.5 / rear 1.25"
+        ],
+        "incidents": [],
+        "notes": ""
+      }
+    ]
+  }
+}

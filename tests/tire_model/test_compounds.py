@@ -25,6 +25,16 @@ class TestNormalizeCompound:
         assert normalize_compound("Nankang NS-2R Used") == "NS-2R"
         assert normalize_compound("A050_22") == "A050"
 
+    def test_generic_slick_and_rain_tires(self):
+        assert normalize_compound("DRY") == "DRY"
+        assert normalize_compound("slicks") == "DRY"
+        assert normalize_compound("slick tires") == "DRY"
+        assert normalize_compound("WET") == "WET"
+        assert normalize_compound("wet tires") == "WET"
+        # A condition is not a tire.
+        for junk in ("wet track", "damp", "dry track", "slightly damp"):
+            assert normalize_compound(junk) is None
+
     def test_set_labels_pass_through(self):
         assert normalize_compound("SET:black") == "SET:black"
         assert normalize_compound("SET:Silver") == "SET:silver"

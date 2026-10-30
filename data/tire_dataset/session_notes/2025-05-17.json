@@ -1,0 +1,106 @@
+{
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|253e602042652386580eb709750b1144974c5328",
+  "_model": "claude-sonnet-5-5",
+  "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
+  "_extracted_at": "2026-10-29T00:21:25.274958+00:00",
+  "_notes_files": [
+    {
+      "file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2025-05-17 Tsukuba.txt",
+      "sha1": "e8e7bdab367ba75623624faed1b920240be2b690"
+    }
+  ],
+  "_sessions": [
+    "b163dda526013fc0",
+    "0effe66a2925a791",
+    "9d521fc473109736"
+  ],
+  "input": "DATE: 2025-05-17 (times are local to the track)\n\nRUN NOTES FILE \"2025-05-17 Tsukuba.txt\":\nTsukuba Wet\n\nall runs on \nworn tires (60%+ tread, better tires on rear)\n\nFront 15\nRear 10\nall pressures 2.1 cold\n\nLOGGED SESSIONS:\n1. session_id=b163dda526013fc0 start=10:08 car=\"Inferno 86\" track=tsukuba_2000 laps=10 type=\"Car Generic testing\" comment=\"rain 60%, judder\"\n2. session_id=0effe66a2925a791 start=11:18 car=\"Inferno 86\" track=tsukuba_2000 laps=22 type=\"Car Generic testing\" comment=\"Maruyama before pit stop / rain / top time\"\n3. session_id=9d521fc473109736 start=12:29 car=\"Inferno 86\" track=tsukuba_2000 laps=13 type=\"Car Generic testing\" comment=\"\"\n",
+  "data": {
+    "sessions": [
+      {
+        "session_id": "b163dda526013fc0",
+        "note_file": "2025-05-17 Tsukuba.txt",
+        "note_session_index": 1,
+        "match_confidence": 0.7,
+        "weather_text": "rain 60%",
+        "ambient_temp_c": null,
+        "track_condition": "wet",
+        "cold_pressure_bar": {
+          "fl": 2.1,
+          "fr": 2.1,
+          "rl": 2.1,
+          "rr": 2.1
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": false,
+        "session_kind": null,
+        "setup_changes": [
+          "Dampers: front 15 / rear 10"
+        ],
+        "incidents": [],
+        "notes": "Worn tires (60%+ tread, better tires on rear). Driver comment: judder."
+      },
+      {
+        "session_id": "0effe66a2925a791",
+        "note_file": "2025-05-17 Tsukuba.txt",
+        "note_session_index": 1,
+        "match_confidence": 0.7,
+        "weather_text": "rain",
+        "ambient_temp_c": null,
+        "track_condition": "wet",
+        "cold_pressure_bar": {
+          "fl": 2.1,
+          "fr": 2.1,
+          "rl": 2.1,
+          "rr": 2.1
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": false,
+        "session_kind": null,
+        "setup_changes": [
+          "Dampers: front 15 / rear 10"
+        ],
+        "incidents": [],
+        "notes": "Worn tires (60%+ tread, better tires on rear). Driver comment: Maruyama before pit stop, top time."
+      },
+      {
+        "session_id": "9d521fc473109736",
+        "note_file": "2025-05-17 Tsukuba.txt",
+        "note_session_index": 1,
+        "match_confidence": 0.6,
+        "weather_text": "rain",
+        "ambient_temp_c": null,
+        "track_condition": "wet",
+        "cold_pressure_bar": {
+          "fl": 2.1,
+          "fr": 2.1,
+          "rl": 2.1,
+          "rr": 2.1
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": false,
+        "session_kind": null,
+        "setup_changes": [
+          "Dampers: front 15 / rear 10"
+        ],
+        "incidents": [],
+        "notes": "Worn tires (60%+ tread, better tires on rear). Values carried over from the day-level notes."
+      }
+    ]
+  }
+}

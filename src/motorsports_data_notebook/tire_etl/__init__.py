@@ -35,10 +35,14 @@ from __future__ import annotations
 # lap_length_m instead of the dash variant name; every "Fuji GP Sh" session
 # so far was a GP-course session (#209). New session column: lap_length_m
 # (median GPS path length per lap at the resolved S/F). Dataset schema 5.
-EXTRACTOR_VERSION = "0.12.0"
+# 0.13.0: the session row carries the file's RaceStudio "Long Comment"
+# (``comment``; the distinct comments of a merged session joined in file
+# order). The driver records the tire fitted there, and the model's
+# compound labelling reads it. Dataset schema 6.
+EXTRACTOR_VERSION = "0.13.0"
 
 from .extract import extract_session, run_extract  # noqa: E402
-from .notes_parser import run_enrich_notes  # noqa: E402
+from .session_notes import run_enrich_notes  # noqa: E402
 from .weather import run_enrich_weather  # noqa: E402
 
 __all__ = [

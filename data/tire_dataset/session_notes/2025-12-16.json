@@ -1,0 +1,99 @@
+{
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|70fe5bc537928f32de27919ee9a920704967eb42",
+  "_model": "claude-sonnet-5-5",
+  "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
+  "_extracted_at": "2026-10-29T00:22:39.381443+00:00",
+  "_notes_files": [],
+  "_sessions": [
+    "bd555fbd95ab2998",
+    "db8009d5d06157dc",
+    "bff9160c204c343b"
+  ],
+  "input": "DATE: 2025-12-16 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=bd555fbd95ab2998 start=08:51 car=\"SFJ\" track=fuji laps=13 type=\"Generic testing\" comment=\"super cold\"\n2. session_id=db8009d5d06157dc start=10:10 car=\"SFJ\" track=fuji laps=15 type=\"Generic testing\" comment=\"front wing -1degree / good balance / crazy locking\"\n3. session_id=bff9160c204c343b start=11:32 car=\"SFJ\" track=fuji laps=12 type=\"Generic testing\" comment=\"new tires!\"\n",
+  "data": {
+    "sessions": [
+      {
+        "session_id": "bd555fbd95ab2998",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": "super cold",
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": "Driver comment: super cold"
+      },
+      {
+        "session_id": "db8009d5d06157dc",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [
+          "front wing -1 degree"
+        ],
+        "incidents": [
+          "crazy locking"
+        ],
+        "notes": "Good balance"
+      },
+      {
+        "session_id": "bff9160c204c343b",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": true,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": "New tires fitted"
+      }
+    ]
+  }
+}

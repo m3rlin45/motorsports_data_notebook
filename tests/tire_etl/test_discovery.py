@@ -157,3 +157,13 @@ def test_group_split_sessions_singleton_groups() -> None:
 
 def test_group_split_sessions_empty_input() -> None:
     assert group_split_sessions([]) == []
+
+
+def test_group_split_sessions_ignores_token_case() -> None:
+    from dataclasses import replace
+
+    a = replace(_make_cand(370, car="kk-f", session_type="generic testing"), driver="cmd")
+    b = _make_cand(371, car="KK-F", session_type="Generic testing")
+    groups = group_split_sessions([a, b])
+    assert len(groups) == 1
+    assert [c.run_num for c in groups[0]] == [370, 371]

@@ -1,0 +1,267 @@
+{
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|0c38956870852215c5d413a085729f17f9d1fc8c",
+  "_model": "claude-sonnet-5-5",
+  "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
+  "_extracted_at": "2026-10-29T00:21:53.484777+00:00",
+  "_notes_files": [],
+  "_sessions": [
+    "511aeb3b6316ee83",
+    "06ed32a8e1264049",
+    "53276d307d23c617",
+    "c486846bbf4cfd03",
+    "22650e6ef6799d69",
+    "b995b5ce66413c69",
+    "e3dc18f3605129d0",
+    "59e2b0f0c7a09bd1",
+    "6936ab3813b7ba1c"
+  ],
+  "input": "DATE: 2025-07-24 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=511aeb3b6316ee83 start=07:59 car=\"Inferno 86\" track=sodegaura laps=1 type=\"\" comment=\"when did the stroke sensors break\"\n2. session_id=06ed32a8e1264049 start=08:54 car=\"Inferno 86\" track=sodegaura laps=1 type=\"\" comment=\"when did the stroke sensors break\"\n3. session_id=53276d307d23c617 start=09:27 car=\"Inferno 86\" track=sodegaura laps=1 type=\"\" comment=\"when did the stroke sensors break\"\n4. session_id=c486846bbf4cfd03 start=09:29 car=\"Inferno 86\" track=sodegaura laps=16 type=\"Generic testing\" comment=\"Front Roll bar 3/3\"\n5. session_id=22650e6ef6799d69 start=11:29 car=\"Inferno 86\" track=sodegaura laps=15 type=\"Generic testing\" comment=\"Front bar 4/4\"\n6. session_id=b995b5ce66413c69 start=13:00 car=\"Inferno 86\" track=sodegaura laps=12 type=\"Generic testing\" comment=\"A050 First Use / Front Bar 4/4\"\n7. session_id=e3dc18f3605129d0 start=14:01 car=\"Inferno 86\" track=sodegaura laps=15 type=\"Generic testing\" comment=\"Front bar 3/3 / A050\"\n8. session_id=59e2b0f0c7a09bd1 start=14:59 car=\"Inferno 86\" track=sodegaura laps=17 type=\"Generic testing\" comment=\"A050 / Front Bar 3/3\"\n9. session_id=6936ab3813b7ba1c start=16:08 car=\"Inferno 86\" track=unknown laps=1 type=\"\" comment=\"when did the stroke sensors break\"\n",
+  "data": {
+    "sessions": [
+      {
+        "session_id": "511aeb3b6316ee83",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": "when did the stroke sensors break"
+      },
+      {
+        "session_id": "06ed32a8e1264049",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": "when did the stroke sensors break"
+      },
+      {
+        "session_id": "53276d307d23c617",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": "when did the stroke sensors break"
+      },
+      {
+        "session_id": "c486846bbf4cfd03",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [
+          "Front roll bar 3/3"
+        ],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "22650e6ef6799d69",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [
+          "Front bar 4/4"
+        ],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "b995b5ce66413c69",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": "A050",
+          "fr": "A050",
+          "rl": "A050",
+          "rr": "A050"
+        },
+        "new_tires": true,
+        "session_kind": null,
+        "setup_changes": [
+          "Front bar 4/4"
+        ],
+        "incidents": [],
+        "notes": "A050 first use"
+      },
+      {
+        "session_id": "e3dc18f3605129d0",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": "A050",
+          "fr": "A050",
+          "rl": "A050",
+          "rr": "A050"
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [
+          "Front bar 3/3"
+        ],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "59e2b0f0c7a09bd1",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": "A050",
+          "fr": "A050",
+          "rl": "A050",
+          "rr": "A050"
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [
+          "Front bar 3/3"
+        ],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "6936ab3813b7ba1c",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": "when did the stroke sensors break"
+      }
+    ]
+  }
+}

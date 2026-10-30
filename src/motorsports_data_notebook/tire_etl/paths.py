@@ -31,8 +31,8 @@ def timeseries_dir(dataset_root: Path) -> Path:
     return dataset_root / "timeseries"
 
 
-def notes_extracted_dir(dataset_root: Path) -> Path:
-    return dataset_root / "notes_extracted"
+def session_notes_dir(dataset_root: Path) -> Path:
+    return dataset_root / "session_notes"
 
 
 def weather_dir(dataset_root: Path) -> Path:

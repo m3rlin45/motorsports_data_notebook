@@ -1,0 +1,112 @@
+{
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|6a23947499e0d0e1cf783155c7bc4e0deba13a1e",
+  "_model": "claude-sonnet-5-5",
+  "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
+  "_extracted_at": "2026-10-29T00:22:17.923904+00:00",
+  "_notes_files": [
+    {
+      "file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2025-10-04-motegi.txt",
+      "sha1": "958d5dcd32855e15da02c2ab35f6292d7cbba155"
+    }
+  ],
+  "_sessions": [
+    "70a656d31f9026a5",
+    "3dc000b84b6d926f",
+    "f1cdb9793729dbbb"
+  ],
+  "input": "DATE: 2025-10-04 (times are local to the track)\n\nRUN NOTES FILE \"2025-10-04-motegi.txt\":\nRun 1 10:45:\n\nAll tires 1.8\nFront 2/2 bar, 10 dampers\nRear 5/5 bar, 10 dampers\n\nfeeling: way too assy, can't step on accelerator on exit\nBraking is very grabby\nTurn in is awesome (probably too awesome)\n\nRun 2 13:30:\n\nFront 2/2 bar, 15 dampers\nRear 4/4 bar, 15 dampers\n\nTires 1.7 all around\n\n23.8 C\n61%\n\nOversteer fixed, a bit lacking on turn-in though\n\nLOGGED SESSIONS:\n1. session_id=70a656d31f9026a5 start=10:45 car=\"Inferno 86\" track=motegi laps=1 type=\"\" comment=\"Front Bar 2/2 / Rear Bar 5/5 / Dampers 10 all around\"\n2. session_id=3dc000b84b6d926f start=11:06 car=\"Inferno 86\" track=motegi laps=4 type=\"Generic testing\" comment=\"Front Bar 2/2 / Rear Bar 5/5 / Dampers 10 all around\"\n3. session_id=f1cdb9793729dbbb start=13:29 car=\"Inferno 86\" track=motegi laps=9 type=\"Generic testing\" comment=\"Front Bar 2/2 / Rear bar 3/3 / dampers 15 all around\"\n",
+  "data": {
+    "sessions": [
+      {
+        "session_id": "70a656d31f9026a5",
+        "note_file": "2025-10-04-motegi.txt",
+        "note_session_index": 1,
+        "match_confidence": 1.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": 1.8,
+          "fr": 1.8,
+          "rl": 1.8,
+          "rr": 1.8
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [
+          "Front bar 2/2",
+          "Rear bar 5/5",
+          "Dampers 10 all around"
+        ],
+        "incidents": [],
+        "notes": "Way too assy, can't step on accelerator on exit. Braking is very grabby. Turn-in is awesome (probably too awesome)."
+      },
+      {
+        "session_id": "3dc000b84b6d926f",
+        "note_file": "2025-10-04-motegi.txt",
+        "note_session_index": 1,
+        "match_confidence": 0.8,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": 1.8,
+          "fr": 1.8,
+          "rl": 1.8,
+          "rr": 1.8
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [
+          "Front bar 2/2",
+          "Rear bar 5/5",
+          "Dampers 10 all around"
+        ],
+        "incidents": [],
+        "notes": "Likely a restart of the previous session, same notes block. Way too assy, can't step on accelerator on exit. Braking is very grabby. Turn-in is awesome (probably too awesome)."
+      },
+      {
+        "session_id": "f1cdb9793729dbbb",
+        "note_file": "2025-10-04-motegi.txt",
+        "note_session_index": 2,
+        "match_confidence": 1.0,
+        "weather_text": "61% humidity",
+        "ambient_temp_c": 23.8,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": 1.7,
+          "fr": 1.7,
+          "rl": 1.7,
+          "rr": 1.7
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [
+          "Front bar 2/2",
+          "Rear bar 3/3 (per logger comment; run notes say rear 4/4)",
+          "Dampers 15 all around"
+        ],
+        "incidents": [],
+        "notes": "Oversteer fixed, a bit lacking on turn-in though. Run notes list rear bar 4/4 while the logger comment says 3/3; the comment was used."
+      }
+    ]
+  }
+}

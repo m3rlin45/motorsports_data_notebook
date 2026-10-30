@@ -1,0 +1,131 @@
+{
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|ced5e870d0c7596138551cc6015af22973315fc6",
+  "_model": "claude-sonnet-5-5",
+  "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
+  "_extracted_at": "2026-10-29T00:23:53.343424+00:00",
+  "_notes_files": [
+    {
+      "file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2026-08-15 Sodegaura.txt",
+      "sha1": "b494cdfdbf2c37aa7c7f157a04f55a7af21f04c9"
+    }
+  ],
+  "_sessions": [
+    "392f278fe193cf1c",
+    "eabbaecc0d4c87ad",
+    "a82279951f152d0d",
+    "e8d6f67cfa560c51"
+  ],
+  "input": "DATE: 2026-08-15 (times are local to the track)\n\nRUN NOTES FILE \"2026-08-15 Sodegaura.txt\":\nRun 1 9:30 AM\nA052\n\nLooks Dry but might have some damp spots, rained overnight\n\n\nFront 2/2\nRear 2/2\n\nDampers \n\nF26\nR22\n\nRained part way through, a little understeery on entry in dry, but decent in damp, would be too sketchy in full wet\n\nFront left is underdamped, way more time in rebound\n\nFront right is slightly underdamped\n\nRear looks good\n\n\nRun 2 10:30 AM:\nA052\nDamp\n\n\nFront 2/2\nRear 2/2\n\n\nFL 28\nFR 27\n\nFelt good, lots of rain partway through, but decent balance, rear wanted to step out on puddles though\n\nStopped half way through to add air, balance came back\n\n\nRun 3 11:30 AM:\nA052\nDamp\n\nFront 2/2\nRear 2/2\n\nFL 29\nFR 28\nRL 22\nRR 21\n\nDried as the session went on\n\nTires over-pressured out of the window after a few laps\n\nLots of understeer mid corner, need to fix that. Probably stiffen rear one step (2/3)\n\nTurn in was good, exits were slightly understeering, but hard to tell if that was mid corner continuing\n\nLOGGED SESSIONS:\n1. session_id=392f278fe193cf1c start=09:28 car=\"Inferno 86\" track=sodegaura laps=22 type=\"一般テスト\" comment=\"\"\n2. session_id=eabbaecc0d4c87ad start=10:29 car=\"Inferno 86\" track=sodegaura laps=10 type=\"一般テスト\" comment=\"Rain partway through\"\n3. session_id=a82279951f152d0d start=10:49 car=\"Inferno 86\" track=sodegaura laps=7 type=\"一般テスト\" comment=\"Rain partway through\"\n4. session_id=e8d6f67cfa560c51 start=11:28 car=\"Inferno 86\" track=sodegaura laps=23 type=\"一般テスト\" comment=\"\"\n",
+  "data": {
+    "sessions": [
+      {
+        "session_id": "392f278fe193cf1c",
+        "note_file": "2026-08-15 Sodegaura.txt",
+        "note_session_index": 1,
+        "match_confidence": 1.0,
+        "weather_text": "Rained overnight; rained part way through the session",
+        "ambient_temp_c": null,
+        "track_condition": "damp",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": "A052",
+          "fr": "A052",
+          "rl": "A052",
+          "rr": "A052"
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": "Looked dry but with some damp spots at the start. Front 2/2, rear 2/2. Dampers F26 / R22. A little understeery on entry in the dry but decent in the damp; would be too sketchy in full wet. Front left underdamped, with far more time in rebound; front right slightly underdamped; rear looks good."
+      },
+      {
+        "session_id": "eabbaecc0d4c87ad",
+        "note_file": "2026-08-15 Sodegaura.txt",
+        "note_session_index": 2,
+        "match_confidence": 1.0,
+        "weather_text": "Damp, lots of rain part way through",
+        "ambient_temp_c": null,
+        "track_condition": "damp",
+        "cold_pressure_bar": {
+          "fl": 1.93,
+          "fr": 1.86,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": "A052",
+          "fr": "A052",
+          "rl": "A052",
+          "rr": "A052"
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [
+          "Rear wanted to step out on puddles"
+        ],
+        "notes": "Front 2/2, rear 2/2. Front pressures listed as 28/27 (read as psi). Felt good with decent balance despite lots of rain part way through. Stopped half way through to add air and the balance came back."
+      },
+      {
+        "session_id": "a82279951f152d0d",
+        "note_file": "2026-08-15 Sodegaura.txt",
+        "note_session_index": 2,
+        "match_confidence": 0.8,
+        "weather_text": "Damp, lots of rain part way through",
+        "ambient_temp_c": null,
+        "track_condition": "damp",
+        "cold_pressure_bar": {
+          "fl": 1.93,
+          "fr": 1.86,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": "A052",
+          "fr": "A052",
+          "rl": "A052",
+          "rr": "A052"
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [
+          "Rear wanted to step out on puddles"
+        ],
+        "notes": "Probably the restart after the mid-run stop to add air in run 2 (same block as the previous logged session). Front 2/2, rear 2/2. Balance came back after adding air."
+      },
+      {
+        "session_id": "e8d6f67cfa560c51",
+        "note_file": "2026-08-15 Sodegaura.txt",
+        "note_session_index": 3,
+        "match_confidence": 1.0,
+        "weather_text": "Damp, dried as the session went on",
+        "ambient_temp_c": null,
+        "track_condition": "damp",
+        "cold_pressure_bar": {
+          "fl": 2.0,
+          "fr": 1.93,
+          "rl": 1.52,
+          "rr": 1.45
+        },
+        "tire_compound": {
+          "fl": "A052",
+          "fr": "A052",
+          "rl": "A052",
+          "rr": "A052"
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": "Front 2/2, rear 2/2. Pressures listed as 29/28/22/21 (read as psi). Tires over-pressured out of the window after a few laps. Lots of mid-corner understeer that needs fixing; probably stiffen rear one step (2/3). Turn-in was good; exits slightly understeering, but hard to tell if that was mid-corner understeer continuing."
+      }
+    ]
+  }
+}

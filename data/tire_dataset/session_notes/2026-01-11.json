@@ -1,0 +1,48 @@
+{
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|a2e513a693ce768c2b5df41e4c08be354ef83cd8",
+  "_model": "claude-sonnet-5-5",
+  "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
+  "_extracted_at": "2026-10-29T00:22:49.748183+00:00",
+  "_notes_files": [
+    {
+      "file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2026-01-11 Fuji1.txt",
+      "sha1": "fc80d7bd3afe19a83a08d3d123f557724e8cff97"
+    }
+  ],
+  "_sessions": [
+    "9bc112f39e7d83ef"
+  ],
+  "input": "DATE: 2026-01-11 (times are local to the track)\n\nRUN NOTES FILE \"2026-01-11 Fuji1.txt\":\nA052\n\nFront 20, 2/2\nRear 20, 1/1\n\nFL: 2.07 15.0\nFR 2.13 13.0\nRL: 2.13 12.0\nRR: 2.16 12.0\n\nsetpoints:\n\n1.59 | 1.59\n___________\n1.59 | 1.59\n\nCar felt great, but I was slow\n\nLOGGED SESSIONS:\n1. session_id=9bc112f39e7d83ef start=12:53 car=\"Inferno 86\" track=fuji laps=14 type=\"Generic testing\" comment=\"Ended when the car in front exploded\"\n",
+  "data": {
+    "sessions": [
+      {
+        "session_id": "9bc112f39e7d83ef",
+        "note_file": "2026-01-11 Fuji1.txt",
+        "note_session_index": 1,
+        "match_confidence": 0.7,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": 1.59,
+          "fr": 1.59,
+          "rl": 1.59,
+          "rr": 1.59
+        },
+        "tire_compound": {
+          "fl": "A052",
+          "fr": "A052",
+          "rl": "A052",
+          "rr": "A052"
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [
+          "Session ended when the car in front exploded"
+        ],
+        "notes": "Car felt great, but driver was slow. Setup listed: dampers front 20 / rear 20, camber front 2/2, rear 1/1. Hot pressures (bar) with temperatures: FL 2.07 (15.0), FR 2.13 (13.0), RL 2.13 (12.0), RR 2.16 (12.0)."
+      }
+    ]
+  }
+}

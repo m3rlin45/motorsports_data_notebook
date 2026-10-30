@@ -1,0 +1,70 @@
+{
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|088d99399dce4d1b4536dc4c84c54d61d4887a73",
+  "_model": "claude-sonnet-5-5",
+  "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
+  "_extracted_at": "2026-10-29T00:23:47.916139+00:00",
+  "_notes_files": [],
+  "_sessions": [
+    "9646e781e8de271b",
+    "1b7fac952a4cd4d6"
+  ],
+  "input": "DATE: 2026-08-30 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=9646e781e8de271b start=08:18 car=\"KK-F\" track=tsukuba_2000 laps=9 type=\"Car 一般テスト\" comment=\"qualifying, ended with suspension failure\"\n2. session_id=1b7fac952a4cd4d6 start=11:00 car=\"KK-F\" track=tsukuba_2000 laps=20 type=\"Car 一般テスト\" comment=\"Race\"\n",
+  "data": {
+    "sessions": [
+      {
+        "session_id": "9646e781e8de271b",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": "qualifying",
+        "setup_changes": [],
+        "incidents": [
+          "ended with suspension failure"
+        ],
+        "notes": ""
+      },
+      {
+        "session_id": "1b7fac952a4cd4d6",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": "race",
+        "setup_changes": [],
+        "incidents": [],
+        "notes": ""
+      }
+    ]
+  }
+}

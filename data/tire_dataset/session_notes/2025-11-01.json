@@ -1,0 +1,79 @@
+{
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|3ab4ee3ca2b5632a66b989ca5e0fb5abab82b294",
+  "_model": "claude-sonnet-5-5",
+  "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
+  "_extracted_at": "2026-10-29T00:22:34.445458+00:00",
+  "_notes_files": [
+    {
+      "file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2025-11-01-Fuji.txt",
+      "sha1": "e8a3209d65bc14a0ba5b6d3f5860e3d0da808773"
+    }
+  ],
+  "_sessions": [
+    "1cd30d2e7b4dabc4",
+    "611daf300cad8603"
+  ],
+  "input": "DATE: 2025-11-01 (times are local to the track)\n\nRUN NOTES FILE \"2025-11-01-Fuji.txt\":\n10:00 NS-4:\n\nTires A052 Used (40%?)\n\nFront 2/2\nRear 3/3\n\nFront 15\nRear 20\n\nRoad surface drying\n\nPressures 1.75 all around\n\n\n11:40 S-4\nDropped all tires to 1.9 (left was dropped .2, right .1)\nGood balance, wish I had a bit more stability through coca cola\n\nLOGGED SESSIONS:\n1. session_id=1cd30d2e7b4dabc4 start=10:04 car=\"Inferno 86\" track=fuji laps=8 type=\"Generic testing\" comment=\"Front 2/2 15 / Rear 3/3 20 / Slightly Damp, but drying / A052 Used (50%)\"\n2. session_id=611daf300cad8603 start=10:39 car=\"Inferno 86\" track=fuji laps=16 type=\"Generic testing\" comment=\"Front 15, 2/2 / Rear 20 3/3 / A052 Used\"\n",
+  "data": {
+    "sessions": [
+      {
+        "session_id": "1cd30d2e7b4dabc4",
+        "note_file": "2025-11-01-Fuji.txt",
+        "note_session_index": 1,
+        "match_confidence": 0.9,
+        "weather_text": "Road surface drying; slightly damp",
+        "ambient_temp_c": null,
+        "track_condition": "damp",
+        "cold_pressure_bar": {
+          "fl": 1.75,
+          "fr": 1.75,
+          "rl": 1.75,
+          "rr": 1.75
+        },
+        "tire_compound": {
+          "fl": "A052",
+          "fr": "A052",
+          "rl": "A052",
+          "rr": "A052"
+        },
+        "new_tires": false,
+        "session_kind": null,
+        "setup_changes": [
+          "Front 2/2, damper 15",
+          "Rear 3/3, damper 20"
+        ],
+        "incidents": [],
+        "notes": "Block NS-4. A052 used, about 50% per comment (notes said 40%?)."
+      },
+      {
+        "session_id": "611daf300cad8603",
+        "note_file": "2025-11-01-Fuji.txt",
+        "note_session_index": 1,
+        "match_confidence": 0.35,
+        "weather_text": "Road surface drying",
+        "ambient_temp_c": null,
+        "track_condition": "damp",
+        "cold_pressure_bar": {
+          "fl": 1.75,
+          "fr": 1.75,
+          "rl": 1.75,
+          "rr": 1.75
+        },
+        "tire_compound": {
+          "fl": "A052",
+          "fr": "A052",
+          "rl": "A052",
+          "rr": "A052"
+        },
+        "new_tires": false,
+        "session_kind": null,
+        "setup_changes": [
+          "Front 2/2, damper 15",
+          "Rear 3/3, damper 20"
+        ],
+        "incidents": [],
+        "notes": "Inherits block 1 values; the 11:40 block (S-4) was not logged. A052 used."
+      }
+    ]
+  }
+}

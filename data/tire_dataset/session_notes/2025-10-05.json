@@ -1,0 +1,251 @@
+{
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|2540e447509f86092174c5e8b162be481b190fdc",
+  "_model": "claude-sonnet-5-5",
+  "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
+  "_extracted_at": "2026-10-29T00:22:29.256151+00:00",
+  "_notes_files": [
+    {
+      "file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2025-10-05-Sodegaura Marutai.txt",
+      "sha1": "db1356f8e832a46b08409b0b639bc6ba7421f178"
+    }
+  ],
+  "_sessions": [
+    "e2aebee861c2b5ec",
+    "f6481d29242753e1",
+    "e5f0c860cfedabaa",
+    "062a0bbcefb503d9",
+    "0b9bce111369629a",
+    "2ae7035bf1a2e016",
+    "02b2a9b8aa5af2c1",
+    "8e880455f1829270"
+  ],
+  "input": "DATE: 2025-10-05 (times are local to the track)\n\nRUN NOTES FILE \"2025-10-05-Sodegaura Marutai.txt\":\nTires A050 used\n\nInferno 86 Info:\n\nPractice 1: \n\nFront 2/2 15\nRear 3/3 17\n\nCold press 1.3 all around\n\nUndersteery\n\nPractice 2:\n\nFront 2/2 15\nRear 3/4 17\n\nPress dropped to 1.4\n\nPractice 3: \n\n\nFront 2/2 15\n\nRear 3/4 20\n\nPress dropped to 1.4\n\nAfter 2 laps, all 1.4\n\nLOGGED SESSIONS:\n1. session_id=e2aebee861c2b5ec start=09:06 car=\"Inferno 86\" track=sodegaura laps=3 type=\"Generic testing\" comment=\"Front 2/2 / Rear 3/3 / Front 15 / Rear 17\"\n2. session_id=f6481d29242753e1 start=09:49 car=\"Inferno 86\" track=sodegaura laps=5 type=\"Generic testing\" comment=\"Front 2/2 15 / Rear 3/4 17\"\n3. session_id=e5f0c860cfedabaa start=09:58 car=\"RX8\" track=sodegaura laps=7 type=\"Generic testing\" comment=\"\"\n4. session_id=062a0bbcefb503d9 start=10:39 car=\"718 Cayman\" track=sodegaura laps=4 type=\"Generic testing\" comment=\"\"\n5. session_id=0b9bce111369629a start=10:49 car=\"Inferno 86\" track=sodegaura laps=4 type=\"Generic testing\" comment=\"Front 2/2 15 / Rear 3/4 20\"\n6. session_id=2ae7035bf1a2e016 start=10:57 car=\"RX8\" track=sodegaura laps=3 type=\"Generic testing\" comment=\"\"\n7. session_id=02b2a9b8aa5af2c1 start=12:54 car=\"Inferno 86\" track=sodegaura laps=59 type=\"Generic testing\" comment=\"\"\n8. session_id=8e880455f1829270 start=15:15 car=\"Inferno 86\" track=sodegaura laps=54 type=\"Generic testing\" comment=\"\"\n",
+  "data": {
+    "sessions": [
+      {
+        "session_id": "e2aebee861c2b5ec",
+        "note_file": "2025-10-05-Sodegaura Marutai.txt",
+        "note_session_index": 1,
+        "match_confidence": 0.7,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": 1.3,
+          "fr": 1.3,
+          "rl": 1.3,
+          "rr": 1.3
+        },
+        "tire_compound": {
+          "fl": "A050",
+          "fr": "A050",
+          "rl": "A050",
+          "rr": "A050"
+        },
+        "new_tires": false,
+        "session_kind": "practice",
+        "setup_changes": [
+          "Front 2/2 15",
+          "Rear 3/3 17"
+        ],
+        "incidents": [],
+        "notes": "Understeery."
+      },
+      {
+        "session_id": "f6481d29242753e1",
+        "note_file": "2025-10-05-Sodegaura Marutai.txt",
+        "note_session_index": 2,
+        "match_confidence": 0.7,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": 1.4,
+          "fr": 1.4,
+          "rl": 1.4,
+          "rr": 1.4
+        },
+        "tire_compound": {
+          "fl": "A050",
+          "fr": "A050",
+          "rl": "A050",
+          "rr": "A050"
+        },
+        "new_tires": false,
+        "session_kind": "practice",
+        "setup_changes": [
+          "Front 2/2 15",
+          "Rear 3/4 17",
+          "Pressure changed from 1.3 to 1.4"
+        ],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "e5f0c860cfedabaa",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "062a0bbcefb503d9",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "0b9bce111369629a",
+        "note_file": "2025-10-05-Sodegaura Marutai.txt",
+        "note_session_index": 3,
+        "match_confidence": 0.7,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": 1.4,
+          "fr": 1.4,
+          "rl": 1.4,
+          "rr": 1.4
+        },
+        "tire_compound": {
+          "fl": "A050",
+          "fr": "A050",
+          "rl": "A050",
+          "rr": "A050"
+        },
+        "new_tires": false,
+        "session_kind": "practice",
+        "setup_changes": [
+          "Front 2/2 15",
+          "Rear 3/4 20"
+        ],
+        "incidents": [],
+        "notes": "After 2 laps, all tires at 1.4."
+      },
+      {
+        "session_id": "2ae7035bf1a2e016",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "02b2a9b8aa5af2c1",
+        "note_file": "2025-10-05-Sodegaura Marutai.txt",
+        "note_session_index": 3,
+        "match_confidence": 0.35,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": 1.4,
+          "fr": 1.4,
+          "rl": 1.4,
+          "rr": 1.4
+        },
+        "tire_compound": {
+          "fl": "A050",
+          "fr": "A050",
+          "rl": "A050",
+          "rr": "A050"
+        },
+        "new_tires": false,
+        "session_kind": "practice",
+        "setup_changes": [
+          "Front 2/2 15",
+          "Rear 3/4 20"
+        ],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "8e880455f1829270",
+        "note_file": "2025-10-05-Sodegaura Marutai.txt",
+        "note_session_index": 3,
+        "match_confidence": 0.35,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": 1.4,
+          "fr": 1.4,
+          "rl": 1.4,
+          "rr": 1.4
+        },
+        "tire_compound": {
+          "fl": "A050",
+          "fr": "A050",
+          "rl": "A050",
+          "rr": "A050"
+        },
+        "new_tires": false,
+        "session_kind": "practice",
+        "setup_changes": [
+          "Front 2/2 15",
+          "Rear 3/4 20"
+        ],
+        "incidents": [],
+        "notes": ""
+      }
+    ]
+  }
+}

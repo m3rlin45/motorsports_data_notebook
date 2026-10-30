@@ -1,0 +1,139 @@
+{
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|b98ce3203e4d0bf7462ba18948d1e3cb915943d6",
+  "_model": "claude-sonnet-5-5",
+  "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
+  "_extracted_at": "2026-10-29T00:21:47.020151+00:00",
+  "_notes_files": [
+    {
+      "file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/Sodegaura touring race 2025-06-15.txt",
+      "sha1": "1bf850e7d73d06333c2900cb1b4d42b0a38b8b5d"
+    }
+  ],
+  "_sessions": [
+    "b7388d982bf2e142",
+    "7d3164525f938d5a",
+    "5fbbafdc955529f5",
+    "1a798bce00410d0d"
+  ],
+  "input": "DATE: 2025-06-15 (times are local to the track)\n\nRUN NOTES FILE \"Sodegaura touring race 2025-06-15.txt\":\nPractice 9:40\nWet, but drying\nTire A052\n2.2 all around\nFront damper 15\nRear Damber 10\n\n\nAmbient\n25c 98%\n\n\nQualifiying:\n\nDrying\n\nTire 71RS\nfront 1.95\nRear 2.1\nfront 15\nrear 13\n\nslidy as hell, lots of traffic\n\nRace: \nDrying\n\n1.9 all around\nRear 15\nFront 20\n\nHot\"\nfront 2.1\nRear 2.05\n\ncar felt great\n\nLOGGED SESSIONS:\n1. session_id=b7388d982bf2e142 start=09:41 car=\"Inferno 86\" track=sodegaura laps=8 type=\"Generic testing\" comment=\"Test with A052\"\n2. session_id=7d3164525f938d5a start=10:51 car=\"Inferno 86\" track=sodegaura laps=7 type=\"Generic testing\" comment=\"RE-71RS\"\n3. session_id=5fbbafdc955529f5 start=12:10 car=\"Inferno 86\" track=sodegaura laps=2 type=\"Race\" comment=\"\"\n4. session_id=1a798bce00410d0d start=12:13 car=\"Inferno 86\" track=sodegaura laps=10 type=\"Race\" comment=\"\"\n",
+  "data": {
+    "sessions": [
+      {
+        "session_id": "b7388d982bf2e142",
+        "note_file": "Sodegaura touring race 2025-06-15.txt",
+        "note_session_index": 1,
+        "match_confidence": 1.0,
+        "weather_text": "Wet, but drying; ambient 25C, 98% humidity",
+        "ambient_temp_c": 25.0,
+        "track_condition": "wet",
+        "cold_pressure_bar": {
+          "fl": 2.2,
+          "fr": 2.2,
+          "rl": 2.2,
+          "rr": 2.2
+        },
+        "tire_compound": {
+          "fl": "A052",
+          "fr": "A052",
+          "rl": "A052",
+          "rr": "A052"
+        },
+        "new_tires": null,
+        "session_kind": "practice",
+        "setup_changes": [
+          "Front damper 15",
+          "Rear damper 10"
+        ],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "7d3164525f938d5a",
+        "note_file": "Sodegaura touring race 2025-06-15.txt",
+        "note_session_index": 2,
+        "match_confidence": 0.7,
+        "weather_text": "Drying; ambient 25C, 98% humidity (carried forward from earlier block)",
+        "ambient_temp_c": 25.0,
+        "track_condition": "damp",
+        "cold_pressure_bar": {
+          "fl": 1.95,
+          "fr": 1.95,
+          "rl": 2.1,
+          "rr": 2.1
+        },
+        "tire_compound": {
+          "fl": "RE-71RS",
+          "fr": "RE-71RS",
+          "rl": "RE-71RS",
+          "rr": "RE-71RS"
+        },
+        "new_tires": null,
+        "session_kind": "qualifying",
+        "setup_changes": [
+          "Front damper 15",
+          "Rear damper 13"
+        ],
+        "incidents": [],
+        "notes": "Slidy as hell, lots of traffic."
+      },
+      {
+        "session_id": "5fbbafdc955529f5",
+        "note_file": "Sodegaura touring race 2025-06-15.txt",
+        "note_session_index": 3,
+        "match_confidence": 0.7,
+        "weather_text": "Drying; ambient 25C (carried forward from earlier block)",
+        "ambient_temp_c": 25.0,
+        "track_condition": "damp",
+        "cold_pressure_bar": {
+          "fl": 1.9,
+          "fr": 1.9,
+          "rl": 1.9,
+          "rr": 1.9
+        },
+        "tire_compound": {
+          "fl": "RE-71RS",
+          "fr": "RE-71RS",
+          "rl": "RE-71RS",
+          "rr": "RE-71RS"
+        },
+        "new_tires": null,
+        "session_kind": "race",
+        "setup_changes": [
+          "Front damper 20",
+          "Rear damper 15"
+        ],
+        "incidents": [],
+        "notes": "Hot pressures: front 2.1, rear 2.05 bar. Car felt great."
+      },
+      {
+        "session_id": "1a798bce00410d0d",
+        "note_file": "Sodegaura touring race 2025-06-15.txt",
+        "note_session_index": 3,
+        "match_confidence": 0.7,
+        "weather_text": "Drying; ambient 25C (carried forward from earlier block)",
+        "ambient_temp_c": 25.0,
+        "track_condition": "damp",
+        "cold_pressure_bar": {
+          "fl": 1.9,
+          "fr": 1.9,
+          "rl": 1.9,
+          "rr": 1.9
+        },
+        "tire_compound": {
+          "fl": "RE-71RS",
+          "fr": "RE-71RS",
+          "rl": "RE-71RS",
+          "rr": "RE-71RS"
+        },
+        "new_tires": null,
+        "session_kind": "race",
+        "setup_changes": [
+          "Front damper 20",
+          "Rear damper 15"
+        ],
+        "incidents": [],
+        "notes": "Restart of the previous race session. Hot pressures: front 2.1, rear 2.05 bar. Car felt great."
+      }
+    ]
+  }
+}

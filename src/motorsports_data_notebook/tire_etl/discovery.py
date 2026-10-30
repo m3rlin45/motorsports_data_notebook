@@ -154,22 +154,29 @@ def group_split_sessions(
         candidates,
         key=lambda c: (
             c.date,
-            c.driver or "",
-            c.car or "",
+            (c.driver or "").casefold(),
+            (c.car or "").casefold(),
             c.track_canonical or "",
-            c.session_type or "",
+            (c.session_type or "").casefold(),
             c.run_num if c.run_num is not None else -1,
         ),
     )
+
+    # Token case is ignored: a recording whose file name RaceStudio folded
+    # to lower case (see scan_aim_tree) still belongs with its cased
+    # neighbours of the same run.
+    def _same(a: str | None, b: str | None) -> bool:
+        return (a or "").casefold() == (b or "").casefold()
+
     groups: list[list[SessionCandidate]] = [[ordered[0]]]
     for cand in ordered[1:]:
         prev = groups[-1][-1]
         same_bucket = (
             prev.date == cand.date
-            and prev.driver == cand.driver
-            and prev.car == cand.car
+            and _same(prev.driver, cand.driver)
+            and _same(prev.car, cand.car)
             and prev.track_canonical == cand.track_canonical
-            and prev.session_type == cand.session_type
+            and _same(prev.session_type, cand.session_type)
         )
         sequential = (
             prev.run_num is not None

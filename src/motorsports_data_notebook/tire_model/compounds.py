@@ -2,11 +2,14 @@
 
 Two sources, in priority order:
 
-1. ``data/tire_dataset/tire_compounds.yaml`` — the human-curated sidecar
-   (one compound per session — every run has one tire on all four
-   corners). Authoritative wherever it has a value.
-2. ``notes_matches.parquet`` — compounds extracted from run notes by the
-   LLM stage, normalized here. Wheel-set labels (``SET:<name>``) resolve
+1. ``data/tire_dataset/tire_compounds.yaml`` — the human-curated
+   exception list (one compound per session — every run has one tire on
+   all four corners): sessions the notes / comment parse cannot label,
+   such as a day with no comment whose tire the previous day's notes
+   establish. Authoritative wherever it has a value; kept minimal.
+2. ``notes_matches.parquet`` — compounds the per-day LLM stage
+   (``tire_etl.session_notes``) read from the run notes and from each
+   file's own RaceStudio comment, normalized here. Wheel-set labels (``SET:<name>``) resolve
    through the sidecar's optional ``wheel_sets`` mapping (e.g. the 86's
    black wheels carried the RE-71RS set through 2025).
 
@@ -28,8 +31,9 @@ logger = logging.getLogger(__name__)
 COMPOUNDS_FILE = "tire_compounds.yaml"
 
 # Canonical spellings for the tires this team runs. Extend as new tires
-# appear in the notes.
-_CANONICAL = ("A052", "RE-71RS", "A050", "NS-2R", "AD09", "CR-S", "ZIII")
+# appear in the notes. DRY / WET are the formula cars' generic slick and
+# rain tires (the KK-F / KK-SII run one of each, chosen by the weather).
+_CANONICAL = ("A052", "RE-71RS", "A050", "NS-2R", "AD09", "CR-S", "ZIII", "DRY", "WET")
 
 
 def normalize_compound(raw: object) -> str | None:
@@ -57,6 +61,12 @@ def normalize_compound(raw: object) -> str | None:
         return "CR-S"
     if "ZIII" in s or s == "Z3":
         return "ZIII"
+    # Generic slick / rain tires: exact tokens only, so a condition word in a
+    # free-text mention ("wet track") can never become a tire label.
+    if s in ("DRY", "SLICK", "SLICKS", "SLICKTIRES", "SLICKTYRES", "DRYTIRES", "DRYTYRES"):
+        return "DRY"
+    if s in ("WET", "WETS", "WETTIRES", "WETTYRES", "RAIN", "RAINTIRES", "RAINTYRES"):
+        return "WET"
     return None
 
 
@@ -86,9 +96,12 @@ def load_compound_labels(dataset_root: Path) -> pd.DataFrame:
     ``session_id, compound, source``.
 
     All four corners always run the same compound (team rule), so a label
-    is one value per session. Sidecar rows win over notes-derived rows.
-    Legacy per-axle sidecar entries (``front``/``rear``) are accepted and
-    collapse to the front value.
+    is one value per session. Two sources, in precedence order: the
+    human-curated sidecar (``source = "sidecar"``) and the per-day parse of
+    the run notes and the files' own RaceStudio comments
+    (``tire_etl.session_notes``; ``source = "notes"``). Legacy
+    per-axle sidecar entries (``front``/``rear``) are accepted and collapse
+    to the front value.
     """
     import yaml  # local import to keep top-of-module deps minimal
 

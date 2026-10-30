@@ -192,3 +192,42 @@ def test_car_name_takes_vehicle_metadata_spelling_only_for_case_differences() ->
     assert _car_name("Inferno 86", "KK-F") == "Inferno 86"  # substance differs: filename wins
     assert _car_name(None, "KK-F") == "KK-F"
     assert _car_name(None, None) is None
+
+
+class TestFileComment:
+    def test_long_comment_is_normalised(self) -> None:
+        from motorsports_data_notebook.tire_etl.extract import file_comment, session_comment
+
+        class _Log:
+            def __init__(self, meta):
+                self.metadata = meta
+
+        assert file_comment(_Log({"Long Comment": "Race\r\nstarted 4 \r\nslicks"})) == (
+            "Race\nstarted 4\nslicks"
+        )
+        assert file_comment(_Log({"Long Comment": "   "})) is None
+        assert file_comment(_Log({})) is None
+        assert file_comment(_Log(None)) is None
+        # Merged restart pair: identical comments collapse, distinct ones join in order.
+        logs = [_Log({"Long Comment": "re-71rs"}), _Log({"Long Comment": "re-71rs"})]
+        assert session_comment(logs) == "re-71rs"
+        logs.append(_Log({"Long Comment": "wet tires"}))
+        assert session_comment(logs) == "re-71rs\nwet tires"
+        assert session_comment([_Log({})]) is None
+
+    def test_session_row_carries_comment(self, tmp_path) -> None:
+        from datetime import date
+
+        from motorsports_data_notebook.tire_etl.discovery import parse_filename
+        from motorsports_data_notebook.tire_etl.extract import _build_empty_session_row
+
+        p = tmp_path / "2026-10-25" / "CMD_KK-F_Tsukuba_Car_Race_a_0381.xrk"
+        row = _build_empty_session_row(
+            session_id="x",
+            path=p,
+            mtime_ns=1,
+            file_size=1,
+            cand=parse_filename(p, date_hint=date(2026, 10, 25)),
+            extractor_version="t",
+        )
+        assert row.column("comment").to_pylist() == [None]
