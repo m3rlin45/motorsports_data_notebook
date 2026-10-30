@@ -1,0 +1,73 @@
+{
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|336900984c679e1be8bf6d99f5f129a78b3c4c82",
+  "_model": "claude-sonnet-5-5",
+  "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
+  "_extracted_at": "2026-10-29T00:21:24.827905+00:00",
+  "_notes_files": [
+    {
+      "file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/Fuji 2025-05-19.txt",
+      "sha1": "86361605fa56f1271747117feaf9ada5bc237ae1"
+    }
+  ],
+  "_sessions": [
+    "5d13072c9c2b8046",
+    "31191c846cfa9505"
+  ],
+  "input": "DATE: 2025-05-19 (times are local to the track)\n\nRUN NOTES FILE \"Fuji 2025-05-19.txt\":\n16:40 T-4 run\n\nFront 27\nRear 25\n\nTires all pretty heavily worn\n1.8 all around\nOvercast\n19.0\n56%\n\nLOGGED SESSIONS:\n1. session_id=5d13072c9c2b8046 start=12:03 car=\"Inferno 86\" track=fuji laps=3 type=\"Generic testing\" comment=\"\"\n2. session_id=31191c846cfa9505 start=16:22 car=\"Inferno 86\" track=fuji laps=11 type=\"Generic testing\" comment=\"\"\n",
+  "data": {
+    "sessions": [
+      {
+        "session_id": "5d13072c9c2b8046",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "31191c846cfa9505",
+        "note_file": "Fuji 2025-05-19.txt",
+        "note_session_index": 1,
+        "match_confidence": 0.8,
+        "weather_text": "Overcast, 56% humidity",
+        "ambient_temp_c": 19.0,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": 1.8,
+          "fr": 1.8,
+          "rl": 1.8,
+          "rr": 1.8
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": false,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": "T-4 run (notes block timed 16:40, session logged 16:22). Unlabeled 'Front 27 / Rear 25' (not clearly a pressure). Tires all pretty heavily worn."
+      }
+    ]
+  }
+}

@@ -1,0 +1,124 @@
+{
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|ae4049ba927acfd520c89d58ef09006e7ee77e70",
+  "_model": "claude-sonnet-5-5",
+  "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
+  "_extracted_at": "2026-10-29T00:22:14.285682+00:00",
+  "_notes_files": [],
+  "_sessions": [
+    "bf19eee13de8cbfc",
+    "8a91c7a7e6e96f57",
+    "2c2c77037e7b1983",
+    "76e93225e6e205de"
+  ],
+  "input": "DATE: 2025-09-13 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=bf19eee13de8cbfc start=09:33 car=\"EK9\" track=motegi laps=3 type=\"Qualifying testing\" comment=\"Qualifying, Wet A052\"\n2. session_id=8a91c7a7e6e96f57 start=09:40 car=\"EK9\" track=motegi laps=2 type=\"Race\" comment=\"\"\n3. session_id=2c2c77037e7b1983 start=10:43 car=\"EK9\" track=motegi laps=5 type=\"Qualifying testing\" comment=\"A050 New, damp track\"\n4. session_id=76e93225e6e205de start=11:18 car=\"EK9\" track=motegi laps=6 type=\"Qualifying testing\" comment=\"A050 Sticker, Dry-ish track, 8500 for the first 3 laps, Hit traffic on lap 1\"\n",
+  "data": {
+    "sessions": [
+      {
+        "session_id": "bf19eee13de8cbfc",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "wet",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": "A052",
+          "fr": "A052",
+          "rl": "A052",
+          "rr": "A052"
+        },
+        "new_tires": null,
+        "session_kind": "qualifying",
+        "setup_changes": [],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "8a91c7a7e6e96f57",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "2c2c77037e7b1983",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "damp",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": "A050",
+          "fr": "A050",
+          "rl": "A050",
+          "rr": "A050"
+        },
+        "new_tires": true,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "76e93225e6e205de",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "dry",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": "A050",
+          "fr": "A050",
+          "rl": "A050",
+          "rr": "A050"
+        },
+        "new_tires": true,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [
+          "Hit traffic on lap 1"
+        ],
+        "notes": "Dry-ish track. 8500 for the first 3 laps."
+      }
+    ]
+  }
+}

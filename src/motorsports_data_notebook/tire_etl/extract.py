@@ -182,6 +182,34 @@ def _extract_session_datetime_utc(
 MERGE_MAX_GAP_S = 300.0
 
 
+def file_comment(log: "LogFile") -> str | None:
+    """The free-text comment typed into RaceStudio for this file, or None.
+
+    AIM stores it as the ``Long Comment`` metadata field. The driver uses it
+    for the tire fitted ("re-71rs", "qually, slick tires, damp track"), setup
+    changes and race results; the model's compound labelling reads it.
+    """
+    try:
+        raw = (log.metadata or {}).get("Long Comment")
+    except Exception:  # noqa: BLE001 — metadata is best-effort
+        return None
+    if not isinstance(raw, str):
+        return None
+    text = "\n".join(line.strip() for line in raw.replace("\r\n", "\n").split("\n"))
+    text = text.strip()
+    return text or None
+
+
+def session_comment(logs: list) -> str | None:
+    """Join the distinct file comments of a (possibly merged) session, in file order."""
+    seen: list[str] = []
+    for lg in logs:
+        c = file_comment(lg)
+        if c and c not in seen:
+            seen.append(c)
+    return "\n".join(seen) if seen else None
+
+
 def load_and_correct_session(path: Path) -> tuple["LogFile", LayoutDetection]:
     """Load one AIM file and reconcile its laps/track with the GPS trace.
 
@@ -698,6 +726,7 @@ def extract_session(
         error_msg=err,
         xrk_paths=[str(p) for p in paths],
         layout=det,
+        comment=session_comment(logs),
     )
 
     return ExtractResult(
@@ -846,6 +875,7 @@ def _build_session_row(
     error_msg: str | None = None,
     xrk_paths: list[str] | None = None,
     layout: LayoutDetection | None = None,
+    comment: str | None = None,
 ) -> pa.Table:
     paths_list = xrk_paths if xrk_paths is not None else [str(path)]
     lay = layout
@@ -877,6 +907,9 @@ def _build_session_row(
             "lap_length_m": pa.array([lay.lap_length_m if lay else None], type=pa.float64()),
             "session_type": [cand.session_type],
             "run_num": pa.array([cand.run_num], type=pa.int32()),
+            # RaceStudio "Long Comment" of the file(s): the driver's own note
+            # on tires / setup / result (see file_comment).
+            "comment": pa.array([comment], type=pa.string()),
             "logger_id": [logger_id],
             "profile_name": [profile_name],
             "extractor_version": [extractor_version],

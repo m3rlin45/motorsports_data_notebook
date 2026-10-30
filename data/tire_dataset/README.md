@@ -22,7 +22,9 @@ deltas show up in PR diffs.
   share every gate (Fuji GP vs Short) are separated by it, not by the dash
   variant name. Review with `just tire-track-audit`.
   (`n_tire_usable_laps` was dropped in schema v4; usability is a training-time
-  decision.)
+  decision.) `comment` (schema v6, extractor 0.13.0) is the RaceStudio
+  "Long Comment" the driver typed for the file(s) — tire fitted, setup, race
+  result; the per-day notes parse below reads it.
 - `laps/YYYY-MM.parquet` — one row per lap (summary stats derived from
   timeseries), including the **out-lap** (`lap_type = "out"`, `lap_num = 0`:
   pit exit, or recording start, to the first start/finish crossing) and any
@@ -46,9 +48,15 @@ deltas show up in PR diffs.
   rules and any rule change meant a full re-extract.
 - `timeseries/YYYY-MM/{session_id}.parquet` — per-sample telemetry for one session.
   This is the source of truth; the per-lap aggregates are rebuildable from it.
-- `notes_extracted/*.json` — structured JSON extracted from run-note `.txt` files
-  via `claude -p` (Opus 4.7). The committed JSON is the cache; claude only re-runs
-  on changed notes.
+- `session_notes/YYYY-MM-DD.json` — one `claude -p` (Sonnet) call per track day
+  over the day's run-notes `.txt` file(s) from the OneDrive notes folder and
+  every logged session's `comment`; the model matches notes blocks to sessions
+  and returns per-session cold pressures, tire compound, track condition, setup
+  changes and incidents. Cached by prompt/model/input hash (`just tire-notes`
+  re-parses only days whose inputs changed). `notes_matches.parquet` is rebuilt
+  from these caches every run: one row per session the inputs said anything
+  about (`source_file` / `note_session_index` / `match_confidence` when a notes
+  block matched; the session's `comment` is carried along).
 - `weather_hourly/{track}/{YYYY}.parquet` — Open-Meteo Historical Weather Archive
   cache (temp, humidity, wind, precip, cloud cover) keyed by track+year.
 

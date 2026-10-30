@@ -1,0 +1,95 @@
+{
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|6ca29e0a21f94480ef1d0b2ff0771095340aff6e",
+  "_model": "claude-sonnet-5-5",
+  "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
+  "_extracted_at": "2026-10-29T00:24:08.675746+00:00",
+  "_notes_files": [],
+  "_sessions": [
+    "3c0cbf2ea68d31f9",
+    "7a50334e8f2e51e9",
+    "7ef18ff253fe8f74"
+  ],
+  "input": "DATE: 2026-10-25 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=3c0cbf2ea68d31f9 start=08:19 car=\"KK-F\" track=tsukuba_2000 laps=6 type=\"Car レース\" comment=\"qually, slick tires, damp track\"\n2. session_id=7a50334e8f2e51e9 start=08:37 car=\"KK-F\" track=tsukuba_2000 laps=6 type=\"Car レース\" comment=\"Qually, wet tires, damp track\"\n3. session_id=7ef18ff253fe8f74 start=10:59 car=\"KK-F\" track=tsukuba_2000 laps=20 type=\"Car レース\" comment=\"Race / started 4 / finish 9 / slightly damp / slicks\"\n",
+  "data": {
+    "sessions": [
+      {
+        "session_id": "3c0cbf2ea68d31f9",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "damp",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": "DRY",
+          "fr": "DRY",
+          "rl": "DRY",
+          "rr": "DRY"
+        },
+        "new_tires": null,
+        "session_kind": "qualifying",
+        "setup_changes": [],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "7a50334e8f2e51e9",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "damp",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": "WET",
+          "fr": "WET",
+          "rl": "WET",
+          "rr": "WET"
+        },
+        "new_tires": null,
+        "session_kind": "qualifying",
+        "setup_changes": [],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "7ef18ff253fe8f74",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "damp",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": "DRY",
+          "fr": "DRY",
+          "rl": "DRY",
+          "rr": "DRY"
+        },
+        "new_tires": null,
+        "session_kind": "race",
+        "setup_changes": [],
+        "incidents": [],
+        "notes": "Started 4, finished 9. Track slightly damp."
+      }
+    ]
+  }
+}

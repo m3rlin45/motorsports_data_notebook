@@ -1,0 +1,346 @@
+{
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|32be68d50d00c8ad09f1773ffb89c0209e498d78",
+  "_model": "claude-sonnet-5-5",
+  "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
+  "_extracted_at": "2026-10-29T00:22:51.747200+00:00",
+  "_notes_files": [
+    {
+      "file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2025-11-18 Motegi Test.txt",
+      "sha1": "3fbdaab354c1d35801bd6bb769f90677558a9ba7"
+    }
+  ],
+  "_sessions": [
+    "1ca8a3040257872b",
+    "a6a3a6a51f705c46",
+    "74ca76c5c5a24913",
+    "4f8caedef2b06539",
+    "39ba126896de9ff9",
+    "a3cd87b9ef9f99e2",
+    "482b4d34eef81cad",
+    "274f70636e441f6b",
+    "66c73001f0b47951",
+    "ca4c1a73b55f6a99",
+    "3e1d401bb0106a0b"
+  ],
+  "input": "DATE: 2025-11-18 (times are local to the track)\n\nRUN NOTES FILE \"2025-11-18 Motegi Test.txt\":\nRear 20, 1/1\nFront 15, 2/2\n\nBalance was ok, but a little tail happy, seems like too much camber on rear. Maybe try 2/2 next time. Front camber was awesome, this seems like a good start\n\nLOGGED SESSIONS:\n1. session_id=1ca8a3040257872b start=09:00 car=\"SFJ\" track=motegi laps=0 type=\"Generic testing\" comment=\"\"\n2. session_id=a6a3a6a51f705c46 start=09:58 car=\"SFJ\" track=motegi laps=1 type=\"Generic testing\" comment=\"\"\n3. session_id=74ca76c5c5a24913 start=10:14 car=\"SFJ\" track=motegi laps=2 type=\"Generic testing\" comment=\"\"\n4. session_id=4f8caedef2b06539 start=10:17 car=\"SFJ\" track=motegi laps=6 type=\"Generic testing\" comment=\"\"\n5. session_id=39ba126896de9ff9 start=10:35 car=\"SFJ\" track=motegi laps=5 type=\"Generic testing\" comment=\"\"\n6. session_id=a3cd87b9ef9f99e2 start=11:55 car=\"SFJ\" track=motegi laps=4 type=\"Generic testing\" comment=\"\"\n7. session_id=482b4d34eef81cad start=12:03 car=\"SFJ\" track=motegi laps=1 type=\"Generic testing\" comment=\"\"\n8. session_id=274f70636e441f6b start=12:21 car=\"SFJ\" track=motegi laps=7 type=\"Generic testing\" comment=\"\"\n9. session_id=66c73001f0b47951 start=14:15 car=\"SFJ\" track=motegi laps=4 type=\"Generic testing\" comment=\"\"\n10. session_id=ca4c1a73b55f6a99 start=14:35 car=\"SFJ\" track=motegi laps=5 type=\"Generic testing\" comment=\"\"\n11. session_id=3e1d401bb0106a0b start=15:00 car=\"Inferno 86\" track=motegi laps=11 type=\"Generic testing\" comment=\"\"\n",
+  "data": {
+    "sessions": [
+      {
+        "session_id": "1ca8a3040257872b",
+        "note_file": "2025-11-18 Motegi Test.txt",
+        "note_session_index": 1,
+        "match_confidence": 0.5,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [
+          "Rear damper 20, rear camber 1/1",
+          "Front damper 15, front camber 2/2"
+        ],
+        "incidents": [],
+        "notes": "Balance was ok, but a little tail happy, seems like too much camber on rear. Maybe try 2/2 next time. Front camber was awesome, this seems like a good start"
+      },
+      {
+        "session_id": "a6a3a6a51f705c46",
+        "note_file": "2025-11-18 Motegi Test.txt",
+        "note_session_index": 1,
+        "match_confidence": 0.35,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [
+          "Rear damper 20, rear camber 1/1",
+          "Front damper 15, front camber 2/2"
+        ],
+        "incidents": [],
+        "notes": "Balance was ok, but a little tail happy, seems like too much camber on rear. Maybe try 2/2 next time. Front camber was awesome, this seems like a good start"
+      },
+      {
+        "session_id": "74ca76c5c5a24913",
+        "note_file": "2025-11-18 Motegi Test.txt",
+        "note_session_index": 1,
+        "match_confidence": 0.35,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [
+          "Rear damper 20, rear camber 1/1",
+          "Front damper 15, front camber 2/2"
+        ],
+        "incidents": [],
+        "notes": "Balance was ok, but a little tail happy, seems like too much camber on rear. Maybe try 2/2 next time. Front camber was awesome, this seems like a good start"
+      },
+      {
+        "session_id": "4f8caedef2b06539",
+        "note_file": "2025-11-18 Motegi Test.txt",
+        "note_session_index": 1,
+        "match_confidence": 0.35,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [
+          "Rear damper 20, rear camber 1/1",
+          "Front damper 15, front camber 2/2"
+        ],
+        "incidents": [],
+        "notes": "Balance was ok, but a little tail happy, seems like too much camber on rear. Maybe try 2/2 next time. Front camber was awesome, this seems like a good start"
+      },
+      {
+        "session_id": "39ba126896de9ff9",
+        "note_file": "2025-11-18 Motegi Test.txt",
+        "note_session_index": 1,
+        "match_confidence": 0.35,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [
+          "Rear damper 20, rear camber 1/1",
+          "Front damper 15, front camber 2/2"
+        ],
+        "incidents": [],
+        "notes": "Balance was ok, but a little tail happy, seems like too much camber on rear. Maybe try 2/2 next time. Front camber was awesome, this seems like a good start"
+      },
+      {
+        "session_id": "a3cd87b9ef9f99e2",
+        "note_file": "2025-11-18 Motegi Test.txt",
+        "note_session_index": 1,
+        "match_confidence": 0.35,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [
+          "Rear damper 20, rear camber 1/1",
+          "Front damper 15, front camber 2/2"
+        ],
+        "incidents": [],
+        "notes": "Balance was ok, but a little tail happy, seems like too much camber on rear. Maybe try 2/2 next time. Front camber was awesome, this seems like a good start"
+      },
+      {
+        "session_id": "482b4d34eef81cad",
+        "note_file": "2025-11-18 Motegi Test.txt",
+        "note_session_index": 1,
+        "match_confidence": 0.35,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [
+          "Rear damper 20, rear camber 1/1",
+          "Front damper 15, front camber 2/2"
+        ],
+        "incidents": [],
+        "notes": "Balance was ok, but a little tail happy, seems like too much camber on rear. Maybe try 2/2 next time. Front camber was awesome, this seems like a good start"
+      },
+      {
+        "session_id": "274f70636e441f6b",
+        "note_file": "2025-11-18 Motegi Test.txt",
+        "note_session_index": 1,
+        "match_confidence": 0.35,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [
+          "Rear damper 20, rear camber 1/1",
+          "Front damper 15, front camber 2/2"
+        ],
+        "incidents": [],
+        "notes": "Balance was ok, but a little tail happy, seems like too much camber on rear. Maybe try 2/2 next time. Front camber was awesome, this seems like a good start"
+      },
+      {
+        "session_id": "66c73001f0b47951",
+        "note_file": "2025-11-18 Motegi Test.txt",
+        "note_session_index": 1,
+        "match_confidence": 0.35,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [
+          "Rear damper 20, rear camber 1/1",
+          "Front damper 15, front camber 2/2"
+        ],
+        "incidents": [],
+        "notes": "Balance was ok, but a little tail happy, seems like too much camber on rear. Maybe try 2/2 next time. Front camber was awesome, this seems like a good start"
+      },
+      {
+        "session_id": "ca4c1a73b55f6a99",
+        "note_file": "2025-11-18 Motegi Test.txt",
+        "note_session_index": 1,
+        "match_confidence": 0.35,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [
+          "Rear damper 20, rear camber 1/1",
+          "Front damper 15, front camber 2/2"
+        ],
+        "incidents": [],
+        "notes": "Balance was ok, but a little tail happy, seems like too much camber on rear. Maybe try 2/2 next time. Front camber was awesome, this seems like a good start"
+      },
+      {
+        "session_id": "3e1d401bb0106a0b",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": ""
+      }
+    ]
+  }
+}

@@ -1,0 +1,106 @@
+{
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|e287033371f8802a8a3355d65d50630a8306102f",
+  "_model": "claude-sonnet-5-5",
+  "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
+  "_extracted_at": "2026-10-29T00:23:38.411595+00:00",
+  "_notes_files": [
+    {
+      "file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2026-07-15 - Fuji.txt",
+      "sha1": "95e02946dfbb7823b3df7ae62d86868327773426"
+    }
+  ],
+  "_sessions": [
+    "5a63ddfdc96f95b4",
+    "a06767b66e88f2be",
+    "45d3e2b5e05e674e"
+  ],
+  "input": "DATE: 2026-07-15 (times are local to the track)\n\nRUN NOTES FILE \"2026-07-15 - Fuji.txt\":\nRE-71RS Used\n\nOrange Car Shakedown\n\nProblems with interference between rear wheels and suspension\n\nLOGGED SESSIONS:\n1. session_id=5a63ddfdc96f95b4 start=09:49 car=\"Inferno 86\" track=fuji laps=2 type=\"一般テスト\" comment=\"Orange car shakedown\"\n2. session_id=a06767b66e88f2be start=10:22 car=\"Inferno 86\" track=fuji laps=8 type=\"一般テスト\" comment=\"\"\n3. session_id=45d3e2b5e05e674e start=11:29 car=\"Inferno 86\" track=fuji laps=15 type=\"一般テスト\" comment=\"\"\n",
+  "data": {
+    "sessions": [
+      {
+        "session_id": "5a63ddfdc96f95b4",
+        "note_file": "2026-07-15 - Fuji.txt",
+        "note_session_index": 1,
+        "match_confidence": 0.8,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": "RE-71RS",
+          "fr": "RE-71RS",
+          "rl": "RE-71RS",
+          "rr": "RE-71RS"
+        },
+        "new_tires": false,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [
+          "Interference between rear wheels and suspension"
+        ],
+        "notes": "Orange car shakedown."
+      },
+      {
+        "session_id": "a06767b66e88f2be",
+        "note_file": "2026-07-15 - Fuji.txt",
+        "note_session_index": 1,
+        "match_confidence": 0.35,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": "RE-71RS",
+          "fr": "RE-71RS",
+          "rl": "RE-71RS",
+          "rr": "RE-71RS"
+        },
+        "new_tires": false,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [
+          "Interference between rear wheels and suspension"
+        ],
+        "notes": "Orange car shakedown."
+      },
+      {
+        "session_id": "45d3e2b5e05e674e",
+        "note_file": "2026-07-15 - Fuji.txt",
+        "note_session_index": 1,
+        "match_confidence": 0.35,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": "RE-71RS",
+          "fr": "RE-71RS",
+          "rl": "RE-71RS",
+          "rr": "RE-71RS"
+        },
+        "new_tires": false,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [
+          "Interference between rear wheels and suspension"
+        ],
+        "notes": "Orange car shakedown."
+      }
+    ]
+  }
+}

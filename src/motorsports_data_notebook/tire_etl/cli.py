@@ -50,17 +50,20 @@ def _cmd_extract(args: argparse.Namespace) -> int:
 
 
 def _cmd_enrich_notes(args: argparse.Namespace) -> int:
-    from .notes_parser import DEFAULT_MODEL, run_enrich_notes
+    """One `claude -p` call per track day over run notes + logger file comments."""
+    from .session_notes import DEFAULT_MODEL, run_enrich_notes
 
+    model = args.model or DEFAULT_MODEL
     counts = run_enrich_notes(
         notes_root=args.notes_root,
         dataset_root=args.dataset_root,
-        model=args.model,
+        model=model,
         force=args.force,
+        workers=args.workers,
     )
     print(
-        f"notes: scanned={counts['scanned']} cached={counts['cached']}"
-        f" parsed={counts['parsed']} errors={counts['errors']} model={args.model or DEFAULT_MODEL}"
+        f"notes: days={counts['days']} cached={counts['cached']} parsed={counts['parsed']}"
+        f" errors={counts['errors']} rows={counts['rows']} model={model}"
     )
     return 0 if counts["errors"] == 0 else 1
 
@@ -70,52 +73,6 @@ def _cmd_enrich_weather(args: argparse.Namespace) -> int:
 
     counts = run_enrich_weather(dataset_root=args.dataset_root)
     print(f"weather: tracks={counts['tracks']} dates={counts['dates']}")
-    return 0
-
-
-def _cmd_match_notes(args: argparse.Namespace) -> int:
-    """Match parsed notes to sessions and write notes_matches.parquet."""
-    import pyarrow as pa
-    import pyarrow.parquet as pq
-
-    from .notes_match import match_notes_to_sessions, write_matches
-    from .notes_parser import ParsedNotes, NotesData
-    from .paths import notes_extracted_dir, sessions_dir
-    import json
-    from datetime import datetime as _dt
-
-    sess_root = sessions_dir(args.dataset_root)
-    if not sess_root.exists():
-        print("no sessions partitions found", file=sys.stderr)
-        return 1
-    tables = [pq.read_table(p) for p in sorted(sess_root.glob("*.parquet"))]
-    if not tables:
-        print("no sessions found", file=sys.stderr)
-        return 1
-    sessions = pa.concat_tables(tables, promote_options="default")
-
-    parsed: list[ParsedNotes] = []
-    nex = notes_extracted_dir(args.dataset_root)
-    for p in sorted(nex.glob("*.json")):
-        try:
-            payload = json.loads(p.read_text(encoding="utf-8"))
-            data = NotesData.model_validate(payload["data"])
-            parsed.append(
-                ParsedNotes(
-                    source_file=Path(payload.get("_source_file", str(p))),
-                    source_sha1=payload.get("_source_sha1", ""),
-                    prompt_sha1=payload.get("_prompt_sha1", ""),
-                    model=payload.get("_model", ""),
-                    extracted_at=payload.get("_extracted_at", ""),
-                    data=data,
-                )
-            )
-        except Exception as e:  # noqa: BLE001
-            logger.warning("skipping malformed %s: %s", p, e)
-
-    matches = match_notes_to_sessions(sessions, parsed)
-    write_matches(args.dataset_root, matches)
-    print(f"match-notes: sessions={len(sessions)} notes={len(parsed)} matches={len(matches)}")
     return 0
 
 
@@ -241,19 +198,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.set_defaults(func=_cmd_extract)
 
-    p = sub.add_parser("enrich-notes", help="Parse run notes via `claude -p`")
+    p = sub.add_parser(
+        "enrich-notes",
+        help="Parse run notes + logger file comments per track day via `claude -p`",
+    )
     _common_args(p)
-    p.add_argument("--model", default="claude-opus-4-7", help="Claude model to use")
+    p.add_argument("--model", default=None, help="Claude model to use (default: Sonnet)")
     p.add_argument("--force", action="store_true", help="Ignore cached JSON and re-run")
+    p.add_argument("--workers", type=int, default=4, help="Parallel `claude -p` calls")
     p.set_defaults(func=_cmd_enrich_notes)
 
     p = sub.add_parser("enrich-weather", help="Fetch Open-Meteo historical weather")
     _common_args(p)
     p.set_defaults(func=_cmd_enrich_weather)
-
-    p = sub.add_parser("match-notes", help="Match parsed notes to sessions")
-    _common_args(p)
-    p.set_defaults(func=_cmd_match_notes)
 
     p = sub.add_parser(
         "audit-tracks",

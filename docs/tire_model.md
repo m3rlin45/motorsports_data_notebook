@@ -319,6 +319,17 @@ manifest row of the superseded spelling is dropped (and its session
 pruned), and the car name takes the logger's `Vehicle` spelling when
 the filename token differs only in case.
 
+### 1.0c Session comments and one notes parse per track day (schema 6, 2026-10-30)
+
+Extractor 0.13.0 stores the RaceStudio "Long Comment" of each file as
+`sessions.comment` (a merged session joins its files' distinct comments).
+The driver records the tire fitted and the conditions there ("re-71rs",
+"qually, slick tires, damp track"), which the old pipeline never saw. The
+run-notes pipeline is one `claude -p` call per track day over the day's
+notes files and every logged session with its comment, cached in
+`session_notes/<date>.json`; `notes_matches.parquet` is rebuilt from the
+caches, and the compound labelling reads the comments.
+
 ## 2. Modeling approach
 
 ### 2.1 Energy balance on a lumped tire mass

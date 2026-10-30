@@ -1,0 +1,75 @@
+{
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|4b3a1f0e44279be6733d137a330843c3b7bd3b1e",
+  "_model": "claude-sonnet-5-5",
+  "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
+  "_extracted_at": "2026-10-29T00:23:04.746491+00:00",
+  "_notes_files": [
+    {
+      "file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2026-02-07_Sodegaura.txt",
+      "sha1": "2d36860b78dc837bb9393917f2bc35b31bbe29df"
+    }
+  ],
+  "_sessions": [
+    "0f1a7021d4af8508",
+    "155ee2fb16c57870"
+  ],
+  "input": "DATE: 2026-02-07 (times are local to the track)\n\nRUN NOTES FILE \"2026-02-07_Sodegaura.txt\":\n09:30 Session\n\n22 Front 2/2\n21 Rear 1/1\nTires 1.75 all around\nConditions: snow flurry 4c\nbrakes brand new, need to bed in\n\nA bit slippery, but not terrible Balance was ok\n\n10:30 Session\n\nKeep tires as is\n\n\nFL 24\nFR 23\nRL 21\nRR 20\n\n11:30 Session:\n\nTires Silver-blue\n\n1.7 all around\n\nCrashed on out lap :(\n\nLOGGED SESSIONS:\n1. session_id=0f1a7021d4af8508 start=09:31 car=\"Inferno 86\" track=sodegaura laps=17 type=\"Generic testing\" comment=\"slightly snowing, bedding in brakes\"\n2. session_id=155ee2fb16c57870 start=10:30 car=\"Inferno 86\" track=sodegaura laps=23 type=\"Generic testing\" comment=\"snowing\"\n",
+  "data": {
+    "sessions": [
+      {
+        "session_id": "0f1a7021d4af8508",
+        "note_file": "2026-02-07_Sodegaura.txt",
+        "note_session_index": 1,
+        "match_confidence": 1.0,
+        "weather_text": "snow flurry",
+        "ambient_temp_c": 4.0,
+        "track_condition": "snow",
+        "cold_pressure_bar": {
+          "fl": 1.75,
+          "fr": 1.75,
+          "rl": 1.75,
+          "rr": 1.75
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [
+          "brakes brand new, need to bed in"
+        ],
+        "incidents": [],
+        "notes": "Setup codes: Front 22 (2/2), Rear 21 (1/1). A bit slippery, but not terrible. Balance was ok."
+      },
+      {
+        "session_id": "155ee2fb16c57870",
+        "note_file": "2026-02-07_Sodegaura.txt",
+        "note_session_index": 2,
+        "match_confidence": 1.0,
+        "weather_text": "snow flurry",
+        "ambient_temp_c": 4.0,
+        "track_condition": "snow",
+        "cold_pressure_bar": {
+          "fl": 1.75,
+          "fr": 1.75,
+          "rl": 1.75,
+          "rr": 1.75
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": "Tires kept as is from the previous session. Unlabeled per-corner values in the notes (FL 24, FR 23, RL 21, RR 20) are not treated as cold pressures."
+      }
+    ]
+  }
+}

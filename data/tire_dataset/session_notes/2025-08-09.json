@@ -1,0 +1,74 @@
+{
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|8d717c79c9af749b07c28c4f70d3d835d3a3f10b",
+  "_model": "claude-sonnet-5-5",
+  "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
+  "_extracted_at": "2026-10-29T00:22:02.153855+00:00",
+  "_notes_files": [],
+  "_sessions": [
+    "f55d9ab3f8571439",
+    "fa565ff3902977a3"
+  ],
+  "input": "DATE: 2025-08-09 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=f55d9ab3f8571439 start=12:31 car=\"Inferno 86\" track=fuji laps=1 type=\"Race\" comment=\"Front 4/4 / dampers front 27 rear 25\"\n2. session_id=fa565ff3902977a3 start=12:48 car=\"Inferno 86\" track=fuji laps=24 type=\"Race\" comment=\"Front 4/4 / dampers front 27 rear 25\"\n",
+  "data": {
+    "sessions": [
+      {
+        "session_id": "f55d9ab3f8571439",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": "race",
+        "setup_changes": [
+          "Front 4/4",
+          "Dampers front 27 rear 25"
+        ],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "fa565ff3902977a3",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": "race",
+        "setup_changes": [
+          "Front 4/4",
+          "Dampers front 27 rear 25"
+        ],
+        "incidents": [],
+        "notes": ""
+      }
+    ]
+  }
+}

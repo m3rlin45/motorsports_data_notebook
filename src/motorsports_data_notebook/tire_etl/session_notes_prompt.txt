@@ -1,0 +1,60 @@
+You extract structured data about one track day of motorsport testing. You are given two inputs for the day:
+
+1. RUN NOTES — zero or more free-form text files the driver/engineer wrote for the day. A file may describe several on-track sessions (blocks marked by a time like "09:30 Session" or an ordinal like "First run"), or just one. It may mention sessions that were never logged, and may not mention every logged session.
+2. LOGGED SESSIONS — the telemetry sessions recorded that day, one line each: a session_id, the local start time, the car, the track, the lap count, the session type from the logger, and the short free-text "comment" the driver typed into the AIM logger file for that session (often the tire fitted, the track condition, a setup change, or a race result; it may be empty).
+
+Return ONLY a JSON object matching this exact schema — no prose, no markdown code fences — with exactly one entry per LOGGED session, in the order given:
+
+{
+  "sessions": [
+    {
+      "session_id": "copied exactly from the logged session line",
+      "note_file": "the run-notes file name that describes this session, or null",
+      "note_session_index": "1-based index of the session block within that notes file that describes this logged session, or null when no block does",
+      "match_confidence": "0.0-1.0: how sure you are that the notes block refers to this logged session (1.0 when the time, car and track agree; lower when the block has no time and was aligned by order; 0.0 when no block matches)",
+      "weather_text": "free text describing the weather or null",
+      "ambient_temp_c": "float Celsius or null",
+      "track_condition": "one of: dry, damp, wet, snow, unknown",
+      "cold_pressure_bar": { "fl": "float or null", "fr": "float or null", "rl": "float or null", "rr": "float or null" },
+      "tire_compound": { "fl": "canonical tire code or null", "fr": "...", "rl": "...", "rr": "..." },
+      "new_tires": "true if the tires were new / fresh / sticker for this session, false if stated worn / old / dead, null if not stated",
+      "session_kind": "one of: practice, qualifying, race, or null",
+      "setup_changes": ["list of strings describing setup changes, empty if none"],
+      "incidents": ["list of strings describing incidents, red flags, spins, mechanical problems; empty if none"],
+      "notes": "any other narrative about this session (results, feel, targets); empty string if none"
+    }
+  ]
+}
+
+Matching run notes to logged sessions:
+- Match a notes block to a logged session by time of day first (the notes' clock may be a few minutes off; a block normally starts before or at the session's start), then by car when the notes name one, then by order within the day when blocks carry no times. Never match a block to a session of a different car when the block names its car.
+- A logged session may be a restart of the previous one (same car, minutes apart, few laps): it belongs to the same notes block, with the same values.
+- A block that matches no logged session is simply not emitted; a logged session with no matching block still gets an entry with note_session_index null, match_confidence 0.0, and only what its own comment says.
+- Values stated once for the whole day ("Tires 1.75 all around", a compound stated without a block) apply to every logged session of that car for the day unless a later block or the session's own comment says otherwise.
+- Tires are not changed between runs unless the notes or a comment say so: a tire compound, and likewise the ambient temperature and the weather, stated in an earlier block carries forward to the later blocks and later logged sessions of the same car until a block or a comment states a different one. Emit the carried value, not null.
+- When the notes describe fewer runs than were logged, the later logged sessions of the same car inherit the last block that precedes them (its note_session_index, and its values carried forward) with match_confidence 0.35, unless their own comment contradicts it.
+
+The session's own comment:
+- It was written for exactly that session, so when it names the tire or the track condition it outranks the run notes for that session.
+- Weather or track words on their own ("rain", "wet", "damp", "dry", "track wet", "misting") describe the TRACK: set track_condition and leave tire_compound untouched.
+- Wear words on their own ("new tires", "dead tires", "worn") set new_tires and do not name a tire.
+- Setup text ("front and rear bars full soft", "rear bar disconnected") goes to setup_changes; results ("started 4, finish 9") to notes; "qually" / "quali" / "race" / "practice" to session_kind.
+
+Pressure unit normalization (always emit bar):
+- 1 kPa = 0.01 bar; 1 kgf/cm² = 0.980665 bar; 1 psi = 0.0689476 bar.
+- Infer the input unit from magnitude and context: values under 3 with no explicit unit are already bar; values 10-35 are psi; values 100-300 are kPa; values 1.5-3.0 with a "kgf" hint are kgf/cm².
+- "Tires 1.75 all around" fills all four corners with the same value. A cold pressure is the pressure SET before going out: lines labelled set / setpoints / cold / "set to" / "start" are cold pressures. A "hot" / target / after-run pressure, or a pressure written next to a temperature reading ("FL: 2.07 15.0" is a hot pressure and a temperature), is NOT a cold pressure: mention it in notes and leave cold_pressure_bar for the set values. When a block lists both, the set / setpoint values are the cold pressures.
+
+Compound codes (tire_compound):
+- Known tire names, spelling varies: A052 ("052"), RE-71RS ("71RS", "re-71rs", "RE-71 RS"), A050 (often with a compound suffix like "A050_22"), Nankang NS-2R, AD09, CR-S, ZIII. Emit the canonical form shown here.
+- The formula cars (KK-F, KK-SII, SFJ) run generic slick and rain tires: "slicks", "slick tires", "dry tires" → "DRY"; "wet tires", "wets", "rain tires", "rain tyres" → "WET". A formula-car compound code such as "14c", "13c", "22" is kept as written when the text ties it to the tires.
+- Numeric-only codes ("22", "14c", "R7") are valid compounds ONLY when the text explicitly ties them to tires ("Tires: 22", "tire compound 14c", or a code written on a corner's tire line next to its pressure: "FL 14c 1.25" means FL compound 14c, cold 1.25 bar). NEVER take numbers from damper lines ("Front 15 / Rear 10"), camber/setup codes ("2/2", "3/4"), pressures (bar/psi values), temperatures ("28c"), wear percentages ("30% used") or race positions. When in doubt, use null.
+- A wheel-set identifier standing in for a set of mounted tires (a color or name: "silver", "Black wheels", "silver-blue") is not a compound: emit "SET:<name>" (e.g. "SET:black") so it can be mapped later.
+- Strip wear / condition adjectives from the compound itself: "A052 Sticker", "Good RE-71 RS", "71RS 30% used" → "A052" / "RE-71RS" / "RE-71RS" (put the wear detail in new_tires / notes).
+- "Front 22 / Rear 21" applies the front code to FL+FR and the rear code to RL+RR. A compound stated with no axle qualifier applies to all four corners.
+- Two different tires named for one session (a change mid-session, or a comparison) → null for that session.
+
+Rules:
+- Use null when a value is unknown. Never guess.
+- Emit every logged session exactly once, with its session_id copied verbatim.
+- Output MUST be parseable JSON. No leading text, no trailing commentary.

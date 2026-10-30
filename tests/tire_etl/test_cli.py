@@ -22,7 +22,6 @@ def test_build_parser_lists_all_subcommands() -> None:
         "extract",
         "enrich-notes",
         "enrich-weather",
-        "match-notes",
         "audit-tracks",
         "manifest-diff",
         "query",
@@ -57,8 +56,9 @@ def test_enrich_notes_subcommand_has_model_default() -> None:
     parser = build_parser()
     args = parser.parse_args(["enrich-notes"])
     assert args.cmd == "enrich-notes"
-    assert args.model == "claude-opus-4-7"
+    assert args.model is None  # resolved to session_notes.DEFAULT_MODEL (Sonnet)
     assert args.force is False
+    assert args.workers == 4
 
 
 def test_query_subcommand_requires_sql_positional() -> None:

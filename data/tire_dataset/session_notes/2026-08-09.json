@@ -1,0 +1,153 @@
+{
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|a8fdd6efe1fcc18063ed0809a1d85109b897bd0f",
+  "_model": "claude-sonnet-5-5",
+  "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
+  "_extracted_at": "2026-10-29T00:23:42.529916+00:00",
+  "_notes_files": [],
+  "_sessions": [
+    "257a4065693239ca",
+    "5b070aaaaa7273e0",
+    "759b1d712d4d62ee",
+    "942f09ec0a8c5840",
+    "2ae53e2036204ba2"
+  ],
+  "input": "DATE: 2026-08-09 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=257a4065693239ca start=09:32 car=\"KK-SII\" track=suzuka laps=12 type=\"一般テスト\" comment=\"\"\n2. session_id=5b070aaaaa7273e0 start=11:04 car=\"KK-SII\" track=suzuka laps=13 type=\"一般テスト\" comment=\"\"\n3. session_id=759b1d712d4d62ee start=14:13 car=\"KK-SII\" track=suzuka laps=13 type=\"一般テスト\" comment=\"new tires (no TPMS)\"\n4. session_id=942f09ec0a8c5840 start=15:44 car=\"KK-SII\" track=suzuka laps=6 type=\"一般テスト\" comment=\"Regular front preload\"\n5. session_id=2ae53e2036204ba2 start=16:11 car=\"KK-SII\" track=suzuka laps=5 type=\"一般テスト\" comment=\"extra preload, terrible understeer\"\n",
+  "data": {
+    "sessions": [
+      {
+        "session_id": "257a4065693239ca",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "5b070aaaaa7273e0",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "759b1d712d4d62ee",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": true,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": "new tires (no TPMS)"
+      },
+      {
+        "session_id": "942f09ec0a8c5840",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [
+          "Regular front preload"
+        ],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "2ae53e2036204ba2",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [
+          "extra preload"
+        ],
+        "incidents": [],
+        "notes": "terrible understeer"
+      }
+    ]
+  }
+}

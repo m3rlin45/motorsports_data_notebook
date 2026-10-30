@@ -142,6 +142,20 @@ Needs action:
   the Fuji GP/Short and Motegi/East convention. Mention it in the summary; do not
   change the pooling in this skill.
 
+**File comments.** Each `.xrk` carries the RaceStudio "Long Comment" the
+driver typed (tire fitted, setup, race result); the extractor (≥ 0.13.0)
+stores it as `sessions.comment` and step 3's per-day parse reads it next to
+the run notes. After step 3, check that every tire named in a new session's
+comment became a compound label (sidecar rows override):
+
+```bash
+cd /home/m3rlin45/code/motorsports_data_notebook && just tire-query "SELECT s.date, s.car, s.n_laps, s.comment, m.tire_compound_fl, m.track_condition, m.note_session_index FROM sessions s LEFT JOIN read_parquet('data/tire_dataset/notes_matches.parquet') m USING (session_id) WHERE s.date >= '<first new date>' ORDER BY s.date, s.session_id"
+```
+
+A tire the model did not recognise: pin the session in
+`data/tire_dataset/tire_compounds.yaml` with the comment as provenance, or
+extend the prompt's compound list.
+
 Also check merges. Files merge only when they share filename date/driver/car/
 track/session-type, have consecutive run numbers, start within 5 minutes of
 the previous file's end of recording, and resolve to the same GPS layout. A
@@ -159,8 +173,14 @@ cd /home/m3rlin45/code/motorsports_data_notebook && just tire-query "SELECT date
 cd /home/m3rlin45/code/motorsports_data_notebook && just tire-notes 2>&1 | tail -5 && just tire-weather 2>&1 | tail -3
 ```
 
-`tire-notes` parses only new/changed `.txt` notes via `claude -p` (cached JSON is
-committed) and re-matches all notes to sessions. `tire-weather` fetches
+`tire-notes` makes one `claude -p` (Sonnet) call per track day that has run
+notes or a session comment: the day's `.txt` notes plus every logged session
+with its RaceStudio comment go in, one record per session comes out (notes
+block matched, cold pressures, tire compound, condition). Cached per day in
+`session_notes/` (committed); only days whose notes, sessions or comments
+changed re-parse. It prints `days= cached= parsed= errors= rows=`; a non-zero
+`errors` is a day the model answered badly — re-run with `--force`, and if it
+persists read the day's `session_notes/<date>.json` `input`. `tire-weather` fetches
 Open-Meteo history only for uncached (track, date) pairs — network required; if it
 fails, retry once, otherwise report and continue (the model falls back to track
 medians for missing weather).
@@ -287,7 +307,7 @@ cd /home/m3rlin45/code/motorsports_data_notebook && sl status && sl diff data/ti
 Expected changes: new `MANIFEST.jsonl` lines, new/updated monthly `sessions/` and
 `laps/` partitions, new `timeseries/YYYY-MM/<id>.parquet` files, weather parquet
 for touched (track, year), `tire_model.json`, `warmup_table.parquet`, the parity
-fixture, and possibly `notes_extracted/*.json`. Anything under `src/` changing
+fixture, and possibly `session_notes/*.json`. Anything under `src/` changing
 means you edited code in step 2; calculator test edits come from step 6 — keep
 both in the same commit and describe them.
 

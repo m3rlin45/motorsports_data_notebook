@@ -1,0 +1,82 @@
+{
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|01d1309ac4c51c7abb1fda2485cfa4127a885519",
+  "_model": "claude-sonnet-5-5",
+  "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
+  "_extracted_at": "2026-10-29T00:23:39.228029+00:00",
+  "_notes_files": [
+    {
+      "file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2026-08-08-Fuji1.txt",
+      "sha1": "8049646daf65899518f5da029436728461993cd2"
+    }
+  ],
+  "_sessions": [
+    "db515260ad05f97f",
+    "fb07570409f35161"
+  ],
+  "input": "DATE: 2026-08-08 (times are local to the track)\n\nRUN NOTES FILE \"2026-08-08-Fuji1.txt\":\nQualifying:\n\nA052 New\n\nFront 2/2\nREar 2/2\nTrying to get rid of understeer in 100r\n\nDampers\n\nF 25\nR 22\n\nTires target 1.8 hot\n\nBalance was good\n\nData says we should use more front rebound\n\nRace:\n\nA052 Used from qualifying\n\nFront 2/2\nRear 2/2\n\nDapmers\n\nF26\nR22\n\nTires target 2.0 hot\n\nLOGGED SESSIONS:\n1. session_id=db515260ad05f97f start=10:55 car=\"Inferno 86\" track=fuji laps=3 type=\"レース\" comment=\"one flying lap\"\n2. session_id=fb07570409f35161 start=14:19 car=\"Inferno 86\" track=fuji laps=23 type=\"レース\" comment=\"\"\n",
+  "data": {
+    "sessions": [
+      {
+        "session_id": "db515260ad05f97f",
+        "note_file": "2026-08-08-Fuji1.txt",
+        "note_session_index": 1,
+        "match_confidence": 0.6,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": "A052",
+          "fr": "A052",
+          "rl": "A052",
+          "rr": "A052"
+        },
+        "new_tires": true,
+        "session_kind": "qualifying",
+        "setup_changes": [
+          "Front 2/2",
+          "Rear 2/2",
+          "Dampers F 25 / R 22",
+          "Trying to get rid of understeer in 100R"
+        ],
+        "incidents": [],
+        "notes": "One flying lap. Target tire pressure 1.8 bar hot. Balance was good. Data says use more front rebound."
+      },
+      {
+        "session_id": "fb07570409f35161",
+        "note_file": "2026-08-08-Fuji1.txt",
+        "note_session_index": 2,
+        "match_confidence": 0.6,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": "A052",
+          "fr": "A052",
+          "rl": "A052",
+          "rr": "A052"
+        },
+        "new_tires": false,
+        "session_kind": "race",
+        "setup_changes": [
+          "Front 2/2",
+          "Rear 2/2",
+          "Dampers F 26 / R 22"
+        ],
+        "incidents": [],
+        "notes": "A052 used from qualifying. Target tire pressure 2.0 bar hot."
+      }
+    ]
+  }
+}
