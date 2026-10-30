@@ -57,7 +57,7 @@ public class CircuitPredictorTests
                     $"vs Python={py.PredictedHotTempC:F4}");
                 Assert.Equal(string.Join(", ", py.KSourceBucket),
                     StripParens(prediction.KSourceBucket));
-                if (c.G2Scale is double expectedScale)
+                if (py.G2Scale is double expectedScale)
                 {
                     Assert.True(Math.Abs(prediction.G2Scale - expectedScale) < 1e-9,
                         $"[{c.Label}/{corner}] g2 scale C#={prediction.G2Scale:F6} " +
@@ -163,7 +163,7 @@ public class CircuitPredictorTests
     // Tiny synthetic v5 artifact: one car, one track, every corner sharing
     // the same K/tau so any hot-temp difference comes from q_typ_by_corner /
     // outlap_q_by_corner alone.
-    private static TireModel SyntheticV5Model(bool withPerCorner)
+    private static TireModel SyntheticV5Model(bool withPerCorner, bool withCornerPace = false)
     {
         var corners = new[] { "fl", "fr", "rl", "rr" };
         var dto = new TireModelDto(
@@ -183,7 +183,10 @@ public class CircuitPredictorTests
             G2TypByTrackCarCond: new[]
             {
                 new G2EntryDto("synth", "Car", "dry", 1.0, 10,
-                    G2VsLapTime: new G2CurveDto(new[] { 50.0, 60.0, 70.0 }, new[] { 1.4, 1.0, 0.7 }, 10),
+                    G2VsLapTime: new G2CurveDto(new[] { 50.0, 60.0, 70.0 }, new[] { 1.4, 1.0, 0.7 }, 10,
+                        G2ByCorner: withCornerPace
+                            ? new Dictionary<string, double[]> { ["fl"] = new[] { 2.0, 1.0, 0.5 } }
+                            : null),
                     QTypByCorner: withPerCorner
                         ? new Dictionary<string, double> { ["fl"] = 1.3, ["fr"] = 0.9, ["rl"] = 1.1, ["rr"] = 0.7 }
                         : null),
@@ -233,6 +236,21 @@ public class CircuitPredictorTests
     }
 
     [Fact]
+    public void Predict_PerCornerPaceCurveScalesEachCornerByItsOwnSeries()
+    {
+        // The simulated-lap curve carries one series per corner: a corner
+        // with its own series uses it, a corner without falls back to the
+        // corner-mean g2. Both anchor at 1 at the typical lap time.
+        var p = new CircuitPredictor(SyntheticV5Model(withPerCorner: true, withCornerPace: true));
+        var flFast = PredictSynthetic(p, "fl", targetLapTimeS: 50.0);
+        var frFast = PredictSynthetic(p, "fr", targetLapTimeS: 50.0);
+        Assert.Equal("curve", flFast.G2PaceSource);
+        Assert.Equal(2.0, flFast.G2Scale, precision: 12);
+        Assert.Equal(1.4, frFast.G2Scale, precision: 12);
+        Assert.Equal(1.0, PredictSynthetic(p, "fl", targetLapTimeS: 60.0).G2Scale, precision: 12);
+    }
+
+    [Fact]
     public void Predict_V5_EntriesWithoutPerCornerFieldsFallBackToTheMean()
     {
         var p = new CircuitPredictor(SyntheticV5Model(withPerCorner: false));
@@ -251,7 +269,6 @@ public class CircuitPredictorTests
         [property: System.Text.Json.Serialization.JsonPropertyName("label")] string Label,
         [property: System.Text.Json.Serialization.JsonPropertyName("inputs")] FixtureInputs Inputs,
         [property: System.Text.Json.Serialization.JsonPropertyName("corners")] Dictionary<string, FixtureCornerOutput> Corners,
-        [property: System.Text.Json.Serialization.JsonPropertyName("g2_scale")] double? G2Scale = null,
         [property: System.Text.Json.Serialization.JsonPropertyName("g2_pace_source")] string? G2PaceSource = null);
 
     private sealed record FixtureInputs(
@@ -270,5 +287,6 @@ public class CircuitPredictorTests
     private sealed record FixtureCornerOutput(
         [property: System.Text.Json.Serialization.JsonPropertyName("cold_pressure_bar")] double ColdPressureBar,
         [property: System.Text.Json.Serialization.JsonPropertyName("predicted_hot_temp_c")] double PredictedHotTempC,
-        [property: System.Text.Json.Serialization.JsonPropertyName("K_source_bucket")] List<string> KSourceBucket);
+        [property: System.Text.Json.Serialization.JsonPropertyName("K_source_bucket")] List<string> KSourceBucket,
+        [property: System.Text.Json.Serialization.JsonPropertyName("g2_scale")] double? G2Scale = null);
 }

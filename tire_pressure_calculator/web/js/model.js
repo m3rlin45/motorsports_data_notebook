@@ -362,21 +362,25 @@ export class TireModel {
     return null;
   }
 
-  // Multiplier on g2_typ for a target lap time; mirrors the Python
-  // predictor's _g2_pace_scale. Preferred: ratio along the bucket's
-  // sector-fit curve (anchored at lap_time_typ so target === typical
-  // scales by exactly 1). Fallback: the pooled sector exponent.
-  // Clamped either way.
-  g2PaceScale(track, car, condition, lapTimeTypS, targetLapTimeS) {
+  // Multiplier on the typical heat input for a target lap time; mirrors
+  // the Python predictor's _g2_pace_scale. Preferred: ratio along the
+  // bucket's simulated-lap curve — the corner's own series when `corner`
+  // is given and the curve carries g2_by_corner, else the corner mean
+  // (anchored at lap_time_typ so target === typical scales by exactly 1).
+  // Fallback: the physics exponent. Clamped either way.
+  g2PaceScale(track, car, condition, lapTimeTypS, targetLapTimeS, corner = null) {
     const paceCfg = this.dto.g2_lap_time_model ?? {};
     const lo = paceCfg.multiplier_clamp?.min ?? 0.4;
     const hi = paceCfg.multiplier_clamp?.max ?? 2.5;
 
     const curve = this.lookupG2PaceCurve(track, car, condition);
     if (curve) {
-      const ref = interpClamped(lapTimeTypS, curve.lap_time_s, curve.g2);
+      const byCorner = curve.g2_by_corner;
+      const series = (corner && byCorner && Array.isArray(byCorner[corner]))
+        ? byCorner[corner] : curve.g2;
+      const ref = interpClamped(lapTimeTypS, curve.lap_time_s, series);
       if (ref > 0) {
-        const scale = interpClamped(targetLapTimeS, curve.lap_time_s, curve.g2) / ref;
+        const scale = interpClamped(targetLapTimeS, curve.lap_time_s, series) / ref;
         return { scale: Math.min(hi, Math.max(lo, scale)), source: 'curve' };
       }
     }
@@ -485,7 +489,8 @@ export function predictCorner(model, {
   const tColdC = coldTireTempC ?? ambientTempC;
   const tStartC = tColdC;
 
-  // Target-lap-time feature: pace sets both time-on-track and tire energy.
+  // Target-lap-time feature: pace sets both time-on-track and tire energy
+  // (the heat multiplier is per corner: the simulated lap loads them differently).
   let g2Scale = 1.0;
   let g2PaceSource = null;
   let lapTimeForClockS = lap.valueSeconds;
@@ -494,7 +499,7 @@ export function predictCorner(model, {
     if (!(targetLapTimeS > 0)) {
       throw new RangeError(`target lap time must be > 0; got ${targetLapTimeS}`);
     }
-    const pace = model.g2PaceScale(track, car, cond, lap.valueSeconds, targetLapTimeS);
+    const pace = model.g2PaceScale(track, car, cond, lap.valueSeconds, targetLapTimeS, corner);
     g2Scale = pace.scale;
     g2PaceSource = pace.source;
     g2Value *= g2Scale;

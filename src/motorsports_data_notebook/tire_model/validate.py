@@ -378,7 +378,8 @@ def _calculator_lap_inputs(
     a target lap time; we stand in the session's own median lap time for
     the target (a driver knows their pace to a few seconds). Returns
     ``(g2, t_flying_s, g2_scale, outlap_s, outlap_g2)``: the bucket's ⟨g²⟩
-    scaled along the pace curve, the flying clock ``N × target``, and the
+    scaled along the corner's simulated-lap pace curve, the flying clock
+    ``N × target``, and the
     bucket's typical out-lap segment (zero when ``with_outlap`` is False —
     the stint's anchor was not a pit exit, so the clock starts at the first
     flying lap as before).
@@ -386,7 +387,7 @@ def _calculator_lap_inputs(
     lap_time_typ_s, _n, _src = _lookup_lap_time(model, track, car, condition)
     g2_typ, _n2, _src2 = _lookup_g2(model, track, car, condition, corner)
     scale, _pace_src = _g2_pace_scale(
-        model, track, car, condition, lap_time_typ_s, session_lap_time_s
+        model, track, car, condition, lap_time_typ_s, session_lap_time_s, corner
     )
     t_flying_s = float(flying_lap_n) * float(session_lap_time_s)
     out_s, out_g2 = 0.0, 0.0
@@ -814,4 +815,90 @@ def run_holdout_validation(
         for c in CORNERS:
             cols += [f"T_hot_obs_c_{c}", f"T_hot_pred_c_{c}", f"resid_c_{c}"]
         print(pivot[cols].to_string(index=False))
+    return 0
+
+
+def run_pace_check(dataset_root: Path | None = None) -> int:
+    """Within-session check of the simulated-lap pace model (``pace_sim``).
+
+    Compares, per session, how much hotter the fastest clean laps ran each
+    corner than the session's median laps (observed from the per-second heat
+    model's per-lap intensities) with what the simulation predicts for that
+    lap-time gap. Prints bias / MAE / slope per corner; an unbiased model
+    has bias ≈ 0 and slope ≈ 1. Exit code 0 always (a report, not a gate).
+    """
+    from .heat_input import CarFacts, ShareParams
+    from .pace_sim import fast_lap_check, load_lap_samples, summarize_fast_lap_check
+    from .warmup_table import (
+        _apply_blacklist,
+        _attach_weather,
+        _build_g2_typ,
+        _compute_delta_t,
+        _compute_stint_anchor,
+        _compute_stint_clock,
+        _flying_laps,
+        _laps_for_fit,
+        _load_filtered_laps,
+        _load_weather,
+        attach_lap_heat,
+        load_sensor_blacklist,
+    )
+
+    root = Path(dataset_root) if dataset_root else default_dataset_root()
+    model_path = root / "tire_model.json"
+    if not model_path.exists():
+        print(f"pace-check: no model at {model_path}; build it first.")
+        return 1
+    with open(model_path, encoding="utf-8") as fh:
+        model = json.load(fh)
+    hi = model.get("heat_input") or {}
+    if "fitted_by_car" not in hi:
+        print("pace-check: the model carries no fitted force shares (pre-v5 artifact).")
+        return 1
+    share: dict[str, ShareParams] = {}
+    for car, fitted in hi["fitted_by_car"].items():
+        facts = hi.get("car_facts_by_car", {}).get(car, {})
+        cf = CarFacts(
+            p_f=float(facts.get("p_f", 0.5)),
+            brake_bias_front=float(facts.get("brake_bias_front", 0.6)),
+            driven=str(facts.get("driven", "rear")),
+        )
+        share[car] = ShareParams(
+            p_f=cf.p_f,
+            g_transfer_front=float(fitted["g_transfer"]),
+            g_transfer_rear=float(fitted["g_transfer"]),
+            beta0=cf.beta0,
+            beta1=0.0,
+            eps_drive=1.0,
+            eps_brake=1.0,
+            driven=cf.driven,
+        )
+
+    laps = _attach_weather(_load_filtered_laps(root), _load_weather(root))
+    laps = _compute_stint_clock(laps)
+    laps, _ = _apply_blacklist(laps, load_sensor_blacklist(root), warn_on_unknown=False)
+    laps = _compute_stint_anchor(laps)
+    laps = _compute_delta_t(laps)
+    laps = _laps_for_fit(laps, _build_g2_typ(laps))
+    laps = _flying_laps(attach_lap_heat(root, laps, model))
+    frame = fast_lap_check(laps, load_lap_samples(root), share)
+    if frame.empty:
+        print("pace-check: no session has both reference laps and clean faster laps.")
+        return 0
+    summary = summarize_fast_lap_check(frame)
+    gap = float(np.median(1.0 - frame["lap_time_fast_s"] / frame["lap_time_median_s"]) * 100)
+    print(
+        f"pace-check: {len(frame)} sessions, fast laps a median {gap:.1f} % under the "
+        "session's median lap. Observed vs simulated per-corner heat ratio (log):"
+    )
+    print(summary.to_string(index=False, float_format=lambda v: f"{v:+.3f}"))
+    for car_name, car_frame in frame.groupby("car"):
+        if len(car_frame) < 3:
+            continue
+        print(f"\n  {car_name} ({len(car_frame)} sessions)")
+        print(
+            summarize_fast_lap_check(car_frame).to_string(
+                index=False, float_format=lambda v: f"{v:+.3f}"
+            )
+        )
     return 0

@@ -50,10 +50,10 @@ test('parity with Python predictor fixture', () => {
         prediction.kSourceBucket,
         `(${expected.K_source_bucket.join(', ')})`,
         `${label}: K source bucket`);
-      if (testCase.g2_scale !== undefined) {
+      if (expected.g2_scale !== undefined) {
         assert.ok(
-          Math.abs(prediction.g2Scale - testCase.g2_scale) < 1e-9,
-          `${label}: g2 scale ${prediction.g2Scale} != ${testCase.g2_scale}`);
+          Math.abs(prediction.g2Scale - expected.g2_scale) < 1e-9,
+          `${label}: g2 scale ${prediction.g2Scale} != ${expected.g2_scale}`);
         assert.equal(prediction.g2PaceSource, testCase.g2_pace_source, `${label}: pace source`);
       }
     }
@@ -370,6 +370,20 @@ test('g2PaceScale: curve ratio anchored at typical, exponent fallback, clamps', 
   assert.ok(Math.abs(atTyp.scale - 1.0) < 1e-12);
   const faster = model.g2PaceScale(track, 'FJ', 'dry', lapTyp, lapTyp * 0.95);
   assert.ok(faster.scale > 1.0);
+  // Per-corner series: each corner anchors at 1 and the simulated lap
+  // heats the corners differently; the mean series is the fallback.
+  for (const c of ['fl', 'fr', 'rl', 'rr']) {
+    const at = model.g2PaceScale(track, 'FJ', 'dry', lapTyp, lapTyp, c);
+    assert.ok(Math.abs(at.scale - 1.0) < 1e-12, `${c} anchored`);
+    assert.ok(model.g2PaceScale(track, 'FJ', 'dry', lapTyp, lapTyp * 0.95, c).scale > 1.0);
+  }
+  const perCorner = ['fl', 'fr', 'rl', 'rr'].map(
+    (c) => model.g2PaceScale(track, 'FJ', 'dry', lapTyp, lapTyp * 0.9, c).scale);
+  assert.ok(new Set(perCorner.map((v) => v.toFixed(6))).size > 1, 'corners differ');
+  const synth = new TireModel(syntheticV5Model());
+  synth.dto.g2_typ_by_track_car_cond[0].g2_vs_lap_time.g2_by_corner = { fl: [2.0, 1.0, 0.5] };
+  assert.ok(Math.abs(synth.g2PaceScale('synth', 'Car', 'dry', 60, 50, 'fl').scale - 2.0) < 1e-12);
+  assert.ok(Math.abs(synth.g2PaceScale('synth', 'Car', 'dry', 60, 50, 'fr').scale - 1.4) < 1e-12);
   // Unknown bucket -> exponent fallback, extreme target hits the clamp
   const fb = model.g2PaceScale('no_such_track', 'NoSuchCar', 'dry', 100, 10);
   assert.equal(fb.source, 'exponent');

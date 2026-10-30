@@ -483,7 +483,7 @@ def _model_with_pace_curve() -> dict:
     model = _minimal_model()
     model["schema_version"] = 3
     model["g2_lap_time_model"] = {
-        "method": "sector_knn_median_curve",
+        "method": "uniform_scaled_lap_shares",
         "default_exponent": 2.0,
         "multiplier_clamp": {"min": 0.4, "max": 2.5},
     }
@@ -568,6 +568,29 @@ def test_target_beyond_curve_range_clamps_to_endpoint() -> None:
     at_edge = predict_cold_pressure(target_lap_time_s=55.0, **kwargs)
     beyond = predict_cold_pressure(target_lap_time_s=40.0, **kwargs)
     assert beyond["fl"].g2_scale == pytest.approx(at_edge["fl"].g2_scale)
+
+
+def test_per_corner_curve_scales_each_corner_by_its_own_series() -> None:
+    """A simulated-lap curve carries g2_by_corner: a corner with its own
+    series uses it, a corner without falls back to the corner-mean g2."""
+    model = _model_with_pace_curve()
+    for r in model["g2_typ_by_track_car_cond"]:
+        if "g2_vs_lap_time" in r:
+            # fl rises faster with pace than the mean: 1.5/0.9 at 55 s vs 1.2/0.9.
+            r["g2_vs_lap_time"]["g2_by_corner"] = {"fl": [1.5, 0.9, 0.3]}
+    p = predict_cold_pressure(
+        _model=model,
+        track="track_a",
+        car="ToyCar",
+        lap_within_stint=5,
+        target_hot_pressure_bar={c: 1.8 for c in CORNERS},
+        ambient_temp_c=20.0,
+        target_lap_time_s=55.0,
+    )
+    assert p["fl"].g2_scale == pytest.approx(1.5 / 0.9)
+    assert p["fr"].g2_scale == pytest.approx(1.2 / 0.9)
+    assert p["fl"].g2_pace_source == "curve" and p["fr"].g2_pace_source == "curve"
+    assert p["fl"].predicted_hot_temp_c > p["fr"].predicted_hot_temp_c
 
 
 def test_bucket_without_curve_falls_back_to_default_exponent() -> None:
