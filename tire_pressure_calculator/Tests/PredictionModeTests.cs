@@ -92,10 +92,11 @@ public class PredictionModeTests
     // ---------- MainViewModel mode + wiring ----------
 
     [Fact]
-    public void Mode_DefaultsToManual()
+    public void Mode_DefaultsToManual_WhenNoModel()
     {
-        // Use the parametric ctor so the test doesn't depend on persisted
-        // settings from a previous run.
+        // Circuit Prediction is the stored default, but without a model the
+        // view model drops to Manual. Use the parametric ctor so the test
+        // doesn't depend on persisted settings from a previous run.
         var vm = new MainViewModel(tireModel: null);
         Assert.Equal(AppMode.Manual, vm.Mode);
         Assert.True(vm.IsManualMode);

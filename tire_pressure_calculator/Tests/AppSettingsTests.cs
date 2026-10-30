@@ -26,10 +26,27 @@ public class AppSettingsTests
     }
 
     [Fact]
-    public void AppSettings_Defaults_ModeIsManual()
+    public void AppSettings_TargetMemory_RoundTrips()
+    {
+        var original = new AppSettings();
+        original.TargetMemory["Inferno 86|A052|dry"] = new()
+        {
+            ["fl"] = new CornerTargets { TargetHotTemp = 95.0, TargetHotPressure = 2.0 },
+        };
+        var json = JsonSerializer.Serialize(original, SettingsContext.Default.AppSettings);
+        var back = JsonSerializer.Deserialize(json, SettingsContext.Default.AppSettings)!;
+        Assert.Equal(2.0, back.TargetMemory["Inferno 86|A052|dry"]["fl"].TargetHotPressure);
+        Assert.Equal(95.0, back.TargetMemory["Inferno 86|A052|dry"]["fl"].TargetHotTemp);
+        // Older payloads without the block deserialize to an empty memory.
+        var legacy = JsonSerializer.Deserialize("{\"Mode\":0}", SettingsContext.Default.AppSettings)!;
+        Assert.Empty(legacy.TargetMemory);
+    }
+
+    [Fact]
+    public void AppSettings_Defaults_ModeIsCircuitPrediction()
     {
         var s = new AppSettings();
-        Assert.Equal(AppMode.Manual, s.Mode);
+        Assert.Equal(AppMode.CircuitPrediction, s.Mode);
         Assert.NotNull(s.Prediction);
         Assert.Equal("dry", s.Prediction.Condition);
     }

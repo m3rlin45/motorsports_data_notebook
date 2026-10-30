@@ -434,6 +434,20 @@ test('corner defaults: per-car steady-state medians with condition fallback', ()
   assert.equal(model.lookupCornerDefaults('NoSuchCar', 'fl', 'dry'), null);
 });
 
+test('target hot pressure: team table per (car, compound), null otherwise', () => {
+  const model = new TireModel(modelDto);
+  assert.equal(model.lookupTargetHotPressure('FJ', 'DRY').targetHotPressureBar, 1.5);
+  assert.equal(model.lookupTargetHotPressure('FJ', 'WET').targetHotPressureBar, 1.7);
+  assert.equal(model.lookupTargetHotPressure('Inferno 86', 'A052').targetHotPressureBar, 1.8);
+  assert.equal(model.lookupTargetHotPressure('Inferno 86', 'RE-71RS').targetHotPressureBar, 2.0);
+  assert.equal(model.lookupTargetHotPressure('Inferno 86', 'A050').targetHotPressureBar, 1.5);
+  assert.equal(model.lookupTargetHotPressure('Inferno 86', 'NS-2R'), null);
+  assert.equal(model.lookupTargetHotPressure('FJ', null), null);
+  // An artifact without the table keeps the caller on the measured median.
+  const bare = new TireModel({ ...modelDto, target_hot_pressure_by_car_compound: undefined });
+  assert.equal(bare.lookupTargetHotPressure('FJ', 'DRY'), null);
+});
+
 test('dataThrough prefers the local time, then the date, then the fit date', () => {
   const model = new TireModel(modelDto);
   assert.equal(model.dataThrough, modelDto.data_through_local);
