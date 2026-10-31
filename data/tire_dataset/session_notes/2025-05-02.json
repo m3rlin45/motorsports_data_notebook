@@ -1,5 +1,5 @@
 {
-  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|c1fdce25fe896f69cd0fde05a36384cced198a0f",
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|c8b6c5f7aa974ad41adb6b232055b39c7818df79",
   "_model": "claude-sonnet-5-5",
   "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
   "_extracted_at": "2026-10-29T00:21:23.378158+00:00",
@@ -10,15 +10,15 @@
     }
   ],
   "_sessions": [
-    "e6dc3ef932ea167d",
-    "c5abb6410931885f",
-    "fa3f0fc82d59bb33"
+    "2025-05-02_125159_Inferno-86_sodegaura_a0343",
+    "2025-05-02_135615_Inferno-86_sodegaura_a0344",
+    "2025-05-02_145649_Inferno-86_sodegaura_a0349"
   ],
-  "input": "DATE: 2025-05-02 (times are local to the track)\n\nRUN NOTES FILE \"2025-05-02 Sodegaura.txt\":\n13:00 Run\n\nDampers\nrear: 10\nFront: 15\n\nTires: \nFront: silver worn\nRear: black worn\n\nall 2.1\n\n14:00 Run\n\nDampers \nsame\n\nTires:\n\nFront Silver new-ish\nRear Black new\n\n\nall 2.1\n\n\n15:00 Run\n\nDampers: all 10\n\ntires same\n\nLOGGED SESSIONS:\n1. session_id=e6dc3ef932ea167d start=12:51 car=\"Inferno 86\" track=sodegaura laps=17 type=\"Generic testing\" comment=\"Rain!\"\n2. session_id=c5abb6410931885f start=13:56 car=\"Inferno 86\" track=sodegaura laps=21 type=\"Generic testing\" comment=\"Rain!\"\n3. session_id=fa3f0fc82d59bb33 start=14:56 car=\"Inferno 86\" track=sodegaura laps=19 type=\"Generic testing\" comment=\"Rain!\"\n",
+  "input": "DATE: 2025-05-02 (times are local to the track)\n\nRUN NOTES FILE \"2025-05-02 Sodegaura.txt\":\n13:00 Run\n\nDampers\nrear: 10\nFront: 15\n\nTires: \nFront: silver worn\nRear: black worn\n\nall 2.1\n\n14:00 Run\n\nDampers \nsame\n\nTires:\n\nFront Silver new-ish\nRear Black new\n\n\nall 2.1\n\n\n15:00 Run\n\nDampers: all 10\n\ntires same\n\nLOGGED SESSIONS:\n1. session_id=2025-05-02_125159_Inferno-86_sodegaura_a0343 start=12:51 car=\"Inferno 86\" track=sodegaura laps=17 type=\"Generic testing\" comment=\"Rain!\"\n2. session_id=2025-05-02_135615_Inferno-86_sodegaura_a0344 start=13:56 car=\"Inferno 86\" track=sodegaura laps=21 type=\"Generic testing\" comment=\"Rain!\"\n3. session_id=2025-05-02_145649_Inferno-86_sodegaura_a0349 start=14:56 car=\"Inferno 86\" track=sodegaura laps=19 type=\"Generic testing\" comment=\"Rain!\"\n",
   "data": {
     "sessions": [
       {
-        "session_id": "e6dc3ef932ea167d",
+        "session_id": "2025-05-02_125159_Inferno-86_sodegaura_a0343",
         "note_file": "2025-05-02 Sodegaura.txt",
         "note_session_index": 1,
         "match_confidence": 0.9,
@@ -46,7 +46,7 @@
         "notes": "Front tires silver set (worn), rear tires black set (worn)."
       },
       {
-        "session_id": "c5abb6410931885f",
+        "session_id": "2025-05-02_135615_Inferno-86_sodegaura_a0344",
         "note_file": "2025-05-02 Sodegaura.txt",
         "note_session_index": 2,
         "match_confidence": 0.9,
@@ -74,7 +74,7 @@
         "notes": "Front silver set new-ish, rear black set new."
       },
       {
-        "session_id": "fa3f0fc82d59bb33",
+        "session_id": "2025-05-02_145649_Inferno-86_sodegaura_a0349",
         "note_file": "2025-05-02 Sodegaura.txt",
         "note_session_index": 3,
         "match_confidence": 0.9,

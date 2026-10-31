@@ -8,6 +8,19 @@ Design principles
 - **MANIFEST.jsonl is canonical.** Each line is ``{session_id, xrk_path,
   xrk_mtime_ns, file_size, extractor_version, status, n_laps, n_samples,
   extracted_at}``, sorted by ``(date, session_id)``.
+
+Timeseries layout (dataset schema 9)
+------------------------------------
+One parquet per session, ``timeseries/YYYY-MM/<session_id>.parquet``, holding
+every selected channel **verbatim at its native rate**: one row per raw
+sample, one row group per raw *timebase* (a set of channels the logger
+sampled on one timecode array), the ``timebase`` and ``family`` columns
+naming it, and every channel column an Arrow null outside the rows of its
+own timebase. Nothing is resampled or aligned here; merging onto one clock
+is done at query time by :func:`load_group` consumers,
+:func:`~.kinematics.load_kinematics` and the per-lap aggregates. The file's
+schema metadata carries the per-timebase summary and the session's sensor
+verdict (``tire_etl.timebases`` / ``tire_etl.kinematics``).
 """
 
 from __future__ import annotations
@@ -18,18 +31,22 @@ import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Iterable
 
+import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
+from .aggregates import channel_series
 from .paths import (
     laps_dir,
     manifest_path,
     sessions_dir,
     timeseries_dir,
 )
+
+__all__ = ["channel_series"]
 
 if TYPE_CHECKING:
     from .extract import ExtractResult
@@ -123,6 +140,297 @@ def _atomic_write_parquet(table: pa.Table, target: Path) -> None:
     os.replace(tmp, target)
 
 
+TIMESERIES_SCHEMA_VERSION = 9
+# An interval at least this long inside a timebase is a dropout, not a
+# sample period: it is excluded from the rate and counted as gap time.
+RATE_GAP_S = 1.0
+# Largest magnitude float16 represents; a channel with a finite value beyond
+# it stays float32 whatever its source.
+_FLOAT16_MAX = 65504.0
+TIMESERIES_KEY_COLUMNS = [
+    "session_id",
+    "timebase",
+    "family",
+    "lap_num",
+    "stint_id",
+    "sample_idx",
+    "t_session_s",
+    "t_lap_s",
+]
+FAMILIES = ("gps", "accel", "gyro", "tpms", "surface", "controls")
+_META_TIMEBASES = b"tire_etl.timebases"
+_META_KINEMATICS = b"tire_etl.kinematics"
+_META_SCHEMA = b"tire_etl.schema"
+
+
+def channel_family(name: str) -> str | None:
+    """The sensor family a canonical channel column belongs to, or None for
+    a key column / unknown name."""
+    if name.startswith("tpms_"):
+        return "tpms"
+    if name.startswith("surf_temp_"):
+        return "surface"
+    if name.startswith("gps_") or name == "speed_ms":
+        return "gps"
+    if name in ("lat_g", "long_g", "vert_g"):
+        return "accel"
+    if name in ("yaw_rate_dps", "pitch_rate_dps", "roll_rate_dps"):
+        return "gyro"
+    if name in ("throttle_pct", "brake_bar", "steer_deg"):
+        return "controls"
+    return None
+
+
+def family_columns(names: Iterable[str], family: str) -> list[str]:
+    """The channel columns of ``family`` among ``names``, in their order."""
+    return [n for n in names if channel_family(n) == family]
+
+
+def narrowest_float(values: np.ndarray, *, float64: bool = False) -> pa.Array:
+    """``values`` as the narrowest Arrow float array that holds them exactly.
+
+    libxrk returns every logger channel as float32 although the AIM file
+    stores the IMU, the gyro and the CAN channels as float16 (CHS decoder
+    type 20; libxrk issue #115). A channel whose finite samples are all
+    float16-representable is stored as float16: the cast is exact, the
+    column halves, and a channel the logger really logged as float32 (an
+    analog input, an IR zone, a TPMS pressure) never satisfies the test on
+    real data. ``float64`` keeps the column at float64 (positions).
+    """
+    v = np.asarray(values)
+    if float64:
+        return pa.array(v.astype(np.float64), type=pa.float64())
+    v32 = v.astype(np.float32)
+    finite = v32[np.isfinite(v32)]
+    if (
+        finite.size
+        and float(np.max(np.abs(finite))) <= _FLOAT16_MAX
+        and np.array_equal(finite.astype(np.float16).astype(np.float32), finite)
+    ):
+        return pa.array(v32.astype(np.float16), type=pa.float16())
+    return pa.array(v32, type=pa.float32())
+
+
+def build_timeseries_table(session_id: str, parts: list[tuple[str, str, pa.Table]]) -> pa.Table:
+    """Assemble the session table from per-timebase parts.
+
+    Each part is ``(timebase, family, table)`` where ``table`` has the key
+    columns ``lap_num, stint_id, sample_idx, t_session_s, t_lap_s`` and the
+    timebase's channel columns. The parts are stacked with the channels of
+    the other timebases as nulls, key columns first, then the channels
+    ordered by family and name.
+    """
+    tables: list[pa.Table] = []
+    for timebase, family, tbl in parts:
+        if len(tbl) == 0:
+            continue
+        n = len(tbl)
+        tbl = tbl.add_column(0, "family", pa.array([family] * n, type=pa.string()))
+        tbl = tbl.add_column(0, "timebase", pa.array([timebase] * n, type=pa.string()))
+        tbl = tbl.add_column(0, "session_id", pa.array([session_id] * n, type=pa.string()))
+        tables.append(tbl)
+    if not tables:
+        return pa.table({})
+    merged = pa.concat_tables(tables, promote_options="default")
+    channels = [c for c in merged.schema.names if c not in TIMESERIES_KEY_COLUMNS]
+    order = [c for c in TIMESERIES_KEY_COLUMNS if c in merged.schema.names]
+    for fam in FAMILIES:
+        order += sorted(family_columns(channels, fam))
+    order += sorted(c for c in channels if channel_family(c) is None)
+    return merged.select(order)
+
+
+def timeseries_summary(table: pa.Table) -> list[dict]:
+    """One entry per timebase: name, family, row count, rate (Hz) and the
+    channels it carries.
+
+    The rate is the number of samples over the time they cover, counting
+    only the intervals shorter than :data:`RATE_GAP_S`: a median interval
+    would call the KK-SII's accelerometer, logged as pairs 2 ms apart on
+    50 Hz frames, 500 Hz, and a span-based mean under-reports a stream
+    with dropouts (an IMU that stops for minutes mid-session). The gap
+    time and count are reported alongside (``gap_s``, ``n_gaps``)."""
+    if len(table) == 0 or "timebase" not in table.schema.names:
+        return []
+    out: list[dict] = []
+    tb_col = table.column("timebase")
+    for name in pc.unique(tb_col).to_pylist():
+        sub = table.filter(pc.equal(tb_col, name))
+        t = np.sort(
+            np.asarray(sub.column("t_session_s").to_numpy(zero_copy_only=False), dtype=float)
+        )
+        dt = np.diff(t)
+        live = dt[(dt > 0) & (dt < RATE_GAP_S)]
+        rate = float(live.size / live.sum()) if live.size and live.sum() > 0 else float("nan")
+        gaps = dt[dt >= RATE_GAP_S]
+        channels = [
+            c
+            for c in sub.schema.names
+            if c not in TIMESERIES_KEY_COLUMNS and sub.column(c).null_count < len(sub)
+        ]
+        out.append(
+            {
+                "timebase": name,
+                "family": sub.column("family")[0].as_py(),
+                "n": len(sub),
+                "rate_hz": rate,
+                "gap_s": float(gaps.sum()) if gaps.size else 0.0,
+                "n_gaps": int(gaps.size),
+                "channels": channels,
+            }
+        )
+    out.sort(
+        key=lambda e: (
+            FAMILIES.index(e["family"]) if e["family"] in FAMILIES else 99,
+            e["timebase"],
+        )
+    )
+    return out
+
+
+def write_timeseries(
+    table: pa.Table,
+    target: Path,
+    *,
+    summary: list[dict] | None = None,
+    kinematics: dict | None = None,
+) -> None:
+    """Atomically write a session table with one row group per timebase.
+
+    Rows are sorted by ``(timebase, t_session_s)``; readers filter on
+    ``family`` / ``timebase`` and parquet's row-group statistics skip the
+    other timebases. ``summary`` (see :func:`timeseries_summary`) and the
+    sensor ``kinematics`` verdict go into the schema metadata so a loader
+    needs only the file.
+
+    Encoding: zstd level 9 over byte-stream-split for the float32/float64
+    columns, PLAIN for float16 (DuckDB cannot read byte-stream-split
+    float16), delta packing for ``sample_idx``, dictionary encoding only on
+    the string keys. Parquet's default dictionary attempt on a float
+    column of mostly distinct values falls back to PLAIN, which zstd
+    barely compresses: the same 20 MB session file is 8.7 MB this way,
+    identical values.
+    """
+    if "timebase" in table.schema.names and len(table) > 1:
+        idx = pc.sort_indices(
+            table, sort_keys=[("timebase", "ascending"), ("t_session_s", "ascending")]
+        )
+        table = table.take(idx)
+    meta = dict(table.schema.metadata or {})
+    meta[_META_SCHEMA] = str(TIMESERIES_SCHEMA_VERSION).encode()
+    if summary is not None:
+        meta[_META_TIMEBASES] = json.dumps(summary).encode()
+    if kinematics is not None:
+        meta[_META_KINEMATICS] = json.dumps(kinematics).encode()
+    table = table.replace_schema_metadata(meta)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = target.with_suffix(".parquet.tmp")
+    wide_floats = [f.name for f in table.schema if f.type in (pa.float32(), pa.float64())]
+    strings = [f.name for f in table.schema if pa.types.is_string(f.type)]
+    encoding = {"sample_idx": "DELTA_BINARY_PACKED"} if "sample_idx" in table.schema.names else {}
+    writer_opts: dict = dict(
+        compression="zstd",
+        compression_level=9,
+        use_dictionary=strings,
+        use_byte_stream_split=wide_floats,
+        column_encoding=encoding,
+    )
+    if "timebase" in table.schema.names and len(table):
+        tb = table.column("timebase").to_numpy(zero_copy_only=False)
+        bounds = np.flatnonzero(np.concatenate([[True], tb[1:] != tb[:-1], [True]]))
+        with pq.ParquetWriter(tmp, table.schema, **writer_opts) as w:
+            for a, b in zip(bounds[:-1], bounds[1:]):
+                piece = table.slice(int(a), int(b - a))
+                w.write_table(piece, row_group_size=max(len(piece), 1))
+    else:
+        pq.write_table(table, tmp, **writer_opts)
+    os.replace(tmp, target)
+
+
+def timeseries_path(dataset_root: Path, session_id: str) -> Path | None:
+    """The session's timeseries file, or None."""
+    files = sorted(timeseries_dir(dataset_root).glob(f"*/{session_id}.parquet"))
+    return files[0] if files else None
+
+
+def timeseries_metadata(path: Path) -> dict:
+    """``{"schema": int | None, "timebases": [...], "kinematics": {...} | None}``
+    from the file's schema metadata."""
+    meta = pq.read_schema(path).metadata or {}
+    schema = meta.get(_META_SCHEMA)
+    tbs = meta.get(_META_TIMEBASES)
+    kin = meta.get(_META_KINEMATICS)
+    return {
+        "schema": int(schema) if schema else None,
+        "timebases": json.loads(tbs) if tbs else [],
+        "kinematics": json.loads(kin) if kin else None,
+    }
+
+
+def _require_current_schema(path: Path, metadata: dict | None) -> None:
+    """Refuse a session file the current loaders cannot read correctly.
+
+    Only files written by this schema carry the ``timebase`` / ``family``
+    row groups the loaders filter on; an older file (every channel
+    resampled onto one clock) would be read as one timebase with the wrong
+    rates. Re-extract (``just tire-etl``) instead of reading it.
+    """
+    raw = (metadata or {}).get(_META_SCHEMA)
+    found = int(raw) if raw else None
+    if found != TIMESERIES_SCHEMA_VERSION:
+        raise ValueError(
+            f"{path.name}: timeseries schema {found if found is not None else 'missing'}, "
+            f"this code reads schema {TIMESERIES_SCHEMA_VERSION} only — re-extract the dataset"
+        )
+
+
+def read_timeseries(
+    path: Path,
+    *,
+    columns: Iterable[str] | None = None,
+    families: Iterable[str] | None = None,
+    timebases: Iterable[str] | None = None,
+) -> pa.Table:
+    """Read (part of) a session file: the key columns plus ``columns`` that
+    exist, restricted to the given families / timebases (row groups the
+    statistics rule out are skipped)."""
+    file_schema = pq.read_schema(path)
+    _require_current_schema(path, file_schema.metadata)
+    schema_names = file_schema.names
+    cols: list[str] | None = None
+    if columns is not None:
+        wanted = list(columns)
+        cols = [c for c in TIMESERIES_KEY_COLUMNS if c in schema_names]
+        cols += [c for c in wanted if c in schema_names and c not in cols]
+    filters: list[tuple] = []
+    if families is not None and "family" in schema_names:
+        filters.append(("family", "in", list(families)))
+    if timebases is not None and "timebase" in schema_names:
+        filters.append(("timebase", "in", list(timebases)))
+    return pq.read_table(path, columns=cols, filters=filters or None)
+
+
+def load_group(
+    dataset_root: Path, session_id: str, family: str, columns: Iterable[str] | None = None
+) -> pa.Table | None:
+    """The rows of one sensor family (``gps`` / ``accel`` / ``gyro`` /
+    ``tpms`` / ``surface`` / ``controls``) with the key columns and the
+    family's channels (all of them, or the subset ``columns``); None when
+    the session has no file or no such family. Each channel column is
+    valid only on its own timebase's rows (:func:`channel_series`)."""
+    path = timeseries_path(dataset_root, session_id)
+    if path is None:
+        return None
+    names = pq.read_schema(path).names
+    if "family" not in names:
+        return None
+    chans = family_columns(names, family)
+    if columns is not None:
+        chans = [c for c in columns if c in chans]
+    tbl = read_timeseries(path, columns=chans, families=[family])
+    return tbl if len(tbl) else None
+
+
 def _anti_join_and_concat(
     existing: pa.Table | None,
     new_rows: pa.Table,
@@ -155,7 +463,11 @@ def _anti_join_and_concat(
     # rejects partitions whose schemas differ only in order.
     merged = pa.concat_tables([keep, new_rows], promote_options="default")
     order = [c for c in new_rows.schema.names] + [
-        c for c in merged.schema.names if c not in new_rows.schema.names
+        c
+        for c in merged.schema.names
+        # A column the incoming rows no longer write (dropped by a schema
+        # bump) is kept only while an older row still carries a value.
+        if c not in new_rows.schema.names and merged.column(c).null_count < len(merged)
     ]
     return merged.select(order)
 
@@ -200,10 +512,21 @@ def upsert_session(
     partition = _partition_for_date(date_str)
     extracted_at = datetime.now(tz=timezone.utc).isoformat(timespec="seconds")
 
-    # Timeseries: one file per session.
+    # Timeseries: one file per session, one row group per raw timebase. A
+    # session that now extracts without samples (an error) loses the file
+    # an earlier run wrote for it, so no stale layout survives a re-extract.
     if len(result.timeseries) > 0:
         ts_path = timeseries_dir(dataset_root) / partition / f"{session_id}.parquet"
-        _atomic_write_parquet(result.timeseries, ts_path)
+        write_timeseries(
+            result.timeseries,
+            ts_path,
+            summary=getattr(result, "timebases", None),
+            kinematics=getattr(result, "kinematics", None),
+        )
+    else:
+        stale = timeseries_path(dataset_root, str(session_id))
+        if stale is not None:
+            stale.unlink()
 
     # Sessions partition.
     sess_path = sessions_dir(dataset_root) / f"{partition}.parquet"

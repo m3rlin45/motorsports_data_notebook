@@ -65,7 +65,7 @@ def test_lap_dynamics_heat_proxy_increases_with_lat_g() -> None:
             "t_lap_s": [float(i) for i in range(61)],
             "lat_g": [0.5] * 61,
             "long_g": [0.0] * 61,
-            "speed_kmh": [100.0] * 61,
+            "speed_ms": [100.0 / 3.6] * 61,
             "brake_bar": [0.0] * 61,
             "throttle_pct": [80.0] * 61,
         }
@@ -77,7 +77,7 @@ def test_lap_dynamics_heat_proxy_increases_with_lat_g() -> None:
             "t_lap_s": [float(i) for i in range(61)],
             "lat_g": [1.0] * 61,
             "long_g": [0.0] * 61,
-            "speed_kmh": [100.0] * 61,
+            "speed_ms": [100.0 / 3.6] * 61,
             "brake_bar": [0.0] * 61,
             "throttle_pct": [80.0] * 61,
         }
@@ -99,7 +99,12 @@ def test_lap_dynamics_moving_time_excludes_standstill() -> None:
     speed = np.where(t < 40, 0.0, 80.0)
     speed[40:45] = 15.0  # rolling out of the pit lane
     lap = pa.table(
-        {"t_lap_s": t, "speed_kmh": speed, "lat_g": np.zeros_like(t), "long_g": np.zeros_like(t)}
+        {
+            "t_lap_s": t,
+            "speed_ms": speed / 3.6,
+            "lat_g": np.zeros_like(t),
+            "long_g": np.zeros_like(t),
+        }
     )
     dyn = compute_lap_dynamics(lap)
     assert dyn["on_track_s"] == 99.0

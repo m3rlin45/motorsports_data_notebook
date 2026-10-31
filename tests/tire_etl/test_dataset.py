@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+import pytest
 
 from motorsports_data_notebook.tire_etl.dataset import (
     load_manifest,
@@ -218,6 +219,8 @@ def test_upsert_with_no_laps_drops_the_sessions_earlier_lap_rows(tmp_path: Path)
     )
     upsert_session(root, errored)
     assert pq.read_table(laps_path).num_rows == 0
+    # ... nor the timeseries file the earlier run wrote for it.
+    assert not (root / "timeseries" / "2026-01" / "sess_a.parquet").exists()
 
     # Other sessions' rows in the same partition survive.
     other = _simple_extract_result("sess_b", "/aim/2026-01-02/b.xrk", "2026-01-02")
@@ -251,3 +254,216 @@ def test_remove_manifest_entries_drops_only_named_paths(tmp_path) -> None:
     )
     assert list(load_manifest(tmp_path)) == ["/aim/2026-10-24/CMD_KK-F_X_a_0376.xrk"]
     assert remove_manifest_entries(tmp_path, ["/nope"]) == 0
+
+
+class TestTimebaseLayout:
+    """Schema 7: one row group per raw timebase, loaders merge at query time."""
+
+    def _table(self):
+        import numpy as np
+
+        from motorsports_data_notebook.tire_etl.dataset import build_timeseries_table
+
+        def keys(t):
+            return {
+                "lap_num": pa.array(np.ones(len(t), dtype=np.int16)),
+                "stint_id": pa.array(np.ones(len(t), dtype=np.int16)),
+                "sample_idx": pa.array(np.arange(len(t), dtype=np.int32)),
+                "t_session_s": pa.array(t, type=pa.float64()),
+                "t_lap_s": pa.array(np.asarray(t, dtype=np.float32)),
+            }
+
+        t_g = np.arange(0.0, 4.0, 0.04)
+        t_p = np.arange(0.0, 4.0, 0.8)
+        gps = {**keys(t_g), "speed_ms": pa.array(np.full(len(t_g), 30.0, dtype=np.float32))}
+        tp = {
+            **keys(t_p),
+            "tpms_press_fl_bar": pa.array(np.linspace(2.0, 2.1, len(t_p)).astype(np.float32)),
+        }
+        return build_timeseries_table(
+            "s1", [("gps", "gps", pa.table(gps)), ("tpms/fl", "tpms", pa.table(tp))]
+        )
+
+    def test_build_puts_keys_first_and_nulls_outside_a_timebase(self) -> None:
+        from motorsports_data_notebook.tire_etl.dataset import TIMESERIES_KEY_COLUMNS
+
+        tbl = self._table()
+        assert tbl.schema.names[: len(TIMESERIES_KEY_COLUMNS)] == TIMESERIES_KEY_COLUMNS
+        assert tbl.column("speed_ms").null_count == 5
+        assert tbl.column("tpms_press_fl_bar").null_count == 100
+
+    def test_write_read_round_trip_with_row_groups_and_metadata(self, tmp_path: Path) -> None:
+        from motorsports_data_notebook.tire_etl.dataset import (
+            channel_series,
+            load_group,
+            read_timeseries,
+            timeseries_metadata,
+            timeseries_summary,
+            write_timeseries,
+        )
+
+        tbl = self._table()
+        summary = timeseries_summary(tbl)
+        assert [e["timebase"] for e in summary] == ["gps", "tpms/fl"]
+        assert summary[0]["rate_hz"] == pytest.approx(25.0) and summary[1]["n"] == 5
+        path = tmp_path / "timeseries" / "2026-01" / "s1.parquet"
+        write_timeseries(tbl, path, summary=summary, kinematics={"accel_source": "imu"})
+        md = pq.read_metadata(path)
+        assert md.num_row_groups == 2
+        meta = timeseries_metadata(path)
+        assert meta["schema"] == 9 and meta["kinematics"] == {"accel_source": "imu"}
+        assert [e["timebase"] for e in meta["timebases"]] == ["gps", "tpms/fl"]
+        tp = read_timeseries(path, columns=["tpms_press_fl_bar"], families=["tpms"])
+        assert len(tp) == 5 and "speed_ms" not in tp.schema.names
+        grp = load_group(tmp_path, "s1", "gps")
+        assert (
+            grp is not None
+            and len(grp) == 100
+            and set(grp.schema.names) >= {"speed_ms", "t_session_s"}
+        )
+        t, v = channel_series(grp, "speed_ms", "t_session_s")
+        assert len(t) == 100 and v[0] == 30.0
+        assert load_group(tmp_path, "s1", "surface") is None
+        assert load_group(tmp_path, "nope", "gps") is None
+
+
+def test_read_timeseries_refuses_a_file_of_another_schema(tmp_path) -> None:
+    """A file without the schema-7 metadata (an older resampled layout, or a
+    hand-written parquet) must not be read as if it were native-rate."""
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    import pytest
+
+    from motorsports_data_notebook.tire_etl.dataset import read_timeseries
+
+    path = tmp_path / "old.parquet"
+    pq.write_table(pa.table({"t_lap_s": [0.0, 1.0], "speed_ms": [1.0, 2.0]}), path)
+    with pytest.raises(ValueError, match="schema missing"):
+        read_timeseries(path)
+    old = pa.table({"t_lap_s": [0.0]}).replace_schema_metadata({b"tire_etl.schema": b"6"})
+    pq.write_table(old, path)
+    with pytest.raises(ValueError, match="schema 6"):
+        read_timeseries(path)
+
+
+def test_narrowest_float_picks_the_exact_width() -> None:
+    import numpy as np
+    import pyarrow as pa
+
+    from motorsports_data_notebook.tire_etl.dataset import narrowest_float
+
+    # A float16 source widened to float32 by libxrk narrows back exactly.
+    f16 = np.array([0.2308, -0.98486, 7.1289, 0.0, np.nan], dtype=np.float16).astype(np.float32)
+    arr = narrowest_float(f16)
+    assert arr.type == pa.float16()
+    assert np.array_equal(
+        arr.to_numpy(zero_copy_only=False).astype(np.float32), f16, equal_nan=True
+    )
+    # A genuine float32 value (TPMS 1.28 bar, an IR 48.7 °C) stays float32.
+    assert narrowest_float(np.array([1.28, 1.25], dtype=np.float32)).type == pa.float32()
+    assert narrowest_float(np.array([48.7, 48.4], dtype=np.float32)).type == pa.float32()
+    # Beyond float16's range stays float32 even when the mantissa would fit.
+    assert narrowest_float(np.array([70000.0, 0.0], dtype=np.float32)).type == pa.float32()
+    # Positions are always float64.
+    assert narrowest_float(np.array([35.39534]), float64=True).type == pa.float64()
+    # All-NaN or empty: float32.
+    assert narrowest_float(np.array([np.nan, np.nan], dtype=np.float32)).type == pa.float32()
+
+
+def test_write_timeseries_encodings(tmp_path) -> None:
+    """Floats are byte-stream-split (float16 PLAIN, DuckDB's limit), no
+    dictionary on numbers, delta-packed sample_idx, and float16 columns
+    read back as float16."""
+    import numpy as np
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    from motorsports_data_notebook.tire_etl.dataset import (
+        build_timeseries_table,
+        narrowest_float,
+        read_timeseries,
+        write_timeseries,
+    )
+
+    n = 2000
+    keys = {
+        "lap_num": pa.array(np.ones(n, dtype=np.int16)),
+        "stint_id": pa.array(np.ones(n, dtype=np.int16)),
+        "sample_idx": pa.array(np.arange(n, dtype=np.int32)),
+        "t_session_s": pa.array(np.arange(n) / 50.0, type=pa.float64()),
+        "t_lap_s": pa.array((np.arange(n) / 50.0).astype(np.float32)),
+    }
+    acc = dict(keys)
+    acc["lat_g"] = narrowest_float(np.sin(np.arange(n) / 7.0).astype(np.float16).astype(np.float32))
+    gps = dict(keys)
+    gps["speed_ms"] = narrowest_float(np.linspace(0.0, 55.123, n))
+    gps["gps_lat"] = narrowest_float(35.0 + np.arange(n) * 1e-6, float64=True)
+    table = build_timeseries_table(
+        "s", [("accel", "accel", pa.table(acc)), ("gps", "gps", pa.table(gps))]
+    )
+    assert table.schema.field("lat_g").type == pa.float16()
+    assert table.schema.field("speed_ms").type == pa.float32()
+    path = tmp_path / "s.parquet"
+    write_timeseries(table, path)
+    md = pq.ParquetFile(path).metadata
+    enc = {}
+    for rg in range(md.num_row_groups):
+        g = md.row_group(rg)
+        for i in range(g.num_columns):
+            c = g.column(i)
+            enc.setdefault(c.path_in_schema, set()).update(str(e) for e in c.encodings)
+    assert "BYTE_STREAM_SPLIT" in enc["speed_ms"] and "BYTE_STREAM_SPLIT" in enc["gps_lat"]
+    assert "BYTE_STREAM_SPLIT" in enc["t_session_s"]
+    assert "RLE_DICTIONARY" not in enc["lat_g"] and "BYTE_STREAM_SPLIT" not in enc["lat_g"]
+    assert "DELTA_BINARY_PACKED" in enc["sample_idx"]
+    assert "RLE_DICTIONARY" in enc["timebase"]
+    back = read_timeseries(path, columns=["lat_g", "speed_ms"], families=["accel"])
+    assert back.schema.field("lat_g").type == pa.float16()
+    lat = back.column("lat_g").to_numpy(zero_copy_only=False).astype(np.float32)
+    assert np.array_equal(lat, acc["lat_g"].to_numpy(zero_copy_only=False).astype(np.float32))
+
+
+def test_timeseries_summary_rate_is_the_mean_rate_not_the_median_interval() -> None:
+    """The KK-SII dash logs its accelerometer as pairs 2 ms apart on 50 Hz
+    frames: 100 samples per second whose median interval is 2 ms."""
+    import numpy as np
+    import pyarrow as pa
+
+    from motorsports_data_notebook.tire_etl.dataset import (
+        build_timeseries_table,
+        timeseries_summary,
+    )
+
+    frames = np.arange(0, 20_000, 20)  # 1000 frames over 20 s
+    t_ms = np.sort(np.concatenate([frames, frames + 2]))
+    n = t_ms.size
+    tbl = pa.table(
+        {
+            "lap_num": pa.array(np.ones(n, dtype=np.int16)),
+            "stint_id": pa.array(np.ones(n, dtype=np.int16)),
+            "sample_idx": pa.array(np.arange(n, dtype=np.int32)),
+            "t_session_s": pa.array(t_ms / 1000.0, type=pa.float64()),
+            "t_lap_s": pa.array((t_ms / 1000.0).astype(np.float32)),
+            "lat_g": pa.array(np.zeros(n, dtype=np.float32)),
+        }
+    )
+    summary = timeseries_summary(build_timeseries_table("s", [("accel", "accel", tbl)]))
+    assert summary[0]["n"] == n and abs(summary[0]["rate_hz"] - 100.0) < 0.5
+    assert summary[0]["gap_s"] == 0.0 and summary[0]["n_gaps"] == 0
+    # A stream that stops for three minutes mid-session (the KK-SII IMU in
+    # spring 2026) still has a 50 Hz rate; the dropout is reported as gap time.
+    t_ms = np.concatenate([np.arange(0, 20_000, 20), np.arange(200_000, 220_000, 20)])
+    n = t_ms.size
+    gappy = pa.table(
+        {
+            "lap_num": pa.array(np.ones(n, dtype=np.int16)),
+            "stint_id": pa.array(np.ones(n, dtype=np.int16)),
+            "sample_idx": pa.array(np.arange(n, dtype=np.int32)),
+            "t_session_s": pa.array(t_ms / 1000.0, type=pa.float64()),
+            "t_lap_s": pa.array((t_ms / 1000.0).astype(np.float32)),
+            "lat_g": pa.array(np.zeros(n, dtype=np.float32)),
+        }
+    )
+    summary = timeseries_summary(build_timeseries_table("s", [("accel", "accel", gappy)]))
+    assert abs(summary[0]["rate_hz"] - 50.0) < 0.5
+    assert summary[0]["n_gaps"] == 1 and abs(summary[0]["gap_s"] - 180.02) < 0.1

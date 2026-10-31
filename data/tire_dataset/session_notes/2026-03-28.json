@@ -1,5 +1,5 @@
 {
-  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|1d2b1bac15cbbcc4aaf6d9262c433919ab7ef08e",
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|0d339e2d5c1817a5eb924474cf094d73d9a1f151",
   "_model": "claude-sonnet-5-5",
   "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
   "_extracted_at": "2026-10-29T00:23:19.891356+00:00",
@@ -10,14 +10,14 @@
     }
   ],
   "_sessions": [
-    "48b47d5539aa2c12",
-    "10852a375d6e419c"
+    "2026-03-28_122655_KK-SII_tsukuba-2000_a0078",
+    "2026-03-28_140936_KK-SII_tsukuba-2000_a0080"
   ],
-  "input": "DATE: 2026-03-28 (times are local to the track)\n\nRUN NOTES FILE \"Tsukuba KKSII 2026-03-28.txt\":\n12:30 Run:\n\nTarget Pressure:\n1.6\n\n\nCold temps/press:\nFL: 1.5 27c\nFR: 1.53 28c\nRL: 1.50 29c\nRR: 1.47 23c\n\nTarget Temp/Press:\nFL: 53c 1.39\nFR: 44c 1.46\nRL: 46c 1.46\nRR: 47c 1.40\n\nLOGGED SESSIONS:\n1. session_id=48b47d5539aa2c12 start=12:26 car=\"KK-SII\" track=tsukuba_2000 laps=20 type=\"Car Generic testing\" comment=\"\"\n2. session_id=10852a375d6e419c start=14:09 car=\"KK-SII\" track=tsukuba_2000 laps=19 type=\"Car Generic testing\" comment=\"\"\n",
+  "input": "DATE: 2026-03-28 (times are local to the track)\n\nRUN NOTES FILE \"Tsukuba KKSII 2026-03-28.txt\":\n12:30 Run:\n\nTarget Pressure:\n1.6\n\n\nCold temps/press:\nFL: 1.5 27c\nFR: 1.53 28c\nRL: 1.50 29c\nRR: 1.47 23c\n\nTarget Temp/Press:\nFL: 53c 1.39\nFR: 44c 1.46\nRL: 46c 1.46\nRR: 47c 1.40\n\nLOGGED SESSIONS:\n1. session_id=2026-03-28_122655_KK-SII_tsukuba-2000_a0078 start=12:26 car=\"KK-SII\" track=tsukuba_2000 laps=20 type=\"Car Generic testing\" comment=\"\"\n2. session_id=2026-03-28_140936_KK-SII_tsukuba-2000_a0080 start=14:09 car=\"KK-SII\" track=tsukuba_2000 laps=19 type=\"Car Generic testing\" comment=\"\"\n",
   "data": {
     "sessions": [
       {
-        "session_id": "48b47d5539aa2c12",
+        "session_id": "2026-03-28_122655_KK-SII_tsukuba-2000_a0078",
         "note_file": "Tsukuba KKSII 2026-03-28.txt",
         "note_session_index": 1,
         "match_confidence": 0.85,
@@ -43,7 +43,7 @@
         "notes": "Target pressure 1.6 bar. Cold tire temps: FL 27c, FR 28c, RL 29c, RR 23c. Target temp/press: FL 53c 1.39, FR 44c 1.46, RL 46c 1.46, RR 47c 1.40."
       },
       {
-        "session_id": "10852a375d6e419c",
+        "session_id": "2026-03-28_140936_KK-SII_tsukuba-2000_a0080",
         "note_file": "Tsukuba KKSII 2026-03-28.txt",
         "note_session_index": 1,
         "match_confidence": 0.35,

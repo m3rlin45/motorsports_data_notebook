@@ -1,19 +1,19 @@
 {
-  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|48aafcbf83cd4b7ed1960fa9e39978ad00f54521",
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|20f9b47a6d948f07e4b1124dfa67226cf18c762e",
   "_model": "claude-sonnet-5-5",
   "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
   "_extracted_at": "2026-10-29T00:21:11.131722+00:00",
   "_notes_files": [],
   "_sessions": [
-    "7e4e02cdaeaf1bbd",
-    "283ef20e72f4938f",
-    "38f58fa068360321"
+    "2025-03-29_101646_Inferno-86_tsukuba-2000_a0192",
+    "2025-03-29_112108_Inferno-86_tsukuba-2000_a0193",
+    "2025-03-29_122919_Inferno-86_tsukuba-2000_a0194"
   ],
-  "input": "DATE: 2025-03-29 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=7e4e02cdaeaf1bbd start=10:16 car=\"Inferno 86\" track=tsukuba_2000 laps=3 type=\"Car Generic testing\" comment=\"\"\n2. session_id=283ef20e72f4938f start=11:21 car=\"Inferno 86\" track=tsukuba_2000 laps=12 type=\"Car Generic testing\" comment=\"\"\n3. session_id=38f58fa068360321 start=12:29 car=\"Inferno 86\" track=tsukuba_2000 laps=12 type=\"Car Generic testing\" comment=\"rain\"\n",
+  "input": "DATE: 2025-03-29 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=2025-03-29_101646_Inferno-86_tsukuba-2000_a0192 start=10:16 car=\"Inferno 86\" track=tsukuba_2000 laps=3 type=\"Car Generic testing\" comment=\"\"\n2. session_id=2025-03-29_112108_Inferno-86_tsukuba-2000_a0193 start=11:21 car=\"Inferno 86\" track=tsukuba_2000 laps=12 type=\"Car Generic testing\" comment=\"\"\n3. session_id=2025-03-29_122919_Inferno-86_tsukuba-2000_a0194 start=12:29 car=\"Inferno 86\" track=tsukuba_2000 laps=12 type=\"Car Generic testing\" comment=\"rain\"\n",
   "data": {
     "sessions": [
       {
-        "session_id": "7e4e02cdaeaf1bbd",
+        "session_id": "2025-03-29_101646_Inferno-86_tsukuba-2000_a0192",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -39,7 +39,7 @@
         "notes": ""
       },
       {
-        "session_id": "283ef20e72f4938f",
+        "session_id": "2025-03-29_112108_Inferno-86_tsukuba-2000_a0193",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -65,7 +65,7 @@
         "notes": ""
       },
       {
-        "session_id": "38f58fa068360321",
+        "session_id": "2025-03-29_122919_Inferno-86_tsukuba-2000_a0194",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,

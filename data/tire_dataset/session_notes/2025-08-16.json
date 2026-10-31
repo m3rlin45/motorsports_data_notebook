@@ -1,19 +1,19 @@
 {
-  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|0210d469b79191a659f88569a60140d4aa92f9d3",
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|5f6579bf19b2272514cff7bd5f42e08ae4b18e86",
   "_model": "claude-sonnet-5-5",
   "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
   "_extracted_at": "2026-10-29T00:22:10.001213+00:00",
   "_notes_files": [],
   "_sessions": [
-    "4c639c1ee3846578",
-    "868e761b816246cc",
-    "346c27d0dc86cf5a"
+    "2025-08-16_094944_Inferno-86_sodegaura_a1317",
+    "2025-08-16_103018_Inferno-86_sodegaura_a1320-1321",
+    "2025-08-16_113456_Inferno-86_sodegaura_a1329"
   ],
-  "input": "DATE: 2025-08-16 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=4c639c1ee3846578 start=09:49 car=\"Inferno 86\" track=sodegaura laps=8 type=\"Generic testing\" comment=\"a050 / Front 4/4 / Front dampers 27 / Rear Dampers 15\"\n2. session_id=868e761b816246cc start=10:30 car=\"Inferno 86\" track=sodegaura laps=13 type=\"Generic testing\" comment=\"A050 /  / Front bar 4/4 / Front left 27 / Front right 28 / Rear 20\"\n3. session_id=346c27d0dc86cf5a start=11:34 car=\"Inferno 86\" track=sodegaura laps=19 type=\"\" comment=\"Front bar 3/3 / FL 27 / FR 28 / R: 20\"\n",
+  "input": "DATE: 2025-08-16 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=2025-08-16_094944_Inferno-86_sodegaura_a1317 start=09:49 car=\"Inferno 86\" track=sodegaura laps=8 type=\"Generic testing\" comment=\"a050 / Front 4/4 / Front dampers 27 / Rear Dampers 15\"\n2. session_id=2025-08-16_103018_Inferno-86_sodegaura_a1320-1321 start=10:30 car=\"Inferno 86\" track=sodegaura laps=13 type=\"Generic testing\" comment=\"A050 /  / Front bar 4/4 / Front left 27 / Front right 28 / Rear 20\"\n3. session_id=2025-08-16_113456_Inferno-86_sodegaura_a1329 start=11:34 car=\"Inferno 86\" track=sodegaura laps=19 type=\"\" comment=\"Front bar 3/3 / FL 27 / FR 28 / R: 20\"\n",
   "data": {
     "sessions": [
       {
-        "session_id": "4c639c1ee3846578",
+        "session_id": "2025-08-16_094944_Inferno-86_sodegaura_a1317",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -43,7 +43,7 @@
         "notes": ""
       },
       {
-        "session_id": "868e761b816246cc",
+        "session_id": "2025-08-16_103018_Inferno-86_sodegaura_a1320-1321",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -74,7 +74,7 @@
         "notes": ""
       },
       {
-        "session_id": "346c27d0dc86cf5a",
+        "session_id": "2025-08-16_113456_Inferno-86_sodegaura_a1329",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
