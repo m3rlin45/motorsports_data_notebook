@@ -1,19 +1,19 @@
 {
-  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|8a9ce352e9c76af79ea8bcdb3d1a344986a49c6d",
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|a3f81943af0e763b17721dc93c0df2ea3e4ad38b",
   "_model": "claude-sonnet-5-5",
   "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
   "_extracted_at": "2026-10-29T00:23:32.431521+00:00",
   "_notes_files": [],
   "_sessions": [
-    "ba585e10155d2a83",
-    "d414ff1da3565096",
-    "bb8906b3d634302b"
+    "2026-06-21_082212_KK-F_fuji_a0025",
+    "2026-06-21_130854_KK-F_fuji_a0028",
+    "2026-06-21_160902_KK-F_fuji_a0031"
   ],
-  "input": "DATE: 2026-06-21 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=ba585e10155d2a83 start=08:22 car=\"KK-F\" track=fuji laps=11 type=\"レース\" comment=\"Track Wet,\"\n2. session_id=d414ff1da3565096 start=13:08 car=\"KK-F\" track=fuji laps=14 type=\"レース\" comment=\"\"\n3. session_id=bb8906b3d634302b start=16:09 car=\"KK-F\" track=fuji laps=14 type=\"レース\" comment=\"Race 2, Dry\"\n",
+  "input": "DATE: 2026-06-21 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=2026-06-21_082212_KK-F_fuji_a0025 start=08:22 car=\"KK-F\" track=fuji laps=11 type=\"レース\" comment=\"Track Wet,\"\n2. session_id=2026-06-21_130854_KK-F_fuji_a0028 start=13:08 car=\"KK-F\" track=fuji laps=14 type=\"レース\" comment=\"\"\n3. session_id=2026-06-21_160902_KK-F_fuji_a0031 start=16:09 car=\"KK-F\" track=fuji laps=14 type=\"レース\" comment=\"Race 2, Dry\"\n",
   "data": {
     "sessions": [
       {
-        "session_id": "ba585e10155d2a83",
+        "session_id": "2026-06-21_082212_KK-F_fuji_a0025",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -39,7 +39,7 @@
         "notes": ""
       },
       {
-        "session_id": "d414ff1da3565096",
+        "session_id": "2026-06-21_130854_KK-F_fuji_a0028",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -65,7 +65,7 @@
         "notes": ""
       },
       {
-        "session_id": "bb8906b3d634302b",
+        "session_id": "2026-06-21_160902_KK-F_fuji_a0031",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
