@@ -1,5 +1,5 @@
 {
-  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|253e602042652386580eb709750b1144974c5328",
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|4a0f971484a45b0477261f90b3e4ab937494ba0d",
   "_model": "claude-sonnet-5-5",
   "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
   "_extracted_at": "2026-10-29T00:21:25.274958+00:00",
@@ -10,15 +10,15 @@
     }
   ],
   "_sessions": [
-    "b163dda526013fc0",
-    "0effe66a2925a791",
-    "9d521fc473109736"
+    "2025-05-17_100833_Inferno-86_tsukuba-2000_a0393",
+    "2025-05-17_111802_Inferno-86_tsukuba-2000_a0394",
+    "2025-05-17_122907_Inferno-86_tsukuba-2000_a0396"
   ],
-  "input": "DATE: 2025-05-17 (times are local to the track)\n\nRUN NOTES FILE \"2025-05-17 Tsukuba.txt\":\nTsukuba Wet\n\nall runs on \nworn tires (60%+ tread, better tires on rear)\n\nFront 15\nRear 10\nall pressures 2.1 cold\n\nLOGGED SESSIONS:\n1. session_id=b163dda526013fc0 start=10:08 car=\"Inferno 86\" track=tsukuba_2000 laps=10 type=\"Car Generic testing\" comment=\"rain 60%, judder\"\n2. session_id=0effe66a2925a791 start=11:18 car=\"Inferno 86\" track=tsukuba_2000 laps=22 type=\"Car Generic testing\" comment=\"Maruyama before pit stop / rain / top time\"\n3. session_id=9d521fc473109736 start=12:29 car=\"Inferno 86\" track=tsukuba_2000 laps=13 type=\"Car Generic testing\" comment=\"\"\n",
+  "input": "DATE: 2025-05-17 (times are local to the track)\n\nRUN NOTES FILE \"2025-05-17 Tsukuba.txt\":\nTsukuba Wet\n\nall runs on \nworn tires (60%+ tread, better tires on rear)\n\nFront 15\nRear 10\nall pressures 2.1 cold\n\nLOGGED SESSIONS:\n1. session_id=2025-05-17_100833_Inferno-86_tsukuba-2000_a0393 start=10:08 car=\"Inferno 86\" track=tsukuba_2000 laps=10 type=\"Car Generic testing\" comment=\"rain 60%, judder\"\n2. session_id=2025-05-17_111802_Inferno-86_tsukuba-2000_a0394 start=11:18 car=\"Inferno 86\" track=tsukuba_2000 laps=22 type=\"Car Generic testing\" comment=\"Maruyama before pit stop / rain / top time\"\n3. session_id=2025-05-17_122907_Inferno-86_tsukuba-2000_a0396 start=12:29 car=\"Inferno 86\" track=tsukuba_2000 laps=13 type=\"Car Generic testing\" comment=\"\"\n",
   "data": {
     "sessions": [
       {
-        "session_id": "b163dda526013fc0",
+        "session_id": "2025-05-17_100833_Inferno-86_tsukuba-2000_a0393",
         "note_file": "2025-05-17 Tsukuba.txt",
         "note_session_index": 1,
         "match_confidence": 0.7,
@@ -46,7 +46,7 @@
         "notes": "Worn tires (60%+ tread, better tires on rear). Driver comment: judder."
       },
       {
-        "session_id": "0effe66a2925a791",
+        "session_id": "2025-05-17_111802_Inferno-86_tsukuba-2000_a0394",
         "note_file": "2025-05-17 Tsukuba.txt",
         "note_session_index": 1,
         "match_confidence": 0.7,
@@ -74,7 +74,7 @@
         "notes": "Worn tires (60%+ tread, better tires on rear). Driver comment: Maruyama before pit stop, top time."
       },
       {
-        "session_id": "9d521fc473109736",
+        "session_id": "2025-05-17_122907_Inferno-86_tsukuba-2000_a0396",
         "note_file": "2025-05-17 Tsukuba.txt",
         "note_session_index": 1,
         "match_confidence": 0.6,

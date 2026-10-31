@@ -1,5 +1,5 @@
 {
-  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|f52d70c58a50f3e928f1d61cb80ef8b29c43b016",
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|1d7eb2219b74480636061782aa4486ed77c4a425",
   "_model": "claude-sonnet-5-5",
   "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
   "_extracted_at": "2026-10-29T00:21:52.004882+00:00",
@@ -10,17 +10,17 @@
     }
   ],
   "_sessions": [
-    "f2b9de7ae62ec02d",
-    "1213ad9c6e624655",
-    "c80ea2bc6c74919c",
-    "f22a1ba4f1faca01",
-    "44dffd85214a2b39"
+    "2025-06-09_093018_Inferno-86_sodegaura_a0049",
+    "2025-06-09_094116_Inferno-86_sodegaura_a0051",
+    "2025-06-09_103017_Inferno-86_sodegaura_a0053",
+    "2025-06-09_104859_Inferno-86_sodegaura_a0054",
+    "2025-06-09_113019_Inferno-86_sodegaura_a0058-0059"
   ],
-  "input": "DATE: 2025-06-09 (times are local to the track)\n\nRUN NOTES FILE \"Sodegaura 2025-06-09.txt\":\n9:30 Run\n\nAmbient: 23.7c 62%\n\nDampers:\nF 27\nR 25\n\nTires:\nGood RE-71 RS\nFront lightly used, Rear nearly new\n\nTires at 27c\nF 1.65\nR 1.75\n\nAfter a few laps\n\nFR 1.9\nFL 2.0\n\nFront camber temps look good, 5c spread\n\nRR RL 2.0\n\nRear camber temps look extreme, +10c on the inside\n\nAfter spin,\n RL 2.2 and 80c\n\nRR  2.1 57c\n\nFR 2.0 60, 64, 66 (OMI)\nFL 2.1 70, 64, 63 (OMI)\n\n\n10:30 Run\n\nA052 Sticker all around\n\nFront 1.75\nRL 1.78\nRR 1.8\n\nAmbient 23.5c 68%\n\n\nDampers:\nF 27\nR 25\nFL 2.2->2.0, 78 outside, 63 inside\nFR 2.15->2.0 72 ourside, 65 inside\nRR 2.1 -> 2.0, too much camber\nRL 2.2 -> 2.0, too much camber\n\n11:30 Run\nSame as before, but with VSC cut\n\n\nCold tire Temps\nRE-71RS rear: 1.75, \nFront 1.65, 1.68\n\nA052 (33c)\nFR 1.85\nFL: 1.85\nRR: 1.85\nRL: 1.9\n\nLOGGED SESSIONS:\n1. session_id=f2b9de7ae62ec02d start=09:30 car=\"Inferno 86\" track=sodegaura laps=4 type=\"Generic testing\" comment=\"\"\n2. session_id=1213ad9c6e624655 start=09:41 car=\"Inferno 86\" track=sodegaura laps=8 type=\"Generic testing\" comment=\"\"\n3. session_id=c80ea2bc6c74919c start=10:30 car=\"Inferno 86\" track=sodegaura laps=8 type=\"Generic testing\" comment=\"A052 sticker tires\"\n4. session_id=f22a1ba4f1faca01 start=10:48 car=\"Inferno 86\" track=sodegaura laps=9 type=\"Generic testing\" comment=\"A052 sticker tires\"\n5. session_id=44dffd85214a2b39 start=11:30 car=\"Inferno 86\" track=sodegaura laps=16 type=\"Generic testing\" comment=\"Getting tired :(\"\n",
+  "input": "DATE: 2025-06-09 (times are local to the track)\n\nRUN NOTES FILE \"Sodegaura 2025-06-09.txt\":\n9:30 Run\n\nAmbient: 23.7c 62%\n\nDampers:\nF 27\nR 25\n\nTires:\nGood RE-71 RS\nFront lightly used, Rear nearly new\n\nTires at 27c\nF 1.65\nR 1.75\n\nAfter a few laps\n\nFR 1.9\nFL 2.0\n\nFront camber temps look good, 5c spread\n\nRR RL 2.0\n\nRear camber temps look extreme, +10c on the inside\n\nAfter spin,\n RL 2.2 and 80c\n\nRR  2.1 57c\n\nFR 2.0 60, 64, 66 (OMI)\nFL 2.1 70, 64, 63 (OMI)\n\n\n10:30 Run\n\nA052 Sticker all around\n\nFront 1.75\nRL 1.78\nRR 1.8\n\nAmbient 23.5c 68%\n\n\nDampers:\nF 27\nR 25\nFL 2.2->2.0, 78 outside, 63 inside\nFR 2.15->2.0 72 ourside, 65 inside\nRR 2.1 -> 2.0, too much camber\nRL 2.2 -> 2.0, too much camber\n\n11:30 Run\nSame as before, but with VSC cut\n\n\nCold tire Temps\nRE-71RS rear: 1.75, \nFront 1.65, 1.68\n\nA052 (33c)\nFR 1.85\nFL: 1.85\nRR: 1.85\nRL: 1.9\n\nLOGGED SESSIONS:\n1. session_id=2025-06-09_093018_Inferno-86_sodegaura_a0049 start=09:30 car=\"Inferno 86\" track=sodegaura laps=4 type=\"Generic testing\" comment=\"\"\n2. session_id=2025-06-09_094116_Inferno-86_sodegaura_a0051 start=09:41 car=\"Inferno 86\" track=sodegaura laps=8 type=\"Generic testing\" comment=\"\"\n3. session_id=2025-06-09_103017_Inferno-86_sodegaura_a0053 start=10:30 car=\"Inferno 86\" track=sodegaura laps=8 type=\"Generic testing\" comment=\"A052 sticker tires\"\n4. session_id=2025-06-09_104859_Inferno-86_sodegaura_a0054 start=10:48 car=\"Inferno 86\" track=sodegaura laps=9 type=\"Generic testing\" comment=\"A052 sticker tires\"\n5. session_id=2025-06-09_113019_Inferno-86_sodegaura_a0058-0059 start=11:30 car=\"Inferno 86\" track=sodegaura laps=16 type=\"Generic testing\" comment=\"Getting tired :(\"\n",
   "data": {
     "sessions": [
       {
-        "session_id": "f2b9de7ae62ec02d",
+        "session_id": "2025-06-09_093018_Inferno-86_sodegaura_a0049",
         "note_file": "Sodegaura 2025-06-09.txt",
         "note_session_index": 1,
         "match_confidence": 1.0,
@@ -50,7 +50,7 @@
         "notes": "Fronts lightly used, rears nearly new. Cold set at tire temp 27c. Hot pressures after a few laps: FR 1.9, FL 2.0, RR/RL 2.0. Front camber temps good (5c spread); rear camber temps extreme (+10c on the inside). After the spin: RL 2.2 at 80c, RR 2.1 at 57c. FR 2.0 with temps 60/64/66 (OMI), FL 2.1 with temps 70/64/63 (OMI)."
       },
       {
-        "session_id": "1213ad9c6e624655",
+        "session_id": "2025-06-09_094116_Inferno-86_sodegaura_a0051",
         "note_file": "Sodegaura 2025-06-09.txt",
         "note_session_index": 1,
         "match_confidence": 0.8,
@@ -80,7 +80,7 @@
         "notes": "Likely a restart of the 09:30 session, so it shares that block. Fronts lightly used, rears nearly new. Cold set at tire temp 27c. Hot pressures after a few laps: FR 1.9, FL 2.0, RR/RL 2.0. Front camber temps good (5c spread); rear camber temps extreme (+10c on the inside). After the spin: RL 2.2 at 80c, RR 2.1 at 57c. FR 2.0 with temps 60/64/66 (OMI), FL 2.1 with temps 70/64/63 (OMI)."
       },
       {
-        "session_id": "c80ea2bc6c74919c",
+        "session_id": "2025-06-09_103017_Inferno-86_sodegaura_a0053",
         "note_file": "Sodegaura 2025-06-09.txt",
         "note_session_index": 2,
         "match_confidence": 1.0,
@@ -108,7 +108,7 @@
         "notes": "Hot pressures: FL 2.2->2.0 (78 outside, 63 inside), FR 2.15->2.0 (72 outside, 65 inside), RR 2.1->2.0 and RL 2.2->2.0 (both too much camber)."
       },
       {
-        "session_id": "f22a1ba4f1faca01",
+        "session_id": "2025-06-09_104859_Inferno-86_sodegaura_a0054",
         "note_file": "Sodegaura 2025-06-09.txt",
         "note_session_index": 2,
         "match_confidence": 0.8,
@@ -136,7 +136,7 @@
         "notes": "Likely a continuation of the 10:30 run, so it shares that block. Hot pressures: FL 2.2->2.0 (78 outside, 63 inside), FR 2.15->2.0 (72 outside, 65 inside), RR 2.1->2.0 and RL 2.2->2.0 (both too much camber)."
       },
       {
-        "session_id": "44dffd85214a2b39",
+        "session_id": "2025-06-09_113019_Inferno-86_sodegaura_a0058-0059",
         "note_file": "Sodegaura 2025-06-09.txt",
         "note_session_index": 3,
         "match_confidence": 1.0,

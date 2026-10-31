@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import logging
 import sys
 from datetime import date as _date
@@ -166,17 +167,84 @@ def _cmd_manifest_diff(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_kinematics_audit(args: argparse.Namespace) -> int:
+    """Per-session sensor verdict with the regression numbers and the A2 gate.
+
+    Every row is one session's accelerometer / gyro source as the extractor
+    decided it, the IMU's lateral / longitudinal / yaw slope and correlation
+    against the GPS reference, and the *chosen* series re-regressed on the
+    reference lap (longitudinal on braking samples). ``--recheck``
+    recomputes the verdict from the timeseries files with the current
+    thresholds and marks sessions whose verdict would change. Exit code 1
+    when a chosen series falls outside the gate bands.
+    """
+    from .kinematics import kinematics_audit
+
+    frame = kinematics_audit(
+        args.dataset_root,
+        since=_parse_since(args.since),
+        car=args.car,
+        recheck=args.recheck,
+    )
+    if frame.empty:
+        print("kinematics-audit: no sessions with a timeseries file.")
+        return 0
+    with _pandas_width():
+        print(frame.drop(columns=["session_id"]).to_string(index=False))
+    summary = (
+        frame.groupby(["car", "profile_name", "accel_source", "gyro_source"], dropna=False)
+        .size()
+        .reset_index(name="sessions")
+    )
+    print("\nverdicts by car / profile:")
+    print(summary.to_string(index=False))
+    out = frame[frame["gate"] != "ok"]
+    print(
+        f"\nkinematics-audit: {len(frame)} sessions, {len(out)} outside the gate bands"
+        + (f", {int(frame['changed'].sum())} would change on recheck" if args.recheck else "")
+    )
+    if len(out):
+        print(out[["date", "car", "accel_source", "gyro_source", "gate"]].to_string(index=False))
+    return 1 if len(out) else 0
+
+
+class _pandas_width:
+    def __enter__(self):
+        import pandas as pd
+
+        self._ctx = pd.option_context("display.width", 250, "display.max_columns", 60)
+        self._ctx.__enter__()
+
+    def __exit__(self, *exc):
+        self._ctx.__exit__(*exc)
+
+
 def _cmd_query(args: argparse.Namespace) -> int:
     import duckdb
 
-    # Register session/laps/timeseries as DuckDB views.
+    from .dataset import FAMILIES, TIMESERIES_KEY_COLUMNS, family_columns
+
+    # Register session/laps/timeseries as DuckDB views; the native-rate
+    # timeseries (one row per raw sample, a channel null outside its own
+    # timebase) also gets one view per sensor family with that family's
+    # columns only: gps, accel, gyro, tpms, surface, controls.
     con = duckdb.connect(":memory:")
     root = args.dataset_root
     con.execute(f"CREATE VIEW sessions AS SELECT * FROM read_parquet('{root}/sessions/*.parquet')")
     con.execute(f"CREATE VIEW laps AS SELECT * FROM read_parquet('{root}/laps/*.parquet')")
+    ts_glob = f"{root}/timeseries/*/*.parquet"
     con.execute(
-        f"CREATE VIEW timeseries AS SELECT * FROM read_parquet('{root}/timeseries/*/*.parquet')"
+        f"CREATE VIEW timeseries AS SELECT * FROM read_parquet('{ts_glob}', union_by_name=true)"
     )
+    names = [r[0] for r in con.execute("DESCRIBE timeseries").fetchall()]
+    if "family" in names:
+        keys = [c for c in TIMESERIES_KEY_COLUMNS if c in names]
+        for fam in FAMILIES:
+            cols = family_columns(names, fam)
+            if not cols:
+                continue
+            sel = ", ".join(f'"{c}"' for c in keys + cols)
+            con.execute(f"CREATE VIEW {fam} AS SELECT {sel} FROM timeseries WHERE family = '{fam}'")
     result = con.execute(args.sql).fetch_arrow_table()
     print(result.to_pandas().to_string(index=False))
     return 0
@@ -228,6 +296,20 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--base", default=".", help="Sapling revision to compare against (default: .)")
     p.set_defaults(func=_cmd_manifest_diff)
 
+    p = sub.add_parser(
+        "kinematics-audit",
+        help="Per-session IMU-vs-GPS verdicts with regression numbers (schema 7)",
+    )
+    _common_args(p)
+    p.add_argument("--since", help="YYYY-MM-DD: only sessions on/after this date")
+    p.add_argument("--car", help="Only sessions whose car matches this string")
+    p.add_argument(
+        "--recheck",
+        action="store_true",
+        help="Recompute the verdict from the timeseries with the current thresholds",
+    )
+    p.set_defaults(func=_cmd_kinematics_audit)
+
     p = sub.add_parser("query", help="Run a DuckDB SQL query over the dataset")
     _common_args(p)
     p.add_argument("sql", help="SQL query")
@@ -237,6 +319,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Parse AIM files with libxrk's Rust backend. The default Cython parser
+    # leaks ~30 MB of native memory per file (m3rlin45/libxrk#111); the Rust
+    # one is flat and matches it on every logger channel, timecode and lap.
+    # libxrk reads the variable at import, so it is set before any command
+    # imports it; an explicit LIBXRK_BACKEND in the environment wins.
+    os.environ.setdefault("LIBXRK_BACKEND", "rust")
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     args = build_parser().parse_args(argv)
     return int(args.func(args))

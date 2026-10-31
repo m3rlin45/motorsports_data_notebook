@@ -39,7 +39,47 @@ from __future__ import annotations
 # (``comment``; the distinct comments of a merged session joined in file
 # order). The driver records the tire fitted there, and the model's
 # compound labelling reads it. Dataset schema 6.
-EXTRACTOR_VERSION = "0.13.0"
+# 0.14.0: native-rate storage. Every selected channel is stored verbatim on
+# its own raw timecode array (one row group per timebase in the session's
+# parquet, ``timebase`` / ``family`` columns, channel columns null outside
+# their timebase) — nothing is resampled or aligned in the extractor; the
+# loaders in dataset.py / kinematics.py merge at query time. New channels:
+# IMU vertical g and the gyro rates, the logger's GPS-derived g / yaw rate
+# and altitude. The IMU is validated against GPS position + speed and the
+# session row records one accelerometer and one gyro source verdict
+# (``accel_source`` / ``gyro_source`` with the regression numbers); the
+# lap table's dynamics come from the chosen series. Merged sessions' later
+# files are now on the merged clock (t_lap_s used to go negative there).
+# Dataset schema 7.
+# 0.15.0: channels are stored at the narrowest float width that holds them
+# exactly — float16 where the AIM file logged float16 (IMU, gyro, CAN
+# brake/steer/throttle; libxrk widens them, issue #115), float32 for the
+# analog, IR and TPMS pressure channels, float64 for positions — and the
+# parquet floats are byte-stream-split without dictionary encoding (a 20 MB
+# session file becomes 8.6 MB with identical values). Dataset schema 8.
+# 0.16.0: readable, sortable session ids —
+# ``2026-10-24_122053_KK-F_tsukuba_a0370-0372`` (date, logger wall-clock
+# start, car, canonical track, run numbers) — replace the path+mtime hash as
+# the key of every table and the timeseries file name; a rewritten file
+# re-extracts under the same id. Dataset schema 9 (file contents unchanged).
+# 0.17.0: the IMU checks compare the candidate at the reference's
+# bandwidth (0.5 s window) and the gyro must read within 0.9-1.1× the
+# position-derived yaw rate (the accelerometer keeps 0.85-1.15×): healthy
+# longitudinal axes no longer fail on their own vibration, and the 0.87×
+# gyros (Inferno 86 since 2025-06-09, SFJ) fall back to position yaw.
+# Verdicts and the laps' dynamics columns change; file layout does not
+# (schema stays 9).
+# 0.18.0: ``imu_swapped`` verdict — an IMU whose two horizontal channels
+# are exchanged in the file (the KK-SII dash since 2026-03-18) is kept, the
+# loader reading the columns exchanged; those sessions used the 25 Hz GPS
+# channels before. Session rows gain kin_imu_swapped_* columns. Schema 9.
+# 0.20.0: the per-timebase ``rate_hz`` in the file metadata is samples
+# over the time they cover, counting only intervals under 1 s, with the
+# dropout time and count reported as ``gap_s`` / ``n_gaps`` — not
+# 1 / median interval, which called the KK-SII's accelerometer (pairs 2 ms
+# apart on 50 Hz frames, 100 Hz) 500 Hz, nor a span mean, which a stream
+# that stops mid-session drags down. Metadata only.
+EXTRACTOR_VERSION = "0.20.0"
 
 from .extract import extract_session, run_extract  # noqa: E402
 from .session_notes import run_enrich_notes  # noqa: E402

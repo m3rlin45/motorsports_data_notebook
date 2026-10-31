@@ -34,7 +34,7 @@ condition_seeds:
     wet: WET
 
 sessions:
-  - session_id: c324e3840d9ac354  # 2025-10-26 14:37 tsukuba_2000 Inferno 86 (54 laps)
+  - session_id: 2025-10-26_143751_Inferno-86_tsukuba-2000_a2069  # 2025-10-26 14:37 tsukuba_2000 Inferno 86 (54 laps)
     # No file comment and no 2025-10-26 notes; the day before at the same
     # track the comments say "Tires a052 used" and the 2025-10-25 notes say
     # "Tires A052". Left to inference the EM calls this RE-71RS (0.82).
