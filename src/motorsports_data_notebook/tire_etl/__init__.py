@@ -39,7 +39,25 @@ from __future__ import annotations
 # (``comment``; the distinct comments of a merged session joined in file
 # order). The driver records the tire fitted there, and the model's
 # compound labelling reads it. Dataset schema 6.
-EXTRACTOR_VERSION = "0.13.0"
+# 0.14.0: native-rate storage. Every selected channel is stored verbatim on
+# its own raw timecode array (one row group per timebase in the session's
+# parquet, ``timebase`` / ``family`` columns, channel columns null outside
+# their timebase) — nothing is resampled or aligned in the extractor; the
+# loaders in dataset.py / kinematics.py merge at query time. New channels:
+# IMU vertical g and the gyro rates, the logger's GPS-derived g / yaw rate
+# and altitude. The IMU is validated against GPS position + speed and the
+# session row records one accelerometer and one gyro source verdict
+# (``accel_source`` / ``gyro_source`` with the regression numbers); the
+# lap table's dynamics come from the chosen series. Merged sessions' later
+# files are now on the merged clock (t_lap_s used to go negative there).
+# Dataset schema 7.
+# 0.15.0: channels are stored at the narrowest float width that holds them
+# exactly — float16 where the AIM file logged float16 (IMU, gyro, CAN
+# brake/steer/throttle; libxrk widens them, issue #115), float32 for the
+# analog, IR and TPMS pressure channels, float64 for positions — and the
+# parquet floats are byte-stream-split without dictionary encoding (a 20 MB
+# session file becomes 8.6 MB with identical values). Dataset schema 8.
+EXTRACTOR_VERSION = "0.15.0"
 
 from .extract import extract_session, run_extract  # noqa: E402
 from .session_notes import run_enrich_notes  # noqa: E402

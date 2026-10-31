@@ -265,19 +265,20 @@ which is why the fitted speed slope cannot see them.
 
 ### 1.0a Raw dataset, training-time cleaning (schema 4, 2026-10-12)
 
-The extractor writes what the logger recorded, downsampled to the 1 Hz
-reference channel, with laps and stints split, the circuit resolved from
-GPS, channels selected and renamed, and a raw per-lap summary. Nothing in
+The extractor writes what the logger recorded (downsampled to the TPMS
+module's 1.25 Hz clock until schema 6; verbatim at every channel's native
+rate since schema 7, §1.0d), with laps and stints split, the circuit
+resolved from GPS, channels selected and renamed, and a raw per-lap summary. Nothing in
 `data/tire_dataset/` is masked, filtered or judged. Every rule about which
 samples and laps the model learns from lives in
 `src/motorsports_data_notebook/tire_model/cleaning.py` and runs when the
 model loads the data (`warmup_table._load_filtered_laps`, the holdout and
 notes-validation loaders, `statespace._session_timeseries`):
 
-1. **Stale TPMS prefix and wake-up transition.** A module asleep at
-   roll-out repeats its stored value bit-exactly until it wakes; the first
-   change on either of a corner's two streams proves the module awake, and
-   the one or two resampled samples blended across the step are masked too.
+1. **Stale TPMS prefix.** A module asleep at roll-out repeats its stored
+   value bit-exactly until it wakes; the first change on either of a
+   corner's two streams proves the module awake, and everything before it
+   is masked on both streams.
 2. **Per-lap TPMS summaries rebuilt** from the masked streams, so an
    out-lap's `tpms_*_start` — the stint anchor — is the first live reading.
 3. **Lap usability** (`tire_usable` / `exclude_reason`): out-laps need
@@ -287,7 +288,7 @@ notes-validation loaders, `statespace._session_timeseries`):
 
 A cleaning change is therefore a code change plus a retrain; the dataset
 is re-extracted only when the extractor's own output (lap splitting,
-channels, downsampling) changes. `just tire-clean-laps` materialises the
+channels, storage layout) changes. `just tire-clean-laps` materialises the
 cleaned table for DuckDB queries. Before schema 4 the extractor applied
 steps 1 and 3 and committed the result, which is why the 2026-10 anchor
 fix first looked like a dataset rebuild.
@@ -329,6 +330,98 @@ run-notes pipeline is one `claude -p` call per track day over the day's
 notes files and every logged session with its comment, cached in
 `session_notes/<date>.json`; `notes_matches.parquet` is rebuilt from the
 caches, and the compound labelling reads the comments.
+
+### 1.0d Native-rate storage and IMU validation (schema 7, 2026-10-30)
+
+Extractor 0.14.0 stores every selected channel **verbatim at its native
+rate**: a session file holds one row per raw sample and one row group per
+raw *timebase* (channels the logger sampled on one timecode array: GPS
+25 Hz, IMU accelerometer 50 Hz — 500 Hz on the KK-SII, where lateral and
+inline sit two samples apart on separate timebases — gyro 50 Hz, each TPMS
+corner on its own 1.25 Hz clock, the IR zones 1–4 and 5–8 of a corner on
+two 10 Hz clocks), with a channel column null outside its timebase.
+Nothing is resampled or aligned in the extractor; the loaders merge at
+query time (`tire_etl/dataset.load_group`, `kinematics.load_kinematics`)
+and the 1 Hz binning of §2.6a maps the TPMS and IR samples onto the
+rolling clock defined by the kinematics. New channels: IMU vertical g, the
+gyro rates, the logger's GPS-derived g and yaw rate, altitude. A survey of
+one file per car showed 56 channels stored losslessly (row counts, rates
+and values equal to the raw file after the float32 cast; latitude and
+longitude stay float64, since float32 quantises them to about a metre and
+destroys curvature). The per-lap TPMS start/end/mean are unchanged on the
+reference corner and within one quantisation step (0.03 bar / 1 °C) on the
+corners that used to be interpolated onto it. Merged multi-file sessions
+now carry their later files on the merged clock (`t_lap_s` used to go
+negative there by the restart offset).
+
+The IMU is **validated against GPS position + speed** on each session's
+fastest full lap: curvature of the ~10 m smoothed local-XY path on a 1 m
+arc-length grid gives `a_lat = V²κ` and `ω = Vκ` (right-positive),
+`a_long = dV/dt` over 0.5 s; fixes a receiver reports while still
+acquiring (anywhere on the globe at zero speed for the first seconds of a
+file — one SFJ session put its path length at a billion metres and the
+extractor out of memory) are dropped when farther than 20 km from the
+session's median position or an isolated jump of over 100 m, and
+interpolated across. Each candidate axis must have samples
+(coverage ≥ 90 %), not be flat (std ≥ 0.1 g / 5 °/s), be in family (OLS
+slope ∈ [0.85, 1.15], corr ≥ 0.9 — ≥ 0.85 longitudinal, dV/dt from 25 Hz
+GPS being the noisier reference — |offset| ≤ 0.4 g / 10 °/s) and not be
+twisted (|corr| with the other axis' reference ≤ 0.5). One verdict per
+session for the accelerometer (`accel_source`: both axes together) and one
+for the gyro (`gyro_source`), fallback IMU → the logger's GPS-derived
+channels, validated the same way → series derived from position; every
+number is on the session row (`kin_*`) and in the file metadata, and the
+laps table's dynamics (`heat_proxy*`, `lat_g_peak`) come from the chosen
+series. Raw channels stay untouched. On the survey files: the Inferno 86
+IMU passes (lateral slope 0.98, corr 0.996; longitudinal 0.995 / 0.97);
+the KK-SII 2026-10-04 Suzuka race has its IMU axes swapped (lateral
+correlates 0.97 with the longitudinal reference) and the default-profile
+KK-F reads lateral at 0.42× — both fall back to the logger's GPS channels
+(slopes 0.96–1.02); the EK9's IMU is rotated about 30° in yaw (lateral
+slope 0.87 ≈ cos 30°, longitudinal cross-correlation 0.63) and falls back
+too. The AIM gyro reads about 0.87× `Vκ` on the Inferno 86 and SFJ and
+≈ 1.0× on the KK cars and EK9. `just tire-kinematics-audit` lists every
+session with the numbers and the A2 gate on the chosen series.
+
+The audit over the whole dataset (281 sessions with ≥ 3 laps, 2026-10-30)
+explains every verdict. Inferno 86 (113 sessions): IMU on 103, lateral
+slope 0.95/0.98/1.01 (10th/50th/90th percentile) at corr ≥ 0.98; six
+sessions with a dead or absent IMU use position, four with longitudinal
+corr 0.81–0.84 use the GPS channels. SFJ (22): the IMU lateral is healthy
+(slope 0.96–0.97) but its longitudinal corr sits at 0.76–0.85, so 11
+sessions fall to the GPS channels on that axis' threshold. EK9 (24):
+IMU on 15 with lateral slope 0.92–0.98 (the ~30° yaw rotation), nine on
+the GPS channels. KK-F (42): the 18 `default`-profile sessions read
+lateral at 0.43–0.55× and use the GPS channels; under the KK-SII profile
+the IMU passes on 16, is absent from the file on 7 and twisted on one.
+KK-SII (72): the IMU is correctly oriented only on 2026-02-25/26 (5
+sessions); from 2026-03-18 through 2026-10-04 its axes are **swapped**
+(lateral follows the longitudinal reference at corr 0.97, 44 sessions),
+and on 16 sessions between 2026-02-18 and 2026-05-24 the IMU and gyro
+streams stop about six minutes into the file (no samples on the reference
+lap); the IMU channel is absent from 8 files. All of those use the logger's
+GPS channels (chosen lateral slope 0.97–0.99, corr 0.96–0.98). On the gate
+bands of the chosen series, 186 of 309 sessions are outside at least one:
+the braking-only longitudinal regression (reference < −0.2 g, a
+range-restricted 25 Hz dV/dt) has corr 0.70/0.89/0.95 on the Inferno 86,
+0.72/0.83/0.88 on the SFJ, 0.74/0.79/0.84 on the EK9 and slope up to 1.2
+under braking (pitch adds a gravity component to the IMU), and the Inferno
+86 and SFJ gyro read 0.85–0.88× the GPS yaw rate (the Inferno 86 from
+2025-06-09 on; 1.01–1.02× before). Lateral is inside its band everywhere
+but three Inferno 86 sessions at 0.88–0.92. Those two bands are the
+reference's, not the sensors', and are left for the lap-sim programme to
+settle.
+
+Storage (schema 8, extractor 0.15.0, 2026-10-31): the AIM file logs the
+IMU, the gyro and the CAN brake / steer / throttle as float16 and libxrk
+widens them to float32 (libxrk #115); every channel is now stored at the
+narrowest float width that holds its samples exactly (float16 for those,
+float32 for the analog inputs, IR zones and TPMS pressures, float64 for
+positions), so the dtype documents the source precision — the
+accelerometer carries a 10-bit mantissa, about 0.001 g near 1 g. Parquet's
+default dictionary attempt on a float column was defeating zstd; the
+float32/float64 columns are byte-stream-split under zstd 9 and the same
+session file went from 20.6 MB to 8.7 MB with identical values.
 
 ## 2. Modeling approach
 
@@ -436,15 +529,14 @@ the anchor state. The predicted "hot temperature" the calculators display
 is therefore a gas temperature and reads lower than the dash early in a
 stint; the hot *pressure* is the number to trust. Pressure is reported in
 0.03 bar steps (≈ 3.6 K of gas temperature at 2.5 bar absolute), so the
-per-lap target is noisier than the TPMS temperature; the 1 Hz stale-prefix
-mask and per-corner wake rule keep the anchor clean. The resample's
-interpolated sample on the wake-up step is masked as well: a module that
-fell asleep hot on an earlier run reports that stored value until it
-wakes, and the blended sample between it and the first live reading had
-been taken as the anchor — 0.4–0.5 bar high on the Sodegaura 2026-10-10
-rear axle, +43 °C on every lap of that stint. Since dataset schema 4 all
-of this runs at training time (`tire_model/cleaning.py`, §1.0a), not in
-the extractor.
+per-lap target is noisier than the TPMS temperature; the stale-prefix
+mask and per-corner wake rule keep the anchor clean: a module that fell
+asleep hot on an earlier run reports that stored value until it wakes,
+and taking it as the anchor put the Sodegaura 2026-10-10 rear axle
+0.4–0.5 bar high, +43 °C on every lap of that stint. With native-rate
+storage the first unmasked sample is the module's first live packet.
+Since dataset schema 4 all of this runs at training time
+(`tire_model/cleaning.py`, §1.0a), not in the extractor.
 
 ### 2.2a′ The reading at speed: the speed-pressure correction (2026-10-08)
 

@@ -3,6 +3,14 @@
 This is the heart of the ETL: one function reads one xrk/xrz and returns three
 PyArrow tables (session row, laps, timeseries). Caller is responsible for
 upserting them into the dataset via :mod:`dataset`.
+
+The timeseries keeps every selected channel **verbatim at its native rate**
+(dataset schema 7): channels the logger sampled on one timecode array form a
+*timebase*, each timebase is a block of rows with its own ``t_session_s``,
+and a channel column is null outside its timebase. Nothing is resampled or
+aligned here — see :mod:`.dataset` for the layout and the loaders that merge
+at query time, and :mod:`.kinematics` for the IMU validation whose verdict
+is recorded on the session row.
 """
 
 from __future__ import annotations
@@ -10,16 +18,26 @@ from __future__ import annotations
 import hashlib
 import logging
 import time
+from collections import Counter
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pyarrow as pa
 
 from .aggregates import compute_corner_aggregates, compute_lap_dynamics
+from .dataset import build_timeseries_table, narrowest_float, timeseries_summary
 from .discovery import SessionCandidate, parse_filename, scan_aim_tree
+from .kinematics import (
+    KIN_ROW_COLUMNS,
+    KinematicsVerdict,
+    choose_reference_lap,
+    empty_verdict_row,
+    session_kinematics,
+    validate_session,
+)
 from .layouts import LayoutDetection, apply_layout_correction, detect_layout
 from .stints import assign_stint_ids
 
@@ -31,30 +49,54 @@ logger = logging.getLogger(__name__)
 CORNERS = ("fl", "fr", "rl", "rr")
 CORNER_AIM_CODES = {"fl": "LF", "fr": "RF", "rl": "LR", "rr": "RR"}
 
-# Canonical profile keys used as the reference for each channel family.
-# We pull actual AIM names from the profile's channel_names dict.
+# Channel families stored at their native rate: profile key -> canonical
+# column, per family. The AIM names come from the profile's channel_names.
+# ``imu_lateral_g`` / ``imu_inline_g`` name the raw IMU regardless of what
+# the analysis-side ``lateral_g`` / ``inline_g`` keys point at for a vehicle
+# (the KK profiles alias those to the logger's GPS-derived channels).
+FAMILY_KEYS: dict[str, dict[str, str]] = {
+    "gps": {
+        "gps_latitude": "gps_lat",
+        "gps_longitude": "gps_lon",
+        "gps_altitude": "gps_alt_m",
+        "gps_speed": "speed_ms",
+        "gps_lateral_g": "gps_lat_g",
+        "gps_inline_g": "gps_long_g",
+        "gps_yaw_rate": "gps_yaw_rate_dps",
+    },
+    "accel": {"imu_lateral_g": "lat_g", "imu_inline_g": "long_g", "vertical_g": "vert_g"},
+    "gyro": {
+        "yaw_rate": "yaw_rate_dps",
+        "pitch_rate": "pitch_rate_dps",
+        "roll_rate": "roll_rate_dps",
+    },
+    "tpms": {
+        **{f"tpms_press_{c}": f"tpms_press_{c}_bar" for c in CORNERS},
+        **{f"tpms_temp_{c}": f"tpms_temp_{c}_c" for c in CORNERS},
+    },
+    "surface": {
+        f"tire_temp_{c}_{i}": f"surf_temp_{c}_ch{i}_c" for c in CORNERS for i in range(1, 9)
+    },
+    "controls": {"throttle": "throttle_pct", "brake": "brake_bar", "steering": "steer_deg"},
+}
+# Position must keep the file's double precision: float32 quantises latitude
+# to ~0.5 m and longitude to ~1.5 m at 36°N / 139°E, which destroys the
+# curvature the IMU validation is referenced to.
+FLOAT64_CHANNELS = {"gps_lat", "gps_lon"}
 TIRE_PRESS_KEYS = [f"tpms_press_{c}" for c in CORNERS]
 TIRE_TEMP_KEYS = [f"tpms_temp_{c}" for c in CORNERS]
 SURF_TEMP_KEYS = {c: [f"tire_temp_{c}_{i}" for i in range(1, 9)] for c in CORNERS}
-DYNAMICS_KEYS = [
-    "throttle",
-    "brake",
-    "gps_speed",
-    "gps_latitude",
-    "gps_longitude",
-    "lateral_g",
-    "inline_g",
-    "steering",
-]
 
 
 @dataclass(frozen=True)
 class ExtractResult:
     session_row: pa.Table  # 1 row
     laps_rows: pa.Table
-    timeseries: pa.Table  # one row per (lap, sample); session_id is included
+    timeseries: pa.Table  # one row per raw sample; session_id is included
     status: str  # "ok" | "partial" | "error"
     error_msg: str | None
+    timebases: list[dict] | None = None  # per-timebase summary (dataset.timeseries_summary)
+    kinematics: dict | None = None  # KinematicsVerdict.to_json()
 
 
 def _session_id_for(path: Path, mtime_ns: int) -> str:
@@ -318,109 +360,174 @@ def split_group_by_wallclock(
     return groups
 
 
-def _build_lap_timeseries(
-    log: "LogFile",
-    lap_num: int,
-    lap_start_ms: int,
-    lap_end_ms: int,
-    stint_id: int,
-    selected_channels: list[str],
-    ref_channel: str,
-) -> pa.Table:
-    """Align all selected channels for one lap to ``ref_channel``'s timebase."""
-    lap_log = log.filter_by_lap(lap_num)
-    # Only request channels that exist on this log
-    available = [c for c in selected_channels if c in lap_log.channels]
-    if ref_channel not in available:
-        # Can't align — return empty
-        return pa.table({})
-    aligned = lap_log.select_channels(available).resample_to_channel(ref_channel).channels
-    ref_tbl = aligned.get(ref_channel)
-    if ref_tbl is None or len(ref_tbl) == 0:
-        return pa.table({})
-    timecodes = ref_tbl.column("timecodes").to_numpy().astype(np.int64)
-    t_lap_s = (timecodes - lap_start_ms).astype(np.float64) / 1000.0
-    cols: dict[str, pa.Array] = {
-        "lap_num": pa.array(np.full(len(timecodes), lap_num, dtype=np.int16)),
-        "stint_id": pa.array(np.full(len(timecodes), stint_id, dtype=np.int16)),
-        "sample_idx": pa.array(np.arange(len(timecodes), dtype=np.int32)),
-        "t_session_s": pa.array(timecodes.astype(np.float64) / 1000.0),
-        "t_lap_s": pa.array(t_lap_s.astype(np.float32)),
-    }
-    for ch, tbl in aligned.items():
-        if ch == ref_channel:
-            arr = tbl.column(ref_channel).to_numpy(zero_copy_only=False)
+@dataclass
+class RawTimebase:
+    """Channels the logger sampled on one timecode array (one file, or the
+    same channel set across the files of a merged session)."""
+
+    family: str
+    channels: dict[str, np.ndarray]  # canonical column -> float64 values
+    t_ms: np.ndarray  # int64, on the session clock
+
+
+def _log_parts(log: Any) -> list[tuple[Any, int]]:
+    """``[(log, offset_ms)]``: a merged session's files with the offsets
+    that put their raw timecodes on the merged clock; a single file at 0."""
+    parts = getattr(log, "parts", None)
+    return list(parts()) if callable(parts) else [(log, 0)]
+
+
+def _wanted_channels(channel_names: dict[str, str]) -> dict[str, tuple[str, str]]:
+    """``{aim_channel_name: (family, canonical_column)}`` for the profile."""
+    out: dict[str, tuple[str, str]] = {}
+    for family, keys in FAMILY_KEYS.items():
+        for key, canonical in keys.items():
+            aim = channel_names.get(key)
+            if aim and aim not in out:
+                out[aim] = (family, canonical)
+    return out
+
+
+def _raw_timebases(log: Any, wanted: dict[str, tuple[str, str]]) -> list[RawTimebase]:
+    """Group the wanted channels by identical timecode array (within a file)
+    and family; the same channel set across a merged session's files is one
+    timebase (their clocks are disjoint once offset)."""
+    groups: dict[tuple[str, tuple[str, ...]], list[tuple[np.ndarray, dict[str, np.ndarray]]]] = {}
+    for part, offset in _log_parts(log):
+        chans = getattr(part, "channels", None) or {}
+        by_hash: dict[tuple[str, str], list[tuple[str, np.ndarray, np.ndarray]]] = {}
+        for aim, (family, canonical) in wanted.items():
+            tbl = chans.get(aim)
+            if tbl is None or len(tbl) == 0 or aim not in tbl.column_names:
+                continue
+            t = tbl.column("timecodes").to_numpy().astype(np.int64)
+            v = np.asarray(tbl.column(aim).to_numpy(zero_copy_only=False), dtype=np.float64)
+            if v.shape != t.shape:
+                continue
+            h = hashlib.blake2b(t.tobytes(), digest_size=8).hexdigest()
+            by_hash.setdefault((family, h), []).append((canonical, v, t))
+        for (family, _), items in by_hash.items():
+            names = tuple(sorted(c for c, _, _ in items))
+            t = items[0][2] + int(offset)
+            groups.setdefault((family, names), []).append((t, {c: v for c, v, _ in items}))
+    out: list[RawTimebase] = []
+    for (family, names), pieces in groups.items():
+        if len(pieces) == 1:
+            t, ch = pieces[0]
         else:
-            arr = tbl.column(ch).to_numpy(zero_copy_only=False)
-        cols[ch] = pa.array(np.asarray(arr, dtype=np.float64))
-    return pa.table(cols)
+            t = np.concatenate([pt for pt, _ in pieces])
+            ch = {c: np.concatenate([pch[c] for _, pch in pieces]) for c in names}
+        out.append(RawTimebase(family=family, channels=ch, t_ms=t))
+    return out
 
 
-def _rename_to_canonical(
-    ts: pa.Table,
+def _timebase_names(tbs: list[RawTimebase]) -> list[str]:
+    """``family`` when a family has one timebase, else ``family/<tag>`` with
+    the tag naming the channels (``tpms/fl``, ``surface/fl_ch1-4``,
+    ``accel/long_g+vert_g``)."""
+    counts = Counter(tb.family for tb in tbs)
+    names: list[str] = []
+    for tb in tbs:
+        if counts[tb.family] == 1:
+            names.append(tb.family)
+            continue
+        cols = sorted(tb.channels)
+        if tb.family == "tpms":
+            tag = "+".join(sorted({c.split("_")[2] for c in cols}))
+        elif tb.family == "surface":
+            tags = []
+            for corner in CORNERS:
+                idx = sorted(
+                    int(c.split("_ch")[1].split("_")[0])
+                    for c in cols
+                    if c.startswith(f"surf_temp_{corner}_")
+                )
+                if idx:
+                    tags.append(
+                        f"{corner}_ch{idx[0]}-{idx[-1]}" if len(idx) > 1 else f"{corner}_ch{idx[0]}"
+                    )
+            tag = "+".join(tags)
+        else:
+            tag = "+".join(cols)
+        names.append(f"{tb.family}/{tag}")
+    seen: Counter = Counter()
+    final: list[str] = []
+    for n in names:
+        seen[n] += 1
+        final.append(n if seen[n] == 1 else f"{n}#{seen[n]}")
+    return final
+
+
+def _pressure_to_bar(arr: np.ndarray) -> np.ndarray:
+    """AIM usually reports TPMS pressure in bar (values 1-3); kPa values
+    (typically 100-300) are divided by 100."""
+    finite = arr[np.isfinite(arr)]
+    if finite.size and float(np.max(np.abs(finite))) > 10.0:
+        return arr / 100.0
+    return arr
+
+
+def build_session_timeseries(
+    log: Any,
+    channel_names: dict[str, str],
     *,
-    profile_names: dict[str, str],
-) -> pa.Table:
-    """Rename AIM channel columns to canonical snake_case names.
+    session_id: str,
+    lap_nums: list[int],
+    lap_starts_ms: list[int],
+    lap_ends_ms: list[int],
+    stint_ids: list[int],
+) -> tuple[pa.Table, list[dict]]:
+    """The session's native-rate table and its per-timebase summary.
 
-    Also collapses 8 surface-temp sensors per corner into ``surf_temp_{c}_mean_c``
-    (and keeps the 8 per-sensor columns as ``surf_temp_{c}_ch{i}_c``).
+    Every wanted channel that exists on the log is stored verbatim: its raw
+    timecodes (on the merged clock for a multi-file session) become
+    ``t_session_s``, each sample is assigned the lap whose
+    ``[start, end)`` window holds it (samples outside every lap are
+    dropped, as the per-lap extraction always did), and ``t_lap_s`` /
+    ``sample_idx`` count from that lap's start. Channel values are stored
+    at the narrowest float width that holds them exactly (float16 for the
+    channels the logger logged as float16, see
+    :func:`~.dataset.narrowest_float`; float64 for positions); TPMS
+    pressures are normalised to bar.
     """
-    rename_map: dict[str, str] = {}
-
-    def _rename_if(key: str, out_name: str) -> None:
-        src = profile_names.get(key)
-        if src and src in ts.schema.names:
-            rename_map[src] = out_name
-
-    for c in CORNERS:
-        _rename_if(f"tpms_press_{c}", f"tpms_press_{c}_bar")
-        _rename_if(f"tpms_temp_{c}", f"tpms_temp_{c}_c")
-        for i in range(1, 9):
-            _rename_if(f"tire_temp_{c}_{i}", f"surf_temp_{c}_ch{i}_c")
-
-    _rename_if("throttle", "throttle_pct")
-    _rename_if("brake", "brake_bar")
-    _rename_if("gps_speed", "speed_ms")
-    _rename_if("gps_latitude", "gps_lat")
-    _rename_if("gps_longitude", "gps_lon")
-    _rename_if("lateral_g", "lat_g")
-    _rename_if("inline_g", "long_g")
-    _rename_if("steering", "steer_deg")
-
-    if rename_map:
-        new_names = [rename_map.get(name, name) for name in ts.schema.names]
-        ts = ts.rename_columns(new_names)
-
-    # Derive speed_kmh from speed_ms if available (mirrors _util.py behavior).
-    if "speed_ms" in ts.schema.names and "speed_kmh" not in ts.schema.names:
-        speed_ms = ts.column("speed_ms").to_numpy(zero_copy_only=False)
-        ts = ts.append_column("speed_kmh", pa.array(np.asarray(speed_ms, dtype=np.float64) * 3.6))
-
-    # Normalize TPMS pressures to bar. AIM usually already reports bar (values
-    # 1-3). If we see kPa values (typically 100-300), divide by 100.
-    for c in CORNERS:
-        col = f"tpms_press_{c}_bar"
-        if col in ts.schema.names:
-            arr = np.asarray(ts.column(col).to_numpy(zero_copy_only=False), dtype=np.float64)
-            finite = arr[~np.isnan(arr)]
-            if finite.size and float(np.nanmax(np.abs(finite))) > 10.0:
-                arr = arr / 100.0
-                idx = ts.schema.get_field_index(col)
-                ts = ts.set_column(idx, col, pa.array(arr))
-
-    # Collapse per-sensor surface temps into a mean column per corner.
-    for c in CORNERS:
-        ch_cols = [f"surf_temp_{c}_ch{i}_c" for i in range(1, 9)]
-        present = [col for col in ch_cols if col in ts.schema.names]
-        if present:
-            arrs = [ts.column(col).to_numpy(zero_copy_only=False) for col in present]
-            stacked = np.vstack([np.asarray(a, dtype=np.float64) for a in arrs])
-            with np.errstate(all="ignore"):
-                mean = np.nanmean(stacked, axis=0)
-            ts = ts.append_column(f"surf_temp_{c}_mean_c", pa.array(mean))
-
-    return ts
+    tbs = _raw_timebases(log, _wanted_channels(channel_names))
+    if not tbs or not lap_nums:
+        return pa.table({}), []
+    order = np.argsort(np.asarray(lap_starts_ms, dtype=np.int64), kind="stable")
+    starts = np.asarray(lap_starts_ms, dtype=np.int64)[order]
+    ends = np.asarray(lap_ends_ms, dtype=np.int64)[order]
+    nums = np.asarray(lap_nums, dtype=np.int64)[order]
+    stints = np.asarray(stint_ids, dtype=np.int64)[order]
+    parts: list[tuple[str, str, pa.Table]] = []
+    for name, tb in zip(_timebase_names(tbs), tbs):
+        t = tb.t_ms
+        sort = np.argsort(t, kind="stable")
+        t = t[sort]
+        idx = np.searchsorted(starts, t, side="right") - 1
+        idx_c = np.clip(idx, 0, len(starts) - 1)
+        valid = (idx >= 0) & (t < ends[idx_c])
+        if not valid.any():
+            continue
+        t_v = t[valid]
+        lap_i = idx_c[valid]
+        n = int(t_v.size)
+        change = np.concatenate([[True], lap_i[1:] != lap_i[:-1]])
+        lap_start_pos = np.maximum.accumulate(np.where(change, np.arange(n), 0))
+        cols: dict[str, pa.Array] = {
+            "lap_num": pa.array(nums[lap_i].astype(np.int16)),
+            "stint_id": pa.array(stints[lap_i].astype(np.int16)),
+            "sample_idx": pa.array((np.arange(n) - lap_start_pos).astype(np.int32)),
+            "t_session_s": pa.array(t_v.astype(np.float64) / 1000.0, type=pa.float64()),
+            "t_lap_s": pa.array(((t_v - starts[lap_i]) / 1000.0).astype(np.float32)),
+        }
+        for canonical, values in tb.channels.items():
+            v = values[sort][valid]
+            if canonical.startswith("tpms_press_"):
+                v = _pressure_to_bar(v)
+            cols[canonical] = narrowest_float(v, float64=canonical in FLOAT64_CHANNELS)
+        parts.append((name, tb.family, pa.table(cols)))
+    table = build_timeseries_table(session_id, parts)
+    return table, timeseries_summary(table)
 
 
 def extract_session(
@@ -590,31 +697,12 @@ def extract_session(
         channel_names.update(profile.channel_names)
         profile_name = profile.name
 
-    # Build list of AIM channel names we want in the timeseries.
-    wanted_keys = (
-        TIRE_PRESS_KEYS
-        + TIRE_TEMP_KEYS
-        + [f"tire_temp_{c}_{i}" for c in CORNERS for i in range(1, 9)]
-        + DYNAMICS_KEYS
-    )
-    wanted_aim: dict[str, str] = _resolve_channels(channel_names, wanted_keys)
-    selected_channels = sorted(set(wanted_aim.values()))
-
-    # Pick a reference channel — prefer the first available TPMS pressure.
-    ref_channel: str | None = None
-    for k in TIRE_PRESS_KEYS:
-        if k in wanted_aim and wanted_aim[k] in log.channels:
-            ref_channel = wanted_aim[k]
-            break
-    if ref_channel is None:
-        # Fall back to gps_speed or first available dynamics channel
-        for k in ("gps_speed", "lateral_g", "inline_g"):
-            if k in wanted_aim and wanted_aim[k] in log.channels:
-                ref_channel = wanted_aim[k]
-                break
+    # The channels to keep, per family, in this profile's AIM names.
+    wanted = _wanted_channels(channel_names)
+    present = [aim for aim in wanted if aim in log.channels]
 
     laps_table = log.laps
-    if ref_channel is None or len(laps_table) == 0:
+    if not present or len(laps_table) == 0:
         row = empty_session.set_column(
             empty_session.schema.get_field_index("status"),
             "status",
@@ -632,8 +720,7 @@ def extract_session(
             error_msg="no_ref_channel",
         )
 
-    # Per-lap iteration: build full-session timeseries table.
-    lap_nums = laps_table.column("num").to_pylist()
+    lap_nums = [int(x) for x in laps_table.column("num").to_pylist()]
     starts = laps_table.column("start_time").to_numpy().astype(np.int64)
     ends = laps_table.column("end_time").to_numpy().astype(np.int64)
     lap_types = (
@@ -643,22 +730,17 @@ def extract_session(
     )
     stint_ids = assign_stint_ids(laps_table).to_numpy().astype(np.int16)
 
-    ts_parts: list[pa.Table] = []
-    for i, ln in enumerate(lap_nums):
-        part = _build_lap_timeseries(
-            log,
-            lap_num=int(ln),
-            lap_start_ms=int(starts[i]),
-            lap_end_ms=int(ends[i]),
-            stint_id=int(stint_ids[i]),
-            selected_channels=selected_channels,
-            ref_channel=ref_channel,
-        )
-        if len(part) == 0:
-            continue
-        ts_parts.append(part)
+    timeseries, tb_summary = build_session_timeseries(
+        log,
+        channel_names,
+        session_id=session_id,
+        lap_nums=lap_nums,
+        lap_starts_ms=starts.tolist(),
+        lap_ends_ms=ends.tolist(),
+        stint_ids=[int(x) for x in stint_ids],
+    )
 
-    if not ts_parts:
+    if len(timeseries) == 0:
         row = empty_session.set_column(
             empty_session.schema.get_field_index("status"),
             "status",
@@ -666,7 +748,7 @@ def extract_session(
         ).set_column(
             empty_session.schema.get_field_index("error_msg"),
             "error_msg",
-            pa.array(["no samples after alignment"]),
+            pa.array(["no samples inside any lap"]),
         )
         return ExtractResult(
             session_row=row,
@@ -676,24 +758,23 @@ def extract_session(
             error_msg="no_samples",
         )
 
-    timeseries = pa.concat_tables(ts_parts, promote_options="default")
-
-    # Rename AIM channel names to canonical snake_case (and derive surf means).
-    timeseries = _rename_to_canonical(timeseries, profile_names=channel_names)
-
-    # Prepend session_id column.
-    session_id_col = pa.array([session_id] * len(timeseries))
-    timeseries = timeseries.add_column(0, "session_id", session_id_col)
+    # Sensor verdict: validate the IMU against GPS on the fastest full lap
+    # and assemble the chosen series on one clock for the lap dynamics.
+    lap_times_s = ((ends - starts) / 1000.0).tolist()
+    ref_lap = choose_reference_lap(lap_nums, lap_times_s, lap_types)
+    verdict = validate_session(timeseries, ref_lap)
+    kin = session_kinematics(timeseries, verdict)
 
     # Build per-lap summary.
     laps_rows = _build_laps_table(
         session_id=session_id,
-        lap_nums=[int(x) for x in lap_nums],
+        lap_nums=lap_nums,
         lap_starts_ms=starts.tolist(),
         lap_ends_ms=ends.tolist(),
         stint_ids=stint_ids.tolist(),
         timeseries=timeseries,
         lap_types=lap_types,
+        kinematics=kin,
     )
 
     # A pit exit is a new stint whatever the gap: the tire's starting
@@ -701,8 +782,9 @@ def extract_session(
     # out-lap and carry the new ids onto the timeseries.
     laps_rows, timeseries = _restint_at_pit_exits(laps_rows, timeseries)
 
-    has_tpms = any(f"tpms_press_{c}_bar" in timeseries.schema.names for c in CORNERS)
-    has_surface_temp = any(f"surf_temp_{c}_mean_c" in timeseries.schema.names for c in CORNERS)
+    names = timeseries.schema.names
+    has_tpms = any(f"tpms_press_{c}_bar" in names for c in CORNERS)
+    has_surface_temp = any(n.startswith("surf_temp_") for n in names)
     status = "ok" if has_tpms else "partial"
     err = None if status == "ok" else "tpms channels missing"
 
@@ -720,7 +802,8 @@ def extract_session(
         has_surface_temp=has_surface_temp,
         has_ambient=False,  # AIM logs rarely carry a dedicated ambient channel in this fleet
         has_track=False,
-        ts_rate_hz=_estimate_ts_rate(timeseries),
+        timebases=tb_summary,
+        kinematics=verdict,
         session_start_utc=_extract_session_datetime_utc(log, date_str, cand.track_canonical),
         status=status,
         error_msg=err,
@@ -735,6 +818,8 @@ def extract_session(
         timeseries=timeseries,
         status=status,
         error_msg=err,
+        timebases=tb_summary,
+        kinematics=verdict.to_json(),
     )
 
 
@@ -766,28 +851,18 @@ def _restint_at_pit_exits(laps_rows: pa.Table, timeseries: pa.Table) -> tuple[pa
         return laps_rows, timeseries
     idx = laps_rows.schema.get_field_index("stint_id")
     laps_rows = laps_rows.set_column(idx, "stint_id", pa.array(new, type=pa.int16()))
-    by_lap = dict(zip(lap_nums, new))
-    ts_laps = timeseries.column("lap_num").to_pylist()
+    # Vectorised: the session table has millions of rows at native rates.
+    keys = np.asarray(lap_nums, dtype=np.int64)
+    vals = np.asarray(new, dtype=np.int16)
+    ts_laps = timeseries.column("lap_num").to_numpy().astype(np.int64)
+    order_k = np.argsort(keys, kind="stable")
+    keys_sorted, vals_sorted = keys[order_k], vals[order_k]
+    pos = np.clip(np.searchsorted(keys_sorted, ts_laps), 0, len(keys_sorted) - 1)
+    hit = keys_sorted[pos] == ts_laps
+    mapped = np.where(hit, vals_sorted[pos], np.int16(1)).astype(np.int16)
     ts_idx = timeseries.schema.get_field_index("stint_id")
-    timeseries = timeseries.set_column(
-        ts_idx, "stint_id", pa.array([by_lap.get(ln, 1) for ln in ts_laps], type=pa.int16())
-    )
+    timeseries = timeseries.set_column(ts_idx, "stint_id", pa.array(mapped, type=pa.int16()))
     return laps_rows, timeseries
-
-
-def _estimate_ts_rate(ts: pa.Table) -> float:
-    """Estimate the timeseries sample rate in Hz from ``t_lap_s`` spacing."""
-    if "t_lap_s" not in ts.schema.names or len(ts) < 2:
-        return 0.0
-    t = ts.column("t_lap_s").to_numpy()
-    if t.size < 2:
-        return 0.0
-    dt = np.diff(t)
-    dt = dt[dt > 0]
-    if dt.size == 0:
-        return 0.0
-    median = float(np.median(dt))
-    return 1.0 / median if median > 0 else 0.0
 
 
 def _vehicle_meta(log) -> str | None:
@@ -843,7 +918,8 @@ def _build_empty_session_row(
         has_surface_temp=False,
         has_ambient=False,
         has_track=False,
-        ts_rate_hz=0.0,
+        timebases=None,
+        kinematics=None,
         session_start_utc=datetime(
             cand.date.year, cand.date.month, cand.date.day, tzinfo=timezone.utc
         ),
@@ -869,7 +945,8 @@ def _build_session_row(
     has_surface_temp: bool,
     has_ambient: bool,
     has_track: bool,
-    ts_rate_hz: float,
+    timebases: list[dict] | None,
+    kinematics: KinematicsVerdict | None,
     session_start_utc: datetime,
     status: str = "ok",
     error_msg: str | None = None,
@@ -879,6 +956,13 @@ def _build_session_row(
 ) -> pa.Table:
     paths_list = xrk_paths if xrk_paths is not None else [str(path)]
     lay = layout
+    tb_text = (
+        ";".join(f"{e['timebase']}:{e['rate_hz']:.2f}Hz:{e['n']}" for e in timebases)
+        if timebases
+        else None
+    )
+    kin_row = kinematics.to_row() if kinematics is not None else empty_verdict_row()
+    kin_cols = {name: pa.array([kin_row.get(name)], type=typ) for name, typ in KIN_ROW_COLUMNS}
     return pa.table(
         {
             "session_id": [session_id],
@@ -923,7 +1007,11 @@ def _build_session_row(
             "has_surface_temp": [has_surface_temp],
             "has_ambient_temp": [has_ambient],
             "has_track_temp": [has_track],
-            "ts_rate_hz": pa.array([ts_rate_hz], type=pa.float32()),
+            # Native-rate storage (schema 7): the raw timebases the file
+            # carries, "name:rate:n" per timebase, and the sensor verdict.
+            "n_timebases": pa.array([len(timebases) if timebases else 0], type=pa.int32()),
+            "timebases": pa.array([tb_text], type=pa.string()),
+            **kin_cols,
         }
     )
 
@@ -937,8 +1025,14 @@ def _build_laps_table(
     stint_ids: list[int],
     timeseries: pa.Table,
     lap_types: list[str] | None = None,
+    kinematics: pa.Table | None = None,
 ) -> pa.Table:
     """Per-lap summary rows.
+
+    ``kinematics`` (:func:`~.kinematics.session_kinematics`) supplies the
+    accelerations the dynamics columns are computed from — the session's
+    validated sensor on its own clock; without it the raw ``lat_g`` /
+    ``long_g`` columns of the timeseries are used.
 
     ``lap_types`` (libxrk's ``full`` / ``out`` / ``in``) sets ``is_outlap`` /
     ``is_inlap`` directly. Without it (legacy callers) the last lap of a
@@ -985,6 +1079,11 @@ def _build_laps_table(
             rows[f"surf_temp_{c}_{stat}"] = []
 
     lap_num_col = timeseries.column("lap_num").to_numpy()
+    kin_lap_col = (
+        kinematics.column("lap_num").to_numpy()
+        if kinematics is not None and "lap_num" in kinematics.schema.names
+        else None
+    )
 
     # Per-stint last-lap detection (potential in-lap, legacy heuristic).
     stint_last_lap: dict[int, int] = {}
@@ -1018,7 +1117,12 @@ def _build_laps_table(
         )
         rows["is_inlap"].append(is_inlap)
 
-        dyn = compute_lap_dynamics(lap_ts)
+        kin_lap = (
+            kinematics.filter(pa.array(kin_lap_col == ln))
+            if kinematics is not None and kin_lap_col is not None
+            else None
+        )
+        dyn = compute_lap_dynamics(lap_ts, kin_lap)
         # An out-lap that begins below pit-lane speed started from standstill
         # (a real pit exit); one that begins at speed is a file that started
         # mid-track and must not be used as a stint's starting temperature.
@@ -1144,6 +1248,71 @@ def _split_on_layout(
     return out
 
 
+def _extract_group(paths: list[Path], dataset_root: Path) -> dict[str, str]:
+    """Extract one file group (split on wall-clock gaps and layout, one
+    session per subgroup) and upsert the results; ``{path: status}``."""
+    from .dataset import upsert_session
+
+    t0 = time.perf_counter()
+    # Filename grouping can fuse two separate track sessions that AIM
+    # happened to number consecutively; verify wall-clock adjacency
+    # before merging. Load failures fall through to extract_session,
+    # which retries the load and records the error result uniformly.
+    subgroups: list[tuple[list[Path], list | None, list[int] | None, list | None]]
+    if len(paths) == 1:
+        subgroups = [(paths, None, None, None)]
+    else:
+        try:
+            loaded = [load_and_correct_session(p) for p in paths]
+        except Exception:
+            subgroups = [(paths, None, None, None)]
+        else:
+            logs = [lg for lg, _ in loaded]
+            det_by_path = {str(p): d for p, (_, d) in zip(paths, loaded)}
+            split = split_group_by_wallclock(
+                paths, logs, track_canonical=loaded[0][1].track_canonical
+            )
+            if len(split) > 1:
+                logger.info(
+                    "wall-clock gap split %d-file group (primary=%s) into %d sessions",
+                    len(paths),
+                    paths[0].name,
+                    len(split),
+                )
+            split = _split_on_layout(split, det_by_path)
+            subgroups = [(sp, sl, so, [det_by_path[str(p)] for p in sp]) for sp, sl, so in split]
+
+    status_by_path: dict[str, str] = {}
+    for sub_paths, sub_logs, sub_offsets, sub_dets in subgroups:
+        result = extract_session(
+            sub_paths,
+            _preloaded_logs=sub_logs,
+            _offsets_ms=sub_offsets,
+            _preloaded_detections=sub_dets,
+        )
+        if len(sub_paths) == 1:
+            logger.info(
+                "extracted %s status=%s elapsed=%.2fs",
+                sub_paths[0].name,
+                result.status,
+                time.perf_counter() - t0,
+            )
+        else:
+            logger.info(
+                "extracted %d-file merged session %s (primary=%s) status=%s elapsed=%.2fs",
+                len(sub_paths),
+                result.session_row.column("session_id")[0].as_py(),
+                sub_paths[0].name,
+                result.status,
+                time.perf_counter() - t0,
+            )
+
+        upsert_session(dataset_root, result, all_xrk_paths=sub_paths)
+        for p in sub_paths:
+            status_by_path[str(p)] = result.status
+    return status_by_path
+
+
 def run_extract(
     *,
     aim_root: Path,
@@ -1154,6 +1323,13 @@ def run_extract(
     retry_errors: bool = False,
 ) -> dict[str, int]:
     """Extract all new sessions and upsert them into the dataset.
+
+    Files are parsed by libxrk's Rust backend (``LIBXRK_BACKEND=rust``, set
+    by the CLI): the Cython parser leaks ~30 MB of native memory per file
+    (m3rlin45/libxrk#111), which took a full re-extract past 14 GB; the Rust
+    parser is flat and its output matches the Cython one on every logger
+    channel, timecode and lap (its derived GPS latitude / altitude / lateral
+    g differ by 1e-14° / 3e-9 m / one float32 ulp).
 
     Files that the AIM logger split across a single physical run (matching
     ``date / driver / car / track / session_type`` and with consecutive
@@ -1166,12 +1342,7 @@ def run_extract(
     its own manifest row (so re-runs detect when any file changed) pointing
     at its (sub)group's session_id.
     """
-    from .dataset import (
-        load_manifest,
-        prune_orphan_sessions,
-        remove_manifest_entries,
-        upsert_session,
-    )
+    from .dataset import load_manifest, prune_orphan_sessions, remove_manifest_entries
     from .discovery import group_split_sessions, stem_key
 
     existing = load_manifest(dataset_root)
@@ -1228,70 +1399,12 @@ def run_extract(
             continue
 
         paths = [c.path for c in group]
-        t0 = time.perf_counter()
-
-        # Filename grouping can fuse two separate track sessions that AIM
-        # happened to number consecutively; verify wall-clock adjacency
-        # before merging. Load failures fall through to extract_session,
-        # which retries the load and records the error result uniformly.
-        subgroups: list[tuple[list[Path], list | None, list[int] | None, list | None]]
-        if len(paths) == 1:
-            subgroups = [(paths, None, None, None)]
-        else:
-            try:
-                loaded = [load_and_correct_session(p) for p in paths]
-            except Exception:
-                subgroups = [(paths, None, None, None)]
+        status_by_path = _extract_group(paths, dataset_root)
+        for p in paths:
+            if status_by_path.get(str(p), "error") == "error":
+                counts["errors"] += 1
             else:
-                logs = [lg for lg, _ in loaded]
-                det_by_path = {str(p): d for p, (_, d) in zip(paths, loaded)}
-                split = split_group_by_wallclock(
-                    paths, logs, track_canonical=loaded[0][1].track_canonical
-                )
-                if len(split) > 1:
-                    logger.info(
-                        "wall-clock gap split %d-file group (primary=%s) into %d sessions",
-                        len(paths),
-                        paths[0].name,
-                        len(split),
-                    )
-                split = _split_on_layout(split, det_by_path)
-                subgroups = [
-                    (sp, sl, so, [det_by_path[str(p)] for p in sp]) for sp, sl, so in split
-                ]
-
-        status_by_path: dict[str, str] = {}
-        for sub_paths, sub_logs, sub_offsets, sub_dets in subgroups:
-            result = extract_session(
-                sub_paths,
-                _preloaded_logs=sub_logs,
-                _offsets_ms=sub_offsets,
-                _preloaded_detections=sub_dets,
-            )
-            if len(sub_paths) == 1:
-                logger.info(
-                    "extracted %s status=%s elapsed=%.2fs",
-                    sub_paths[0].name,
-                    result.status,
-                    time.perf_counter() - t0,
-                )
-            else:
-                logger.info(
-                    "extracted %d-file merged session %s (primary=%s) status=%s elapsed=%.2fs",
-                    len(sub_paths),
-                    result.session_row.column("session_id")[0].as_py(),
-                    sub_paths[0].name,
-                    result.status,
-                    time.perf_counter() - t0,
-                )
-
-            upsert_session(dataset_root, result, all_xrk_paths=sub_paths)
-            if result.status == "error":
-                counts["errors"] += len(sub_paths)
-            else:
-                counts["extracted"] += len(sub_paths)
-            for p in sub_paths:
-                status_by_path[str(p)] = result.status
+                counts["extracted"] += 1
 
         for cand, mtime_ns, size in zip(group, mtimes, sizes):
             existing[str(cand.path)] = {
