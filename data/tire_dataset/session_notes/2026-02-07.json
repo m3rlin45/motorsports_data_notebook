@@ -1,5 +1,5 @@
 {
-  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|4b3a1f0e44279be6733d137a330843c3b7bd3b1e",
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|9a70d8057e77150fbd9aad651f6f257aa133279f",
   "_model": "claude-sonnet-5-5",
   "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
   "_extracted_at": "2026-10-29T00:23:04.746491+00:00",
@@ -10,14 +10,14 @@
     }
   ],
   "_sessions": [
-    "0f1a7021d4af8508",
-    "155ee2fb16c57870"
+    "2026-02-07_093117_Inferno-86_sodegaura_a4507",
+    "2026-02-07_103020_Inferno-86_sodegaura_a4512"
   ],
-  "input": "DATE: 2026-02-07 (times are local to the track)\n\nRUN NOTES FILE \"2026-02-07_Sodegaura.txt\":\n09:30 Session\n\n22 Front 2/2\n21 Rear 1/1\nTires 1.75 all around\nConditions: snow flurry 4c\nbrakes brand new, need to bed in\n\nA bit slippery, but not terrible Balance was ok\n\n10:30 Session\n\nKeep tires as is\n\n\nFL 24\nFR 23\nRL 21\nRR 20\n\n11:30 Session:\n\nTires Silver-blue\n\n1.7 all around\n\nCrashed on out lap :(\n\nLOGGED SESSIONS:\n1. session_id=0f1a7021d4af8508 start=09:31 car=\"Inferno 86\" track=sodegaura laps=17 type=\"Generic testing\" comment=\"slightly snowing, bedding in brakes\"\n2. session_id=155ee2fb16c57870 start=10:30 car=\"Inferno 86\" track=sodegaura laps=23 type=\"Generic testing\" comment=\"snowing\"\n",
+  "input": "DATE: 2026-02-07 (times are local to the track)\n\nRUN NOTES FILE \"2026-02-07_Sodegaura.txt\":\n09:30 Session\n\n22 Front 2/2\n21 Rear 1/1\nTires 1.75 all around\nConditions: snow flurry 4c\nbrakes brand new, need to bed in\n\nA bit slippery, but not terrible Balance was ok\n\n10:30 Session\n\nKeep tires as is\n\n\nFL 24\nFR 23\nRL 21\nRR 20\n\n11:30 Session:\n\nTires Silver-blue\n\n1.7 all around\n\nCrashed on out lap :(\n\nLOGGED SESSIONS:\n1. session_id=2026-02-07_093117_Inferno-86_sodegaura_a4507 start=09:31 car=\"Inferno 86\" track=sodegaura laps=17 type=\"Generic testing\" comment=\"slightly snowing, bedding in brakes\"\n2. session_id=2026-02-07_103020_Inferno-86_sodegaura_a4512 start=10:30 car=\"Inferno 86\" track=sodegaura laps=23 type=\"Generic testing\" comment=\"snowing\"\n",
   "data": {
     "sessions": [
       {
-        "session_id": "0f1a7021d4af8508",
+        "session_id": "2026-02-07_093117_Inferno-86_sodegaura_a4507",
         "note_file": "2026-02-07_Sodegaura.txt",
         "note_session_index": 1,
         "match_confidence": 1.0,
@@ -45,7 +45,7 @@
         "notes": "Setup codes: Front 22 (2/2), Rear 21 (1/1). A bit slippery, but not terrible. Balance was ok."
       },
       {
-        "session_id": "155ee2fb16c57870",
+        "session_id": "2026-02-07_103020_Inferno-86_sodegaura_a4512",
         "note_file": "2026-02-07_Sodegaura.txt",
         "note_session_index": 2,
         "match_confidence": 1.0,

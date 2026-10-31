@@ -1,17 +1,17 @@
 {
-  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|244d40bf8b14a38a5bf1d269cfcb348f6cad7a14",
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|85de72c936c59a575fa2e1ef0e87ecf4235fa0f0",
   "_model": "claude-sonnet-5-5",
   "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
   "_extracted_at": "2026-10-29T00:21:57.886016+00:00",
   "_notes_files": [],
   "_sessions": [
-    "ba5d166040ca507d"
+    "2025-08-08_163056_Inferno-86_fuji_a1153"
   ],
-  "input": "DATE: 2025-08-08 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=ba5d166040ca507d start=16:30 car=\"Inferno 86\" track=fuji laps=5 type=\"Generic testing\" comment=\"Front Stabilizer 4/4, A052 used\"\n",
+  "input": "DATE: 2025-08-08 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=2025-08-08_163056_Inferno-86_fuji_a1153 start=16:30 car=\"Inferno 86\" track=fuji laps=5 type=\"Generic testing\" comment=\"Front Stabilizer 4/4, A052 used\"\n",
   "data": {
     "sessions": [
       {
-        "session_id": "ba5d166040ca507d",
+        "session_id": "2025-08-08_163056_Inferno-86_fuji_a1153",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,

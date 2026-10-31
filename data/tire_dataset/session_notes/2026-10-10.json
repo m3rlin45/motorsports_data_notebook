@@ -1,5 +1,5 @@
 {
-  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|82ca1f852852b3b31575eae470cea90d18541faf",
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|3bd172a966b470660aaa832bb22c72a1c5c393cc",
   "_model": "claude-sonnet-5-5",
   "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
   "_extracted_at": "2026-10-29T00:24:07.518481+00:00",
@@ -10,16 +10,16 @@
     }
   ],
   "_sessions": [
-    "9997ae89808de183",
-    "3cf0129d43fcf833",
-    "d263e4ca6b736e1c",
-    "ed12fa2f6fd378bd"
+    "2026-10-10_130251_Inferno-86_sodegaura_a6054",
+    "2026-10-10_140202_Inferno-86_sodegaura_a6060",
+    "2026-10-10_140853_Inferno-86_sodegaura_a6062",
+    "2026-10-10_160114_Inferno-86_sodegaura_a6067"
   ],
-  "input": "DATE: 2026-10-10 (times are local to the track)\n\nRUN NOTES FILE \"2026-10-10 Sodegaura.txt\":\nSession 1: 13:00\n\nA052 used\n\nFront 2/2\nRear 2/2\n\nDapmers\n\nF26\nR22\n\nTires target 2.0 hot\t\n\nData says front right damper is busted\n\nSession 2: 14:00\n\nA052\n\nSetup unchanged\n\n\nSession 3: 15:00 \n\ncoaching, no representative time\n\n\n\nSession 4: 16:00\n\nA052\n\nFront 3/3\n\nFelt some understeer, but front tires looked good in 5/6/7/8, need to get some rotation back and this is good\n\nLOGGED SESSIONS:\n1. session_id=9997ae89808de183 start=13:02 car=\"Inferno 86\" track=sodegaura laps=20 type=\"Generic testing\" comment=\"A052 Used / F 2/2 26 / R 2/2 22 /  / Could use more rotation in T8 and T9\"\n2. session_id=3cf0129d43fcf833 start=14:02 car=\"Inferno 86\" track=sodegaura laps=2 type=\"Generic testing\" comment=\"A052 /  / Still have understeer on 8, can push 5/6 way more\"\n3. session_id=d263e4ca6b736e1c start=14:08 car=\"Inferno 86\" track=sodegaura laps=16 type=\"Generic testing\" comment=\"A052 /  / Still have understeer on 8, can push 5/6 way more\"\n4. session_id=ed12fa2f6fd378bd start=16:01 car=\"Inferno 86\" track=sodegaura laps=21 type=\"Generic testing\" comment=\"A052 / Front 3/3 26 / Rear 2/2 22\"\n",
+  "input": "DATE: 2026-10-10 (times are local to the track)\n\nRUN NOTES FILE \"2026-10-10 Sodegaura.txt\":\nSession 1: 13:00\n\nA052 used\n\nFront 2/2\nRear 2/2\n\nDapmers\n\nF26\nR22\n\nTires target 2.0 hot\t\n\nData says front right damper is busted\n\nSession 2: 14:00\n\nA052\n\nSetup unchanged\n\n\nSession 3: 15:00 \n\ncoaching, no representative time\n\n\n\nSession 4: 16:00\n\nA052\n\nFront 3/3\n\nFelt some understeer, but front tires looked good in 5/6/7/8, need to get some rotation back and this is good\n\nLOGGED SESSIONS:\n1. session_id=2026-10-10_130251_Inferno-86_sodegaura_a6054 start=13:02 car=\"Inferno 86\" track=sodegaura laps=20 type=\"Generic testing\" comment=\"A052 Used / F 2/2 26 / R 2/2 22 /  / Could use more rotation in T8 and T9\"\n2. session_id=2026-10-10_140202_Inferno-86_sodegaura_a6060 start=14:02 car=\"Inferno 86\" track=sodegaura laps=2 type=\"Generic testing\" comment=\"A052 /  / Still have understeer on 8, can push 5/6 way more\"\n3. session_id=2026-10-10_140853_Inferno-86_sodegaura_a6062 start=14:08 car=\"Inferno 86\" track=sodegaura laps=16 type=\"Generic testing\" comment=\"A052 /  / Still have understeer on 8, can push 5/6 way more\"\n4. session_id=2026-10-10_160114_Inferno-86_sodegaura_a6067 start=16:01 car=\"Inferno 86\" track=sodegaura laps=21 type=\"Generic testing\" comment=\"A052 / Front 3/3 26 / Rear 2/2 22\"\n",
   "data": {
     "sessions": [
       {
-        "session_id": "9997ae89808de183",
+        "session_id": "2026-10-10_130251_Inferno-86_sodegaura_a6054",
         "note_file": "2026-10-10 Sodegaura.txt",
         "note_session_index": 1,
         "match_confidence": 1.0,
@@ -51,7 +51,7 @@
         "notes": "Tires target 2.0 hot. Could use more rotation in T8 and T9."
       },
       {
-        "session_id": "3cf0129d43fcf833",
+        "session_id": "2026-10-10_140202_Inferno-86_sodegaura_a6060",
         "note_file": "2026-10-10 Sodegaura.txt",
         "note_session_index": 2,
         "match_confidence": 1.0,
@@ -77,7 +77,7 @@
         "notes": "Setup unchanged. Still have understeer on 8, can push 5/6 way more."
       },
       {
-        "session_id": "d263e4ca6b736e1c",
+        "session_id": "2026-10-10_140853_Inferno-86_sodegaura_a6062",
         "note_file": "2026-10-10 Sodegaura.txt",
         "note_session_index": 2,
         "match_confidence": 1.0,
@@ -103,7 +103,7 @@
         "notes": "Restart of previous session (same block). Setup unchanged. Still have understeer on 8, can push 5/6 way more."
       },
       {
-        "session_id": "ed12fa2f6fd378bd",
+        "session_id": "2026-10-10_160114_Inferno-86_sodegaura_a6067",
         "note_file": "2026-10-10 Sodegaura.txt",
         "note_session_index": 4,
         "match_confidence": 1.0,

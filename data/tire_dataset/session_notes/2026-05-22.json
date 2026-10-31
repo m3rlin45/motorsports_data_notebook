@@ -1,19 +1,19 @@
 {
-  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|972345123ca471d8e8767850f3504e04475953eb",
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|82d1de5b56180ed8ee263c1c992122ac21c253cf",
   "_model": "claude-sonnet-5-5",
   "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
   "_extracted_at": "2026-10-29T00:23:31.232433+00:00",
   "_notes_files": [],
   "_sessions": [
-    "b232d635afdfee7c",
-    "8337a8e2216a5cb4",
-    "406195e4897f018f"
+    "2026-05-22_130216_KK-SII_tsukuba-2000_a0139-0140",
+    "2026-05-22_141819_KK-SII_tsukuba-2000_a0143",
+    "2026-05-22_153321_KK-SII_tsukuba-2000_a0147"
   ],
-  "input": "DATE: 2026-05-22 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=b232d635afdfee7c start=13:02 car=\"KK-SII\" track=tsukuba_2000 laps=17 type=\"Car Qualifying testing\" comment=\"spitting rain/misting\"\n2. session_id=8337a8e2216a5cb4 start=14:18 car=\"KK-SII\" track=tsukuba_2000 laps=6 type=\"Car Qualifying testing\" comment=\"ended hitting a vita in t1\"\n3. session_id=406195e4897f018f start=15:33 car=\"KK-SII\" track=tsukuba_2000 laps=19 type=\"Car Qualifying testing\" comment=\"\"\n",
+  "input": "DATE: 2026-05-22 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=2026-05-22_130216_KK-SII_tsukuba-2000_a0139-0140 start=13:02 car=\"KK-SII\" track=tsukuba_2000 laps=17 type=\"Car Qualifying testing\" comment=\"spitting rain/misting\"\n2. session_id=2026-05-22_141819_KK-SII_tsukuba-2000_a0143 start=14:18 car=\"KK-SII\" track=tsukuba_2000 laps=6 type=\"Car Qualifying testing\" comment=\"ended hitting a vita in t1\"\n3. session_id=2026-05-22_153321_KK-SII_tsukuba-2000_a0147 start=15:33 car=\"KK-SII\" track=tsukuba_2000 laps=19 type=\"Car Qualifying testing\" comment=\"\"\n",
   "data": {
     "sessions": [
       {
-        "session_id": "b232d635afdfee7c",
+        "session_id": "2026-05-22_130216_KK-SII_tsukuba-2000_a0139-0140",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -39,7 +39,7 @@
         "notes": ""
       },
       {
-        "session_id": "8337a8e2216a5cb4",
+        "session_id": "2026-05-22_141819_KK-SII_tsukuba-2000_a0143",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -67,7 +67,7 @@
         "notes": ""
       },
       {
-        "session_id": "406195e4897f018f",
+        "session_id": "2026-05-22_153321_KK-SII_tsukuba-2000_a0147",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,

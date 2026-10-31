@@ -1,18 +1,18 @@
 {
-  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|f13db5fc12a9ea11c31dff2fa489d8276ad3fd14",
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|b7a2260fc0e9f049e46d8fcf46980fe29c74ff17",
   "_model": "claude-sonnet-5-5",
   "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
   "_extracted_at": "2026-10-29T00:21:09.885175+00:00",
   "_notes_files": [],
   "_sessions": [
-    "ce56f14d5f7bbbee",
-    "dd8a94d803b4b7de"
+    "2025-03-20_092110_Inferno-86_sodegaura_a0114",
+    "2025-03-20_102722_Inferno-86_sodegaura_a0115-0116"
   ],
-  "input": "DATE: 2025-03-20 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=ce56f14d5f7bbbee start=09:21 car=\"Inferno 86\" track=sodegaura laps=18 type=\"Generic testing\" comment=\"Old tires, track damp in places, including T2\"\n2. session_id=dd8a94d803b4b7de start=10:27 car=\"Inferno 86\" track=sodegaura laps=14 type=\"Generic testing\" comment=\"\"\n",
+  "input": "DATE: 2025-03-20 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=2025-03-20_092110_Inferno-86_sodegaura_a0114 start=09:21 car=\"Inferno 86\" track=sodegaura laps=18 type=\"Generic testing\" comment=\"Old tires, track damp in places, including T2\"\n2. session_id=2025-03-20_102722_Inferno-86_sodegaura_a0115-0116 start=10:27 car=\"Inferno 86\" track=sodegaura laps=14 type=\"Generic testing\" comment=\"\"\n",
   "data": {
     "sessions": [
       {
-        "session_id": "ce56f14d5f7bbbee",
+        "session_id": "2025-03-20_092110_Inferno-86_sodegaura_a0114",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -38,7 +38,7 @@
         "notes": "Comment: Old tires, track damp in places, including T2"
       },
       {
-        "session_id": "dd8a94d803b4b7de",
+        "session_id": "2025-03-20_102722_Inferno-86_sodegaura_a0115-0116",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,

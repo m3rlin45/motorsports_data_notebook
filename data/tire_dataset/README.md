@@ -24,7 +24,17 @@ deltas show up in PR diffs.
   (`n_tire_usable_laps` was dropped in schema v4; usability is a training-time
   decision.) `comment` (schema v6, extractor 0.13.0) is the RaceStudio
   "Long Comment" the driver typed for the file(s) — tire fitted, setup, race
-  result; the per-day notes parse below reads it.
+  result; the per-day notes parse below reads it. Schema v7 (extractor
+  0.14.0) adds `timebases` / `n_timebases` (the raw timebases the file
+  carries, `name:rate:n`) and the **sensor verdict**: `accel_source`
+  (`imu` / `imu_swapped` — the IMU's two horizontal channels exchanged in
+  the file, read back exchanged by the loader / `gps_channel` /
+  `gps_position`) and `gyro_source` (`imu` /
+  `gps_position`) with every regression number behind them
+  (`kin_{imu,gps}_{lat,long,yaw}_{slope,corr,offset,coverage,std,cross,ok}`,
+  `kin_ref_lap`, `kin_note`): the IMU is checked against GPS position + speed
+  on the fastest full lap and the loaders use the chosen series
+  (`tire_etl/kinematics.py`; review with `just tire-kinematics-audit`).
 - `laps/YYYY-MM.parquet` — one row per lap (summary stats derived from
   timeseries), including the **out-lap** (`lap_type = "out"`, `lap_num = 0`:
   pit exit, or recording start, to the first start/finish crossing) and any
@@ -39,15 +49,51 @@ deltas show up in PR diffs.
   `stint_id` starts at every from-pit out-lap, not only after a ≥ 10 min gap.
   Cleaning happens when the model loads the data
   (`src/motorsports_data_notebook/tire_model/cleaning.py`): the stale-TPMS
-  prefix and the resample's wake-up transition sample are masked, the TPMS
-  summaries are rebuilt from the masked streams (so an out-lap's start is the
-  pit-exit reading the driver actually set), and `tire_usable` /
-  `exclude_reason` are assigned. `just tire-clean-laps` writes that cleaned
+  prefix is masked, the TPMS summaries are rebuilt from the masked streams
+  (so an out-lap's start is the pit-exit reading the driver actually set),
+  and `tire_usable` / `exclude_reason` are assigned. From schema v7 the
+  dynamics columns (`lat_g_peak`, `long_g_peak_brake`, `heat_proxy*`) are
+  computed from the session's **validated** accelerations (the sensor the
+  verdict chose, at its native rate), and `speed_kmh_max` / the per-corner
+  summaries from each channel's own samples. `just tire-clean-laps` writes that cleaned
   table to a parquet file for queries. Before v4 (schemas 1–3) the extractor
   masked and filtered, so the committed columns depended on the cleaning
   rules and any rule change meant a full re-extract.
-- `timeseries/YYYY-MM/{session_id}.parquet` — per-sample telemetry for one session.
-  This is the source of truth; the per-lap aggregates are rebuildable from it.
+- `timeseries/YYYY-MM/{session_id}.parquet` — per-sample telemetry for one session,
+  the source of truth; the per-lap aggregates are rebuildable from it. The
+  `session_id` (schema v9, extractor 0.16.0) is readable and sorts
+  chronologically: `2026-10-24_122053_KK-F_tsukuba_a0370-0372` — the date,
+  the logger's wall-clock start, the car, the canonical track and the run
+  number(s) of the file(s) (`a0370-0372` is a three-file merged session). It
+  keys every table and names the file; it changes when the session's
+  identity changes (car tag, file grouping), not when a file is rewritten —
+  the manifest's mtime / size check decides re-extraction, which replaces
+  the rows under the same id. Schema v7
+  stores every selected channel **verbatim at its native rate**: one row per raw
+  sample, one row group per raw *timebase* (channels the logger sampled on one
+  timecode array — `gps` 25 Hz with `gps_lat`/`gps_lon` (float64),
+  `gps_alt_m`, `speed_ms` and the logger's `gps_lat_g`/`gps_long_g`/
+  `gps_yaw_rate_dps`; `accel` 50 Hz (500 Hz on the KK-SII) `lat_g`/`long_g`/
+  `vert_g`; `gyro` `yaw_rate_dps`/`pitch_rate_dps`/`roll_rate_dps`; `tpms/<corner>`
+  1.25 Hz; `surface/<corner>_ch1-4` and `_ch5-8` 10 Hz; `controls/...`), named
+  by the `timebase` and `family` columns; every channel column is null outside
+  its timebase, and `t_session_s`, `lap_num`, `stint_id`, `sample_idx`,
+  `t_lap_s` are per row. Each channel is stored at the narrowest float
+  width that holds its samples exactly (schema v8, extractor 0.15.0):
+  float16 where the AIM file logged float16 — the IMU, the gyro, the CAN
+  brake / steer / throttle (libxrk widens them to float32, libxrk #115) —
+  float32 for the analog inputs, the IR zones and the TPMS pressures,
+  float64 for latitude / longitude; the parquet floats are byte-stream-split
+  under zstd 9 (float16 PLAIN, DuckDB's limit) and read back as `FLOAT` in
+  `just tire-query`. Nothing is resampled or aligned in the extractor —
+  merging onto one clock happens at query time (`dataset.load_group`,
+  `dataset.channel_series`, `kinematics.load_kinematics`, which puts speed and
+  the verdict's lateral/longitudinal/yaw series on the chosen sensor's clock).
+  The file's schema metadata carries the per-timebase summary and the sensor
+  verdict. `just tire-query` exposes one DuckDB view per family (`gps`,
+  `accel`, `gyro`, `tpms`, `surface`, `controls`) next to `timeseries`.
+  The loaders read this schema only (the file's `tire_etl.schema` metadata
+  must say 9); a file from an earlier extractor is refused, not reinterpreted.
 - `session_notes/YYYY-MM-DD.json` — one `claude -p` (Sonnet) call per track day
   over the day's run-notes `.txt` file(s) from the OneDrive notes folder and
   every logged session's `comment`; the model matches notes blocks to sessions
