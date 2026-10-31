@@ -96,9 +96,10 @@ def car_g_reference(root: Path, laps_for_fit: pd.DataFrame) -> dict[str, float]:
     for sid, car in dry.drop_duplicates("session_id")[["session_id", "car"]].itertuples(
         index=False
     ):
-        ts = _session_timeseries(str(root), str(sid))
-        if ts is None or "speed_ms" not in ts.columns:
+        ss = _session_timeseries(str(root), str(sid))
+        if ss is None or "speed_ms" not in ss.kin.columns:
             continue
+        ts = ss.kin
         moving = ts["speed_ms"].to_numpy(dtype=float) > MOVING_SPEED_MS
         lat = np.nan_to_num(ts["lat_g"].to_numpy(dtype=float)[moving], nan=0.0)
         lng = np.nan_to_num(ts["long_g"].to_numpy(dtype=float)[moving], nan=0.0)

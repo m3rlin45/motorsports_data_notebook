@@ -1,5 +1,5 @@
 {
-  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|2540e447509f86092174c5e8b162be481b190fdc",
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|daa291c567de8d5c7525cb62e8a4146d6980651a",
   "_model": "claude-sonnet-5-5",
   "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
   "_extracted_at": "2026-10-29T00:22:29.256151+00:00",
@@ -10,20 +10,20 @@
     }
   ],
   "_sessions": [
-    "e2aebee861c2b5ec",
-    "f6481d29242753e1",
-    "e5f0c860cfedabaa",
-    "062a0bbcefb503d9",
-    "0b9bce111369629a",
-    "2ae7035bf1a2e016",
-    "02b2a9b8aa5af2c1",
-    "8e880455f1829270"
+    "2025-10-05_090622_Inferno-86_sodegaura_a1587",
+    "2025-10-05_094919_Inferno-86_sodegaura_a1591",
+    "2025-10-05_095824_RX8_sodegaura_a0426",
+    "2025-10-05_103904_718-Cayman_sodegaura_a0010",
+    "2025-10-05_104918_Inferno-86_sodegaura_a1593",
+    "2025-10-05_105723_RX8_sodegaura_a0430",
+    "2025-10-05_125458_Inferno-86_sodegaura_a1599",
+    "2025-10-05_151546_Inferno-86_sodegaura_a1603"
   ],
-  "input": "DATE: 2025-10-05 (times are local to the track)\n\nRUN NOTES FILE \"2025-10-05-Sodegaura Marutai.txt\":\nTires A050 used\n\nInferno 86 Info:\n\nPractice 1: \n\nFront 2/2 15\nRear 3/3 17\n\nCold press 1.3 all around\n\nUndersteery\n\nPractice 2:\n\nFront 2/2 15\nRear 3/4 17\n\nPress dropped to 1.4\n\nPractice 3: \n\n\nFront 2/2 15\n\nRear 3/4 20\n\nPress dropped to 1.4\n\nAfter 2 laps, all 1.4\n\nLOGGED SESSIONS:\n1. session_id=e2aebee861c2b5ec start=09:06 car=\"Inferno 86\" track=sodegaura laps=3 type=\"Generic testing\" comment=\"Front 2/2 / Rear 3/3 / Front 15 / Rear 17\"\n2. session_id=f6481d29242753e1 start=09:49 car=\"Inferno 86\" track=sodegaura laps=5 type=\"Generic testing\" comment=\"Front 2/2 15 / Rear 3/4 17\"\n3. session_id=e5f0c860cfedabaa start=09:58 car=\"RX8\" track=sodegaura laps=7 type=\"Generic testing\" comment=\"\"\n4. session_id=062a0bbcefb503d9 start=10:39 car=\"718 Cayman\" track=sodegaura laps=4 type=\"Generic testing\" comment=\"\"\n5. session_id=0b9bce111369629a start=10:49 car=\"Inferno 86\" track=sodegaura laps=4 type=\"Generic testing\" comment=\"Front 2/2 15 / Rear 3/4 20\"\n6. session_id=2ae7035bf1a2e016 start=10:57 car=\"RX8\" track=sodegaura laps=3 type=\"Generic testing\" comment=\"\"\n7. session_id=02b2a9b8aa5af2c1 start=12:54 car=\"Inferno 86\" track=sodegaura laps=59 type=\"Generic testing\" comment=\"\"\n8. session_id=8e880455f1829270 start=15:15 car=\"Inferno 86\" track=sodegaura laps=54 type=\"Generic testing\" comment=\"\"\n",
+  "input": "DATE: 2025-10-05 (times are local to the track)\n\nRUN NOTES FILE \"2025-10-05-Sodegaura Marutai.txt\":\nTires A050 used\n\nInferno 86 Info:\n\nPractice 1: \n\nFront 2/2 15\nRear 3/3 17\n\nCold press 1.3 all around\n\nUndersteery\n\nPractice 2:\n\nFront 2/2 15\nRear 3/4 17\n\nPress dropped to 1.4\n\nPractice 3: \n\n\nFront 2/2 15\n\nRear 3/4 20\n\nPress dropped to 1.4\n\nAfter 2 laps, all 1.4\n\nLOGGED SESSIONS:\n1. session_id=2025-10-05_090622_Inferno-86_sodegaura_a1587 start=09:06 car=\"Inferno 86\" track=sodegaura laps=3 type=\"Generic testing\" comment=\"Front 2/2 / Rear 3/3 / Front 15 / Rear 17\"\n2. session_id=2025-10-05_094919_Inferno-86_sodegaura_a1591 start=09:49 car=\"Inferno 86\" track=sodegaura laps=5 type=\"Generic testing\" comment=\"Front 2/2 15 / Rear 3/4 17\"\n3. session_id=2025-10-05_095824_RX8_sodegaura_a0426 start=09:58 car=\"RX8\" track=sodegaura laps=7 type=\"Generic testing\" comment=\"\"\n4. session_id=2025-10-05_103904_718-Cayman_sodegaura_a0010 start=10:39 car=\"718 Cayman\" track=sodegaura laps=4 type=\"Generic testing\" comment=\"\"\n5. session_id=2025-10-05_104918_Inferno-86_sodegaura_a1593 start=10:49 car=\"Inferno 86\" track=sodegaura laps=4 type=\"Generic testing\" comment=\"Front 2/2 15 / Rear 3/4 20\"\n6. session_id=2025-10-05_105723_RX8_sodegaura_a0430 start=10:57 car=\"RX8\" track=sodegaura laps=3 type=\"Generic testing\" comment=\"\"\n7. session_id=2025-10-05_125458_Inferno-86_sodegaura_a1599 start=12:54 car=\"Inferno 86\" track=sodegaura laps=59 type=\"Generic testing\" comment=\"\"\n8. session_id=2025-10-05_151546_Inferno-86_sodegaura_a1603 start=15:15 car=\"Inferno 86\" track=sodegaura laps=54 type=\"Generic testing\" comment=\"\"\n",
   "data": {
     "sessions": [
       {
-        "session_id": "e2aebee861c2b5ec",
+        "session_id": "2025-10-05_090622_Inferno-86_sodegaura_a1587",
         "note_file": "2025-10-05-Sodegaura Marutai.txt",
         "note_session_index": 1,
         "match_confidence": 0.7,
@@ -52,7 +52,7 @@
         "notes": "Understeery."
       },
       {
-        "session_id": "f6481d29242753e1",
+        "session_id": "2025-10-05_094919_Inferno-86_sodegaura_a1591",
         "note_file": "2025-10-05-Sodegaura Marutai.txt",
         "note_session_index": 2,
         "match_confidence": 0.7,
@@ -82,7 +82,7 @@
         "notes": ""
       },
       {
-        "session_id": "e5f0c860cfedabaa",
+        "session_id": "2025-10-05_095824_RX8_sodegaura_a0426",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -108,7 +108,7 @@
         "notes": ""
       },
       {
-        "session_id": "062a0bbcefb503d9",
+        "session_id": "2025-10-05_103904_718-Cayman_sodegaura_a0010",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -134,7 +134,7 @@
         "notes": ""
       },
       {
-        "session_id": "0b9bce111369629a",
+        "session_id": "2025-10-05_104918_Inferno-86_sodegaura_a1593",
         "note_file": "2025-10-05-Sodegaura Marutai.txt",
         "note_session_index": 3,
         "match_confidence": 0.7,
@@ -163,7 +163,7 @@
         "notes": "After 2 laps, all tires at 1.4."
       },
       {
-        "session_id": "2ae7035bf1a2e016",
+        "session_id": "2025-10-05_105723_RX8_sodegaura_a0430",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -189,7 +189,7 @@
         "notes": ""
       },
       {
-        "session_id": "02b2a9b8aa5af2c1",
+        "session_id": "2025-10-05_125458_Inferno-86_sodegaura_a1599",
         "note_file": "2025-10-05-Sodegaura Marutai.txt",
         "note_session_index": 3,
         "match_confidence": 0.35,
@@ -218,7 +218,7 @@
         "notes": ""
       },
       {
-        "session_id": "8e880455f1829270",
+        "session_id": "2025-10-05_151546_Inferno-86_sodegaura_a1603",
         "note_file": "2025-10-05-Sodegaura Marutai.txt",
         "note_session_index": 3,
         "match_confidence": 0.35,

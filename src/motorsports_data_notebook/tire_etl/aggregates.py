@@ -3,6 +3,13 @@
 The timeseries pa.Table is the source of truth; this module computes cheap
 summary statistics for the ``laps/`` fast-query layer. Statistics gracefully
 degrade when channels are missing (NaN passthrough).
+
+Since dataset schema 7 a lap slice holds several raw timebases: every channel
+column is an Arrow null outside the rows of its own timebase, so each
+statistic reads a channel together with the ``t_lap_s`` of exactly its own
+samples (:func:`channel_series`). A single-clock table where every column is
+valid on every row (the pre-schema-7 layout, synthetic fixtures) is the
+special case where all series share one clock.
 """
 
 from __future__ import annotations
@@ -11,8 +18,11 @@ from dataclasses import dataclass
 
 import numpy as np
 import pyarrow as pa
+import pyarrow.compute as pc
 
 CORNERS = ("fl", "fr", "rl", "rr")
+
+_EMPTY = np.zeros(0, dtype=np.float64)
 
 
 @dataclass(frozen=True)
@@ -36,6 +46,29 @@ class CornerTireAggregates:
     # start, so the pit-exit reading can be placed on the stint clock.
     temp_first_valid_s: float = float("nan")
     press_first_valid_s: float = float("nan")
+
+
+def channel_series(
+    ts: pa.Table, name: str, t_col: str = "t_lap_s"
+) -> tuple[np.ndarray, np.ndarray]:
+    """``(t, values)`` of ``name``'s own samples, as float64 arrays.
+
+    The channel's own samples are the rows where the column is *valid*
+    (not an Arrow null); NaN values inside its timebase are kept, so a
+    sensor dropout stays a NaN sample rather than vanishing. Missing
+    column or time column: two empty arrays.
+    """
+    if name not in ts.schema.names or t_col not in ts.schema.names:
+        return _EMPTY, _EMPTY
+    col = ts.column(name)
+    if col.null_count:
+        sub = ts.select([t_col, name]).filter(pc.is_valid(col))
+        t = sub.column(t_col).to_numpy(zero_copy_only=False)
+        v = sub.column(name).to_numpy(zero_copy_only=False)
+    else:
+        t = ts.column(t_col).to_numpy(zero_copy_only=False)
+        v = col.to_numpy(zero_copy_only=False)
+    return np.asarray(t, dtype=np.float64), np.asarray(v, dtype=np.float64)
 
 
 def _safe_stats(arr: np.ndarray) -> tuple[float, float, float, float, float]:
@@ -64,40 +97,73 @@ def _rise_rate_per_min(t_s: np.ndarray, values: np.ndarray) -> float:
     return float(slope_per_s * 60.0)
 
 
-def _col_or_nan(ts: pa.Table, name: str, n: int) -> np.ndarray:
-    if name in ts.schema.names:
-        arr = ts.column(name).to_numpy(zero_copy_only=False).astype(np.float64)
-        return np.asarray(arr, dtype=np.float64)
-    return np.full(n, np.nan, dtype=np.float64)
+def _first_valid_t(t: np.ndarray, values: np.ndarray) -> float:
+    ok = ~np.isnan(values) & ~np.isnan(t)
+    return float(t[ok][0]) if ok.any() else float("nan")
+
+
+def _interp_onto(t_out: np.ndarray, t_in: np.ndarray, v_in: np.ndarray) -> np.ndarray:
+    """Linear interpolation of ``v_in(t_in)`` at ``t_out``; NaN outside the
+    finite support and when fewer than two finite samples exist."""
+    ok = np.isfinite(v_in) & np.isfinite(t_in)
+    if ok.sum() < 2:
+        return np.full(t_out.shape, np.nan)
+    ti, vi = t_in[ok], v_in[ok]
+    order = np.argsort(ti, kind="stable")
+    ti, vi = ti[order], vi[order]
+    out = np.asarray(np.interp(t_out, ti, vi), dtype=np.float64)
+    out[(t_out < ti[0]) | (t_out > ti[-1])] = np.nan
+    return out
+
+
+def surface_zone_mean(ts: pa.Table, corner: str) -> tuple[np.ndarray, np.ndarray]:
+    """``(t, mean)`` of the corner's IR zones across the zones.
+
+    The eight zone channels of a corner may sit on two raw timebases
+    (zones 1-4 and 5-8 on the AIM IR controller); the mean is taken on the
+    clock of the zone with the most samples, the others interpolated onto
+    it.
+    """
+    zones = [channel_series(ts, f"surf_temp_{corner}_ch{i}_c") for i in range(1, 9)]
+    zones = [(t, v) for t, v in zones if t.size]
+    if not zones:
+        return _EMPTY, _EMPTY
+    base_t, base_v = max(zones, key=lambda z: z[0].size)
+    stacked = [base_v]
+    for t, v in zones:
+        if t is base_t:
+            continue
+        if t.shape == base_t.shape and np.array_equal(t, base_t):
+            stacked.append(v)
+        else:
+            stacked.append(_interp_onto(base_t, t, v))
+    with np.errstate(all="ignore"):
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)  # all-NaN rows
+            mean = np.nanmean(np.vstack(stacked), axis=0)
+    return base_t, mean
 
 
 def compute_corner_aggregates(lap_ts: pa.Table, corner: str) -> CornerTireAggregates:
     """Compute per-corner tire aggregates from a single lap's timeseries rows.
 
     ``lap_ts`` is a wide timeseries table with columns like
-    ``tpms_press_fl_kpa``, ``tpms_temp_fl_c``, ``surf_temp_fl_mean_c``, and
+    ``tpms_press_fl_bar``, ``tpms_temp_fl_c``, ``surf_temp_fl_ch1_c`` and
     ``t_lap_s``. The extractor runs this on the raw timeseries; the model
     runs it again on the masked one (``tire_model.cleaning``), so the stale
     TPMS wake-up samples are judged at training time, not here.
     """
-    n = len(lap_ts)
-    t = _col_or_nan(lap_ts, "t_lap_s", n)
-    press = _col_or_nan(lap_ts, f"tpms_press_{corner}_bar", n)
+    t_p, press = channel_series(lap_ts, f"tpms_press_{corner}_bar")
     # Note: rise rate is in bar/min (not kPa/min)
-    temp = _col_or_nan(lap_ts, f"tpms_temp_{corner}_c", n)
-    surf = _col_or_nan(lap_ts, f"surf_temp_{corner}_mean_c", n)
+    t_t, temp = channel_series(lap_ts, f"tpms_temp_{corner}_c")
+    _, surf = surface_zone_mean(lap_ts, corner)
 
     p_start, p_end, p_min, p_max, p_mean = _safe_stats(press)
     tt_start, tt_end, tt_min, tt_max, tt_mean = _safe_stats(temp)
     s_start, s_end, s_min, s_max, s_mean = _safe_stats(surf)  # noqa: F841
-    rise = _rise_rate_per_min(t, press)
-
-    def _first_valid_t(values: np.ndarray) -> float:
-        ok = ~np.isnan(values) & ~np.isnan(t)
-        return float(t[ok][0]) if ok.any() else float("nan")
-
-    temp_first_valid_s = _first_valid_t(temp)
-    press_first_valid_s = _first_valid_t(press)
+    rise = _rise_rate_per_min(t_p, press)
 
     return CornerTireAggregates(
         press_start=p_start,
@@ -114,20 +180,47 @@ def compute_corner_aggregates(lap_ts: pa.Table, corner: str) -> CornerTireAggreg
         surf_mean=s_mean,
         surf_min=s_min,
         surf_max=s_max,
-        temp_first_valid_s=temp_first_valid_s,
-        press_first_valid_s=press_first_valid_s,
+        temp_first_valid_s=_first_valid_t(t_t, temp),
+        press_first_valid_s=_first_valid_t(t_p, press),
     )
 
 
-def compute_lap_dynamics(lap_ts: pa.Table) -> dict[str, float]:
-    """Compute lap-level dynamics summary (speed, G, heat proxy, etc.)."""
-    n = len(lap_ts)
-    t = _col_or_nan(lap_ts, "t_lap_s", n)
-    speed = _col_or_nan(lap_ts, "speed_kmh", n)
-    brake = _col_or_nan(lap_ts, "brake_bar", n)
-    throttle = _col_or_nan(lap_ts, "throttle_pct", n)
-    lat_g = _col_or_nan(lap_ts, "lat_g", n)
-    long_g = _col_or_nan(lap_ts, "long_g", n)
+def _dt_of(t: np.ndarray) -> np.ndarray:
+    """Per-sample step of a time series (first step 0); NaN or negative steps
+    (a recording gap written out of order) count as 0."""
+    if t.size == 0:
+        return _EMPTY
+    dt = np.diff(t, prepend=t[0])
+    return np.where(np.isnan(dt) | (dt < 0), 0.0, dt)
+
+
+def _speed_kmh_series(lap_ts: pa.Table) -> tuple[np.ndarray, np.ndarray]:
+    """GPS speed in km/h on its own samples (stored as ``speed_ms``)."""
+    t, v = channel_series(lap_ts, "speed_ms")
+    return t, v * 3.6
+
+
+def compute_lap_dynamics(lap_ts: pa.Table, kin: pa.Table | None = None) -> dict[str, float]:
+    """Compute lap-level dynamics summary (speed, G, heat proxy, etc.).
+
+    Speed, brake and throttle come from ``lap_ts``; the accelerations from
+    ``kin`` when given (the session's validated kinematics on the chosen
+    sensor's clock, see :mod:`.kinematics`), else from the ``lat_g`` /
+    ``long_g`` columns of ``lap_ts``. Lateral and longitudinal g may sit on
+    different clocks: the heat proxies are sums of per-axis integrals, so
+    each axis is integrated on its own samples.
+    """
+    t_all = (
+        np.asarray(lap_ts.column("t_lap_s").to_numpy(zero_copy_only=False), dtype=np.float64)
+        if "t_lap_s" in lap_ts.schema.names
+        else _EMPTY
+    )
+    t_speed, speed = _speed_kmh_series(lap_ts)
+    _, brake = channel_series(lap_ts, "brake_bar")
+    _, throttle = channel_series(lap_ts, "throttle_pct")
+    g_src = kin if kin is not None else lap_ts
+    t_lat, lat_g = channel_series(g_src, "lat_g")
+    t_long, long_g = channel_series(g_src, "long_g")
 
     speed_valid = speed[~np.isnan(speed)]
     brake_valid = brake[~np.isnan(brake)]
@@ -135,39 +228,34 @@ def compute_lap_dynamics(lap_ts: pa.Table) -> dict[str, float]:
 
     heat_proxy = float("nan")
     heat_proxy_corner: dict[str, float] = {c: float("nan") for c in CORNERS}
-    if n >= 2 and not np.all(np.isnan(lat_g)) and not np.all(np.isnan(long_g)):
+    has_lat = lat_g.size >= 2 and not np.all(np.isnan(lat_g))
+    has_long = long_g.size >= 2 and not np.all(np.isnan(long_g))
+    if has_lat and has_long:
         lg = np.nan_to_num(lat_g, nan=0.0)
         lng = np.nan_to_num(long_g, nan=0.0)
-        dt = np.diff(t, prepend=t[0] if t.size else 0.0)
-        dt = np.where(np.isnan(dt), 0.0, dt)
-        heat_proxy = float(np.sum((lg * lg + lng * lng) * dt))
+        dt_lat = _dt_of(t_lat)
+        dt_long = _dt_of(t_long)
+        heat_proxy = float(np.sum(lg * lg * dt_lat) + np.sum(lng * lng * dt_long))
         # Per-corner decomposition: positive lat_g ⇒ right turn ⇒ load on
         # LEFT corners; positive long_g ⇒ accel ⇒ rear; negative long_g ⇒
         # brake ⇒ front. Each corner sums only the G components that load
         # it, so a hard-braking lap inflates FL/FR but not RL/RR.
-        lat_pos = np.where(lg > 0, lg, 0.0)
-        lat_neg = np.where(lg < 0, -lg, 0.0)
-        long_pos = np.where(lng > 0, lng, 0.0)
-        long_neg = np.where(lng < 0, -lng, 0.0)
-        per_corner = {
-            "fl": lat_pos * lat_pos + long_neg * long_neg,  # right turn + brake
-            "fr": lat_neg * lat_neg + long_neg * long_neg,  # left turn + brake
-            "rl": lat_pos * lat_pos + long_pos * long_pos,  # right turn + accel
-            "rr": lat_neg * lat_neg + long_pos * long_pos,  # left turn + accel
+        lat_pos = float(np.sum(np.where(lg > 0, lg, 0.0) ** 2 * dt_lat))
+        lat_neg = float(np.sum(np.where(lg < 0, -lg, 0.0) ** 2 * dt_lat))
+        long_pos = float(np.sum(np.where(lng > 0, lng, 0.0) ** 2 * dt_long))
+        long_neg = float(np.sum(np.where(lng < 0, -lng, 0.0) ** 2 * dt_long))
+        heat_proxy_corner = {
+            "fl": lat_pos + long_neg,  # right turn + brake
+            "fr": lat_neg + long_neg,  # left turn + brake
+            "rl": lat_pos + long_pos,  # right turn + accel
+            "rr": lat_neg + long_pos,  # left turn + accel
         }
-        heat_proxy_corner = {c: float(np.sum(v * dt)) for c, v in per_corner.items()}
 
-    long_g_min = (
-        float(np.nanmin(long_g)) if long_g.size and not np.all(np.isnan(long_g)) else float("nan")
-    )
-    lat_g_abs_max = (
-        float(np.nanmax(np.abs(lat_g)))
-        if lat_g.size and not np.all(np.isnan(lat_g))
-        else float("nan")
-    )
+    long_g_min = float(np.nanmin(long_g)) if has_long else float("nan")
+    lat_g_abs_max = float(np.nanmax(np.abs(lat_g))) if has_lat else float("nan")
     on_track_s = float("nan")
-    if t.size:
-        finite_t = t[~np.isnan(t)]
+    if t_all.size:
+        finite_t = t_all[~np.isnan(t_all)]
         if finite_t.size >= 2:
             on_track_s = float(finite_t.max() - finite_t.min())
     # Time actually rolling (> 5 km/h). Equals on_track_s for a flying lap;
@@ -176,12 +264,11 @@ def compute_lap_dynamics(lap_ts: pa.Table) -> dict[str, float]:
     # whether the lap started from standstill (a pit exit) or mid-track.
     moving_s = float("nan")
     speed_kmh_first = float("nan")
-    if t.size >= 2 and not np.all(np.isnan(speed)):
-        dt_m = np.diff(t, prepend=t[0])
-        dt_m = np.where(np.isnan(dt_m), 0.0, dt_m)
+    if t_speed.size >= 2 and not np.all(np.isnan(speed)):
+        dt_m = _dt_of(t_speed)
         moving_s = float(np.sum(np.where(np.nan_to_num(speed, nan=0.0) > 5.0, dt_m, 0.0)))
         speed_kmh_first = float(speed_valid[0]) if speed_valid.size else float("nan")
-    distance_m = _col_or_nan(lap_ts, "distance_m", n)
+    _, distance_m = channel_series(lap_ts, "distance_m")
     dist_val = (
         float(np.nanmax(distance_m))
         if distance_m.size and not np.all(np.isnan(distance_m))

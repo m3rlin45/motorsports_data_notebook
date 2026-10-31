@@ -1,5 +1,5 @@
 {
-  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|3ab4ee3ca2b5632a66b989ca5e0fb5abab82b294",
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|7495b78fa17a52901fcf1a7ac2f5afeae7a6e50e",
   "_model": "claude-sonnet-5-5",
   "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
   "_extracted_at": "2026-10-29T00:22:34.445458+00:00",
@@ -10,14 +10,14 @@
     }
   ],
   "_sessions": [
-    "1cd30d2e7b4dabc4",
-    "611daf300cad8603"
+    "2025-11-01_100443_Inferno-86_fuji_a2242",
+    "2025-11-01_103906_Inferno-86_fuji_a2248"
   ],
-  "input": "DATE: 2025-11-01 (times are local to the track)\n\nRUN NOTES FILE \"2025-11-01-Fuji.txt\":\n10:00 NS-4:\n\nTires A052 Used (40%?)\n\nFront 2/2\nRear 3/3\n\nFront 15\nRear 20\n\nRoad surface drying\n\nPressures 1.75 all around\n\n\n11:40 S-4\nDropped all tires to 1.9 (left was dropped .2, right .1)\nGood balance, wish I had a bit more stability through coca cola\n\nLOGGED SESSIONS:\n1. session_id=1cd30d2e7b4dabc4 start=10:04 car=\"Inferno 86\" track=fuji laps=8 type=\"Generic testing\" comment=\"Front 2/2 15 / Rear 3/3 20 / Slightly Damp, but drying / A052 Used (50%)\"\n2. session_id=611daf300cad8603 start=10:39 car=\"Inferno 86\" track=fuji laps=16 type=\"Generic testing\" comment=\"Front 15, 2/2 / Rear 20 3/3 / A052 Used\"\n",
+  "input": "DATE: 2025-11-01 (times are local to the track)\n\nRUN NOTES FILE \"2025-11-01-Fuji.txt\":\n10:00 NS-4:\n\nTires A052 Used (40%?)\n\nFront 2/2\nRear 3/3\n\nFront 15\nRear 20\n\nRoad surface drying\n\nPressures 1.75 all around\n\n\n11:40 S-4\nDropped all tires to 1.9 (left was dropped .2, right .1)\nGood balance, wish I had a bit more stability through coca cola\n\nLOGGED SESSIONS:\n1. session_id=2025-11-01_100443_Inferno-86_fuji_a2242 start=10:04 car=\"Inferno 86\" track=fuji laps=8 type=\"Generic testing\" comment=\"Front 2/2 15 / Rear 3/3 20 / Slightly Damp, but drying / A052 Used (50%)\"\n2. session_id=2025-11-01_103906_Inferno-86_fuji_a2248 start=10:39 car=\"Inferno 86\" track=fuji laps=16 type=\"Generic testing\" comment=\"Front 15, 2/2 / Rear 20 3/3 / A052 Used\"\n",
   "data": {
     "sessions": [
       {
-        "session_id": "1cd30d2e7b4dabc4",
+        "session_id": "2025-11-01_100443_Inferno-86_fuji_a2242",
         "note_file": "2025-11-01-Fuji.txt",
         "note_session_index": 1,
         "match_confidence": 0.9,
@@ -46,7 +46,7 @@
         "notes": "Block NS-4. A052 used, about 50% per comment (notes said 40%?)."
       },
       {
-        "session_id": "611daf300cad8603",
+        "session_id": "2025-11-01_103906_Inferno-86_fuji_a2248",
         "note_file": "2025-11-01-Fuji.txt",
         "note_session_index": 1,
         "match_confidence": 0.35,

@@ -1,19 +1,19 @@
 {
-  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|9628a21656010c87beea5bf65317129413ca54cc",
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|4f7022e017a62f34371a62d4c6921183c0c7d820",
   "_model": "claude-sonnet-5-5",
   "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
   "_extracted_at": "2026-10-29T00:21:11.006524+00:00",
   "_notes_files": [],
   "_sessions": [
-    "51e97cbe2130ef10",
-    "5962b494ace54520",
-    "7b4eec31424535e5"
+    "2025-03-16_092842_Inferno-86_sodegaura_a0079",
+    "2025-03-16_103220_Inferno-86_sodegaura_a0086",
+    "2025-03-16_114422_Inferno-86_sodegaura_a0090"
   ],
-  "input": "DATE: 2025-03-16 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=51e97cbe2130ef10 start=09:28 car=\"Inferno 86\" track=sodegaura laps=6 type=\"\" comment=\"Super Rainy\"\n2. session_id=5962b494ace54520 start=10:32 car=\"Inferno 86\" track=sodegaura laps=7 type=\"\" comment=\"Super Rainy\"\n3. session_id=7b4eec31424535e5 start=11:44 car=\"Inferno 86\" track=sodegaura laps=10 type=\"\" comment=\"Super Rainy\"\n",
+  "input": "DATE: 2025-03-16 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=2025-03-16_092842_Inferno-86_sodegaura_a0079 start=09:28 car=\"Inferno 86\" track=sodegaura laps=6 type=\"\" comment=\"Super Rainy\"\n2. session_id=2025-03-16_103220_Inferno-86_sodegaura_a0086 start=10:32 car=\"Inferno 86\" track=sodegaura laps=7 type=\"\" comment=\"Super Rainy\"\n3. session_id=2025-03-16_114422_Inferno-86_sodegaura_a0090 start=11:44 car=\"Inferno 86\" track=sodegaura laps=10 type=\"\" comment=\"Super Rainy\"\n",
   "data": {
     "sessions": [
       {
-        "session_id": "51e97cbe2130ef10",
+        "session_id": "2025-03-16_092842_Inferno-86_sodegaura_a0079",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -39,7 +39,7 @@
         "notes": ""
       },
       {
-        "session_id": "5962b494ace54520",
+        "session_id": "2025-03-16_103220_Inferno-86_sodegaura_a0086",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -65,7 +65,7 @@
         "notes": ""
       },
       {
-        "session_id": "7b4eec31424535e5",
+        "session_id": "2025-03-16_114422_Inferno-86_sodegaura_a0090",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
