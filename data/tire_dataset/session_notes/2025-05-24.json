@@ -1,5 +1,5 @@
 {
-  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|a5469432178ab89e16c3fa86556becb883123486",
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|06c511e05eae984291b1fb28144e4287d257317c",
   "_model": "claude-sonnet-5-5",
   "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
   "_extracted_at": "2026-10-29T00:21:44.584246+00:00",
@@ -10,15 +10,15 @@
     }
   ],
   "_sessions": [
-    "2c49342ed7cd4728",
-    "6545855ba3ce2fe0",
-    "5be6c9af4826745b"
+    "2025-05-24_092249_Inferno-86_sodegaura_a0435",
+    "2025-05-24_102340_Inferno-86_sodegaura_a0437",
+    "2025-05-24_112436_Inferno-86_sodegaura_a0439"
   ],
-  "input": "DATE: 2025-05-24 (times are local to the track)\n\nRUN NOTES FILE \"Sodegaura 2025-05-24.txt\":\n9:30 AM Run\nAmbient 22.4c 57%\n\nDampers:\nFront 27\nRear 25\n\nAir:\nAll 1.8\n\nSilver Worn on front\nBlack more worn on back\n\nCusco ARB\n\nTrack VSC\n\nLots of oversteer, both on corner entry and exit\n\nBetter front end grip, no understeer unless overspeed\n\nFront tires way over pressure (2.4+)\nLowered all tires to 2.1 hot\n\n\n10:30 Run\n\nNo changes\n\nVery slidy, tires are dead\n\nAmbient 21c 60%\n\n11:30 Run\n\nSame everything, \n\nAmbient 20c 65%\n\nLight rain across session (5%)\nLight understeer, some front push, but lots of tail movement\nCar was very stable at 1:21 pace\nCar was decent at 1:20 pace\nCar was good for 1 lap at 1:19 pace, then got very slidy, both over and understeer\n\n\ncold\nFR 1.7\nFL 1.65\nRL 1.75\nRR 1.75\n\nLOGGED SESSIONS:\n1. session_id=2c49342ed7cd4728 start=09:22 car=\"Inferno 86\" track=sodegaura laps=17 type=\"Generic testing\" comment=\"FIrst run with new Stabilizer\"\n2. session_id=6545855ba3ce2fe0 start=10:23 car=\"Inferno 86\" track=sodegaura laps=20 type=\"Generic testing\" comment=\"Tires very dead, lots of sliding\"\n3. session_id=5be6c9af4826745b start=11:24 car=\"Inferno 86\" track=sodegaura laps=21 type=\"Generic testing\" comment=\"Very dead tires, some rain, was practicing target times\"\n",
+  "input": "DATE: 2025-05-24 (times are local to the track)\n\nRUN NOTES FILE \"Sodegaura 2025-05-24.txt\":\n9:30 AM Run\nAmbient 22.4c 57%\n\nDampers:\nFront 27\nRear 25\n\nAir:\nAll 1.8\n\nSilver Worn on front\nBlack more worn on back\n\nCusco ARB\n\nTrack VSC\n\nLots of oversteer, both on corner entry and exit\n\nBetter front end grip, no understeer unless overspeed\n\nFront tires way over pressure (2.4+)\nLowered all tires to 2.1 hot\n\n\n10:30 Run\n\nNo changes\n\nVery slidy, tires are dead\n\nAmbient 21c 60%\n\n11:30 Run\n\nSame everything, \n\nAmbient 20c 65%\n\nLight rain across session (5%)\nLight understeer, some front push, but lots of tail movement\nCar was very stable at 1:21 pace\nCar was decent at 1:20 pace\nCar was good for 1 lap at 1:19 pace, then got very slidy, both over and understeer\n\n\ncold\nFR 1.7\nFL 1.65\nRL 1.75\nRR 1.75\n\nLOGGED SESSIONS:\n1. session_id=2025-05-24_092249_Inferno-86_sodegaura_a0435 start=09:22 car=\"Inferno 86\" track=sodegaura laps=17 type=\"Generic testing\" comment=\"FIrst run with new Stabilizer\"\n2. session_id=2025-05-24_102340_Inferno-86_sodegaura_a0437 start=10:23 car=\"Inferno 86\" track=sodegaura laps=20 type=\"Generic testing\" comment=\"Tires very dead, lots of sliding\"\n3. session_id=2025-05-24_112436_Inferno-86_sodegaura_a0439 start=11:24 car=\"Inferno 86\" track=sodegaura laps=21 type=\"Generic testing\" comment=\"Very dead tires, some rain, was practicing target times\"\n",
   "data": {
     "sessions": [
       {
-        "session_id": "2c49342ed7cd4728",
+        "session_id": "2025-05-24_092249_Inferno-86_sodegaura_a0435",
         "note_file": "Sodegaura 2025-05-24.txt",
         "note_session_index": 1,
         "match_confidence": 1.0,
@@ -49,7 +49,7 @@
         "notes": "Silver wheels worn on front, black wheels more worn on rear. Lots of oversteer on corner entry and exit. Better front end grip, no understeer unless overspeed. Front tires way over pressure (2.4+ hot); lowered all tires to 2.1 hot."
       },
       {
-        "session_id": "6545855ba3ce2fe0",
+        "session_id": "2025-05-24_102340_Inferno-86_sodegaura_a0437",
         "note_file": "Sodegaura 2025-05-24.txt",
         "note_session_index": 2,
         "match_confidence": 1.0,
@@ -75,7 +75,7 @@
         "notes": "No changes from previous run. Very slidy, tires are dead."
       },
       {
-        "session_id": "5be6c9af4826745b",
+        "session_id": "2025-05-24_112436_Inferno-86_sodegaura_a0439",
         "note_file": "Sodegaura 2025-05-24.txt",
         "note_session_index": 3,
         "match_confidence": 1.0,

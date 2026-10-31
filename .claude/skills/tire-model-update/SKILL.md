@@ -42,7 +42,15 @@ cd /home/m3rlin45/code/motorsports_data_notebook && LOG="${TMPDIR:-/tmp}/tire-et
 
 (Use your session scratch directory for `LOG` if `/tmp` is not writable. A full
 re-extract takes 15–25 minutes: either give the command a 30-minute timeout, or
-run it in the background and read the log when the `extract:` line appears.)
+run it in the background and read the log when the `extract:` line appears.
+Run it under a memory cap — `(ulimit -v 10000000; just tire-etl ...)` — so a
+runaway session ends in a traceback instead of the kernel OOM-killing the
+machine; the machine has 15 GB and that has happened. The CLI parses with
+libxrk's Rust backend (`LIBXRK_BACKEND=rust`, set in `cli.main`): the Cython
+parser leaks ~30 MB per file (libxrk #111) and a full run climbs past 14 GB
+with it; the Rust parser stays near 1.5 GB and its output matches on every
+logger channel, timecode and lap. It prints `Bad bytes(...)` lines for some
+files; those are parser diagnostics, not errors.)
 
 Idempotent: only files that are new, changed, or extracted with an older
 `EXTRACTOR_VERSION` are processed. After a loader/merge/registry code fix
@@ -66,9 +74,9 @@ cd /home/m3rlin45/code/motorsports_data_notebook && just tire-query "SELECT date
 
 After an extractor bump run that query without the date filter (expect ~25
 error sessions, all with `n_laps = 0`). An error with `n_laps > 0`, or a
-message other than `no usable reference channel or no laps` / `tpms channels
-missing` (that one is `partial`, not an error), is a real failure: stop and
-report it.
+message other than `no usable reference channel or no laps` / `no samples
+inside any lap` / `tpms channels missing` (that one is `partial`, not an
+error), is a real failure: stop and report it.
 
 **Lap semantics:** `n_laps` counts *full* laps only. libxrk (≥ 0.13) types the
 first and last lap of a recording as out/in and the loader drops them, so a
@@ -167,6 +175,35 @@ confirming the files' lap times look like one continuous run.
 cd /home/m3rlin45/code/motorsports_data_notebook && just tire-query "SELECT date, car, track_canonical, layout_id, lap_source, n_laps, status, len(xrk_paths) n_files FROM sessions WHERE date >= '<first new date>' ORDER BY date, session_id"
 ```
 
+## 2b. Audit the sensor verdicts (schema ≥ 7)
+
+```bash
+cd /home/m3rlin45/code/motorsports_data_notebook && just tire-kinematics-audit --since <first new date> 2>&1 | tail -40
+```
+
+Every session's IMU was checked against GPS position + speed on its fastest
+full lap and the extractor recorded `accel_source` / `gyro_source` on the
+session row (`imu`, `gps_channel`, `gps_position`); the audit prints the
+regression numbers behind each verdict and re-scores the *chosen* series
+against the reference (exit 1 when one is outside the gate bands: lateral
+slope 0.9–1.1 and corr ≥ 0.9, longitudinal slope 0.85–1.15 and corr ≥ 0.85 on
+braking samples, yaw slope 0.9–1.1). Expected (docs §1.0d has the numbers):
+Inferno 86, EK9, RX8, SFJ and the KK-F under the KK-SII profile → `imu`; the 18 KK-F `default`-profile sessions → `gps_channel` (lateral
+at 0.4–0.55×); the KK-SII → `gps_channel` on every session since 2026-03-18
+(IMU axes swapped, reason `twisted`); gyro → `gps_position` on the Inferno
+86 since 2025-06-09 and on the SFJ (0.87× scale) and on the Feb–May 2026 sessions whose
+IMU/gyro stream stops six minutes into the file (reason `no_samples`). A new
+session whose verdict is not explained by its numbers (an `imu` with slope
+outside 0.9–1.1, a fallback whose IMU numbers look healthy) is worth a line in
+the summary; `--recheck` recomputes the verdicts with the current thresholds
+without re-extracting and marks what would change. Expect ~20 % of
+sessions outside a band, all on the braking-only longitudinal regression
+(slope 1.15–1.2 from pitch, corr 0.8–0.85 on the range-restricted subset);
+the Inferno 86 (since 2025-06-09) and SFJ gyros read 0.85–0.88× and fall
+back to position yaw by design. A *lateral* band failure or a new
+accelerometer fallback is worth a line; lateral slopes of 0.92–0.97 on an
+`imu` verdict are body roll, not a fault.
+
 ## 3. Notes and weather
 
 ```bash
@@ -214,10 +251,13 @@ fastest clean laps. Expect |bias_log| ≤ 0.01 and slope ≈ 1 on every corner;
 a corner drifting past ±0.02 means the force shares changed how a faster
 lap loads it — report it with the holdout numbers.
 
-**Out-laps and the cleaned table (dataset schema 4).** The committed laps
-table is raw: no TPMS masking and no `tire_usable` column. The model cleans
-it on load (`tire_model/cleaning.py`: stale-TPMS prefix and wake-up transition
-masked, per-lap TPMS summaries rebuilt, usability flags). For queries that
+**Out-laps and the cleaned table (dataset schema 4; native rates since
+schema 7).** The committed laps table is raw: no TPMS masking and no
+`tire_usable` column. The timeseries keeps every channel at its native rate
+and the loaders merge at query time, so a fit reads 50 accelerometer samples
+per rolling second where it used to read one or two. The model cleans
+it on load (`tire_model/cleaning.py`: stale-TPMS prefix masked, per-lap TPMS
+summaries rebuilt, usability flags). For queries that
 need the cleaned view, materialise it first:
 `just tire-clean-laps --out "$TMPDIR/laps_clean.parquet"` and
 `read_parquet('<that path>')` in `just tire-query` (it carries date, car,
@@ -266,8 +306,9 @@ notes-validation MAE in bar, and any bucket that moved from prior to fitted
 than ~1 °C MAE on a car with lots of data is a red flag — look at which new
 sessions dominate the new laps before committing. When the extractor version
 changed, also diff the manifest (`sl cat -r . data/tire_dataset/MANIFEST.jsonl`
-vs the working copy). `session_id` changes whenever merge grouping changes, so
-compare by **file group** with the committed revision:
+vs the working copy). `session_id` (`YYYY-MM-DD_HHMMSS_<car>_<track>_aNNNN[-NNNN]`) changes
+whenever the car tag or the merge grouping changes, so compare by **file
+group** with the committed revision:
 
 ```bash
 cd /home/m3rlin45/code/motorsports_data_notebook && just tire-manifest-diff            # vs the current commit
