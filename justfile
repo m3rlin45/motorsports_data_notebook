@@ -67,6 +67,11 @@ tire-manifest-diff *ARGS:
     uv run python -m motorsports_data_notebook.tire_etl.cli manifest-diff {{ARGS}}
 
 # Fetch historical weather for sessions
+# Per-session IMU-vs-GPS verdicts (accel_source / gyro_source) with the
+# regression numbers and the A2 gate; --recheck recomputes with current thresholds
+tire-kinematics-audit *ARGS:
+    uv run python -m motorsports_data_notebook.tire_etl.cli kinematics-audit {{ARGS}}
+
 tire-weather *ARGS:
     uv run python -m motorsports_data_notebook.tire_etl.cli enrich-weather {{ARGS}}
 

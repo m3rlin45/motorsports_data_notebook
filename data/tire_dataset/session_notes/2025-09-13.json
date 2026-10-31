@@ -1,20 +1,20 @@
 {
-  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|ae4049ba927acfd520c89d58ef09006e7ee77e70",
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|93c5cac83b6b46c88045f47253a7b1623e773923",
   "_model": "claude-sonnet-5-5",
   "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
   "_extracted_at": "2026-10-29T00:22:14.285682+00:00",
   "_notes_files": [],
   "_sessions": [
-    "bf19eee13de8cbfc",
-    "8a91c7a7e6e96f57",
-    "2c2c77037e7b1983",
-    "76e93225e6e205de"
+    "2025-09-13_093311_EK9_motegi_a0374",
+    "2025-09-13_094020_EK9_motegi_a0375",
+    "2025-09-13_104311_EK9_motegi_a0377",
+    "2025-09-13_111813_EK9_motegi_a0378"
   ],
-  "input": "DATE: 2025-09-13 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=bf19eee13de8cbfc start=09:33 car=\"EK9\" track=motegi laps=3 type=\"Qualifying testing\" comment=\"Qualifying, Wet A052\"\n2. session_id=8a91c7a7e6e96f57 start=09:40 car=\"EK9\" track=motegi laps=2 type=\"Race\" comment=\"\"\n3. session_id=2c2c77037e7b1983 start=10:43 car=\"EK9\" track=motegi laps=5 type=\"Qualifying testing\" comment=\"A050 New, damp track\"\n4. session_id=76e93225e6e205de start=11:18 car=\"EK9\" track=motegi laps=6 type=\"Qualifying testing\" comment=\"A050 Sticker, Dry-ish track, 8500 for the first 3 laps, Hit traffic on lap 1\"\n",
+  "input": "DATE: 2025-09-13 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=2025-09-13_093311_EK9_motegi_a0374 start=09:33 car=\"EK9\" track=motegi laps=3 type=\"Qualifying testing\" comment=\"Qualifying, Wet A052\"\n2. session_id=2025-09-13_094020_EK9_motegi_a0375 start=09:40 car=\"EK9\" track=motegi laps=2 type=\"Race\" comment=\"\"\n3. session_id=2025-09-13_104311_EK9_motegi_a0377 start=10:43 car=\"EK9\" track=motegi laps=5 type=\"Qualifying testing\" comment=\"A050 New, damp track\"\n4. session_id=2025-09-13_111813_EK9_motegi_a0378 start=11:18 car=\"EK9\" track=motegi laps=6 type=\"Qualifying testing\" comment=\"A050 Sticker, Dry-ish track, 8500 for the first 3 laps, Hit traffic on lap 1\"\n",
   "data": {
     "sessions": [
       {
-        "session_id": "bf19eee13de8cbfc",
+        "session_id": "2025-09-13_093311_EK9_motegi_a0374",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -40,7 +40,7 @@
         "notes": ""
       },
       {
-        "session_id": "8a91c7a7e6e96f57",
+        "session_id": "2025-09-13_094020_EK9_motegi_a0375",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -66,7 +66,7 @@
         "notes": ""
       },
       {
-        "session_id": "2c2c77037e7b1983",
+        "session_id": "2025-09-13_104311_EK9_motegi_a0377",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -92,7 +92,7 @@
         "notes": ""
       },
       {
-        "session_id": "76e93225e6e205de",
+        "session_id": "2025-09-13_111813_EK9_motegi_a0378",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,

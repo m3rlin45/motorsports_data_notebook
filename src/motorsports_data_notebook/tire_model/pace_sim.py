@@ -48,7 +48,6 @@ from typing import Sequence
 
 import numpy as np
 import pandas as pd
-import pyarrow.parquet as pq
 
 from .heat_input import DEFAULT_G_CLIP, ShareParams, share_heat_rate
 
@@ -91,7 +90,11 @@ _SAMPLE_CACHE: dict[str, dict[tuple[str, int], LapSamples]] = {}
 
 
 def load_lap_samples(root: Path) -> dict[tuple[str, int], LapSamples]:
-    """Per-(session_id, lap_num) samples from the raw timeseries, cached."""
+    """Per-(session_id, lap_num) samples of every session's validated
+    kinematics (:func:`~..tire_etl.kinematics.load_kinematics`: speed and
+    the chosen lateral / longitudinal g on the sensor's own clock), cached."""
+    from ..tire_etl.kinematics import load_kinematics
+
     key = str(Path(root).resolve())
     cached = _SAMPLE_CACHE.get(key)
     if cached is not None:
@@ -99,10 +102,10 @@ def load_lap_samples(root: Path) -> dict[tuple[str, int], LapSamples]:
     out: dict[tuple[str, int], LapSamples] = {}
     for f in sorted((Path(root) / "timeseries").glob("*/*.parquet")):
         try:
-            names = pq.read_schema(f).names
-            if not set(_TS_COLUMNS).issubset(names):
+            kin = load_kinematics(Path(root), f.stem)
+            if kin is None or not set(_TS_COLUMNS).issubset(kin.schema.names):
                 continue
-            ts = pq.read_table(f, columns=_TS_COLUMNS).to_pandas()
+            ts = kin.select(_TS_COLUMNS).to_pandas()
         except Exception:  # noqa: BLE001 — one unreadable file shouldn't kill the build
             logger.warning("pace model: failed to read %s — skipping", f)
             continue
