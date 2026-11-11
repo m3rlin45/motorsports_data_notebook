@@ -280,7 +280,8 @@ view and fed the view model's spec.
 | Time/Distance tab | done 2026-10-29 | `LapSeriesBuilder` extracts the chosen channels per selected lap (with neighbours) from the `LogFile`; channel picker (speed/throttle/brake preselected from the profile); fastest lap is the delta reference. The lap picker doubles as the legend (`StripChartSpec.Legend` off), so overlaid laps never hide the data. Known: with 13 overlaid laps the per-lap cursor value labels overflow a panel |
 | Suspension tab | done 2026-10-29 | `HistogramGridSpec` + `ScottPlotHistogramGrid` (2×2 bars, range bands, side-by-side A/B, hover label); `ChannelConfigViewModel` (A/B entries with completion, sync, profile fill, reset) reusable by every tab; motion ratios; stats pane with the statistics, symmetry and group-difference tables |
 | Roll Gradient tab | done 2026-10-29 | `ScatterGridSpec` (track map + scatter panels with fit lines, binned means, annotations) + `ScottPlotScatterGrid` (map hover snaps to the track and highlights the index-aligned samples on every panel, equal-units map); config with GPS/lateral/shock channels and track widths, motion ratios shared with the Suspension config as in Python; min |G| entry; roll table |
-| Driver, Tire Grip tabs | next | |
+| Driver tab | done 2026-10-29 | `BoxPlotSpec` + `ScottPlotBoxPlot` (stacked boxes with numpy quartiles, 1.5 IQR whiskers, fliers, mean line, gold opportunity bands, hover stats), `TrackMapSpec` + `ScottPlotTrackMap` (segments coloured by type, accel width by opportunity, apex labels, gold stars), the detail overlay reuses the strip chart (viridis laps, brake/entry/apex/exit markers); config with thresholds per session and the 95th-percentile auto throttle threshold; Summary/Detail/Map views, corner selector, stats tables |
+| Tire Grip tab | next | |
 
 Lesson from corners: match numpy's operation order exactly (`x * (π/180)`,
 not `x * π / 180`; pairwise sums) before loosening a tolerance.
