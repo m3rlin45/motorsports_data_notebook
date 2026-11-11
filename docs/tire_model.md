@@ -583,6 +583,63 @@ the derivatives), so a run that changes source part-way has a step in its
 heat input. That is accepted: it was already there between sessions, and
 the alternative was no dynamics at all for those laps.
 
+**Where the committed dataset and model stand** (schema 9, extractor
+0.21.0; every number run on 2026-11-11). 309 sessions and 3,555 laps — the
+readable ids exposed one session downloaded twice (Sodegaura 2025-04-18,
+run a_0258), so one fewer than under the hash — in 307 timeseries files,
+574 MB. Accelerometer verdicts: `imu` 178, `imu_swapped` 54, `gps_channel`
+59, `gps_position` 16; gyro: `imu` 170, `gps_position` 137; two sessions
+have no samples inside a lap.
+
+Of the 20,349 windows, 14,927 (73.4 %) use the IMU, 5,379 (26.4 %) the GPS
+fallback and 43 (0.21 %) are discarded, in 11 sessions. Fourteen sessions,
+all KK-SII, mix sources: the IMU while its stream lasts, the GPS after. On
+13 sessions the IMU was scored on a lap other than the fastest. 21
+sessions have one mismatched window and none has more, so the cap has not
+fired yet. Of the 43 discarded windows, 31 fall in six sessions with TPMS:
+20 in three road drives with no resolved track, and 11 on circuit sessions
+the model trains on, all KK-SII at Tsukuba after the IMU had stopped
+(2026-03-22 `a0066` and 2026-03-28 `a0080` one each; 2026-05-23
+`a0166-0167` nine — that session's GPS is noisy enough that neither its GPS
+channels nor its IMU validate against it). 29 of the 3,555 laps (19 of the
+2,978 full laps) have no heat summary. Of the 280 sessions with ≥ 3 laps,
+229 are inside every gate band of `just tire-kinematics-audit`; 43 of the
+51 outside fail only the braking-only longitudinal regression.
+
+The model refitted at each step, FL/FR/RL/RR:
+
+| | schema 6 | schema 9, one source per session (0.20.0) | schema 9, per window (0.21.0) |
+|---|---|---|---|
+| 5-fold calculator holdout, hot-pressure MAE (bar) | 0.048/0.047/0.044/0.038 | 0.042/0.040/0.049/0.038 | 0.042/0.040/0.049/0.038 |
+| 5-fold oracle holdout (bar) | 0.048/0.047/0.046/0.041 | 0.044/0.042/0.049/0.041 | 0.044/0.041/0.049/0.041 |
+| Notes validation, 12 sessions (bar) | 0.101/0.085/0.060/0.069 | 0.101/0.085/0.060/0.069 | 0.101/0.085/0.060/0.069 |
+| Pace check slope | 1.01/1.07/1.08/1.18 | 0.87/0.90/0.91/0.95 | 0.87/0.95/0.85/0.94 |
+| Pace check bias (log) | | +0.004/+0.005/+0.005/+0.006 | +0.004/+0.004/+0.005/+0.005 |
+
+- The folds are drawn in session-id order within a (track, car, condition)
+  bucket, so the readable ids changed the partition between the first two
+  columns as well as the inputs; they are not the same split. The last two
+  are.
+- RL is the one corner worse than at schema 6, and all of it is the damp
+  bucket: 58 RL points at 0.132 bar against 0.040 dry and 0.046 wet; over
+  the dry and wet points together the calculator holdout reads
+  0.039/0.041/0.042/0.038.
+- Per-window sources left the pressure accuracy where it was. One constant
+  moved by more than 15 %: the FJ speed-pressure κ, 4.4e-7 → 2.2e-7. It had
+  already halved from 8.7e-7 when the `imu_swapped` verdict moved 46 KK-SII
+  sessions from GPS-derived to IMU heat, and it halved again as ten more
+  sessions got their IMU back for part of the run — which suggests that on
+  this car κ is absorbing the scale of the heat input rather than
+  measuring an effect of speed on the pressure reading.
+- The pace check compares a session's fast laps with its typical laps, a
+  heat ratio of about 6 %. Across a change of sensor that ratio is swamped
+  by the 15 % step between GPS-derived and IMU heat: run over every lap of
+  the mixed sessions it read 0.75/0.85/0.75/0.84 (FJ 0.45/0.43/0.55/0.58),
+  an artefact of comparing unlike laps. It now compares only laps of a
+  session's most common single source (34 sessions instead of 37). Per
+  car: FJ 0.75/0.74/0.75/0.76, Inferno 86 0.91/0.98/0.90/0.98. The slopes
+  under 0.9 remain lap-sim segment E's question (#207).
+
 ## 2. Modeling approach
 
 ### 2.1 Energy balance on a lumped tire mass
