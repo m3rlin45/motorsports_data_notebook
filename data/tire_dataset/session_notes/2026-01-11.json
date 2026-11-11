@@ -1,5 +1,5 @@
 {
-  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|a2e513a693ce768c2b5df41e4c08be354ef83cd8",
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|91cef5b28523b455146786478ba1cd0eef059590",
   "_model": "claude-sonnet-5-5",
   "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
   "_extracted_at": "2026-10-29T00:22:49.748183+00:00",
@@ -10,13 +10,13 @@
     }
   ],
   "_sessions": [
-    "9bc112f39e7d83ef"
+    "2026-01-11_125319_Inferno-86_fuji_a3985"
   ],
-  "input": "DATE: 2026-01-11 (times are local to the track)\n\nRUN NOTES FILE \"2026-01-11 Fuji1.txt\":\nA052\n\nFront 20, 2/2\nRear 20, 1/1\n\nFL: 2.07 15.0\nFR 2.13 13.0\nRL: 2.13 12.0\nRR: 2.16 12.0\n\nsetpoints:\n\n1.59 | 1.59\n___________\n1.59 | 1.59\n\nCar felt great, but I was slow\n\nLOGGED SESSIONS:\n1. session_id=9bc112f39e7d83ef start=12:53 car=\"Inferno 86\" track=fuji laps=14 type=\"Generic testing\" comment=\"Ended when the car in front exploded\"\n",
+  "input": "DATE: 2026-01-11 (times are local to the track)\n\nRUN NOTES FILE \"2026-01-11 Fuji1.txt\":\nA052\n\nFront 20, 2/2\nRear 20, 1/1\n\nFL: 2.07 15.0\nFR 2.13 13.0\nRL: 2.13 12.0\nRR: 2.16 12.0\n\nsetpoints:\n\n1.59 | 1.59\n___________\n1.59 | 1.59\n\nCar felt great, but I was slow\n\nLOGGED SESSIONS:\n1. session_id=2026-01-11_125319_Inferno-86_fuji_a3985 start=12:53 car=\"Inferno 86\" track=fuji laps=14 type=\"Generic testing\" comment=\"Ended when the car in front exploded\"\n",
   "data": {
     "sessions": [
       {
-        "session_id": "9bc112f39e7d83ef",
+        "session_id": "2026-01-11_125319_Inferno-86_fuji_a3985",
         "note_file": "2026-01-11 Fuji1.txt",
         "note_session_index": 1,
         "match_confidence": 0.7,

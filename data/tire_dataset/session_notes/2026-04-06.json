@@ -1,5 +1,5 @@
 {
-  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|603a575ff7940aecc4486ca047e2cee16de0f916",
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|923a86f7fdd636704b7ba609bbeb17980758c7fd",
   "_model": "claude-sonnet-5-5",
   "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
   "_extracted_at": "2026-10-29T00:23:22.167925+00:00",
@@ -10,14 +10,14 @@
     }
   ],
   "_sessions": [
-    "b97e1ec4a6d9c64e",
-    "7ca9b6b064c31e5b"
+    "2026-04-06_090128_Inferno-86_fuji_a4813",
+    "2026-04-06_094212_Inferno-86_fuji_a4817"
   ],
-  "input": "DATE: 2026-04-06 (times are local to the track)\n\nRUN NOTES FILE \"Fuji 2026-04-06.txt\":\nRun 1\n\nFL 23\nFR 23\nRL 20\nRR 20\n\nF 2/2\nR 1/1\n\nall checked\n\nTrack 18c in sun, 14c in shade\n\nair 19c\n\nA052\ntarget press 1.9\n\nWhen it was 10c out\n\ntarget temps\n\nFL: 54\nFR: 51\nRL: 49\nRR: 48\n\ncold temps\nFL: 22c\nFR: 23c\nRL 20c\nRR: 21c\n\nRun 2\nAdded a little air to better hit target\n\nFL/FR 25\ngood balance, but crashed\n\nLOGGED SESSIONS:\n1. session_id=b97e1ec4a6d9c64e start=09:01 car=\"Inferno 86\" track=fuji laps=7 type=\"Generic testing\" comment=\"Shakedown, feels good\"\n2. session_id=7ca9b6b064c31e5b start=09:42 car=\"Inferno 86\" track=fuji laps=5 type=\"Generic testing\" comment=\"ends in crash\"\n",
+  "input": "DATE: 2026-04-06 (times are local to the track)\n\nRUN NOTES FILE \"Fuji 2026-04-06.txt\":\nRun 1\n\nFL 23\nFR 23\nRL 20\nRR 20\n\nF 2/2\nR 1/1\n\nall checked\n\nTrack 18c in sun, 14c in shade\n\nair 19c\n\nA052\ntarget press 1.9\n\nWhen it was 10c out\n\ntarget temps\n\nFL: 54\nFR: 51\nRL: 49\nRR: 48\n\ncold temps\nFL: 22c\nFR: 23c\nRL 20c\nRR: 21c\n\nRun 2\nAdded a little air to better hit target\n\nFL/FR 25\ngood balance, but crashed\n\nLOGGED SESSIONS:\n1. session_id=2026-04-06_090128_Inferno-86_fuji_a4813 start=09:01 car=\"Inferno 86\" track=fuji laps=7 type=\"Generic testing\" comment=\"Shakedown, feels good\"\n2. session_id=2026-04-06_094212_Inferno-86_fuji_a4817 start=09:42 car=\"Inferno 86\" track=fuji laps=5 type=\"Generic testing\" comment=\"ends in crash\"\n",
   "data": {
     "sessions": [
       {
-        "session_id": "b97e1ec4a6d9c64e",
+        "session_id": "2026-04-06_090128_Inferno-86_fuji_a4813",
         "note_file": "Fuji 2026-04-06.txt",
         "note_session_index": 1,
         "match_confidence": 0.7,
@@ -43,7 +43,7 @@
         "notes": "Shakedown, feels good. Cold pressures read as psi (23 front, 20 rear). Target hot pressure 1.9 bar. Target hot temps FL 54, FR 51, RL 49, RR 48 C. Cold temps FL 22, FR 23, RL 20, RR 21 C. F 2/2, R 1/1 (setup codes), all checked."
       },
       {
-        "session_id": "7ca9b6b064c31e5b",
+        "session_id": "2026-04-06_094212_Inferno-86_fuji_a4817",
         "note_file": "Fuji 2026-04-06.txt",
         "note_session_index": 2,
         "match_confidence": 0.7,

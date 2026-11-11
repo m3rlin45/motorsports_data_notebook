@@ -1,5 +1,5 @@
 {
-  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|abfe25a834c78e76d85b4cada359f0c485d04e68",
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|c20ca0f3dfa86a696e6e386ea1d41729fb504f31",
   "_model": "claude-sonnet-5-5",
   "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
   "_extracted_at": "2026-10-29T00:23:18.735747+00:00",
@@ -10,16 +10,16 @@
     }
   ],
   "_sessions": [
-    "c2cebc821c5ece56",
-    "3a7be23fc6b8bd95",
-    "b192d03bda53499a",
-    "9575f602be5d4117"
+    "2026-04-04_125749_KK-SII_tsukuba-2000_a0082",
+    "2026-04-04_142746_KK-SII_tsukuba-2000_a0086",
+    "2026-04-04_154212_KK-SII_tsukuba-2000_a0089-0090",
+    "2026-04-04_160520_KK-SII_tsukuba-2000_a0091"
   ],
-  "input": "DATE: 2026-04-04 (times are local to the track)\n\nRUN NOTES FILE \"Tsukuba KKSII 2026-04-04.txt\":\nRain\n\nFirst run 12:45\n\nFL 14c 1.25\nFR 14c 1.28\nRL 13c 1.35\nRR 13c 1.35\n\nLOGGED SESSIONS:\n1. session_id=c2cebc821c5ece56 start=12:57 car=\"KK-SII\" track=tsukuba_2000 laps=17 type=\"Car Generic testing\" comment=\"rain\"\n2. session_id=3a7be23fc6b8bd95 start=14:27 car=\"KK-SII\" track=tsukuba_2000 laps=14 type=\"Car Generic testing\" comment=\"rain\"\n3. session_id=b192d03bda53499a start=15:42 car=\"KK-SII\" track=tsukuba_2000 laps=10 type=\"Car Generic testing\" comment=\"rain, 2 red flags\"\n4. session_id=9575f602be5d4117 start=16:05 car=\"KK-SII\" track=tsukuba_2000 laps=5 type=\"Car Generic testing\" comment=\"rain, 2 red flags\"\n",
+  "input": "DATE: 2026-04-04 (times are local to the track)\n\nRUN NOTES FILE \"Tsukuba KKSII 2026-04-04.txt\":\nRain\n\nFirst run 12:45\n\nFL 14c 1.25\nFR 14c 1.28\nRL 13c 1.35\nRR 13c 1.35\n\nLOGGED SESSIONS:\n1. session_id=2026-04-04_125749_KK-SII_tsukuba-2000_a0082 start=12:57 car=\"KK-SII\" track=tsukuba_2000 laps=17 type=\"Car Generic testing\" comment=\"rain\"\n2. session_id=2026-04-04_142746_KK-SII_tsukuba-2000_a0086 start=14:27 car=\"KK-SII\" track=tsukuba_2000 laps=14 type=\"Car Generic testing\" comment=\"rain\"\n3. session_id=2026-04-04_154212_KK-SII_tsukuba-2000_a0089-0090 start=15:42 car=\"KK-SII\" track=tsukuba_2000 laps=10 type=\"Car Generic testing\" comment=\"rain, 2 red flags\"\n4. session_id=2026-04-04_160520_KK-SII_tsukuba-2000_a0091 start=16:05 car=\"KK-SII\" track=tsukuba_2000 laps=5 type=\"Car Generic testing\" comment=\"rain, 2 red flags\"\n",
   "data": {
     "sessions": [
       {
-        "session_id": "c2cebc821c5ece56",
+        "session_id": "2026-04-04_125749_KK-SII_tsukuba-2000_a0082",
         "note_file": "Tsukuba KKSII 2026-04-04.txt",
         "note_session_index": 1,
         "match_confidence": 1.0,
@@ -45,7 +45,7 @@
         "notes": ""
       },
       {
-        "session_id": "3a7be23fc6b8bd95",
+        "session_id": "2026-04-04_142746_KK-SII_tsukuba-2000_a0086",
         "note_file": "Tsukuba KKSII 2026-04-04.txt",
         "note_session_index": 1,
         "match_confidence": 0.35,
@@ -71,7 +71,7 @@
         "notes": ""
       },
       {
-        "session_id": "b192d03bda53499a",
+        "session_id": "2026-04-04_154212_KK-SII_tsukuba-2000_a0089-0090",
         "note_file": "Tsukuba KKSII 2026-04-04.txt",
         "note_session_index": 1,
         "match_confidence": 0.35,
@@ -99,7 +99,7 @@
         "notes": ""
       },
       {
-        "session_id": "9575f602be5d4117",
+        "session_id": "2026-04-04_160520_KK-SII_tsukuba-2000_a0091",
         "note_file": "Tsukuba KKSII 2026-04-04.txt",
         "note_session_index": 1,
         "match_confidence": 0.35,

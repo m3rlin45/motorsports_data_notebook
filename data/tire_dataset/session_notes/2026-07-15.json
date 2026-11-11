@@ -1,5 +1,5 @@
 {
-  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|e287033371f8802a8a3355d65d50630a8306102f",
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|4bac49d7d2e5638ca54e1c9cd26c3e0f75756a74",
   "_model": "claude-sonnet-5-5",
   "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
   "_extracted_at": "2026-10-29T00:23:38.411595+00:00",
@@ -10,15 +10,15 @@
     }
   ],
   "_sessions": [
-    "5a63ddfdc96f95b4",
-    "a06767b66e88f2be",
-    "45d3e2b5e05e674e"
+    "2026-07-15_094954_Inferno-86_fuji_a5079",
+    "2026-07-15_102220_Inferno-86_fuji_a5085",
+    "2026-07-15_112920_Inferno-86_fuji_a5093"
   ],
-  "input": "DATE: 2026-07-15 (times are local to the track)\n\nRUN NOTES FILE \"2026-07-15 - Fuji.txt\":\nRE-71RS Used\n\nOrange Car Shakedown\n\nProblems with interference between rear wheels and suspension\n\nLOGGED SESSIONS:\n1. session_id=5a63ddfdc96f95b4 start=09:49 car=\"Inferno 86\" track=fuji laps=2 type=\"一般テスト\" comment=\"Orange car shakedown\"\n2. session_id=a06767b66e88f2be start=10:22 car=\"Inferno 86\" track=fuji laps=8 type=\"一般テスト\" comment=\"\"\n3. session_id=45d3e2b5e05e674e start=11:29 car=\"Inferno 86\" track=fuji laps=15 type=\"一般テスト\" comment=\"\"\n",
+  "input": "DATE: 2026-07-15 (times are local to the track)\n\nRUN NOTES FILE \"2026-07-15 - Fuji.txt\":\nRE-71RS Used\n\nOrange Car Shakedown\n\nProblems with interference between rear wheels and suspension\n\nLOGGED SESSIONS:\n1. session_id=2026-07-15_094954_Inferno-86_fuji_a5079 start=09:49 car=\"Inferno 86\" track=fuji laps=2 type=\"一般テスト\" comment=\"Orange car shakedown\"\n2. session_id=2026-07-15_102220_Inferno-86_fuji_a5085 start=10:22 car=\"Inferno 86\" track=fuji laps=8 type=\"一般テスト\" comment=\"\"\n3. session_id=2026-07-15_112920_Inferno-86_fuji_a5093 start=11:29 car=\"Inferno 86\" track=fuji laps=15 type=\"一般テスト\" comment=\"\"\n",
   "data": {
     "sessions": [
       {
-        "session_id": "5a63ddfdc96f95b4",
+        "session_id": "2026-07-15_094954_Inferno-86_fuji_a5079",
         "note_file": "2026-07-15 - Fuji.txt",
         "note_session_index": 1,
         "match_confidence": 0.8,
@@ -46,7 +46,7 @@
         "notes": "Orange car shakedown."
       },
       {
-        "session_id": "a06767b66e88f2be",
+        "session_id": "2026-07-15_102220_Inferno-86_fuji_a5085",
         "note_file": "2026-07-15 - Fuji.txt",
         "note_session_index": 1,
         "match_confidence": 0.35,
@@ -74,7 +74,7 @@
         "notes": "Orange car shakedown."
       },
       {
-        "session_id": "45d3e2b5e05e674e",
+        "session_id": "2026-07-15_112920_Inferno-86_fuji_a5093",
         "note_file": "2026-07-15 - Fuji.txt",
         "note_session_index": 1,
         "match_confidence": 0.35,
