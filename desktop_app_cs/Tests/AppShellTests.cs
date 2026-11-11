@@ -97,6 +97,66 @@ public class AppShellTests
         Assert.Equal(3, window.TimeDistance.Spec!.Subplots.Count); // no delta panel against time
     }
 
+    [Fact]
+    public async Task Time_distance_tab_overlays_session_b_laps_with_session_labels()
+    {
+        var window = new MainWindowViewModel(BuiltinOnly);
+        window.TimeDistance.Debounce = TimeSpan.Zero;
+        window.SessionA.Apply(Sample.Value, SessionParityTests.SamplePath());
+        window.SessionB.Apply(Sample.Value, SessionParityTests.SamplePath());
+        await window.TimeDistance.RunNowAsync();
+
+        var spec = window.TimeDistance.Spec!;
+        Assert.False(spec.Legend); // the lap lists are the legend
+        var countA = window.SessionA.SelectedLaps.Count;
+        var countB = window.SessionB.SelectedLaps.Count;
+        Assert.True(countB > 0);
+        Assert.Equal(countA + countB, spec.Subplots[0].Traces.Count);
+        Assert.Equal(countA, spec.Subplots[0].Traces.Count(t => t.Label.StartsWith("A Lap ")));
+        Assert.Equal(countB, spec.Subplots[0].Traces.Count(t => t.Label.StartsWith("B Lap ")));
+        // Fastest lap of either session is the delta reference.
+        Assert.StartsWith("A Lap 14", spec.Subplots[0].Traces[0].Label);
+        // The lap lists carry the trace colours (they are the legend).
+        Assert.Equal(InfernoAnalyzer.App.StripChartBuilder.ColorFor(0), window.SessionA.Laps.First(l => l.Num == 14).TraceColor);
+        var traceB12 = spec.Subplots[0].Traces.Single(t => t.Label.StartsWith("B Lap 12 "));
+        Assert.Equal(traceB12.Color, window.SessionB.Laps.First(l => l.Num == 12).TraceColor);
+        Assert.Null(window.SessionA.Laps.First(l => l.Num == 1).TraceColor); // not selected, not drawn
+        Assert.Contains("vs A Lap 14", spec.Subplots[^1].Traces[1].Label);
+        Assert.StartsWith($"{countA + countB} laps", window.TimeDistance.Summary);
+
+        // Same vehicle on both sides: nothing to translate.
+        Assert.Empty(window.TimeDistance.ChannelMapToB());
+
+        // Deselecting every B lap falls back to A alone.
+        foreach (var lap in window.SessionB.Laps)
+        {
+            lap.IsSelected = false;
+        }
+
+        await window.TimeDistance.RunNowAsync();
+        Assert.Equal(countA, window.TimeDistance.Spec!.Subplots[0].Traces.Count);
+        Assert.StartsWith("Lap 14", window.TimeDistance.Spec.Subplots[0].Traces[0].Label);
+        Assert.All(window.SessionB.Laps, l => Assert.Null(l.TraceColor));
+    }
+
+    [Fact]
+    public void Lap_series_builder_translates_channel_names_for_the_comparison_session()
+    {
+        var log = Sample.Value;
+        // Pretend the comparison vehicle logs throttle as "GPS Speed": the PPS panel shows that channel.
+        var mapped = InfernoAnalyzer.App.Series.LapSeriesBuilder.Build(log, new[] { 14 }, new[] { "PPS", "BrakePress" }, "GPS Speed", "B", new Dictionary<string, string> { ["PPS"] = "GPS Speed" });
+        var plain = InfernoAnalyzer.App.Series.LapSeriesBuilder.Build(log, new[] { 14 }, new[] { "GPS Speed", "BrakePress" }, "GPS Speed");
+
+        var lap = Assert.Single(mapped.Laps);
+        Assert.Equal("B", lap.Session);
+        Assert.Equal("B Lap 14", lap.ShortLabel);
+        Assert.Equal(plain.Laps[0].Series["GPS Speed"], lap.Series["PPS"]);
+        Assert.Equal(plain.Laps[0].Series["BrakePress"], lap.Series["BrakePress"]);
+        Assert.Equal(plain.Units["GPS Speed"], mapped.Units["PPS"]);
+        Assert.NotNull(lap.Before);
+        Assert.Equal("B", lap.Before!.Session);
+    }
+
     [AvaloniaFact]
     public async Task Main_window_renders_with_a_loaded_session()
     {
