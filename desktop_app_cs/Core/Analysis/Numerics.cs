@@ -63,6 +63,95 @@ public static class Numerics
         return g;
     }
 
+    /// <summary>
+    /// <c>numpy.gradient(f, x)</c> with a coordinate array: numpy's
+    /// second-order interior formula (used even when the spacing happens to
+    /// be uniform) and first-order one-sided ends.
+    /// </summary>
+    public static double[] Gradient(ReadOnlySpan<double> f, ReadOnlySpan<double> x)
+    {
+        var n = f.Length;
+        var g = new double[n];
+        if (n < 2)
+        {
+            return g;
+        }
+
+        g[0] = (f[1] - f[0]) / (x[1] - x[0]);
+        g[n - 1] = (f[n - 1] - f[n - 2]) / (x[n - 1] - x[n - 2]);
+        for (var i = 1; i < n - 1; i++)
+        {
+            var dx1 = x[i] - x[i - 1];
+            var dx2 = x[i + 1] - x[i];
+            var a = -dx2 / (dx1 * (dx1 + dx2));
+            var b = (dx2 - dx1) / (dx1 * dx2);
+            var c = dx1 / (dx2 * (dx1 + dx2));
+            g[i] = a * f[i - 1] + b * f[i] + c * f[i + 1];
+        }
+
+        return g;
+    }
+
+    /// <summary><c>numpy.std</c> (population, ddof = 0) with numpy's pairwise sums.</summary>
+    public static double Std(ReadOnlySpan<double> values)
+    {
+        if (values.Length == 0)
+        {
+            return double.NaN;
+        }
+
+        var mean = Mean(values);
+        var squares = new double[values.Length];
+        for (var i = 0; i < values.Length; i++)
+        {
+            var d = values[i] - mean;
+            squares[i] = d * d;
+        }
+
+        return Math.Sqrt(Sum(squares) / values.Length);
+    }
+
+    /// <summary><c>numpy.arange(start, stop, step)</c> for floats: <c>start + k * step</c>, k &lt; ceil((stop − start) / step).</summary>
+    public static double[] ARange(double start, double stop, double step)
+    {
+        var count = (int)Math.Ceiling((stop - start) / step);
+        var result = new double[Math.Max(count, 0)];
+        for (var k = 0; k < result.Length; k++)
+        {
+            result[k] = start + k * step;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// <c>numpy.histogram(values, bins=edges)</c> counts: bin i holds
+    /// <c>edges[i] &lt;= v &lt; edges[i+1]</c>, the last bin also its right
+    /// edge; values outside the edges are ignored.
+    /// </summary>
+    public static long[] Histogram(ReadOnlySpan<double> values, ReadOnlySpan<double> edges)
+    {
+        var counts = new long[Math.Max(edges.Length - 1, 0)];
+        if (counts.Length == 0)
+        {
+            return counts;
+        }
+
+        var last = edges[^1];
+        foreach (var v in values)
+        {
+            if (v < edges[0] || v > last || double.IsNaN(v))
+            {
+                continue;
+            }
+
+            var bin = v == last ? counts.Length - 1 : SearchSortedRight(edges, v) - 1;
+            counts[bin]++;
+        }
+
+        return counts;
+    }
+
     /// <summary><c>numpy.cumsum</c>.</summary>
     public static double[] CumulativeSum(ReadOnlySpan<double> values)
     {
