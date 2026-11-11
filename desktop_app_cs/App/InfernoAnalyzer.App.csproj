@@ -16,15 +16,17 @@
     <PackageReference Include="Avalonia.Desktop" Version="$(AvaloniaVersion)" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="$(AvaloniaVersion)" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="$(AvaloniaVersion)" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="$(MvvmToolkitVersion)" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Core\InfernoAnalyzer.Core.csproj" />
     <ProjectReference Include="..\Charting\InfernoAnalyzer.Charting.csproj" />
     <!-- The one place the backend is chosen (see ChartSurfaces.cs). -->
     <ProjectReference Include="..\Charting.ScottPlot\InfernoAnalyzer.Charting.ScottPlot.csproj" />
   </ItemGroup>
 
-  <!-- Spike fixtures extracted by tools/extract_fixture.py; copied next to the exe. -->
+  <!-- Demo fixtures extracted by tools/extract_fixture.py; copied next to the exe (`cs-run path.json`). -->
   <ItemGroup>
     <None Include="fixtures\**\*.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

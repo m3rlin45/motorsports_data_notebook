@@ -1,0 +1,34 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:InfernoAnalyzer.App.ViewModels"
+             x:Class="InfernoAnalyzer.App.Views.SessionPanelView"
+             x:DataType="vm:SessionViewModel">
+  <Border Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}" CornerRadius="6" Padding="8">
+    <DockPanel>
+      <TextBlock DockPanel.Dock="Top" Text="{Binding Title}" FontWeight="Bold" FontSize="13" Margin="0,0,0,4" />
+      <Border x:Name="DropZone" DockPanel.Dock="Top" Background="{DynamicResource SystemControlBackgroundBaseLowBrush}" CornerRadius="4" Padding="6" Margin="0,0,0,4"
+              DragDrop.AllowDrop="True" Cursor="Hand">
+        <TextBlock Text="Drop XRK/XRZ/IBT file here or click to browse" FontSize="11" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" HorizontalAlignment="Center" />
+      </Border>
+      <TextBlock DockPanel.Dock="Top" Text="{Binding FileLabel}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,4" />
+      <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="4" Margin="0,0,0,4">
+        <Button Content="Best" Command="{Binding SelectBestCommand}" Padding="8,2" FontSize="11" />
+        <Button Content="Top 103%" Command="{Binding SelectTop103Command}" Padding="8,2" FontSize="11" />
+        <Button Content="All" Command="{Binding SelectAllCommand}" Padding="8,2" FontSize="11" />
+        <Button Content="None" Command="{Binding SelectNoneCommand}" Padding="8,2" FontSize="11" />
+      </StackPanel>
+      <ScrollViewer MaxHeight="110">
+        <ItemsControl ItemsSource="{Binding Laps}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:LapItemViewModel">
+              <StackPanel Orientation="Horizontal">
+                <Border Width="14" Height="3" Background="{Binding TraceBrush}" VerticalAlignment="Center" Margin="0,0,4,0" />
+                <CheckBox IsChecked="{Binding IsSelected}" Content="{Binding Label}" FontSize="11" MinHeight="22" Padding="4,0" />
+              </StackPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+    </DockPanel>
+  </Border>
+</UserControl>
