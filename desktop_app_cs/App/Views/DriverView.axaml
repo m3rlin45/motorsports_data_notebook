@@ -1,0 +1,45 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:InfernoAnalyzer.App.ViewModels"
+             xmlns:views="using:InfernoAnalyzer.App.Views"
+             x:Class="InfernoAnalyzer.App.Views.DriverView"
+             x:DataType="vm:DriverViewModel">
+  <DockPanel>
+    <Border DockPanel.Dock="Top" Padding="8,4" Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}">
+      <DockPanel>
+        <ToggleButton DockPanel.Dock="Right" Content="Statistics" IsChecked="{Binding ShowStats}" Padding="8,2" FontSize="11" Margin="6,0,0,0" />
+        <ToggleButton DockPanel.Dock="Right" Content="Track Map" IsChecked="{Binding IsMap}" Padding="8,2" FontSize="11" />
+        <TextBlock Text="Driver consistency — braking points, throttle acceptance and exit speed per corner" VerticalAlignment="Center" FontSize="11" />
+      </DockPanel>
+    </Border>
+    <Border DockPanel.Dock="Left" Width="170" Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}" Padding="6">
+      <DockPanel>
+        <TextBlock DockPanel.Dock="Top" Text="View" FontWeight="Bold" FontSize="12" />
+        <RadioButton DockPanel.Dock="Top" Content="Summary" GroupName="drvview" IsChecked="{Binding IsSummary}" FontSize="11" />
+        <RadioButton DockPanel.Dock="Top" Content="Detail" GroupName="drvview" IsChecked="{Binding IsDetail}" FontSize="11" />
+        <TextBlock DockPanel.Dock="Top" Text="Corners" FontWeight="Bold" FontSize="12" Margin="0,8,0,2" />
+        <ListBox ItemsSource="{Binding Corners}" SelectedItem="{Binding SelectedCorner}" FontSize="11">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:CornerChoice">
+              <TextBlock Text="{Binding Label}" />
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </DockPanel>
+    </Border>
+    <ScrollViewer DockPanel.Dock="Right" Width="480" IsVisible="{Binding ShowStats}" Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}" Padding="6">
+      <ItemsControl ItemsSource="{Binding Stats}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:StatsTable">
+            <views:StatsTableView Table="{Binding}" />
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+    <Panel>
+      <ContentControl x:Name="SummaryHost" IsVisible="{Binding IsSummary}" />
+      <ContentControl x:Name="DetailHost" IsVisible="{Binding IsDetail}" />
+      <ContentControl x:Name="MapHost" IsVisible="{Binding IsMap}" />
+    </Panel>
+  </DockPanel>
+</UserControl>

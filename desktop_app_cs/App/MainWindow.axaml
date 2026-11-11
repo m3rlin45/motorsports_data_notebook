@@ -22,6 +22,12 @@
     <DataTemplate DataType="vm:RollGradientConfigViewModel">
       <views:RollGradientConfigView />
     </DataTemplate>
+    <DataTemplate DataType="vm:DriverViewModel">
+      <views:DriverView />
+    </DataTemplate>
+    <DataTemplate DataType="vm:DriverConfigViewModel">
+      <views:DriverConfigView />
+    </DataTemplate>
   </Window.DataTemplates>
   <DockPanel>
     <Grid DockPanel.Dock="Top" Margin="8,6" ColumnDefinitions="*,*,*,Auto" IsVisible="{Binding !IsTopCollapsed}">
