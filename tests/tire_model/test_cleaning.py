@@ -1,5 +1,5 @@
-"""Tests for the training-side cleaning: stale-TPMS masking, the wake-up
-transition sample, rebuilt per-lap TPMS aggregates and the lap usability
+"""Tests for the training-side cleaning: stale-TPMS masking, rebuilt
+per-lap TPMS aggregates and the lap usability
 filters. The dataset on disk is raw; these rules run when the model loads it."""
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ import pyarrow.parquet as pq
 import pytest
 
 from motorsports_data_notebook.tire_etl.aggregates import compute_corner_aggregates
+from tests._timeseries_fixture import write_session_timeseries
 from motorsports_data_notebook.tire_model.cleaning import (
     FilterConfig,
     _stale_prefix_len,
@@ -215,79 +216,18 @@ def test_stale_mask_is_per_corner_first_change_on_either_stream() -> None:
     assert np.isnan(rr_t[:5]).all() and rr_t[5] == 21.0
 
 
-def test_wake_transition_len_counts_interpolated_step_samples() -> None:
-    from motorsports_data_notebook.tire_model.cleaning import _wake_transition_len
-
-    # Module slept at 2.19 bar (hot from a previous run), resample puts one
-    # blended sample on the step down to the live 1.60 bar.
-    arr = np.array([2.19, 2.19, 2.19, 2.02, 1.60, 1.60, 1.63])
-    assert _stale_prefix_len(arr) == 3
-    assert _wake_transition_len(arr, 3) == 1
-    # Step straight to the live value: nothing to mask.
-    assert _wake_transition_len(np.array([2.19, 2.19, 2.19, 1.60, 1.60]), 3) == 0
-    # Two blended samples on a slow step (rare), both counted.
-    assert _wake_transition_len(np.array([40.0, 40.0, 40.0, 36.0, 30.0, 25.0, 25.0]), 3) == 2
-    # A genuine ramp is capped so at most two seconds are lost.
-    assert _wake_transition_len(np.array([2.0] * 3 + [2.03, 2.06, 2.09, 2.12, 2.15]), 3) == 2
-    # No prefix, or a flat series, has no transition.
-    assert _wake_transition_len(np.array([2.0, 2.03, 2.06]), 0) == 0
-    assert _wake_transition_len(np.array([2.0, 2.0, 2.0]), 3) == 0
-
-
-def test_stale_mask_drops_the_wake_transition_sample() -> None:
-    """Sodegaura 2026-10-10 rear axle: the sensors woke up carrying the
-    previous track day's hot values and the 1 Hz resample left one sample
-    between that and the first live reading. That blended sample must not
-    become the out-lap's first valid (anchor) reading."""
-    press = np.array([2.19, 2.19, 2.19, 2.024477, 1.60, 1.60, 1.63, 1.63])
-    temp = np.array([36.0, 36.0, 36.0, 30.492004, 27.0, 27.0, 27.0, 28.0])
-    ts = pa.table(
-        {
-            "t_lap_s": pa.array(np.arange(8, dtype=np.float32), type=pa.float32()),
-            "tpms_press_rr_bar": pa.array(press, type=pa.float32()),
-            "tpms_temp_rr_c": pa.array(temp, type=pa.float32()),
-        }
-    )
-    out = mask_stale_session_prefix(ts)
-    p = out.column("tpms_press_rr_bar").to_numpy(zero_copy_only=False)
-    t = out.column("tpms_temp_rr_c").to_numpy(zero_copy_only=False)
-    assert np.isnan(p[:4]).all() and np.isnan(t[:4]).all()
-    assert p[4] == pytest.approx(1.60) and t[4] == pytest.approx(27.0)
-    # The lap aggregate's start reading is now the live pit-exit value.
-    agg = compute_corner_aggregates(out, "rr")
-    assert agg.press_start == pytest.approx(1.60)
-    assert agg.temp_start == pytest.approx(27.0)
-    assert agg.press_first_valid_s == pytest.approx(4.0)
-
-
-def test_stale_mask_transition_applies_to_the_later_waking_stream() -> None:
-    """Pressure proves the module awake at sample 3; the temperature stream
-    keeps its stored constant until sample 6 and then steps through one
-    blended sample. Only that blended sample is dropped from the temperature
-    stream — the constant readings in between are real."""
-    press = np.array([2.0] * 3 + [2.03] * 7)
-    temp = np.array([40.0] * 6 + [35.0, 30.0, 30.0, 30.0])
-    ts = pa.table({"tpms_press_fl_bar": press, "tpms_temp_fl_c": temp})
-    out = mask_stale_session_prefix(ts)
-    t = out.column("tpms_temp_fl_c").to_numpy(zero_copy_only=False)
-    p = out.column("tpms_press_fl_bar").to_numpy(zero_copy_only=False)
-    assert np.isnan(p[:3]).all() and p[3] == 2.03
-    assert np.isnan(t[:3]).all()
-    assert (t[3:6] == 40.0).all()
-    assert np.isnan(t[6]) and t[7] == 30.0
-
-
 def test_clean_laps_rebuilds_tpms_summary_from_masked_timeseries(tmp_path) -> None:
-    """A raw dataset whose out-lap starts with a stale hot reading and one
-    blended wake-up sample: the committed lap row carries the stale start,
-    clean_laps replaces it with the first live reading and flags the laps."""
+    """A raw dataset whose out-lap starts with a stale hot reading (the
+    module asleep from an earlier run): the committed lap row carries the
+    stale start, clean_laps replaces it with the first live reading and
+    flags the laps."""
     root = tmp_path
     (root / "laps").mkdir()
     (root / "timeseries" / "2026-10").mkdir(parents=True)
     sid = "abc123"
     n0, n1 = 8, 6
-    press = [2.19, 2.19, 2.19, 2.02, 1.60, 1.60, 1.63, 1.63] + [1.66] * n1
-    temp = [36.0, 36.0, 36.0, 30.5, 27.0, 27.0, 27.0, 28.0] + [31.0] * n1
+    press = [2.19, 2.19, 2.19, 1.60, 1.60, 1.60, 1.63, 1.63] + [1.66] * n1
+    temp = [36.0, 36.0, 36.0, 27.0, 27.0, 27.0, 27.0, 28.0] + [31.0] * n1
     ts = pa.table(
         {
             "session_id": [sid] * (n0 + n1),
@@ -300,7 +240,7 @@ def test_clean_laps_rebuilds_tpms_summary_from_masked_timeseries(tmp_path) -> No
             "tpms_temp_rl_c": pa.array(temp, type=pa.float32()),
         }
     )
-    pq.write_table(ts, root / "timeseries" / "2026-10" / f"{sid}.parquet")
+    write_session_timeseries(root, sid, ts, partition="2026-10")
     laps = pd.DataFrame(
         [
             {
@@ -343,7 +283,7 @@ def test_clean_laps_rebuilds_tpms_summary_from_masked_timeseries(tmp_path) -> No
     lap0 = out[out["lap_num"] == 0].iloc[0]
     assert lap0["tpms_press_rl_start"] == pytest.approx(1.60)
     assert lap0["tpms_temp_rl_start"] == pytest.approx(27.0)
-    assert lap0["tpms_press_rl_first_valid_s"] == pytest.approx(4.0)
+    assert lap0["tpms_press_rl_first_valid_s"] == pytest.approx(3.0)
     assert lap0["tpms_press_rl_max"] == pytest.approx(1.63)
     assert bool(lap0["tire_usable"])
     lap1 = out[out["lap_num"] == 1].iloc[0]

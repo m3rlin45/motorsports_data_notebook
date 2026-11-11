@@ -2,17 +2,17 @@
 
 The extractor (:mod:`..tire_etl`) turns the AIM files into in-repo data with
 the minimum processing needed for a stable, manageable dataset: it splits
-laps and stints, resolves the circuit from GPS, downsamples to the 1 Hz
-reference channel, selects and renames channels, and writes a raw per-lap
-summary. Nothing under ``data/tire_dataset/`` is masked, filtered or judged.
+laps and stints, resolves the circuit from GPS, selects and renames channels
+(stored verbatim at their native rates, dataset schema 7), validates the IMU
+against GPS, and writes a raw per-lap summary. Nothing under ``data/tire_dataset/`` is masked, filtered or judged.
 Every decision about which samples and laps the model may learn from is made
 here, at training time, so a cleaning rule can change without re-extracting.
 
 Three steps, in the order the model applies them:
 
 1. :func:`mask_stale_session_prefix` — a TPMS module that is asleep at
-   roll-out reports its stored value until it wakes, and the 1 Hz resample
-   leaves a blended sample on the wake-up step; both are masked per corner.
+   roll-out reports its stored value until it wakes; that stale prefix is
+   masked per corner.
 2. :func:`recompute_tpms_lap_aggregates` — the per-lap TPMS summary columns
    (start / end / min / max / mean, rise rate, first-valid time) are rebuilt
    from the masked timeseries, so an out-lap's ``tpms_*_start`` — the stint
@@ -38,6 +38,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from ..tire_etl.aggregates import compute_corner_aggregates
+from ..tire_etl.dataset import load_group
 from ..tire_etl.paths import laps_dir, timeseries_dir
 
 logger = logging.getLogger(__name__)
@@ -94,49 +95,6 @@ def _stale_prefix_len(arr: np.ndarray) -> int:
     return arr.size  # flat from first_idx to end → all-stale
 
 
-# At most this many 1 Hz samples are treated as the wake-up transition
-# (interpolation between the last stale value and the first live reading).
-_WAKE_TRANSITION_MAX = 2
-
-
-def _wake_transition_len(arr: np.ndarray, stale_len: int) -> int:
-    """Count the interpolated wake-up samples that follow a stale prefix.
-
-    The timeseries is resampled to the 1 Hz reference channel by linear
-    interpolation, so the step from the sleeping module's stored value to
-    its first live reading leaves one (rarely more) sample part-way down
-    the step: a value that lies strictly between the stale constant and the
-    sample after it. On an out-lap that blended sample would otherwise be
-    the first valid reading — the stint's anchor temperature and pressure —
-    and a module that fell asleep hot on a previous run can put it 0.4 bar
-    above the cold pressure actually set (Sodegaura 2026-10-10 rear axle).
-
-    Returns how many samples from ``stale_len`` on are such transition
-    values (0 when the prefix is empty or the series is flat), capped at
-    ``_WAKE_TRANSITION_MAX``: the TPMS updates at about the 1 Hz reference
-    rate, so a step spans one blended sample, and a genuine ramp that
-    happens to follow the wake-up costs at most two seconds of anchor.
-    """
-    if stale_len <= 0 or stale_len >= arr.size:
-        return 0
-    finite_mask = ~np.isnan(arr[:stale_len])
-    if not finite_mask.any():
-        return 0
-    baseline = float(arr[:stale_len][finite_mask][0])
-    n = 0
-    i = stale_len
-    while n < _WAKE_TRANSITION_MAX and i + 1 < arr.size:
-        cur, nxt = arr[i], arr[i + 1]
-        if np.isnan(cur) or np.isnan(nxt):
-            break
-        lo, hi = min(baseline, nxt), max(baseline, nxt)
-        if not (lo < cur < hi):
-            break
-        n += 1
-        i += 1
-    return n
-
-
 def mask_stale_session_prefix(ts: pa.Table) -> pa.Table:
     """Mask the leading stale-sensor samples in each TPMS channel as NaN.
 
@@ -148,12 +106,9 @@ def mask_stale_session_prefix(ts: pa.Table) -> pa.Table:
     sample on the other stream's (possibly still constant — the values are
     quantised to 1 °C / 0.03 bar) reading is a real reading. Both streams
     are therefore unmasked from the earlier of their two first-change
-    points. Different corners still wake independently.
-
-    The sample(s) right after a stream's own stale prefix are the resample's
-    interpolation across the wake-up step and are masked too (see
-    :func:`_wake_transition_len`), so an out-lap's first valid reading is
-    the first *live* one.
+    points. Different corners still wake independently. The samples are
+    the module's own packets at their native rate, so the first unmasked
+    reading is the first live one.
     """
     new_table = ts
     for c in CORNERS:
@@ -173,16 +128,13 @@ def mask_stale_session_prefix(ts: pa.Table) -> pa.Table:
         # vouch for the module; take the earliest *real* change.
         proven = [v for n, v in stale.items() if v < arrays[n].size]
         corner_stale = min(proven) if proven else max(stale.values())
+        if corner_stale == 0:
+            continue
         for n in names:
             arr = arrays[n]
-            transition = _wake_transition_len(arr, stale[n])
-            if corner_stale == 0 and transition == 0:
-                continue
             idx = new_table.schema.get_field_index(n)
             field = new_table.schema.field(idx)
             arr[:corner_stale] = np.nan
-            if transition:
-                arr[stale[n] : stale[n] + transition] = np.nan
             new_col = pa.array(arr.astype(field.type.to_pandas_dtype()), type=field.type)
             new_table = new_table.set_column(idx, n, new_col)
     return new_table
@@ -194,17 +146,20 @@ def mask_stale_session_prefix(ts: pa.Table) -> pa.Table:
 def load_tpms_timeseries(root: Path, session_id: str) -> pa.Table | None:
     """The session's TPMS streams (plus ``lap_num`` / ``t_lap_s``), masked.
 
-    ``None`` when the session has no timeseries file or no TPMS channels.
+    The ``tpms`` family of the native-rate file: each corner's pressure and
+    temperature are valid on the rows of that corner's own timebase (null
+    elsewhere), which the per-corner masking and the lap aggregates read
+    through :func:`~..tire_etl.aggregates.channel_series`. ``None`` when the
+    session has no timeseries file or no TPMS channels.
     """
-    files = list(timeseries_dir(root).glob(f"*/{session_id}.parquet"))
-    if not files:
+    ts = load_group(root, session_id, "tpms", columns=TPMS_TS_COLUMNS)
+    if ts is None:
         return None
-    schema = pq.read_schema(files[0])
-    tpms = [c for c in TPMS_TS_COLUMNS if c in schema.names]
-    if not tpms or "lap_num" not in schema.names:
+    tpms = [c for c in TPMS_TS_COLUMNS if c in ts.schema.names]
+    if not tpms or "lap_num" not in ts.schema.names:
         return None
-    cols = ["lap_num"] + (["t_lap_s"] if "t_lap_s" in schema.names else []) + tpms
-    return mask_stale_session_prefix(pq.read_table(files[0], columns=cols))
+    cols = ["lap_num"] + (["t_lap_s"] if "t_lap_s" in ts.schema.names else []) + tpms
+    return mask_stale_session_prefix(ts.select(cols))
 
 
 def recompute_tpms_lap_aggregates(laps: pd.DataFrame, ts: pa.Table) -> pd.DataFrame:

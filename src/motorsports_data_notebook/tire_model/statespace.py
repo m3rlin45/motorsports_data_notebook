@@ -35,10 +35,8 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-import pyarrow.parquet as pq
 from scipy.optimize import least_squares  # type: ignore[import-untyped]
 
-from ..tire_etl.paths import timeseries_dir
 from .cleaning import mask_stale_session_prefix
 from .energy_balance import P_ATM_BAR, T_ZERO_C_TO_K, speed_pressure_factor
 from .heat_input import (
@@ -64,6 +62,10 @@ logger = logging.getLogger(__name__)
 CORNERS = ("fl", "fr", "rl", "rr")
 MOVING_SPEED_MS = 5.0 / 3.6
 MIN_SCORED_SECONDS = 60  # a (stint, corner) needs this much observed data to count
+# After a hole in the heat input (a window the sensor verdict discarded) the
+# simulation restarts from the measured state: the mean observed gas
+# temperature of the first REANCHOR_SECONDS scored seconds after the hole.
+REANCHOR_SECONDS = 10
 MIN_RAIN_SESSIONS = 3  # per (car, condition) for its own tau/K (else the condition chain)
 TAU_BOUNDS_S = (30.0, 3000.0)
 A_BOUNDS = (1e-3, 1e3)  # relative to the initial guess (see _Design.bounds)
@@ -116,6 +118,13 @@ class StintSeries:
     # irradiance on the asphalt as a fraction of overhead clear sky (solar.sun_index)
     sun: float = float("nan")
     sun_clear: float = float("nan")  # the same without the cloud attenuation
+    # (n,) False where the heat input is unknown (a discarded sensor window);
+    # None when the whole stint is known.
+    valid: np.ndarray | None = None
+    # (n, 4) the bin each bin's simulation starts from: −1 = the stint's
+    # pit-exit anchor, else the first scored bin after the last hole before
+    # it (see REANCHOR_SECONDS). None when the stint has no hole.
+    seg_anchor: np.ndarray | None = None
 
 
 def sink_temperature(s: StintSeries, cool_params: dict[str, float], corner: str) -> float:
@@ -156,26 +165,73 @@ def cooling_power_factor(T: np.ndarray, t_eff: float | np.ndarray, n: float) -> 
 # ---------------------------------------------------------------- data prep
 
 
+@dataclass
+class SessionSeries:
+    """One session's native-rate inputs for the fit, each on its own clock.
+
+    ``kin``: the validated kinematics (``t_session_s, lap_num, speed_ms,
+    lat_g, long_g`` on the chosen sensor's clock — the IMU's 50-100 Hz
+    when it passed validation, see :mod:`..tire_etl.kinematics`);
+    ``tpms``: the masked TPMS streams on each corner's 1.25 Hz clock (a
+    corner's columns are NaN outside its own rows); ``surf``: the IR zone
+    channels on the IR controller's clocks. :func:`_bin_stint` maps the
+    TPMS and IR samples onto the rolling clock defined by ``kin``.
+    """
+
+    kin: pd.DataFrame
+    tpms: pd.DataFrame | None
+    surf: pd.DataFrame | None
+
+
 @lru_cache(maxsize=4)
-def _session_timeseries(root_str: str, session_id: str) -> pd.DataFrame | None:
-    files = list(timeseries_dir(Path(root_str)).glob(f"*/{session_id}.parquet"))
-    if not files:
+def _session_timeseries(root_str: str, session_id: str) -> SessionSeries | None:
+    from ..tire_etl.dataset import load_group
+    from ..tire_etl.kinematics import load_kinematics
+
+    root = Path(root_str)
+    kin = load_kinematics(root, session_id)
+    if kin is None or "lap_num" not in kin.schema.names:
         return None
-    cols = ["lap_num", "sample_idx", "t_session_s", "speed_ms", "lat_g", "long_g"]
-    cols += [f"tpms_press_{c}_bar" for c in CORNERS]
-    # Temperatures are read only so the per-corner wake rule can see both
-    # streams of a module; the fit itself uses the pressure.
-    cols += [f"tpms_temp_{c}_c" for c in CORNERS]
-    cols += [f"surf_temp_{c}_ch{i}_c" for c in CORNERS for i in range(1, 9)]
-    schema = pq.read_schema(files[0])
-    cols = [c for c in cols if c in schema.names]
-    # The dataset is raw: mask the stale TPMS prefix / wake-up step here.
-    df: pd.DataFrame = mask_stale_session_prefix(pq.read_table(files[0], columns=cols)).to_pandas()
-    return df
+    kin_cols = [
+        c
+        for c in ("t_session_s", "lap_num", "speed_ms", "lat_g", "long_g", "lat_source")
+        if c in kin.schema.names
+    ]
+    kin_df: pd.DataFrame = kin.select(kin_cols).to_pandas()
+    tpms_cols = [f"tpms_press_{c}_bar" for c in CORNERS] + [f"tpms_temp_{c}_c" for c in CORNERS]
+    tpms = load_group(root, session_id, "tpms", columns=tpms_cols)
+    tpms_df: pd.DataFrame | None = None
+    if tpms is not None:
+        # The dataset is raw: mask the stale TPMS prefix / wake-up step here.
+        # Temperatures are read only so the per-corner wake rule can see
+        # both streams of a module; the fit itself uses the pressure.
+        keep = ["t_session_s", "lap_num"] + [c for c in tpms_cols if c in tpms.schema.names]
+        tpms_df = mask_stale_session_prefix(tpms.select(keep)).to_pandas()
+    surf = load_group(root, session_id, "surface")
+    surf_df: pd.DataFrame | None = None
+    if surf is not None:
+        zcols = [c for c in surf.schema.names if c.startswith("surf_temp_") and "_ch" in c]
+        if zcols:
+            surf_df = surf.select(["t_session_s", "lap_num"] + zcols).to_pandas()
+    return SessionSeries(kin=kin_df, tpms=tpms_df, surf=surf_df)
+
+
+def _bins_on_roll(
+    t_other: np.ndarray, t: np.ndarray, roll: np.ndarray, v: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Rolling-clock bin of samples taken on another clock, and whether the
+    car was moving there: ``(bin, moving)``; samples outside the kinematics'
+    time span get bin -1."""
+    inside = (t_other >= t[0]) & (t_other <= t[-1])
+    b = np.full(t_other.shape, -1, dtype=int)
+    b[inside] = np.floor(np.interp(t_other[inside], t, roll)).astype(int)
+    moving = np.zeros(t_other.shape, dtype=bool)
+    moving[inside] = np.interp(t_other[inside], t, np.nan_to_num(v, nan=0.0)) > MOVING_SPEED_MS
+    return b, moving
 
 
 def _bin_stint(
-    ts: pd.DataFrame,
+    ss: SessionSeries,
     lap_nums: list[int],
     heat: HeatInput = DEFAULT_HEAT_INPUT,
     car: str = "",
@@ -185,15 +241,22 @@ def _bin_stint(
 ) -> dict[str, Any] | None:
     """1 Hz bins on the rolling clock for the given laps of one stint.
 
-    ``heat`` picks the heat-input form; ``q`` is evaluated per sample before
-    binning so a nonlinear slip activation sees the native-rate g. With a
-    ``geometry`` and ``load_exp > 0`` the per-corner input
-    ``q_i = (W_i/W_i,static)^p · q`` is binned too (``"q4"``)."""
+    The clock is the validated kinematics' (``ss.kin``, the IMU rate when
+    the IMU passed): ``heat`` picks the heat-input form and ``q`` is
+    evaluated per sample before binning so a nonlinear slip activation sees
+    the native-rate g, as are the non-negative acceleration parts. TPMS
+    pressures and IR temperatures keep their own clocks and are mapped onto
+    the same rolling second. With a ``geometry`` and ``load_exp > 0`` the
+    per-corner input ``q_i = (W_i/W_i,static)^p · q`` is binned too
+    (``"q4"``). ``"valid"`` is False for the seconds whose heat input is
+    unknown: the car was moving through a window the sensor verdict
+    discarded (kinematics rows with source ``discard``)."""
     # The clock and g² span every lap from the first to the last fitted one (a lap
     # the usability filters dropped mid-stint still heats the tire and advances the
     # clock); observations are scored only in the fitted laps.
     lo, hi = min(lap_nums), max(lap_nums)
-    sub = ts[(ts["lap_num"] >= lo) & (ts["lap_num"] <= hi)].sort_values(["lap_num", "sample_idx"])
+    kin = ss.kin
+    sub = kin[(kin["lap_num"] >= lo) & (kin["lap_num"] <= hi)].sort_values("t_session_s")
     if len(sub) < 10:
         return None
     t = sub["t_session_s"].to_numpy(dtype=float)
@@ -206,7 +269,6 @@ def _bin_stint(
         else np.full(len(sub), 10.0)
     )
     moving = np.nan_to_num(v, nan=0.0) > MOVING_SPEED_MS
-    in_fit = np.isin(lap, lap_nums)
     roll = np.cumsum(np.where(moving, dt, 0.0))
     b = np.floor(roll).astype(int)
     n = int(b.max()) + 1
@@ -215,6 +277,10 @@ def _bin_stint(
     cnt = np.bincount(b[moving], minlength=n).astype(float)
     lat_s = sub["lat_g"].to_numpy(dtype=float)
     lng_s = sub["long_g"].to_numpy(dtype=float)
+    valid = np.ones(n, dtype=bool)
+    if "lat_source" in sub.columns:
+        hole = (sub["lat_source"].to_numpy() == "discard") & moving
+        valid = np.bincount(b[hole], minlength=n) == 0
     g2 = heat.rate(lat_s, lng_s, v, car)
     q4 = None
     q4_drive = None
@@ -275,44 +341,63 @@ def _bin_stint(
         "long_pos": _bin1(np.maximum(lng_c, 0.0)),
         "long_neg": _bin1(np.maximum(-lng_c, 0.0)),
     }
+    # TPMS pressure on each corner's own clock, mapped onto the rolling second.
     press = np.full((n, 4), np.nan)
-    for j, c in enumerate(CORNERS):
-        col = f"tpms_press_{c}_bar"
-        if col not in sub.columns:
-            continue
-        p = sub[col].to_numpy(dtype=float)
-        ok = np.isfinite(p) & moving & in_fit
-        s = np.bincount(b[ok], weights=p[ok], minlength=n)
-        k = np.bincount(b[ok], minlength=n)
-        press[:, j] = np.where(k > 0, s / np.maximum(k, 1), np.nan)
+    if ss.tpms is not None and len(ss.tpms):
+        tp = ss.tpms
+        tt = tp["t_session_s"].to_numpy(dtype=float)
+        bt, moving_t = _bins_on_roll(tt, t, roll, v)
+        in_fit = np.isin(tp["lap_num"].to_numpy(), lap_nums)
+        for j, c in enumerate(CORNERS):
+            col = f"tpms_press_{c}_bar"
+            if col not in tp.columns:
+                continue
+            p = tp[col].to_numpy(dtype=float)
+            ok = np.isfinite(p) & moving_t & in_fit & (bt >= 0) & (bt < n)
+            s_ = np.bincount(bt[ok], weights=p[ok], minlength=n)
+            k = np.bincount(bt[ok], minlength=n)
+            press[:, j] = np.where(k > 0, s_ / np.maximum(k, 1), np.nan)
     lap_end = np.zeros(n, dtype=bool)
     for ln in np.unique(lap):
         m = lap == ln
         lap_end[int(b[m].max())] = True
     # IR tread temperature: mean and spread across the zones, sentinel-masked.
+    # A corner's eight zones sit on two IR clocks (zones 1-4 and 5-8): each
+    # row carries the zones of its own clock, the second averages both.
     surf = np.full((n, 4), np.nan)
     zr = np.full((n, 4), np.nan)
-    for j, c in enumerate(CORNERS):
-        zcols = [f"surf_temp_{c}_ch{i}_c" for i in range(1, 9) if f"surf_temp_{c}_ch{i}_c" in sub]
-        if not zcols:
-            continue
-        z = sub[zcols].to_numpy(dtype=float)
-        z = np.where((z > IR_VALID_C[0]) & (z < IR_VALID_C[1]), z, np.nan)
-        with np.errstate(all="ignore"), warnings.catch_warnings():
-            warnings.simplefilter("ignore", RuntimeWarning)  # all-NaN rows
-            zmean = np.nanmean(z, axis=1)
-            zrange = np.nanmax(z, axis=1) - np.nanmin(z, axis=1)
-        ok = np.isfinite(zmean) & moving
-        k = np.bincount(b[ok], minlength=n)
-        surf[:, j] = np.where(
-            k > 0, np.bincount(b[ok], weights=zmean[ok], minlength=n) / np.maximum(k, 1), np.nan
-        )
-        zr[:, j] = np.where(
-            k > 0, np.bincount(b[ok], weights=zrange[ok], minlength=n) / np.maximum(k, 1), np.nan
-        )
+    if ss.surf is not None and len(ss.surf):
+        sf = ss.surf
+        ts_ = sf["t_session_s"].to_numpy(dtype=float)
+        bs, moving_s = _bins_on_roll(ts_, t, roll, v)
+        for j, c in enumerate(CORNERS):
+            zcols = [
+                f"surf_temp_{c}_ch{i}_c" for i in range(1, 9) if f"surf_temp_{c}_ch{i}_c" in sf
+            ]
+            if not zcols:
+                continue
+            z = sf[zcols].to_numpy(dtype=float)
+            z = np.where((z > IR_VALID_C[0]) & (z < IR_VALID_C[1]), z, np.nan)
+            with np.errstate(all="ignore"), warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)  # all-NaN rows
+                zmean = np.nanmean(z, axis=1)
+                zrange = np.nanmax(z, axis=1) - np.nanmin(z, axis=1)
+            ok = np.isfinite(zmean) & moving_s & (bs >= 0) & (bs < n)
+            k = np.bincount(bs[ok], minlength=n)
+            surf[:, j] = np.where(
+                k > 0,
+                np.bincount(bs[ok], weights=zmean[ok], minlength=n) / np.maximum(k, 1),
+                np.nan,
+            )
+            zr[:, j] = np.where(
+                k > 0,
+                np.bincount(bs[ok], weights=zrange[ok], minlength=n) / np.maximum(k, 1),
+                np.nan,
+            )
     return {
         "g2": g2_bin,
         "v": v_bin,
+        "valid": valid,
         "press": press,
         "lap_end": lap_end,
         "surf": surf,
@@ -368,6 +453,9 @@ def build_stint_series(
         t_start = np.full(4, np.nan)
         p_start = np.full(4, np.nan)
         roll_t = np.arange(n, dtype=float)
+        valid = binned["valid"]
+        has_hole = not bool(valid.all())
+        seg_anchor = np.full((n, 4), -1, dtype=int) if has_hole else None
         for j, c in enumerate(CORNERS):
             t0, p0, ta = first[f"t_start_{c}"], first[f"p_start_{c}"], first[f"t_anchor_{c}"]
             if pd.isna(t0) or pd.isna(p0) or pd.isna(ta) or float(p0) <= 0.3:
@@ -376,7 +464,9 @@ def build_stint_series(
             tg = (float(t0) + T_ZERO_C_TO_K) * (p + P_ATM_BAR) / (
                 float(p0) + P_ATM_BAR
             ) - T_ZERO_C_TO_K
-            scored = np.isfinite(p) & (roll_t >= float(ta))
+            scored = np.isfinite(p) & (roll_t >= float(ta)) & valid
+            if seg_anchor is not None:
+                scored, seg_anchor[:, j] = _segment_scored(scored, valid)
             if scored.sum() < MIN_SCORED_SECONDS:
                 continue
             obs[:, j] = np.where(scored, tg, np.nan)
@@ -432,9 +522,45 @@ def build_stint_series(
                 p_start=p_start,
                 n_laps=int(len(grp)),
                 lap_ends=binned["lap_end"],
+                valid=valid if has_hole else None,
+                seg_anchor=seg_anchor,
             )
         )
     return out
+
+
+def _segment_scored(scored: np.ndarray, valid: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Split a corner's scored seconds at the holes in the heat input.
+
+    ``valid`` is False where the heat input is unknown. The seconds before
+    the first hole after the first scored one stay on the stint's pit-exit
+    anchor (−1); each later stretch of valid seconds is anchored on its own
+    first scored second, and dropped when it has fewer than
+    :data:`MIN_SCORED_SECONDS` scored seconds (too short to say anything
+    about the thermal model once its start is taken from the data). Returns
+    ``(scored, seg_anchor)``.
+    """
+    scored = scored.copy()
+    n = scored.size
+    anchor = np.full(n, -1, dtype=int)
+    if not scored.any():
+        return scored, anchor
+    first = int(np.argmax(scored))
+    holes = np.flatnonzero(~valid)
+    holes = holes[holes > first]
+    if holes.size == 0:
+        return scored, anchor
+    # stretches of valid seconds after the first hole
+    seg_id = np.cumsum(~valid)  # increases inside and after each hole
+    after = np.arange(n) > holes[0]
+    for sid in np.unique(seg_id[after & valid]):
+        rows = np.flatnonzero((seg_id == sid) & valid & after)
+        sc = rows[scored[rows]]
+        if sc.size < MIN_SCORED_SECONDS:
+            scored[rows] = False
+            continue
+        anchor[rows] = int(sc[0])
+    return scored, anchor
 
 
 def stint_log_pressure_ratio(s: StintSeries, mode: str) -> np.ndarray:
@@ -549,6 +675,9 @@ class _Design:
         troad: list[np.ndarray] = []
         suns: list[np.ndarray] = []
         n0 = 0
+        # (rows, corner, anchor rows): rows whose simulation starts from the
+        # measured state at ``anchor rows`` instead of the pit-exit anchor.
+        self.reanchors: list[tuple[np.ndarray, int, np.ndarray]] = []
         for s in stints:
             n = len(s.g2)
             ss = np.zeros((n, 4), dtype=int)
@@ -557,6 +686,17 @@ class _Design:
                 a_i = s.anchor_idx[j] if s.anchor_idx[j] >= 0 else 0
                 ss[:, j] = n0 + a_i
                 tt[:, j] = s.t_start[j] if np.isfinite(s.t_start[j]) else s.t_eff_c
+                if s.seg_anchor is None or s.anchor_idx[j] < 0:
+                    continue
+                for a_seg in np.unique(s.seg_anchor[:, j]):
+                    if a_seg < 0:
+                        continue
+                    rows = np.flatnonzero(s.seg_anchor[:, j] == a_seg)
+                    sc = rows[np.isfinite(s.obs[rows, j])][:REANCHOR_SECONDS]
+                    if sc.size == 0:
+                        continue
+                    ss[rows, j] = n0 + int(a_seg)
+                    self.reanchors.append((n0 + rows, j, n0 + sc))
             g2.append(s.g2)
             q4s.append(s.q4 if s.q4 is not None else np.repeat(s.g2[:, None], 4, axis=1))
             q4d.append(s.q4_drive if s.q4_drive is not None else np.zeros((n, 4)))
@@ -576,6 +716,9 @@ class _Design:
             car_i.append(np.full(n, self.cars.index(s.car)))
             va = np.zeros((n, 4))
             for j in range(4):
+                # the pit-exit anchor's speed for every row: a re-anchored
+                # stretch starts from the *corrected* observation, which is
+                # already on the pit-exit scale (see simulate)
                 a_i = s.anchor_idx[j] if s.anchor_idx[j] >= 0 else 0
                 va[:, j] = s.v[a_i]
             v_anchor.append(va)
@@ -891,15 +1034,34 @@ class _Design:
         if self.logp is not None:
             q = q * np.exp(-self.p_exp(x) * self.logp)
         teff = self.sink(x)
-        T = self._integrate(a, b, q, teff)
+        t0 = self._start_temperatures(x)
+        T = self._integrate(a, b, q, teff, t0)
         if self.cool_mode == "power":
             n = self._cp("n|cool", x)
             for _ in range(3):  # Picard: the gap sets the rate, the rate sets the gap
-                T = self._integrate(a, b * cooling_power_factor(T, teff, n), q, teff)
+                T = self._integrate(a, b * cooling_power_factor(T, teff, n), q, teff, t0)
         return T
 
+    def _start_temperatures(self, x: np.ndarray) -> np.ndarray:
+        """Per (second, corner) the temperature its simulation starts from:
+        the stint's pit-exit anchor, or — after a hole in the heat input —
+        the mean observed gas temperature of the first scored seconds of the
+        stretch (speed-corrected like every other observation)."""
+        if not self.reanchors:
+            return self.t0
+        t0 = self.t0.copy()
+        obs = self.observed(x)
+        for rows, j, anchor_rows in self.reanchors:
+            t0[rows, j] = float(np.mean(obs[anchor_rows, j]))
+        return t0
+
     def _integrate(
-        self, a: np.ndarray, b: np.ndarray, q: np.ndarray, teff: np.ndarray
+        self,
+        a: np.ndarray,
+        b: np.ndarray,
+        q: np.ndarray,
+        teff: np.ndarray,
+        t0: np.ndarray | None = None,
     ) -> np.ndarray:
         # exact per-second update, segment-wise via cumulative sums
         S = np.cumsum(b, 0)
@@ -913,7 +1075,8 @@ class _Design:
         CG = np.cumsum(G, 0)
         CG_prev = CG - G
         cg_at = np.take_along_axis(CG_prev, self.seg_start, 0)
-        T: np.ndarray = np.exp(-srel) * (self.t0 + (CG_prev - cg_at))
+        start = self.t0 if t0 is None else t0
+        T: np.ndarray = np.exp(-srel) * (start + (CG_prev - cg_at))
         return T
 
     def residuals(self, x: np.ndarray) -> np.ndarray:
@@ -1008,6 +1171,14 @@ class _Design:
         return S.tocsr()
 
 
+def _laps_with_holes(s: StintSeries, lap_idx: np.ndarray, n_laps: int) -> np.ndarray:
+    """(n_laps,) True for the laps with a second of unknown heat input: their
+    lap sums would be integrals with a hole in them."""
+    if s.valid is None:
+        return np.zeros(n_laps, dtype=bool)
+    return np.asarray(np.bincount(lap_idx[~s.valid], minlength=n_laps) > 0)
+
+
 def lap_heat_components(stints: list[StintSeries]) -> pd.DataFrame:
     """Per (session, stint, lap_num, corner): the lap sums of the three
     heat-input parts (``base``, ``drive``, ``brake``; see
@@ -1019,6 +1190,7 @@ def lap_heat_components(stints: list[StintSeries]) -> pd.DataFrame:
         lap_idx = np.cumsum(s.lap_ends) - s.lap_ends  # 0-based lap index per bin
         n_laps = int(lap_idx.max()) + 1 if len(lap_idx) else 0
         seconds = np.bincount(lap_idx, minlength=n_laps).astype(float)
+        holed = _laps_with_holes(s, lap_idx, n_laps)
         for j, c in enumerate(CORNERS):
             base = s.q4[:, j] if s.q4 is not None else s.g2
             drive = s.q4_drive[:, j] if s.q4_drive is not None else np.zeros_like(base)
@@ -1027,6 +1199,8 @@ def lap_heat_components(stints: list[StintSeries]) -> pd.DataFrame:
             d_sum = np.bincount(lap_idx, weights=drive, minlength=n_laps)
             k_sum = np.bincount(lap_idx, weights=brake, minlength=n_laps)
             for k in range(n_laps):
+                if holed[k]:
+                    continue
                 rows.append(
                     {
                         "session_id": s.session_id,
@@ -1120,8 +1294,9 @@ def lap_heat_share(stints: list[StintSeries], share: dict[str, ShareParams]) -> 
             )
             for c in CORNERS
         }
+        holed = _laps_with_holes(s, lap_idx, n_laps)
         for k in range(n_laps):
-            if seconds[k] <= 0:
+            if seconds[k] <= 0 or holed[k]:
                 continue
             rows.append(
                 {

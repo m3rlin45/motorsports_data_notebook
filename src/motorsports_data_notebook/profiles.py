@@ -48,6 +48,19 @@ DEFAULT_CHANNEL_NAMES: dict[str, str] = {
     "gps_longitude": "GPS Longitude",
     "lateral_g": "LateralAcc",
     "inline_g": "InlineAcc",
+    # Raw inertial channels for the tire ETL (``lateral_g`` / ``inline_g``
+    # above are the *analysis* choice per vehicle and may point at the
+    # logger's GPS-derived accelerations instead of the IMU).
+    "imu_lateral_g": "LateralAcc",
+    "imu_inline_g": "InlineAcc",
+    "vertical_g": "VerticalAcc",
+    "yaw_rate": "YawRate",
+    "pitch_rate": "PitchRate",
+    "roll_rate": "RollRate",
+    "gps_altitude": "GPS Altitude",
+    "gps_lateral_g": "GPS_LateralAcc",
+    "gps_inline_g": "GPS_InlineAcc",
+    "gps_yaw_rate": "GPS_Yaw_Rate",
     "steering": "SteerAngle",
     "shock_fl": "LF_Shock_Pot",
     "shock_fr": "RF_Shock_Pot",
