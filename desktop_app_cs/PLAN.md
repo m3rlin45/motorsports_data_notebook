@@ -248,7 +248,7 @@ cases to `Tests/Fixtures/profiles.json`; `ProfilesParityTests` replays them.
 Phase 1 is complete once the two parser PRs are merged (then re-pin to the
 tagged releases).
 
-### Phase 2 — in progress
+### Phase 2 — done 2026-10-29
 
 Kernels live in `Core/Analysis/`, one file per Python module, driven by
 `tools/extract_kernel_fixture.py --module X` (`just cs-kernel-fixture X`),
@@ -263,7 +263,11 @@ summaries where large) from the Fuji 86 sample, laps 14 and 12.
 | `suspension` | done 2026-10-29 | shock velocity (numpy.gradient with coordinates, edge-padded box smoothing), wheel velocity, zero-centred histogram, moments and range shares, single- and multi-lap analysis, symmetry and group-difference tables; velocity derivation bit-identical on a dumped slice, histograms within one sample per bin and moments to 1e-6 end to end from the C# loader (the 500 Hz inputs are not dumped) |
 | `roll_gradient` | done 2026-10-29 | roll angle, least-squares gradient with R², lateral-g binning (numpy digitize/bincount), asymmetric edge-padded smoothing, single/multi-lap over the C# LogFile with GPS track positions; fits and ratios to 1e-6 end to end, bin counts within 1 % (smoothed samples on 0.1 g edges flip with summation order), synthetic fit/bin/smooth cases to 1e-10 |
 | `driver_analysis` | done 2026-10-29 | `PrepareThrottleAcceptance` / `FindThrottleAcceptance`; identical to Python per corner and lap on dumped inputs. `DriverConsistency` ports the desktop app's `analyze_driver_consistency` pipeline (corners from the fastest selected lap, zones, segments, stats, per-corner throttle acceptance, braking/speed spreads, opportunity score, traces) and reproduces the fixture's acceptance values end to end |
-| `tire_grip` | next | |
+| `tire_grip` | done 2026-10-29 | bucketed-percentile grip analysis, single and multi-lap, pressure and temperature modes. Python runs this in float32 (the G and TPMS channels are float32 arrays), so parity is 1e-6 with an edge-sample allowance; the synthetic float64 case is exact, after reproducing numpy's percentile `_lerp` |
+
+Phase 2 kernels are complete; what remains of the Python analysis surface
+(`report.py`, `session_runner.py`, the tire model and ETL) is out of the
+desktop app's scope. Next: Phase 3 views.
 
 Lesson from corners: match numpy's operation order exactly (`x * (π/180)`,
 not `x * π / 180`; pairwise sums) before loosening a tolerance.
