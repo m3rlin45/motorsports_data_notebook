@@ -1,0 +1,36 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:InfernoAnalyzer.App.ViewModels"
+             x:Class="InfernoAnalyzer.App.Views.SuspensionConfigView"
+             x:DataType="vm:SuspensionConfigViewModel">
+  <StackPanel Spacing="4">
+    <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding HasSessionB}">
+      <RadioButton Content="Session A" GroupName="cfgsession" IsChecked="{Binding IsSessionA}" FontSize="11" />
+      <RadioButton Content="Session B" GroupName="cfgsession" IsChecked="{Binding IsSessionB}" FontSize="11" />
+      <CheckBox Content="Keep B in sync with A" IsChecked="{Binding SyncWithA}" FontSize="11" />
+    </StackPanel>
+    <ItemsControl ItemsSource="{Binding Entries}">
+      <ItemsControl.ItemsPanel>
+        <ItemsPanelTemplate>
+          <UniformGrid Columns="2" />
+        </ItemsPanelTemplate>
+      </ItemsControl.ItemsPanel>
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="vm:ChannelEntryViewModel">
+          <DockPanel Margin="0,0,6,2">
+            <TextBlock DockPanel.Dock="Left" Text="{Binding Label}" Width="64" FontSize="11" VerticalAlignment="Center" />
+            <AutoCompleteBox Text="{Binding Value}" ItemsSource="{Binding Suggestions}" IsEnabled="{Binding IsEditable}" FilterMode="Contains" MinimumPrefixLength="1" FontSize="11" MinHeight="24" />
+          </DockPanel>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+    <TextBlock Text="Motion ratios (pot / wheel)" FontSize="11" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+    <UniformGrid Columns="4" DataContext="{Binding Ratios}" x:DataType="vm:MotionRatiosViewModel">
+      <DockPanel Margin="0,0,6,0"><TextBlock DockPanel.Dock="Left" Text="FL" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0" /><TextBox Text="{Binding FrontLeft}" IsEnabled="{Binding IsEditable}" FontSize="11" MinHeight="24" /></DockPanel>
+      <DockPanel Margin="0,0,6,0"><TextBlock DockPanel.Dock="Left" Text="FR" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0" /><TextBox Text="{Binding FrontRight}" IsEnabled="{Binding IsEditable}" FontSize="11" MinHeight="24" /></DockPanel>
+      <DockPanel Margin="0,0,6,0"><TextBlock DockPanel.Dock="Left" Text="RL" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0" /><TextBox Text="{Binding RearLeft}" IsEnabled="{Binding IsEditable}" FontSize="11" MinHeight="24" /></DockPanel>
+      <DockPanel><TextBlock DockPanel.Dock="Left" Text="RR" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0" /><TextBox Text="{Binding RearRight}" IsEnabled="{Binding IsEditable}" FontSize="11" MinHeight="24" /></DockPanel>
+    </UniformGrid>
+    <Button Content="Reset" Command="{Binding ResetCommand}" Padding="8,2" FontSize="11" HorizontalAlignment="Left" />
+  </StackPanel>
+</UserControl>
