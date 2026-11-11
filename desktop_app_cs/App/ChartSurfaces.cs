@@ -28,6 +28,9 @@ public static class ChartSurfaces
     /// <summary>Create a surface able to render <see cref="TrackMapSpec"/>.</summary>
     public static IChartSurface CreateTrackMap() => FollowTheme(new ScottPlotTrackMap());
 
+    /// <summary>Create a surface able to render <see cref="LineGridSpec"/>.</summary>
+    public static IChartSurface CreateLineGrid() => FollowTheme(new ScottPlotLineGrid());
+
     /// <summary>The chart theme matching the app's current (OS-driven) variant.</summary>
     public static ChartTheme CurrentTheme => ThemeFor(Application.Current?.ActualThemeVariant);
 
