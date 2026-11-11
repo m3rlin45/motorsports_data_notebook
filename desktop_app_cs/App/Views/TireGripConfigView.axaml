@@ -1,0 +1,29 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:InfernoAnalyzer.App.ViewModels"
+             x:Class="InfernoAnalyzer.App.Views.TireGripConfigView"
+             x:DataType="vm:TireGripConfigViewModel">
+  <StackPanel Spacing="4">
+    <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding HasSessionB}">
+      <RadioButton Content="Session A" GroupName="tirecfgsession" IsChecked="{Binding IsSessionA}" FontSize="11" />
+      <RadioButton Content="Session B" GroupName="tirecfgsession" IsChecked="{Binding IsSessionB}" FontSize="11" />
+      <CheckBox Content="Keep B in sync with A" IsChecked="{Binding SyncWithA}" FontSize="11" />
+    </StackPanel>
+    <ItemsControl ItemsSource="{Binding Entries}">
+      <ItemsControl.ItemsPanel>
+        <ItemsPanelTemplate>
+          <UniformGrid Columns="2" />
+        </ItemsPanelTemplate>
+      </ItemsControl.ItemsPanel>
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="vm:ChannelEntryViewModel">
+          <DockPanel Margin="0,0,6,2">
+            <TextBlock DockPanel.Dock="Left" Text="{Binding Label}" Width="64" FontSize="11" VerticalAlignment="Center" />
+            <AutoCompleteBox Text="{Binding Value}" ItemsSource="{Binding Suggestions}" IsEnabled="{Binding IsEditable}" FilterMode="Contains" MinimumPrefixLength="1" FontSize="11" MinHeight="24" />
+          </DockPanel>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+    <Button Content="Reset" Command="{Binding ResetCommand}" Padding="8,2" FontSize="11" HorizontalAlignment="Left" />
+  </StackPanel>
+</UserControl>

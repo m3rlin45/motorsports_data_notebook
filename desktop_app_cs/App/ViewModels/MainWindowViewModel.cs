@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using InfernoAnalyzer.Core.Profiles;
+using InfernoAnalyzer.Core.Tracks;
 
 namespace InfernoAnalyzer.App.ViewModels;
 
@@ -11,16 +12,20 @@ namespace InfernoAnalyzer.App.ViewModels;
 /// </summary>
 public sealed partial class MainWindowViewModel : ObservableObject
 {
-    /// <summary>Create the window model over <paramref name="profiles"/>.</summary>
-    public MainWindowViewModel(ProfileStore? profiles = null)
+    /// <summary>Create the window model over <paramref name="profiles"/> and <paramref name="tracks"/>.</summary>
+    public MainWindowViewModel(ProfileStore? profiles = null, TrackStore? tracks = null)
     {
         Profiles = profiles ?? new ProfileStore();
+        TrackStore = tracks ?? new TrackStore();
         SessionA = new SessionViewModel("SESSION A (Primary)", Profiles);
         SessionB = new SessionViewModel("SESSION B (Compare)", Profiles);
         TimeDistance = new TimeDistanceViewModel(SessionA, SessionB);
         Suspension = new SuspensionViewModel(SessionA, SessionB);
         RollGradient = new RollGradientViewModel(SessionA, SessionB, Suspension.SuspensionConfig);
-        Tabs = new ObservableCollection<AnalysisTabViewModel> { TimeDistance, Suspension, RollGradient };
+        Driver = new DriverViewModel(SessionA, SessionB);
+        TireGrip = new TireGripViewModel(SessionA, SessionB);
+        Sectors = new SectorsViewModel(SessionA, TrackStore);
+        Tabs = new ObservableCollection<AnalysisTabViewModel> { TimeDistance, Sectors, Suspension, Driver, TireGrip, RollGradient };
         _activeTab = TimeDistance;
         TimeDistance.SetActive(true);
 
@@ -32,6 +37,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     /// <summary>Profile store shared by the sessions and tabs.</summary>
     public ProfileStore Profiles { get; }
+
+    /// <summary>Track store for the Sectors tab.</summary>
+    public TrackStore TrackStore { get; }
 
     /// <summary>Primary session.</summary>
     public SessionViewModel SessionA { get; }
@@ -47,6 +55,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     /// <summary>The Roll Gradient tab.</summary>
     public RollGradientViewModel RollGradient { get; }
+
+    /// <summary>The Driver Consistency tab.</summary>
+    public DriverViewModel Driver { get; }
+
+    /// <summary>The Tire Grip tab.</summary>
+    public TireGripViewModel TireGrip { get; }
+
+    /// <summary>The Sectors tab.</summary>
+    public SectorsViewModel Sectors { get; }
 
     /// <summary>Analysis tabs in display order.</summary>
     public ObservableCollection<AnalysisTabViewModel> Tabs { get; }
@@ -99,6 +116,44 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <summary>Toggle the top panel.</summary>
     [RelayCommand]
     public void ToggleTopPanel() => IsTopCollapsed = !IsTopCollapsed;
+
+    /// <summary>
+    /// Save a vehicle profile for the session the active config panel is
+    /// editing (A, or B when selected): every tab's channel names merged,
+    /// the Suspension tab's motion ratios and the Roll Gradient tab's track
+    /// widths, under the logger ID and vehicle name, as the Python app does.
+    /// </summary>
+    [RelayCommand]
+    public void SaveProfile()
+    {
+        var session = ActiveTab.Config is ChannelConfigViewModel { ActiveSession: "B" } && SessionB.Log is not null ? "B" : "A";
+        var slot = session == "B" ? SessionB : SessionA;
+        if (slot.LoggerId is null)
+        {
+            ActiveTab.Status = "No logger ID — load a session first";
+            return;
+        }
+
+        // Tabs share some keys (the shock pots appear on Suspension and Roll Gradient); the
+        // first tab to define a key owns it, so the Suspension entries win for the shocks.
+        var names = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var config in Tabs.Select(t => t.Config).OfType<ChannelConfigViewModel>())
+        {
+            foreach (var (key, value) in config.GetChannelNames(session))
+            {
+                names.TryAdd(key, value);
+            }
+        }
+
+        var ratios = Suspension.SuspensionConfig.GetMotionRatios(session);
+        var existing = slot.Profile;
+        // Keep the loaded calibration only while the entered ratios still derive from it.
+        var calibration = existing?.ShockCalibration is { } cal && cal.PotWheelRatios() == ratios ? cal : null;
+        var profile = new VehicleProfile(slot.SessionLabel, names, ratios, calibration, RollGradient.RollConfig.GetTrackWidths(session));
+        Profiles.SaveProfileForLogger(slot.LoggerId, profile, slot.VehicleName);
+        var ident = $"logger {slot.LoggerId}" + (slot.VehicleName is null ? string.Empty : $" / {slot.VehicleName}");
+        ActiveTab.Status = $"Profile saved for {ident}";
+    }
 
     private void OnSessionLoaded()
     {
