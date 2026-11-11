@@ -5,11 +5,13 @@ on:
     branches: [master]
     paths:
       - 'desktop_app_cs/**'
+      - 'src/motorsports_data_notebook/data/builtin_profiles.yaml'
       - 'pyproject.toml'
       - '.github/workflows/build-analyzer-cs.yml'
   pull_request:
     paths:
       - 'desktop_app_cs/**'
+      - 'src/motorsports_data_notebook/data/builtin_profiles.yaml'
       - 'pyproject.toml'
       - '.github/workflows/build-analyzer-cs.yml'
 
