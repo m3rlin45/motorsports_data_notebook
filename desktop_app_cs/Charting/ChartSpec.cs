@@ -226,3 +226,69 @@ public sealed record ScatterGridSpec(
     IReadOnlyList<ScatterPanelSpec> Panels,
     int Columns) : ChartSpec;
 
+/// <summary>One box of a box-and-whisker plot, with its statistics precomputed (numpy percentile semantics).</summary>
+public sealed record BoxSpec(
+    double Position,
+    double Q1,
+    double Median,
+    double Q3,
+    double WhiskerLow,
+    double WhiskerHigh,
+    double Mean,
+    double[] Fliers,
+    string Color,
+    string Tooltip,
+    double Width = 0.5)
+{
+    /// <summary>Box statistics of <paramref name="values"/>: quartiles by linear interpolation, whiskers at 1.5 IQR, the rest fliers.</summary>
+    public static BoxSpec From(double position, IReadOnlyList<double> values, string color, string tooltip, double width = 0.5)
+    {
+        var sorted = values.OrderBy(v => v).ToArray();
+        double Pct(double q)
+        {
+            var index = q / 100.0 * (sorted.Length - 1);
+            var lo = (int)Math.Floor(index);
+            var hi = Math.Min(lo + 1, sorted.Length - 1);
+            var t = index - lo;
+            return t >= 0.5 ? sorted[hi] - (sorted[hi] - sorted[lo]) * (1 - t) : sorted[lo] + (sorted[hi] - sorted[lo]) * t;
+        }
+
+        var q1 = Pct(25);
+        var median = Pct(50);
+        var q3 = Pct(75);
+        var iqr = q3 - q1;
+        var low = sorted.Where(v => v >= q1 - 1.5 * iqr).DefaultIfEmpty(q1).Min();
+        var high = sorted.Where(v => v <= q3 + 1.5 * iqr).DefaultIfEmpty(q3).Max();
+        var fliers = sorted.Where(v => v < low || v > high).ToArray();
+        var mean = sorted.Length > 0 ? sorted.Average() : double.NaN;
+        return new BoxSpec(position, q1, median, q3, low, high, mean, fliers, color, tooltip, width);
+    }
+}
+
+/// <summary>One stacked panel of boxes.</summary>
+public sealed record BoxPanelSpec(string Title, string YLabel, IReadOnlyList<BoxSpec> Boxes, bool ZeroLine = false);
+
+/// <summary>Stacked box-plot panels sharing the category axis (the driver summary view).</summary>
+/// <param name="Title">Figure title.</param>
+/// <param name="Panels">Panels top to bottom.</param>
+/// <param name="CategoryPositions">X position of each category.</param>
+/// <param name="CategoryLabels">Label of each category (bottom panel ticks).</param>
+/// <param name="Bands">Shaded category bands (top-opportunity corners), drawn on every panel.</param>
+/// <param name="Legend">Legend entries (empty: no legend).</param>
+public sealed record BoxPlotSpec(
+    string Title,
+    IReadOnlyList<BoxPanelSpec> Panels,
+    double[] CategoryPositions,
+    string[] CategoryLabels,
+    IReadOnlyList<BandSpec> Bands,
+    IReadOnlyList<(string Label, string Color)> Legend) : ChartSpec;
+
+/// <summary>A coloured polyline on a track map.</summary>
+public sealed record TrackMapPathSpec(double[] X, double[] Y, string Color, double Width, string Label = "");
+
+/// <summary>A marked point on a track map.</summary>
+public sealed record TrackMapPointSpec(double X, double Y, string Color, double Size, string Label = "", bool Star = false);
+
+/// <summary>A standalone track map with coloured segments and marked points (equal units).</summary>
+public sealed record TrackMapSpec(string Title, IReadOnlyList<TrackMapPathSpec> Paths, IReadOnlyList<TrackMapPointSpec> Points) : ChartSpec;
+
