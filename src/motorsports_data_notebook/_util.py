@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 import pyarrow as pa  # type: ignore[import-untyped]
@@ -413,6 +413,11 @@ class MergedLogFile:
             raise ValueError(f"Lap {lap_num} not found in merged session")
         log_idx, orig_num = self._lap_map[lap_num]
         return self._logs[log_idx].filter_by_lap(orig_num)
+
+    def parts(self) -> list[tuple[Any, int]]:
+        """The constituent logs with the offset (ms) that places each one's
+        raw channel timecodes on the merged session clock."""
+        return list(zip(self._logs, self._offsets_ms))
 
     def select_channels(self, channels):
         """Delegate to the first underlying LogFile.

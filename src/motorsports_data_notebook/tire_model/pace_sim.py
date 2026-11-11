@@ -42,13 +42,12 @@ Buckets without usable timeseries fall back to the physics exponent
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Sequence
 
 import numpy as np
 import pandas as pd
-import pyarrow.parquet as pq
 
 from .heat_input import DEFAULT_G_CLIP, ShareParams, share_heat_rate
 
@@ -79,6 +78,10 @@ class LapSamples:
     speed_ms: np.ndarray
     lat_g: np.ndarray
     long_g: np.ndarray
+    #: The sensor the accelerations come from (``imu``, ``imu_swapped``,
+    #: ``gps_channel``, ``gps_position``), ``mixed`` when the lap changes
+    #: source part-way, empty when unknown.
+    source: str = ""
 
     @property
     def lap_time_s(self) -> float:
@@ -91,7 +94,11 @@ _SAMPLE_CACHE: dict[str, dict[tuple[str, int], LapSamples]] = {}
 
 
 def load_lap_samples(root: Path) -> dict[tuple[str, int], LapSamples]:
-    """Per-(session_id, lap_num) samples from the raw timeseries, cached."""
+    """Per-(session_id, lap_num) samples of every session's validated
+    kinematics (:func:`~..tire_etl.kinematics.load_kinematics`: speed and
+    the chosen lateral / longitudinal g on the sensor's own clock), cached."""
+    from ..tire_etl.kinematics import load_kinematics
+
     key = str(Path(root).resolve())
     cached = _SAMPLE_CACHE.get(key)
     if cached is not None:
@@ -99,17 +106,27 @@ def load_lap_samples(root: Path) -> dict[tuple[str, int], LapSamples]:
     out: dict[tuple[str, int], LapSamples] = {}
     for f in sorted((Path(root) / "timeseries").glob("*/*.parquet")):
         try:
-            names = pq.read_schema(f).names
-            if not set(_TS_COLUMNS).issubset(names):
+            kin = load_kinematics(Path(root), f.stem)
+            if kin is None or not set(_TS_COLUMNS).issubset(kin.schema.names):
                 continue
-            ts = pq.read_table(f, columns=_TS_COLUMNS).to_pandas()
+            ts = kin.select(_TS_COLUMNS).to_pandas()
+            lap_source: dict[int, str] = {}
+            if "lat_source" in kin.schema.names:
+                ts["_source"] = kin.column("lat_source").to_pandas().to_numpy()
+                # a lap with a discarded sensor window has a hole in its g trace
+                holed = set(ts.loc[ts["_source"] == "discard", "lap_num"].unique())
+                ts = ts[~ts["lap_num"].isin(holed)]
+                for lap_num, names in ts.groupby("lap_num")["_source"].unique().items():
+                    lap_source[int(lap_num)] = str(names[0]) if len(names) == 1 else "mixed"
         except Exception:  # noqa: BLE001 — one unreadable file shouldn't kill the build
             logger.warning("pace model: failed to read %s — skipping", f)
             continue
         for lap_num, lap in ts.groupby("lap_num"):
             samples = _lap_samples(lap)
             if samples is not None:
-                out[(f.stem, int(lap_num))] = samples
+                out[(f.stem, int(lap_num))] = replace(
+                    samples, source=lap_source.get(int(lap_num), "")
+                )
     _SAMPLE_CACHE[key] = out
     return out
 
@@ -137,7 +154,13 @@ def scaled_lap(samples: LapSamples, m: float) -> LapSamples:
     """The lap driven ``m`` times faster everywhere (uniform scaling)."""
     if m <= 0:
         raise ValueError(f"speed multiplier must be > 0; got {m}")
-    return LapSamples(samples.dt_s / m, samples.speed_ms * m, samples.lat_g * m * m, samples.long_g)
+    return replace(
+        samples,
+        dt_s=samples.dt_s / m,
+        speed_ms=samples.speed_ms * m,
+        lat_g=samples.lat_g * m * m,
+        long_g=samples.long_g,
+    )
 
 
 def corner_heat_means(share: ShareParams, samples: LapSamples) -> np.ndarray:
@@ -261,7 +284,13 @@ def fast_lap_check(
     per-corner ratio = mean ``q_lap_c`` (fast) / mean ``q_lap_c``
     (reference), from the per-second heat model's own per-lap intensities;
     predicted = the simulation from each reference lap to the fast laps'
-    mean time (median over reference laps). Returns one row per session with
+    mean time (median over reference laps). The ratio is a few percent, so
+    it is only meaningful between laps measured by the same sensor (the
+    GPS-derived accelerations read about 15 % more heat than the IMU's on
+    the same car): in a session whose laps come from more than one sensor
+    source — an IMU stream that stops part-way through the run — only the
+    laps of its most common single source are compared. Returns one row per
+    session with
     ``log_obs_{c}`` and ``log_pred_{c}``; an unbiased simulation has
     ``mean(log_obs - log_pred) ≈ 0`` and slope ≈ 1 on every corner.
     """
@@ -271,6 +300,12 @@ def fast_lap_check(
         return pd.DataFrame()
     rows = []
     for sid, s in laps.dropna(subset=q_cols).groupby("session_id"):
+        sources = s["lap_num"].map(
+            lambda n: getattr(samples_by_lap.get((str(sid), int(n))), "source", "")
+        )
+        single = sources[~sources.isin(["", "mixed"])]
+        if single.nunique() > 1 or (len(single) and (sources == "mixed").any()):
+            s = s[sources == single.value_counts().idxmax()]
         if len(s) < min_laps:
             continue
         share = share_by_car.get(str(s["car"].iloc[0]))

@@ -10,6 +10,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from motorsports_data_notebook.tire_model.heat_input import CarFacts, ShareParams
+from tests._timeseries_fixture import write_session_timeseries
 from motorsports_data_notebook.tire_model.pace_sim import (
     CORNERS,
     GRID_FACTORS,
@@ -63,9 +64,7 @@ def _write_session_ts(root: Path, session_id: str, laps: dict[int, LapSamples]) 
         rows["speed_ms"].extend(s.speed_ms.tolist())
         rows["lat_g"].extend(s.lat_g.tolist())
         rows["long_g"].extend(s.long_g.tolist())
-    out = root / "timeseries" / "2026-01"
-    out.mkdir(parents=True, exist_ok=True)
-    pq.write_table(pa.table(rows), out / f"{session_id}.parquet")
+    write_session_timeseries(root, session_id, pa.table(rows))
 
 
 def _laps_meta(session_id: str, lap_times: list[float], car: str = "ToyCar") -> pd.DataFrame:
@@ -195,8 +194,42 @@ class TestFastLapCheck:
         assert len(frame) == 1
         summary = summarize_fast_lap_check(frame)
         assert set(summary["corner"]) == set(CORNERS)
-        np.testing.assert_allclose(summary["bias_log"], 0.0, atol=1e-9)
+        # float32 storage of speed and g (schema 7) rounds the ratio at ~1e-7
+        np.testing.assert_allclose(summary["bias_log"], 0.0, atol=1e-5)
         assert (summary["mean_log_obs"] > 0).all()
+
+    def test_only_laps_of_one_sensor_source_are_compared(self, tmp_path: Path) -> None:
+        # The session's IMU stops after lap 10: laps 11-14 come from the GPS
+        # channels, whose heat reads 15 % high, and two of them are fast.
+        # Compared with the IMU reference laps they would look like a 15 %
+        # hotter fast lap; like is compared with like instead.
+        from dataclasses import replace
+
+        share = _share()
+        base = _synthetic_lap(60.0)
+        fast = scaled_lap(base, 60.0 / 58.0)
+        samples = {("s0", i): replace(base, source="imu") for i in range(1, 9)}
+        samples.update({("s0", i): replace(fast, source="imu") for i in (9, 10)})
+        samples.update({("s0", i): replace(base, source="gps_channel") for i in (11, 12)})
+        samples.update({("s0", i): replace(fast, source="gps_channel") for i in (13, 14)})
+        meta = _laps_meta("s0", [samples[("s0", n)].lap_time_s for n in range(1, 15)])
+        for c in CORNERS:
+            q = [
+                corner_heat_means(share, samples[("s0", int(n))])[CORNERS.index(c)]
+                for n in meta["lap_num"]
+            ]
+            meta[f"q_lap_{c}"] = [
+                v * (1.15 if n >= 11 else 1.0) for v, n in zip(q, meta["lap_num"])
+            ]
+        frame = fast_lap_check(meta, samples, {"ToyCar": share})
+        assert len(frame) == 1 and frame["n_fast"].iloc[0] == 2  # the IMU's two fast laps
+        summary = summarize_fast_lap_check(frame)
+        np.testing.assert_allclose(summary["bias_log"], 0.0, atol=1e-9)
+        # without the restriction half the fast laps but a fifth of the reference
+        # laps are GPS ones: the log ratio comes out 0.04 high
+        mixed = {k: replace(v, source="") for k, v in samples.items()}
+        biased = summarize_fast_lap_check(fast_lap_check(meta, mixed, {"ToyCar": share}))
+        assert (biased["bias_log"] > 0.03).all()
 
     def test_sessions_without_fast_laps_are_skipped(self, tmp_path: Path) -> None:
         _write_session_ts(tmp_path, "s0", {i: _synthetic_lap(60.0) for i in range(1, 9)})

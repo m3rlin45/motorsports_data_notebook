@@ -35,6 +35,16 @@ profiles:
       gps_latitude: GPS Latitude
       gps_longitude: GPS Longitude
       lateral_g: LateralAcc
+      imu_lateral_g: LateralAcc
+      imu_inline_g: InlineAcc
+      vertical_g: VerticalAcc
+      yaw_rate: YawRate
+      pitch_rate: PitchRate
+      roll_rate: RollRate
+      gps_altitude: GPS Altitude
+      gps_lateral_g: GPS_LateralAcc
+      gps_inline_g: GPS_InlineAcc
+      gps_yaw_rate: GPS_Yaw_Rate
       steering: SteerAngle
       shock_fl: LF_Shock_Pot
       shock_fr: RF_Shock_Pot
@@ -104,6 +114,16 @@ profiles:
       gps_latitude: GPS Latitude
       gps_longitude: GPS Longitude
       lateral_g: LateralAcc
+      imu_lateral_g: LateralAcc
+      imu_inline_g: InlineAcc
+      vertical_g: VerticalAcc
+      yaw_rate: YawRate
+      pitch_rate: PitchRate
+      roll_rate: RollRate
+      gps_altitude: GPS Altitude
+      gps_lateral_g: GPS_LateralAcc
+      gps_inline_g: GPS_InlineAcc
+      gps_yaw_rate: GPS_Yaw_Rate
     motion_ratios:
       front_left: 1.0
       front_right: 1.0
@@ -120,6 +140,16 @@ profiles:
       gps_latitude: GPS Latitude
       gps_longitude: GPS Longitude
       lateral_g: LateralAcc
+      imu_lateral_g: LateralAcc
+      imu_inline_g: InlineAcc
+      vertical_g: VerticalAcc
+      yaw_rate: YawRate
+      pitch_rate: PitchRate
+      roll_rate: RollRate
+      gps_altitude: GPS Altitude
+      gps_lateral_g: GPS_LateralAcc
+      gps_inline_g: GPS_InlineAcc
+      gps_yaw_rate: GPS_Yaw_Rate
       steering: steering
     motion_ratios:
       front_left: 1.0
@@ -140,6 +170,16 @@ profiles:
       gps_longitude: GPS Longitude
       lateral_g: GPS_LateralAcc
       inline_g: GPS_InlineAcc
+      imu_lateral_g: LateralAcc
+      imu_inline_g: InlineAcc
+      vertical_g: VerticalAc
+      yaw_rate: YawRate
+      pitch_rate: PitchRate
+      roll_rate: RollRate
+      gps_altitude: GPS Altitude
+      gps_lateral_g: GPS_LateralAcc
+      gps_inline_g: GPS_InlineAcc
+      gps_yaw_rate: GPS_Yaw_Rate
       steering: Steering
       shock_fl: LF_Shock_Pot
       shock_fr: RF_Shock_Pot
@@ -185,6 +225,16 @@ profiles:
       gps_longitude: GPS Longitude
       lateral_g: GPS_LateralAcc
       inline_g: GPS_InlineAcc
+      imu_lateral_g: LateralAcc
+      imu_inline_g: InlineAcc
+      vertical_g: VerticalAc
+      yaw_rate: YawRate
+      pitch_rate: PitchRate
+      roll_rate: RollRate
+      gps_altitude: GPS Altitude
+      gps_lateral_g: GPS_LateralAcc
+      gps_inline_g: GPS_InlineAcc
+      gps_yaw_rate: GPS_Yaw_Rate
       steering: steering
       shock_fl: LF_Shock_Pot
       shock_fr: RF_Shock_Pot

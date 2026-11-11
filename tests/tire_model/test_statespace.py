@@ -12,6 +12,7 @@ import pytest
 from motorsports_data_notebook.tire_model import statespace as ss
 from motorsports_data_notebook.tire_model.cleaning import mask_stale_session_prefix
 from motorsports_data_notebook.tire_model.energy_balance import P_ATM_BAR, T_ZERO_C_TO_K
+from tests._timeseries_fixture import write_session_timeseries
 
 CORNERS = ("fl", "fr", "rl", "rr")
 TRUE_K = 30.0
@@ -34,8 +35,13 @@ def _make_stint(
     p_start: float = P_START,
     p_exp: float = 0.0,
     kappa: float = 0.0,
+    discard_windows: tuple[int, ...] = (),
 ) -> pd.DataFrame:
     """Write one session's timeseries parquet and return its lap rows.
+
+    ``discard_windows`` are 20 s windows of the session the sensor verdict
+    discards; the logged accelerations there are garbage (4 g), so a fit
+    that read them would be thrown far off.
 
     ``p_exp`` > 0 generates the data with the pressure-dependent heat input
     ``q · (P_ref / P(t))^n`` where ``P(t)`` is the gas-law pressure."""
@@ -76,9 +82,13 @@ def _make_stint(
                 }
             )
     ts = pd.DataFrame(rows)
-    out = root / "timeseries" / "2026-01"
-    out.mkdir(parents=True, exist_ok=True)
-    ts.to_parquet(out / f"{sid}.parquet")
+    windows = ""
+    if discard_windows:
+        n_win = int(np.ceil(n_s / 20.0))
+        windows = "".join("D" if i in discard_windows else "I" for i in range(n_win))
+        w = np.floor(ts["t_session_s"].to_numpy() / 20.0).astype(int)
+        ts.loc[np.isin(w, discard_windows), "lat_g"] = 4.0
+    write_session_timeseries(root, sid, ts, windows=windows)
     # The dataset is raw and the fit masks the TPMS streams on load; the
     # production anchor is the first *live* reading of the cleaned laps.
     # Mirror that: anchor where the masked series becomes finite (quantised
@@ -197,3 +207,53 @@ def test_recovers_speed_pressure_constant(tmp_path: Path) -> None:
     terms = ss.stint_speed_terms(tmp_path, laps)
     assert len(terms) == 24 and terms["speed_end_ms"].between(14.0, 41.0).all()
     assert terms["speed_anchor_fl_ms"].notna().all()
+
+
+def test_segment_scored_reanchors_after_each_hole() -> None:
+    n = 400
+    scored = np.zeros(n, dtype=bool)
+    scored[20:] = True
+    valid = np.ones(n, dtype=bool)
+    valid[100:120] = False  # a 20 s hole
+    valid[300:320] = False  # another, leaving 320..399 (80 s) after it
+    scored &= valid
+    out, anchor = ss._segment_scored(scored, valid)
+    assert (anchor[:100] == -1).all()  # the stretch before the first hole: pit-exit anchor
+    assert (anchor[120:300] == 120).all() and (anchor[320:] == 320).all()
+    assert out[120:300].all() and out[320:].all() and not out[100:120].any()
+    # a stretch too short to score is dropped
+    valid2 = valid.copy()
+    valid2[150:160] = False  # splits 120..299 into 30 s and 140 s
+    out2, anchor2 = ss._segment_scored(scored & valid2, valid2)
+    assert not out2[120:150].any() and (anchor2[160:300] == 160).all()
+
+
+def test_fit_trains_around_a_discarded_window(tmp_path: Path) -> None:
+    """A window the sensor verdict discarded leaves a hole in the heat input:
+    its seconds are not scored, the simulation restarts from the measured
+    state after it, and the fit still recovers the constants."""
+    laps = pd.concat(
+        [
+            _make_stint(
+                tmp_path, "s_tsukuba", "tsukuba_2000", 12, quantise=False, discard_windows=(9,)
+            ),
+            _make_stint(tmp_path, "s_fuji", "fuji", 12, quantise=False, discard_windows=(5, 20)),
+        ],
+        ignore_index=True,
+    )
+    stints = ss.build_stint_series(tmp_path, laps)
+    s = stints[0]
+    assert s.valid is not None and s.seg_anchor is not None
+    assert not s.valid[180:200].any() and s.valid[:180].all() and s.valid[200:].all()
+    assert np.isnan(s.obs[180:200, 0]).all()  # the hole is not scored
+    assert (s.seg_anchor[:180, 0] == -1).all() and (s.seg_anchor[200:, 0] == 200).all()
+    assert np.nanmax(s.g2) < 3.0  # the 4 g garbage never reaches the heat input
+    fit = ss.fit_cells(stints)
+    for c in CORNERS:
+        a, b = fit.ab[("FJ", c, "dry")]
+        assert 1.0 / b == pytest.approx(TRUE_TAU, rel=0.03)
+        assert a / b == pytest.approx(TRUE_K, rel=0.03)
+    # the laps holding a hole have no per-lap heat row
+    comp = ss.lap_heat_components(stints)
+    holed = comp[comp["session_id"] == "s_tsukuba"]["lap_num"].unique()
+    assert 180 // LAP_S not in holed and 0 in holed
