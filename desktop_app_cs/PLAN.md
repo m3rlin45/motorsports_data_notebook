@@ -280,7 +280,8 @@ view and fed the view model's spec.
 | App shell | done 2026-10-29 | `SessionViewModel` (drop zone / file picker, profile resolution by logger + vehicle, lap checkboxes, Best / Top 103 % / All / None, auto top-103 on load), `AnalysisTabViewModel` (300 ms debounce, one run at a time with queued rerun, stale-when-hidden, status), `MainWindowViewModel` (two slots, tab routing, collapsible top panel), `cs-run file.xrz` loads Session A, `cs-run file.json` shows a fixture |
 | Time/Distance tab | done 2026-10-29 | `LapSeriesBuilder` extracts the chosen channels per selected lap (with neighbours) from the `LogFile`; channel picker (speed/throttle/brake preselected from the profile); fastest lap is the delta reference. The lap picker doubles as the legend (`StripChartSpec.Legend` off), so overlaid laps never hide the data. Known: with 13 overlaid laps the per-lap cursor value labels overflow a panel |
 | Suspension tab | done 2026-10-29 | `HistogramGridSpec` + `ScottPlotHistogramGrid` (2×2 bars, range bands, side-by-side A/B, hover label); `ChannelConfigViewModel` (A/B entries with completion, sync, profile fill, reset) reusable by every tab; motion ratios; stats pane with the statistics, symmetry and group-difference tables |
-| Roll Gradient, Driver, Tire Grip tabs | next | |
+| Roll Gradient tab | done 2026-10-29 | `ScatterGridSpec` (track map + scatter panels with fit lines, binned means, annotations) + `ScottPlotScatterGrid` (map hover snaps to the track and highlights the index-aligned samples on every panel, equal-units map); config with GPS/lateral/shock channels and track widths, motion ratios shared with the Suspension config as in Python; min |G| entry; roll table |
+| Driver, Tire Grip tabs | next | |
 
 Lesson from corners: match numpy's operation order exactly (`x * (π/180)`,
 not `x * π / 180`; pairwise sums) before loosening a tolerance.

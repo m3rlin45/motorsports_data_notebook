@@ -19,7 +19,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         SessionB = new SessionViewModel("SESSION B (Compare)", Profiles);
         TimeDistance = new TimeDistanceViewModel(SessionA, SessionB);
         Suspension = new SuspensionViewModel(SessionA, SessionB);
-        Tabs = new ObservableCollection<AnalysisTabViewModel> { TimeDistance, Suspension };
+        RollGradient = new RollGradientViewModel(SessionA, SessionB, Suspension.SuspensionConfig);
+        Tabs = new ObservableCollection<AnalysisTabViewModel> { TimeDistance, Suspension, RollGradient };
         _activeTab = TimeDistance;
         TimeDistance.SetActive(true);
 
@@ -43,6 +44,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     /// <summary>The Suspension tab.</summary>
     public SuspensionViewModel Suspension { get; }
+
+    /// <summary>The Roll Gradient tab.</summary>
+    public RollGradientViewModel RollGradient { get; }
 
     /// <summary>Analysis tabs in display order.</summary>
     public ObservableCollection<AnalysisTabViewModel> Tabs { get; }
