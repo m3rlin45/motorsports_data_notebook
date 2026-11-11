@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using InfernoAnalyzer.App.Series;
 using InfernoAnalyzer.Charting;
 using InfernoAnalyzer.Core.Io;
@@ -27,6 +28,10 @@ public sealed partial class ChannelChoiceViewModel : ObservableObject
     private bool _isSelected;
 
     partial void OnIsSelectedChanged(bool value) => _onToggled();
+
+    /// <summary>Whether the channel passes the current search filter (selection is kept while hidden).</summary>
+    [ObservableProperty]
+    private bool _isMatch = true;
 }
 
 /// <summary>
@@ -58,6 +63,25 @@ public sealed partial class TimeDistanceViewModel : AnalysisTabViewModel
 
     /// <summary>Channels available in Session A, with the plotted ones checked.</summary>
     public ObservableCollection<ChannelChoiceViewModel> Channels { get; } = new();
+
+    /// <summary>Search text; channels whose name does not contain it (case-insensitive) are hidden.</summary>
+    [ObservableProperty]
+    private string _channelFilter = string.Empty;
+
+    partial void OnChannelFilterChanged(string value) => ApplyChannelFilter();
+
+    /// <summary>Empty the search box (the ✕ button).</summary>
+    [RelayCommand]
+    public void ClearChannelFilter() => ChannelFilter = string.Empty;
+
+    private void ApplyChannelFilter()
+    {
+        var filter = ChannelFilter.Trim();
+        foreach (var channel in Channels)
+        {
+            channel.IsMatch = filter.Length == 0 || channel.Name.Contains(filter, StringComparison.OrdinalIgnoreCase);
+        }
+    }
 
     /// <summary>Channel whose timecodes every series is resampled onto.</summary>
     [ObservableProperty]
@@ -141,6 +165,7 @@ public sealed partial class TimeDistanceViewModel : AnalysisTabViewModel
         }
 
         _suppressChannelEvents = false;
+        ApplyChannelFilter();
         base.OnSessionLoaded();
     }
 
