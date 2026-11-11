@@ -1,0 +1,121 @@
+using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Headless.XUnit;
+using Avalonia.Media.Imaging;
+using InfernoAnalyzer.App;
+using InfernoAnalyzer.App.ViewModels;
+using InfernoAnalyzer.Core.Analysis;
+using InfernoAnalyzer.Core.Io;
+using InfernoAnalyzer.Core.Profiles;
+
+namespace InfernoAnalyzer.Tests;
+
+/// <summary>The session slot and window view models over the Fuji 86 sample.</summary>
+public class AppShellTests
+{
+    private static readonly ProfileStore BuiltinOnly = new("/nonexistent/profiles.yaml");
+
+    private static readonly Lazy<LogFile> Sample = new(() => SessionLoader.Load(SessionParityTests.SamplePath(), BuiltinOnly));
+
+    [Fact]
+    public void Session_slot_lists_laps_resolves_the_profile_and_preselects_the_top_laps()
+    {
+        var session = new SessionViewModel("SESSION A (Primary)", BuiltinOnly);
+        var loaded = 0;
+        var selections = 0;
+        session.SessionLoaded += () => loaded++;
+        session.SelectionChanged += () => selections++;
+
+        session.Apply(Sample.Value, SessionParityTests.SamplePath());
+
+        Assert.Equal(1, loaded);
+        Assert.Equal(1, selections); // the auto-selection, not one per lap
+        Assert.Equal("Toyota 86 ZN6", session.Profile?.Name);
+        Assert.Contains("Logger: 6701209", session.FileLabel);
+        Assert.Equal(Sample.Value.Laps.Count, session.Laps.Count);
+        Assert.Equal(LapSelection.GetTopLaps(Sample.Value.Laps).Select(l => l.Num), session.SelectedLaps);
+        Assert.Equal("2:05.056", session.Laps.First(l => l.Num == 14).Label.Split(": ")[1]);
+
+        session.SelectBest();
+        Assert.Equal(new[] { 14 }, session.SelectedLaps);
+        session.SelectNone();
+        Assert.Empty(session.SelectedLaps);
+        session.SelectAll();
+        Assert.Equal(session.Laps.Count, session.SelectedLaps.Count);
+        Assert.Equal(4, selections);
+    }
+
+    [Fact]
+    public async Task Loading_a_bad_file_reports_the_error_without_a_session()
+    {
+        var session = new SessionViewModel("A", BuiltinOnly);
+        var bad = Path.Combine(Path.GetTempPath(), $"inferno-bad-{Guid.NewGuid():N}.xrz");
+        await File.WriteAllBytesAsync(bad, new byte[] { 1, 2, 3 }, TestContext.Current.CancellationToken);
+        try
+        {
+            await session.LoadFileAsync(bad);
+        }
+        finally
+        {
+            File.Delete(bad);
+        }
+
+        Assert.False(session.HasSession);
+        Assert.Empty(session.Laps);
+    }
+
+    [Fact]
+    public async Task Time_distance_tab_builds_a_strip_chart_from_the_selected_laps()
+    {
+        var window = new MainWindowViewModel(BuiltinOnly);
+        window.TimeDistance.Debounce = TimeSpan.Zero;
+        var completed = 0;
+        window.TimeDistance.AnalysisCompleted += () => completed++;
+
+        window.SessionA.Apply(Sample.Value, SessionParityTests.SamplePath());
+        await window.TimeDistance.RunNowAsync();
+
+        var spec = window.TimeDistance.Spec;
+        Assert.NotNull(spec);
+        // With a zero debounce the session-load and selection triggers cannot coalesce, so
+        // the load's analysis runs and the selection's rerun follows it.
+        Assert.InRange(completed, 1, 2);
+        Assert.Equal("Analysis complete", window.Status);
+        // speed_kmh, PPS, BrakePress plus the delta-time panel.
+        Assert.Equal(new[] { "speed_kmh", "PPS", "BrakePress", "Delta time vs reference" }, spec!.Subplots.Select(s => s.Title));
+        Assert.Equal(window.SessionA.SelectedLaps.Count, spec.Subplots[0].Traces.Count);
+        // The fastest lap is the reference, drawn first.
+        Assert.StartsWith("Lap 14", spec.Subplots[0].Traces[0].Label);
+        // The lap list is the legend: it carries the trace colours and the plot draws none.
+        Assert.False(spec.Legend);
+        Assert.Equal(InfernoAnalyzer.App.StripChartBuilder.ColorFor(0), window.SessionA.Laps.First(l => l.Num == 14).TraceColor);
+        Assert.Null(window.SessionA.Laps.First(l => l.Num == 1).TraceColor); // not selected, not drawn
+        Assert.Equal("GPS Speed", window.TimeDistance.Timebase);
+        Assert.Contains(window.TimeDistance.Channels, c => c.Name == "PPS" && c.IsSelected);
+
+        window.TimeDistance.IsTime = true;
+        Assert.Equal(3, window.TimeDistance.Spec!.Subplots.Count); // no delta panel against time
+    }
+
+    [AvaloniaFact]
+    public async Task Main_window_renders_with_a_loaded_session()
+    {
+        var viewModel = new MainWindowViewModel(BuiltinOnly);
+        viewModel.TimeDistance.Debounce = TimeSpan.Zero;
+        var window = new MainWindow(viewModel) { Width = 1300, Height = 900 };
+        window.Show();
+
+        viewModel.SessionA.Apply(Sample.Value, SessionParityTests.SamplePath());
+        await viewModel.TimeDistance.RunNowAsync();
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        viewModel.TimeDistance.Cursors.SetCursor(1500);
+
+        var frame = window.CaptureRenderedFrame();
+        Assert.NotNull(frame);
+        frame!.Save(Path.Combine(RenderSmokeTests.RenderDir, "main_window_session.png"), new PngBitmapEncoderOptions());
+
+        viewModel.ToggleTopPanel();
+        Assert.Contains("A: CMD_Inferno", viewModel.CollapsedSummary);
+        Assert.Contains("B: No file", viewModel.CollapsedSummary);
+    }
+}

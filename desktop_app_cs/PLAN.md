@@ -123,8 +123,8 @@ Roslyn UDFs, DuckDB SQL (all remain possible later).
 ```bash
 just cs-build            # dotnet build
 just cs-test             # unit + headless render tests (PNGs in Tests/bin/.../renders/)
-just cs-run              # launch the spike window (WSLg / X11 / Windows)
-just cs-run path.json    # ... with another fixture, e.g. App/fixtures/laps_dense.json
+just cs-run              # launch the app (WSLg / X11 / Windows)
+just cs-run FILE         # ... loading a session (.xrk/.xrz/.ibt) as Session A, or a fixture JSON as the Time/Distance demo
 just cs-fixture          # regenerate App/fixtures/laps.json (laps 14 & 12 + neighbours, 25 Hz)
 just cs-fixture-dense    # 13 top laps on the 500 Hz shock-pot timebase (git-ignored)
 just cs-profiles-fixture # regenerate Tests/Fixtures/profiles.json from the Python profiles module
@@ -242,8 +242,8 @@ cases to `Tests/Fixtures/profiles.json`; `ProfilesParityTests` replays them.
   Tolerances: 1e-9 relative on GPS-derived channels, because libxrk master
   (what the FFI builds) reorders the GPS float arithmetic vs the 0.13.0 wheel.
 - Build: `just cs-native` (host) or `--rids linux-x64 win-x64`; CI installs
-  Rust and builds the libraries before the C# test job. The App does not
-  reference `Core` yet (Phase 3 wires it in), so the publish jobs are unchanged.
+  Rust and builds the libraries before the C# test and publish jobs; the
+  publish jobs fail if the parser libraries are missing from their output.
 
 Phase 1 is complete once the two parser PRs are merged (then re-pin to the
 tagged releases).
@@ -267,7 +267,20 @@ summaries where large) from the Fuji 86 sample, laps 14 and 12.
 
 Phase 2 kernels are complete; what remains of the Python analysis surface
 (`report.py`, `session_runner.py`, the tire model and ETL) is out of the
-desktop app's scope. Next: Phase 3 views.
+desktop app's scope.
+
+### Phase 3 — in progress
+
+The App is MVVM on CommunityToolkit.Mvvm (source-generated, AOT-safe) with
+compiled bindings; views are thin and the ScottPlot surface is created by the
+view and fed the view model's spec.
+
+| Piece | State | Notes |
+|---|---|---|
+| App shell | done 2026-10-29 | `SessionViewModel` (drop zone / file picker, profile resolution by logger + vehicle, lap checkboxes, Best / Top 103 % / All / None, auto top-103 on load), `AnalysisTabViewModel` (300 ms debounce, one run at a time with queued rerun, stale-when-hidden, status), `MainWindowViewModel` (two slots, tab routing, collapsible top panel), `cs-run file.xrz` loads Session A, `cs-run file.json` shows a fixture |
+| Time/Distance tab | done 2026-10-29 | `LapSeriesBuilder` extracts the chosen channels per selected lap (with neighbours) from the `LogFile`; channel picker (speed/throttle/brake preselected from the profile); fastest lap is the delta reference. The lap picker doubles as the legend (`StripChartSpec.Legend` off), so overlaid laps never hide the data. Known: with 13 overlaid laps the per-lap cursor value labels overflow a panel |
+| Suspension tab | next | `HistogramGridSpec` + ScottPlot bars, config (channels, motion ratios, A/B sync), stats |
+| Roll Gradient, Driver, Tire Grip tabs | | |
 
 Lesson from corners: match numpy's operation order exactly (`x * (π/180)`,
 not `x * π / 180`; pairwise sums) before loosening a tolerance.

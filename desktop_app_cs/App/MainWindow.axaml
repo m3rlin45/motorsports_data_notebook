@@ -1,17 +1,41 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:InfernoAnalyzer.App.ViewModels"
+        xmlns:views="using:InfernoAnalyzer.App.Views"
         x:Class="InfernoAnalyzer.App.MainWindow"
-        Title="Inferno Analyzer — strip chart spike"
-        Width="1280" Height="860">
+        x:DataType="vm:MainWindowViewModel"
+        Title="Inferno Analyzer"
+        Width="1300" Height="900" MinWidth="1000" MinHeight="700">
+  <Window.DataTemplates>
+    <DataTemplate DataType="vm:TimeDistanceViewModel">
+      <views:TimeDistanceView />
+    </DataTemplate>
+  </Window.DataTemplates>
   <DockPanel>
-    <Border DockPanel.Dock="Top" Padding="12,8" Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}">
-      <StackPanel Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
-        <TextBlock x:Name="FixtureLabel" x:FieldModifier="public" VerticalAlignment="Center" />
-        <TextBlock Text="X axis:" VerticalAlignment="Center" />
-        <RadioButton x:Name="DistanceRadio" x:FieldModifier="public" Content="Distance" GroupName="xaxis" IsChecked="True" />
-        <RadioButton x:Name="TimeRadio" x:FieldModifier="public" Content="Time" GroupName="xaxis" />
-      </StackPanel>
+    <Grid DockPanel.Dock="Top" Margin="8,6" ColumnDefinitions="*,*,*,Auto" IsVisible="{Binding !IsTopCollapsed}">
+      <views:SessionPanelView Grid.Column="0" DataContext="{Binding SessionA}" Margin="0,0,4,0" />
+      <views:SessionPanelView Grid.Column="1" DataContext="{Binding SessionB}" Margin="0,0,4,0" />
+      <Border Grid.Column="2" Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}" CornerRadius="6" Padding="8">
+        <DockPanel>
+          <TextBlock DockPanel.Dock="Top" Text="{Binding ActiveTab.Header}" FontWeight="Bold" FontSize="13" />
+          <TextBlock DockPanel.Dock="Bottom" Text="{Binding Status}" FontSize="11" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" TextWrapping="Wrap" Margin="0,4,0,0" />
+          <ContentControl Content="{Binding ActiveTab.Config}" />
+        </DockPanel>
+      </Border>
+      <Button Grid.Column="3" Content="▲" Command="{Binding ToggleTopPanelCommand}" VerticalAlignment="Top" Margin="4,0,0,0" Padding="6,2" />
+    </Grid>
+    <Border DockPanel.Dock="Top" Margin="8,4" Padding="8,4" Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}" CornerRadius="6" IsVisible="{Binding IsTopCollapsed}">
+      <DockPanel>
+        <Button DockPanel.Dock="Right" Content="▼ Expand" Command="{Binding ToggleTopPanelCommand}" Padding="6,2" FontSize="11" />
+        <TextBlock Text="{Binding CollapsedSummary}" VerticalAlignment="Center" FontSize="11" />
+      </DockPanel>
     </Border>
-    <ContentControl x:Name="ChartHost" />
+    <TabControl ItemsSource="{Binding Tabs}" SelectedItem="{Binding ActiveTab}" Margin="8,0,8,8">
+      <TabControl.ItemTemplate>
+        <DataTemplate x:DataType="vm:AnalysisTabViewModel">
+          <TextBlock Text="{Binding Header}" />
+        </DataTemplate>
+      </TabControl.ItemTemplate>
+    </TabControl>
   </DockPanel>
 </Window>

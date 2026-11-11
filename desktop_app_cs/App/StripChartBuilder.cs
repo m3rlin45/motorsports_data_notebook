@@ -65,7 +65,8 @@ public static class StripChartBuilder
             ? (XRange?)null
             : new XRange(0, stitched.Max(s => s.LapRange.Max));
 
-        return new StripChartSpec(subplots, xAxis, markers, view);
+        // The lap picker in the session panels is the legend.
+        return new StripChartSpec(subplots, xAxis, markers, view, Legend: false);
     }
 
     /// <summary>Palette colour for lap index <paramref name="i"/>.</summary>
