@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using InfernoAnalyzer.Core.Profiles;
+using InfernoAnalyzer.Core.Tracks;
 
 namespace InfernoAnalyzer.App.ViewModels;
 
@@ -11,10 +12,11 @@ namespace InfernoAnalyzer.App.ViewModels;
 /// </summary>
 public sealed partial class MainWindowViewModel : ObservableObject
 {
-    /// <summary>Create the window model over <paramref name="profiles"/>.</summary>
-    public MainWindowViewModel(ProfileStore? profiles = null)
+    /// <summary>Create the window model over <paramref name="profiles"/> and <paramref name="tracks"/>.</summary>
+    public MainWindowViewModel(ProfileStore? profiles = null, TrackStore? tracks = null)
     {
         Profiles = profiles ?? new ProfileStore();
+        TrackStore = tracks ?? new TrackStore();
         SessionA = new SessionViewModel("SESSION A (Primary)", Profiles);
         SessionB = new SessionViewModel("SESSION B (Compare)", Profiles);
         TimeDistance = new TimeDistanceViewModel(SessionA, SessionB);
@@ -22,7 +24,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         RollGradient = new RollGradientViewModel(SessionA, SessionB, Suspension.SuspensionConfig);
         Driver = new DriverViewModel(SessionA, SessionB);
         TireGrip = new TireGripViewModel(SessionA, SessionB);
-        Tabs = new ObservableCollection<AnalysisTabViewModel> { TimeDistance, Suspension, Driver, TireGrip, RollGradient };
+        Sectors = new SectorsViewModel(SessionA, TrackStore);
+        Tabs = new ObservableCollection<AnalysisTabViewModel> { TimeDistance, Sectors, Suspension, Driver, TireGrip, RollGradient };
         _activeTab = TimeDistance;
         TimeDistance.SetActive(true);
 
@@ -34,6 +37,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     /// <summary>Profile store shared by the sessions and tabs.</summary>
     public ProfileStore Profiles { get; }
+
+    /// <summary>Track store for the Sectors tab.</summary>
+    public TrackStore TrackStore { get; }
 
     /// <summary>Primary session.</summary>
     public SessionViewModel SessionA { get; }
@@ -55,6 +61,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     /// <summary>The Tire Grip tab.</summary>
     public TireGripViewModel TireGrip { get; }
+
+    /// <summary>The Sectors tab.</summary>
+    public SectorsViewModel Sectors { get; }
 
     /// <summary>Analysis tabs in display order.</summary>
     public ObservableCollection<AnalysisTabViewModel> Tabs { get; }

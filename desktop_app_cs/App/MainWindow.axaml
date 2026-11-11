@@ -34,6 +34,9 @@
     <DataTemplate DataType="vm:TireGripConfigViewModel">
       <views:TireGripConfigView />
     </DataTemplate>
+    <DataTemplate DataType="vm:SectorsViewModel">
+      <views:SectorsView />
+    </DataTemplate>
   </Window.DataTemplates>
   <DockPanel>
     <Grid DockPanel.Dock="Top" Margin="8,6" ColumnDefinitions="*,*,*,Auto" IsVisible="{Binding !IsTopCollapsed}">
