@@ -114,11 +114,17 @@ public sealed record XMarkerSpec(double X, string Label, string Color, int Row =
 /// X range shown after rendering; the user pans/zooms from there. Null: fit
 /// all data.
 /// </param>
+/// <param name="Legend">
+/// Show the backend's legend on the top panel. Off when the view provides
+/// its own key (the Time/Distance lap picker), since an in-plot legend
+/// covers the data once many laps are overlaid.
+/// </param>
 public sealed record StripChartSpec(
     IReadOnlyList<SubplotSpec> Subplots,
     XAxisMode XAxis,
     IReadOnlyList<XMarkerSpec>? Markers = null,
-    XRange? InitialView = null
+    XRange? InitialView = null,
+    bool Legend = true
 ) : ChartSpec
 {
     /// <summary>Axis label for the bottom panel.</summary>
