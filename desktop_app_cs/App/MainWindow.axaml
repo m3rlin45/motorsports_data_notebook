@@ -28,6 +28,12 @@
     <DataTemplate DataType="vm:DriverConfigViewModel">
       <views:DriverConfigView />
     </DataTemplate>
+    <DataTemplate DataType="vm:TireGripViewModel">
+      <views:TireGripView />
+    </DataTemplate>
+    <DataTemplate DataType="vm:TireGripConfigViewModel">
+      <views:TireGripConfigView />
+    </DataTemplate>
   </Window.DataTemplates>
   <DockPanel>
     <Grid DockPanel.Dock="Top" Margin="8,6" ColumnDefinitions="*,*,*,Auto" IsVisible="{Binding !IsTopCollapsed}">
