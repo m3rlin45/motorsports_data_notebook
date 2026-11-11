@@ -12,11 +12,17 @@
           <RadioButton x:Name="TimeRadio" Content="Time" GroupName="xaxis" IsChecked="{Binding IsTime}" FontSize="11" />
         </StackPanel>
         <TextBlock DockPanel.Dock="Top" Text="Channels" FontWeight="Bold" Margin="0,0,0,4" IsVisible="{Binding !!Channels.Count}" />
+        <Grid DockPanel.Dock="Top" Margin="0,0,0,4" IsVisible="{Binding !!Channels.Count}">
+          <TextBox Text="{Binding ChannelFilter}" Watermark="Search channels" FontSize="11" MinHeight="24" Padding="6,2,26,2" />
+          <Button x:Name="ClearFilterButton" Content="✕" Command="{Binding ClearChannelFilterCommand}" IsVisible="{Binding !!ChannelFilter.Length}"
+                  HorizontalAlignment="Right" VerticalAlignment="Center" Background="Transparent" BorderThickness="0" Padding="6,0" FontSize="11" Margin="0,0,2,0"
+                  ToolTip.Tip="Clear search" />
+        </Grid>
         <ScrollViewer IsVisible="{Binding !!Channels.Count}">
           <ItemsControl ItemsSource="{Binding Channels}">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:ChannelChoiceViewModel">
-                <CheckBox IsChecked="{Binding IsSelected}" Content="{Binding Name}" FontSize="11" MinHeight="22" Padding="4,0" />
+                <CheckBox IsChecked="{Binding IsSelected}" Content="{Binding Name}" FontSize="11" MinHeight="22" Padding="4,0" IsVisible="{Binding IsMatch}" />
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
