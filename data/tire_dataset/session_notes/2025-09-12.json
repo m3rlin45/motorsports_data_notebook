@@ -1,23 +1,23 @@
 {
-  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|478c66653bc675e46373cc70bde4b4d1fce5dd46",
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|3fce1af78ab90ac004d16f6e25906e70215cb750",
   "_model": "claude-sonnet-5-5",
   "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
   "_extracted_at": "2026-10-29T00:22:10.002029+00:00",
   "_notes_files": [],
   "_sessions": [
-    "fce0026b5b520aaa",
-    "a653c4744881aee1",
-    "5f70b77a45a51584",
-    "d8c61a2dc61395d7",
-    "6977b47cdaf463ca",
-    "51cae026ecd81ea5",
-    "ffc040980263eef8"
+    "2025-09-12_110441_EK9_motegi_a0361-0362",
+    "2025-09-12_112314_EK9_motegi_a0363",
+    "2025-09-12_114622_EK9_motegi_a0364",
+    "2025-09-12_121717_EK9_motegi_a0365",
+    "2025-09-12_145816_EK9_motegi_a0367",
+    "2025-09-12_152020_EK9_motegi_a0370",
+    "2025-09-12_153528_EK9_motegi_a0371"
   ],
-  "input": "DATE: 2025-09-12 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=fce0026b5b520aaa start=11:04 car=\"EK9\" track=motegi laps=5 type=\"Generic testing\" comment=\"A050 Used\"\n2. session_id=a653c4744881aee1 start=11:23 car=\"EK9\" track=motegi laps=7 type=\"Generic testing\" comment=\"A050 Used\"\n3. session_id=5f70b77a45a51584 start=11:46 car=\"EK9\" track=motegi laps=9 type=\"Generic testing\" comment=\"A050 Used, Rain part way through\"\n4. session_id=d8c61a2dc61395d7 start=12:17 car=\"EK9\" track=motegi laps=4 type=\"Generic testing\" comment=\"A050 Used, Rain part way through\"\n5. session_id=6977b47cdaf463ca start=14:58 car=\"EK9\" track=motegi laps=4 type=\"Generic testing\" comment=\"Quali new old stock A050\"\n6. session_id=51cae026ecd81ea5 start=15:20 car=\"EK9\" track=motegi laps=5 type=\"Generic testing\" comment=\"Quali Practice new old stock A050\"\n7. session_id=ffc040980263eef8 start=15:35 car=\"EK9\" track=motegi laps=5 type=\"Generic testing\" comment=\"Quali Practice new old stock A050\"\n",
+  "input": "DATE: 2025-09-12 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=2025-09-12_110441_EK9_motegi_a0361-0362 start=11:04 car=\"EK9\" track=motegi laps=5 type=\"Generic testing\" comment=\"A050 Used\"\n2. session_id=2025-09-12_112314_EK9_motegi_a0363 start=11:23 car=\"EK9\" track=motegi laps=7 type=\"Generic testing\" comment=\"A050 Used\"\n3. session_id=2025-09-12_114622_EK9_motegi_a0364 start=11:46 car=\"EK9\" track=motegi laps=9 type=\"Generic testing\" comment=\"A050 Used, Rain part way through\"\n4. session_id=2025-09-12_121717_EK9_motegi_a0365 start=12:17 car=\"EK9\" track=motegi laps=4 type=\"Generic testing\" comment=\"A050 Used, Rain part way through\"\n5. session_id=2025-09-12_145816_EK9_motegi_a0367 start=14:58 car=\"EK9\" track=motegi laps=4 type=\"Generic testing\" comment=\"Quali new old stock A050\"\n6. session_id=2025-09-12_152020_EK9_motegi_a0370 start=15:20 car=\"EK9\" track=motegi laps=5 type=\"Generic testing\" comment=\"Quali Practice new old stock A050\"\n7. session_id=2025-09-12_153528_EK9_motegi_a0371 start=15:35 car=\"EK9\" track=motegi laps=5 type=\"Generic testing\" comment=\"Quali Practice new old stock A050\"\n",
   "data": {
     "sessions": [
       {
-        "session_id": "fce0026b5b520aaa",
+        "session_id": "2025-09-12_110441_EK9_motegi_a0361-0362",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -43,7 +43,7 @@
         "notes": ""
       },
       {
-        "session_id": "a653c4744881aee1",
+        "session_id": "2025-09-12_112314_EK9_motegi_a0363",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -69,7 +69,7 @@
         "notes": ""
       },
       {
-        "session_id": "5f70b77a45a51584",
+        "session_id": "2025-09-12_114622_EK9_motegi_a0364",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -95,7 +95,7 @@
         "notes": "Rain part way through the session."
       },
       {
-        "session_id": "d8c61a2dc61395d7",
+        "session_id": "2025-09-12_121717_EK9_motegi_a0365",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -121,7 +121,7 @@
         "notes": "Rain part way through the session."
       },
       {
-        "session_id": "6977b47cdaf463ca",
+        "session_id": "2025-09-12_145816_EK9_motegi_a0367",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -147,7 +147,7 @@
         "notes": "New old stock A050 tires."
       },
       {
-        "session_id": "51cae026ecd81ea5",
+        "session_id": "2025-09-12_152020_EK9_motegi_a0370",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -173,7 +173,7 @@
         "notes": "Quali practice on new old stock A050 tires."
       },
       {
-        "session_id": "ffc040980263eef8",
+        "session_id": "2025-09-12_153528_EK9_motegi_a0371",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,

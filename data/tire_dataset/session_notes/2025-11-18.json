@@ -1,5 +1,5 @@
 {
-  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|32be68d50d00c8ad09f1773ffb89c0209e498d78",
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|e0d9c3552bec065810b03664e9f70ed8a425fb10",
   "_model": "claude-sonnet-5-5",
   "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
   "_extracted_at": "2026-10-29T00:22:51.747200+00:00",
@@ -10,23 +10,23 @@
     }
   ],
   "_sessions": [
-    "1ca8a3040257872b",
-    "a6a3a6a51f705c46",
-    "74ca76c5c5a24913",
-    "4f8caedef2b06539",
-    "39ba126896de9ff9",
-    "a3cd87b9ef9f99e2",
-    "482b4d34eef81cad",
-    "274f70636e441f6b",
-    "66c73001f0b47951",
-    "ca4c1a73b55f6a99",
-    "3e1d401bb0106a0b"
+    "2025-11-18_114112_SFJ_motegi_a0052",
+    "2025-11-18_095845_SFJ_motegi_a0043",
+    "2025-11-18_101402_SFJ_motegi_a0044",
+    "2025-11-18_101719_SFJ_motegi_a0045",
+    "2025-11-18_103519_SFJ_motegi_a0048-0049",
+    "2025-11-18_115511_SFJ_motegi_a0053",
+    "2025-11-18_120348_SFJ_motegi_a0054",
+    "2025-11-18_122109_SFJ_motegi_a0058",
+    "2025-11-18_141542_SFJ_motegi_a0059",
+    "2025-11-18_143516_SFJ_motegi_a0060",
+    "2025-11-18_150039_Inferno-86_motegi_a2830-2831"
   ],
-  "input": "DATE: 2025-11-18 (times are local to the track)\n\nRUN NOTES FILE \"2025-11-18 Motegi Test.txt\":\nRear 20, 1/1\nFront 15, 2/2\n\nBalance was ok, but a little tail happy, seems like too much camber on rear. Maybe try 2/2 next time. Front camber was awesome, this seems like a good start\n\nLOGGED SESSIONS:\n1. session_id=1ca8a3040257872b start=09:00 car=\"SFJ\" track=motegi laps=0 type=\"Generic testing\" comment=\"\"\n2. session_id=a6a3a6a51f705c46 start=09:58 car=\"SFJ\" track=motegi laps=1 type=\"Generic testing\" comment=\"\"\n3. session_id=74ca76c5c5a24913 start=10:14 car=\"SFJ\" track=motegi laps=2 type=\"Generic testing\" comment=\"\"\n4. session_id=4f8caedef2b06539 start=10:17 car=\"SFJ\" track=motegi laps=6 type=\"Generic testing\" comment=\"\"\n5. session_id=39ba126896de9ff9 start=10:35 car=\"SFJ\" track=motegi laps=5 type=\"Generic testing\" comment=\"\"\n6. session_id=a3cd87b9ef9f99e2 start=11:55 car=\"SFJ\" track=motegi laps=4 type=\"Generic testing\" comment=\"\"\n7. session_id=482b4d34eef81cad start=12:03 car=\"SFJ\" track=motegi laps=1 type=\"Generic testing\" comment=\"\"\n8. session_id=274f70636e441f6b start=12:21 car=\"SFJ\" track=motegi laps=7 type=\"Generic testing\" comment=\"\"\n9. session_id=66c73001f0b47951 start=14:15 car=\"SFJ\" track=motegi laps=4 type=\"Generic testing\" comment=\"\"\n10. session_id=ca4c1a73b55f6a99 start=14:35 car=\"SFJ\" track=motegi laps=5 type=\"Generic testing\" comment=\"\"\n11. session_id=3e1d401bb0106a0b start=15:00 car=\"Inferno 86\" track=motegi laps=11 type=\"Generic testing\" comment=\"\"\n",
+  "input": "DATE: 2025-11-18 (times are local to the track)\n\nRUN NOTES FILE \"2025-11-18 Motegi Test.txt\":\nRear 20, 1/1\nFront 15, 2/2\n\nBalance was ok, but a little tail happy, seems like too much camber on rear. Maybe try 2/2 next time. Front camber was awesome, this seems like a good start\n\nLOGGED SESSIONS:\n1. session_id=2025-11-18_114112_SFJ_motegi_a0052 start=09:00 car=\"SFJ\" track=motegi laps=0 type=\"Generic testing\" comment=\"\"\n2. session_id=2025-11-18_095845_SFJ_motegi_a0043 start=09:58 car=\"SFJ\" track=motegi laps=1 type=\"Generic testing\" comment=\"\"\n3. session_id=2025-11-18_101402_SFJ_motegi_a0044 start=10:14 car=\"SFJ\" track=motegi laps=2 type=\"Generic testing\" comment=\"\"\n4. session_id=2025-11-18_101719_SFJ_motegi_a0045 start=10:17 car=\"SFJ\" track=motegi laps=6 type=\"Generic testing\" comment=\"\"\n5. session_id=2025-11-18_103519_SFJ_motegi_a0048-0049 start=10:35 car=\"SFJ\" track=motegi laps=5 type=\"Generic testing\" comment=\"\"\n6. session_id=2025-11-18_115511_SFJ_motegi_a0053 start=11:55 car=\"SFJ\" track=motegi laps=4 type=\"Generic testing\" comment=\"\"\n7. session_id=2025-11-18_120348_SFJ_motegi_a0054 start=12:03 car=\"SFJ\" track=motegi laps=1 type=\"Generic testing\" comment=\"\"\n8. session_id=2025-11-18_122109_SFJ_motegi_a0058 start=12:21 car=\"SFJ\" track=motegi laps=7 type=\"Generic testing\" comment=\"\"\n9. session_id=2025-11-18_141542_SFJ_motegi_a0059 start=14:15 car=\"SFJ\" track=motegi laps=4 type=\"Generic testing\" comment=\"\"\n10. session_id=2025-11-18_143516_SFJ_motegi_a0060 start=14:35 car=\"SFJ\" track=motegi laps=5 type=\"Generic testing\" comment=\"\"\n11. session_id=2025-11-18_150039_Inferno-86_motegi_a2830-2831 start=15:00 car=\"Inferno 86\" track=motegi laps=11 type=\"Generic testing\" comment=\"\"\n",
   "data": {
     "sessions": [
       {
-        "session_id": "1ca8a3040257872b",
+        "session_id": "2025-11-18_114112_SFJ_motegi_a0052",
         "note_file": "2025-11-18 Motegi Test.txt",
         "note_session_index": 1,
         "match_confidence": 0.5,
@@ -55,7 +55,7 @@
         "notes": "Balance was ok, but a little tail happy, seems like too much camber on rear. Maybe try 2/2 next time. Front camber was awesome, this seems like a good start"
       },
       {
-        "session_id": "a6a3a6a51f705c46",
+        "session_id": "2025-11-18_095845_SFJ_motegi_a0043",
         "note_file": "2025-11-18 Motegi Test.txt",
         "note_session_index": 1,
         "match_confidence": 0.35,
@@ -84,7 +84,7 @@
         "notes": "Balance was ok, but a little tail happy, seems like too much camber on rear. Maybe try 2/2 next time. Front camber was awesome, this seems like a good start"
       },
       {
-        "session_id": "74ca76c5c5a24913",
+        "session_id": "2025-11-18_101402_SFJ_motegi_a0044",
         "note_file": "2025-11-18 Motegi Test.txt",
         "note_session_index": 1,
         "match_confidence": 0.35,
@@ -113,7 +113,7 @@
         "notes": "Balance was ok, but a little tail happy, seems like too much camber on rear. Maybe try 2/2 next time. Front camber was awesome, this seems like a good start"
       },
       {
-        "session_id": "4f8caedef2b06539",
+        "session_id": "2025-11-18_101719_SFJ_motegi_a0045",
         "note_file": "2025-11-18 Motegi Test.txt",
         "note_session_index": 1,
         "match_confidence": 0.35,
@@ -142,7 +142,7 @@
         "notes": "Balance was ok, but a little tail happy, seems like too much camber on rear. Maybe try 2/2 next time. Front camber was awesome, this seems like a good start"
       },
       {
-        "session_id": "39ba126896de9ff9",
+        "session_id": "2025-11-18_103519_SFJ_motegi_a0048-0049",
         "note_file": "2025-11-18 Motegi Test.txt",
         "note_session_index": 1,
         "match_confidence": 0.35,
@@ -171,7 +171,7 @@
         "notes": "Balance was ok, but a little tail happy, seems like too much camber on rear. Maybe try 2/2 next time. Front camber was awesome, this seems like a good start"
       },
       {
-        "session_id": "a3cd87b9ef9f99e2",
+        "session_id": "2025-11-18_115511_SFJ_motegi_a0053",
         "note_file": "2025-11-18 Motegi Test.txt",
         "note_session_index": 1,
         "match_confidence": 0.35,
@@ -200,7 +200,7 @@
         "notes": "Balance was ok, but a little tail happy, seems like too much camber on rear. Maybe try 2/2 next time. Front camber was awesome, this seems like a good start"
       },
       {
-        "session_id": "482b4d34eef81cad",
+        "session_id": "2025-11-18_120348_SFJ_motegi_a0054",
         "note_file": "2025-11-18 Motegi Test.txt",
         "note_session_index": 1,
         "match_confidence": 0.35,
@@ -229,7 +229,7 @@
         "notes": "Balance was ok, but a little tail happy, seems like too much camber on rear. Maybe try 2/2 next time. Front camber was awesome, this seems like a good start"
       },
       {
-        "session_id": "274f70636e441f6b",
+        "session_id": "2025-11-18_122109_SFJ_motegi_a0058",
         "note_file": "2025-11-18 Motegi Test.txt",
         "note_session_index": 1,
         "match_confidence": 0.35,
@@ -258,7 +258,7 @@
         "notes": "Balance was ok, but a little tail happy, seems like too much camber on rear. Maybe try 2/2 next time. Front camber was awesome, this seems like a good start"
       },
       {
-        "session_id": "66c73001f0b47951",
+        "session_id": "2025-11-18_141542_SFJ_motegi_a0059",
         "note_file": "2025-11-18 Motegi Test.txt",
         "note_session_index": 1,
         "match_confidence": 0.35,
@@ -287,7 +287,7 @@
         "notes": "Balance was ok, but a little tail happy, seems like too much camber on rear. Maybe try 2/2 next time. Front camber was awesome, this seems like a good start"
       },
       {
-        "session_id": "ca4c1a73b55f6a99",
+        "session_id": "2025-11-18_143516_SFJ_motegi_a0060",
         "note_file": "2025-11-18 Motegi Test.txt",
         "note_session_index": 1,
         "match_confidence": 0.35,
@@ -316,7 +316,7 @@
         "notes": "Balance was ok, but a little tail happy, seems like too much camber on rear. Maybe try 2/2 next time. Front camber was awesome, this seems like a good start"
       },
       {
-        "session_id": "3e1d401bb0106a0b",
+        "session_id": "2025-11-18_150039_Inferno-86_motegi_a2830-2831",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,

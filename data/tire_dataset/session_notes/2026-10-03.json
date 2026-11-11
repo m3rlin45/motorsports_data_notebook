@@ -1,17 +1,17 @@
 {
-  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|2f08eb5f3052b8ffd89d1a18790db96110744325",
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|e3a13b9161970157507aac957175d7c12bf04ff7",
   "_model": "claude-sonnet-5-5",
   "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
   "_extracted_at": "2026-10-29T00:23:56.135352+00:00",
   "_notes_files": [],
   "_sessions": [
-    "ee074c15f1ab418f"
+    "2026-10-03_152413_KK-SII_suzuka_a0355"
   ],
-  "input": "DATE: 2026-10-03 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=ee074c15f1ab418f start=15:24 car=\"KK-SII\" track=suzuka laps=7 type=\"Race\" comment=\"Qualifying\"\n",
+  "input": "DATE: 2026-10-03 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=2026-10-03_152413_KK-SII_suzuka_a0355 start=15:24 car=\"KK-SII\" track=suzuka laps=7 type=\"Race\" comment=\"Qualifying\"\n",
   "data": {
     "sessions": [
       {
-        "session_id": "ee074c15f1ab418f",
+        "session_id": "2026-10-03_152413_KK-SII_suzuka_a0355",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,

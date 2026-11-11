@@ -1,5 +1,5 @@
 {
-  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|336900984c679e1be8bf6d99f5f129a78b3c4c82",
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|88803d8930ed3f1714dcec90b044e01b251c9655",
   "_model": "claude-sonnet-5-5",
   "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
   "_extracted_at": "2026-10-29T00:21:24.827905+00:00",
@@ -10,14 +10,14 @@
     }
   ],
   "_sessions": [
-    "5d13072c9c2b8046",
-    "31191c846cfa9505"
+    "2025-05-19_120308_Inferno-86_fuji_a0416",
+    "2025-05-19_162248_Inferno-86_fuji_a0418"
   ],
-  "input": "DATE: 2025-05-19 (times are local to the track)\n\nRUN NOTES FILE \"Fuji 2025-05-19.txt\":\n16:40 T-4 run\n\nFront 27\nRear 25\n\nTires all pretty heavily worn\n1.8 all around\nOvercast\n19.0\n56%\n\nLOGGED SESSIONS:\n1. session_id=5d13072c9c2b8046 start=12:03 car=\"Inferno 86\" track=fuji laps=3 type=\"Generic testing\" comment=\"\"\n2. session_id=31191c846cfa9505 start=16:22 car=\"Inferno 86\" track=fuji laps=11 type=\"Generic testing\" comment=\"\"\n",
+  "input": "DATE: 2025-05-19 (times are local to the track)\n\nRUN NOTES FILE \"Fuji 2025-05-19.txt\":\n16:40 T-4 run\n\nFront 27\nRear 25\n\nTires all pretty heavily worn\n1.8 all around\nOvercast\n19.0\n56%\n\nLOGGED SESSIONS:\n1. session_id=2025-05-19_120308_Inferno-86_fuji_a0416 start=12:03 car=\"Inferno 86\" track=fuji laps=3 type=\"Generic testing\" comment=\"\"\n2. session_id=2025-05-19_162248_Inferno-86_fuji_a0418 start=16:22 car=\"Inferno 86\" track=fuji laps=11 type=\"Generic testing\" comment=\"\"\n",
   "data": {
     "sessions": [
       {
-        "session_id": "5d13072c9c2b8046",
+        "session_id": "2025-05-19_120308_Inferno-86_fuji_a0416",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -43,7 +43,7 @@
         "notes": ""
       },
       {
-        "session_id": "31191c846cfa9505",
+        "session_id": "2025-05-19_162248_Inferno-86_fuji_a0418",
         "note_file": "Fuji 2025-05-19.txt",
         "note_session_index": 1,
         "match_confidence": 0.8,

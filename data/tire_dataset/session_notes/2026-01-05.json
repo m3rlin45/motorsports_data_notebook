@@ -1,5 +1,5 @@
 {
-  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|ae3626387bdc56f7b535caf363bec83d112e2825",
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|5f204aa545773e355ddd07756717d10eb1f55fd6",
   "_model": "claude-sonnet-5-5",
   "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
   "_extracted_at": "2026-10-29T00:23:02.259210+00:00",
@@ -10,16 +10,16 @@
     }
   ],
   "_sessions": [
-    "fa1a572e75bab05b",
-    "7bb672a1df88a7d3",
-    "c0447043b2b2ca3d",
-    "5ee532a60d52896b"
+    "2026-01-05_090033_Inferno-86_fuji_a3716",
+    "2026-01-05_091730_Inferno-86_fuji_a3718",
+    "2026-01-05_101928_Inferno-86_fuji_a3723",
+    "2026-01-05_115459_Inferno-86_fuji_a3729"
   ],
-  "input": "DATE: 2026-01-05 (times are local to the track)\n\nRUN NOTES FILE \"2026-01-05 Fuji.txt\":\nNS-4A 09:00:\n2c\nroad in shade -2c\n\nFront: 20 2/2\nRear: 25 1/1\n\nPress 1.67 all around\n\n\nCold 2.13 11c\n\nhot target temp 45c\nhot target press 2.0\n\n\np1/t1 * t2 = p2\n\nLOGGED SESSIONS:\n1. session_id=fa1a572e75bab05b start=09:00 car=\"Inferno 86\" track=fuji laps=4 type=\"Generic testing\" comment=\"Cold, 2c / Front Dampers 20 / Rear Dampers 25\"\n2. session_id=7bb672a1df88a7d3 start=09:17 car=\"Inferno 86\" track=fuji laps=7 type=\"Generic testing\" comment=\"Driver says the rear is too easy to slide /  / Front 2/2 20 / Rear 1/1 25\"\n3. session_id=c0447043b2b2ca3d start=10:19 car=\"Inferno 86\" track=fuji laps=14 type=\"Generic testing\" comment=\"Rear 23, still lots of oversteer, lots of pickup\"\n4. session_id=5ee532a60d52896b start=11:54 car=\"Inferno 86\" track=fuji laps=12 type=\"Generic testing\" comment=\"A052\"\n",
+  "input": "DATE: 2026-01-05 (times are local to the track)\n\nRUN NOTES FILE \"2026-01-05 Fuji.txt\":\nNS-4A 09:00:\n2c\nroad in shade -2c\n\nFront: 20 2/2\nRear: 25 1/1\n\nPress 1.67 all around\n\n\nCold 2.13 11c\n\nhot target temp 45c\nhot target press 2.0\n\n\np1/t1 * t2 = p2\n\nLOGGED SESSIONS:\n1. session_id=2026-01-05_090033_Inferno-86_fuji_a3716 start=09:00 car=\"Inferno 86\" track=fuji laps=4 type=\"Generic testing\" comment=\"Cold, 2c / Front Dampers 20 / Rear Dampers 25\"\n2. session_id=2026-01-05_091730_Inferno-86_fuji_a3718 start=09:17 car=\"Inferno 86\" track=fuji laps=7 type=\"Generic testing\" comment=\"Driver says the rear is too easy to slide /  / Front 2/2 20 / Rear 1/1 25\"\n3. session_id=2026-01-05_101928_Inferno-86_fuji_a3723 start=10:19 car=\"Inferno 86\" track=fuji laps=14 type=\"Generic testing\" comment=\"Rear 23, still lots of oversteer, lots of pickup\"\n4. session_id=2026-01-05_115459_Inferno-86_fuji_a3729 start=11:54 car=\"Inferno 86\" track=fuji laps=12 type=\"Generic testing\" comment=\"A052\"\n",
   "data": {
     "sessions": [
       {
-        "session_id": "fa1a572e75bab05b",
+        "session_id": "2026-01-05_090033_Inferno-86_fuji_a3716",
         "note_file": "2026-01-05 Fuji.txt",
         "note_session_index": 1,
         "match_confidence": 1.0,
@@ -50,7 +50,7 @@
         "notes": "Road in shade -2c. Also noted 'Cold 2.13 11c' (pressure 2.13 at 11c). Hot target temp 45c, hot target pressure 2.0 bar."
       },
       {
-        "session_id": "7bb672a1df88a7d3",
+        "session_id": "2026-01-05_091730_Inferno-86_fuji_a3718",
         "note_file": "2026-01-05 Fuji.txt",
         "note_session_index": 1,
         "match_confidence": 0.35,
@@ -79,7 +79,7 @@
         "notes": "Driver says the rear is too easy to slide. Hot target temp 45c, hot target pressure 2.0 bar."
       },
       {
-        "session_id": "c0447043b2b2ca3d",
+        "session_id": "2026-01-05_101928_Inferno-86_fuji_a3723",
         "note_file": "2026-01-05 Fuji.txt",
         "note_session_index": 1,
         "match_confidence": 0.35,
@@ -107,7 +107,7 @@
         "notes": "Still lots of oversteer, lots of pickup. Hot target temp 45c, hot target pressure 2.0 bar."
       },
       {
-        "session_id": "5ee532a60d52896b",
+        "session_id": "2026-01-05_115459_Inferno-86_fuji_a3729",
         "note_file": "2026-01-05 Fuji.txt",
         "note_session_index": 1,
         "match_confidence": 0.35,
