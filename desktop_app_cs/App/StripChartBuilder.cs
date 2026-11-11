@@ -118,12 +118,12 @@ public static class StripChartBuilder
         {
             foreach (var (lap, offset) in _segments)
             {
-                yield return new XMarkerSpec(offset, $"Lap {lap.Num}", color, row);
+                yield return new XMarkerSpec(offset, lap.ShortLabel, color, row);
             }
 
             if (Lap.After is null)
             {
-                yield return new XMarkerSpec(LapRange.Max, $"Lap {Lap.Num} end", color, row);
+                yield return new XMarkerSpec(LapRange.Max, $"{Lap.ShortLabel} end", color, row);
             }
         }
 
@@ -168,7 +168,7 @@ public static class StripChartBuilder
                 delta[k] = lapTime[k] - referenceTime[k];
             }
 
-            traces.Add(new TraceSpec($"{lap.Label} vs Lap {reference.Num}", grid, delta, ColorFor(i)));
+            traces.Add(new TraceSpec($"{lap.Label} vs {reference.ShortLabel}", grid, delta, ColorFor(i)));
         }
 
         return new SubplotSpec("Delta time vs reference", "s", traces, ZeroLine: true, Decimals: 2);
