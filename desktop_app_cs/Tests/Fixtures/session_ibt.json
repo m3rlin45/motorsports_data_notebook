@@ -1,0 +1,6211 @@
+{
+ "sample": "test.ibt",
+ "channel_order": [
+  "SessionTime",
+  "SessionTick",
+  "SessionNum",
+  "SessionState",
+  "SessionUniqueID",
+  "SessionFlags",
+  "SessionTimeRemain",
+  "SessionLapsRemain",
+  "SessionLapsRemainEx",
+  "SessionTimeTotal",
+  "SessionLapsTotal",
+  "SessionJokerLapsRemain",
+  "SessionOnJokerLap",
+  "SessionTimeOfDay",
+  "DriverMarker",
+  "PushToTalk",
+  "PushToPass",
+  "ManualBoost",
+  "ManualNoBoost",
+  "IsOnTrack",
+  "FrameRate",
+  "CpuUsageFG",
+  "GpuUsage",
+  "ChanAvgLatency",
+  "ChanLatency",
+  "ChanQuality",
+  "ChanPartnerQuality",
+  "CpuUsageBG",
+  "ChanClockSkew",
+  "MemPageFaultSec",
+  "MemSoftPageFaultSec",
+  "PlayerCarPosition",
+  "PlayerCarClassPosition",
+  "PlayerCarClass",
+  "PlayerTrackSurface",
+  "PlayerTrackSurfaceMaterial",
+  "PlayerCarIdx",
+  "PlayerCarTeamIncidentCount",
+  "PlayerCarMyIncidentCount",
+  "PlayerCarDriverIncidentCount",
+  "PlayerCarWeightPenalty",
+  "PlayerCarPowerAdjust",
+  "PlayerCarDryTireSetLimit",
+  "PlayerCarTowTime",
+  "PlayerCarInPitStall",
+  "PlayerCarPitSvStatus",
+  "PlayerTireCompound",
+  "PlayerFastRepairsUsed",
+  "PaceMode",
+  "OnPitRoad",
+  "SteeringWheelAngle",
+  "Throttle",
+  "Brake",
+  "Clutch",
+  "Gear",
+  "RPM",
+  "Lap",
+  "LapCompleted",
+  "LapDist",
+  "LapDistPct",
+  "CarDistAhead",
+  "CarDistBehind",
+  "LapBestLap",
+  "LapBestLapTime",
+  "LapLastLapTime",
+  "LapCurrentLapTime",
+  "LapLasNLapSeq",
+  "LapLastNLapTime",
+  "LapBestNLapLap",
+  "LapBestNLapTime",
+  "LapDeltaToBestLap",
+  "LapDeltaToBestLap_DD",
+  "LapDeltaToBestLap_OK",
+  "LapDeltaToOptimalLap",
+  "LapDeltaToOptimalLap_DD",
+  "LapDeltaToOptimalLap_OK",
+  "LapDeltaToSessionBestLap",
+  "LapDeltaToSessionBestLap_DD",
+  "LapDeltaToSessionBestLap_OK",
+  "LapDeltaToSessionOptimalLap",
+  "LapDeltaToSessionOptimalLap_DD",
+  "LapDeltaToSessionOptimalLap_OK",
+  "LapDeltaToSessionLastlLap",
+  "LapDeltaToSessionLastlLap_DD",
+  "LapDeltaToSessionLastlLap_OK",
+  "Speed",
+  "Yaw",
+  "YawNorth",
+  "Pitch",
+  "Roll",
+  "EnterExitReset",
+  "Lat",
+  "Lon",
+  "Alt",
+  "TrackTemp",
+  "TrackTempCrew",
+  "AirTemp",
+  "TrackWetness",
+  "Skies",
+  "AirDensity",
+  "AirPressure",
+  "WindVel",
+  "WindDir",
+  "RelativeHumidity",
+  "FogLevel",
+  "Precipitation",
+  "SolarAltitude",
+  "SolarAzimuth",
+  "WeatherDeclaredWet",
+  "PitsOpen",
+  "PlayerIncidents",
+  "PitRepairLeft",
+  "PitOptRepairLeft",
+  "PitstopActive",
+  "FastRepairUsed",
+  "FastRepairAvailable",
+  "LFTiresUsed",
+  "RFTiresUsed",
+  "LRTiresUsed",
+  "RRTiresUsed",
+  "LeftTireSetsUsed",
+  "RightTireSetsUsed",
+  "FrontTireSetsUsed",
+  "RearTireSetsUsed",
+  "TireSetsUsed",
+  "LFTiresAvailable",
+  "RFTiresAvailable",
+  "LRTiresAvailable",
+  "RRTiresAvailable",
+  "LeftTireSetsAvailable",
+  "RightTireSetsAvailable",
+  "FrontTireSetsAvailable",
+  "RearTireSetsAvailable",
+  "TireSetsAvailable",
+  "IsOnTrackCar",
+  "SteeringWheelAngleMax",
+  "ShiftPowerPct",
+  "ShiftGrindRPM",
+  "ThrottleRaw",
+  "BrakeRaw",
+  "ClutchRaw",
+  "HandbrakeRaw",
+  "BrakeABSactive",
+  "BrakeABScutPct",
+  "Shifter",
+  "EngineWarnings",
+  "FuelLevelPct",
+  "PitSvFlags",
+  "PitSvLFP",
+  "PitSvRFP",
+  "PitSvLRP",
+  "PitSvRRP",
+  "PitSvFuel",
+  "PitSvTireCompound",
+  "P2P_Status",
+  "P2P_Count",
+  "SteeringWheelPctTorque",
+  "SteeringWheelPctTorqueSign",
+  "SteeringWheelPctTorqueSignStops",
+  "SteeringWheelPctIntensity",
+  "SteeringWheelPctSmoothing",
+  "SteeringWheelPctDamper",
+  "SteeringWheelLimiter",
+  "SteeringWheelMaxForceNm",
+  "SteeringWheelUseLinear",
+  "ShiftIndicatorPct",
+  "TireLF_RumblePitch",
+  "TireRF_RumblePitch",
+  "TireLR_RumblePitch",
+  "TireRR_RumblePitch",
+  "SteeringWheelTorque",
+  "VelocityZ",
+  "VelocityY",
+  "VelocityX",
+  "YawRate",
+  "PitchRate",
+  "RollRate",
+  "VertAccel",
+  "LatAccel",
+  "LongAccel",
+  "dcStarter",
+  "dcPitSpeedLimiterToggle",
+  "dcTearOffVisor",
+  "dpTireChange",
+  "dpFuelFill",
+  "dpFuelAutoFillEnabled",
+  "dpFuelAutoFillActive",
+  "dpFuelAddKg",
+  "dpFastRepair",
+  "dcBrakeBias",
+  "dpLFTireColdPress",
+  "dpRFTireColdPress",
+  "dpLRTireColdPress",
+  "dpRRTireColdPress",
+  "RFbrakeLinePress",
+  "RFspeed",
+  "RFpressure",
+  "RFcoldPressure",
+  "RFodometer",
+  "RFtempL",
+  "RFtempM",
+  "RFtempR",
+  "RFtempCL",
+  "RFtempCM",
+  "RFtempCR",
+  "RFwearL",
+  "RFwearM",
+  "RFwearR",
+  "LFbrakeLinePress",
+  "LFspeed",
+  "LFpressure",
+  "LFcoldPressure",
+  "LFodometer",
+  "LFtempL",
+  "LFtempM",
+  "LFtempR",
+  "LFtempCL",
+  "LFtempCM",
+  "LFtempCR",
+  "LFwearL",
+  "LFwearM",
+  "LFwearR",
+  "FuelUsePerHour",
+  "Voltage",
+  "WaterTemp",
+  "WaterLevel",
+  "FuelPress",
+  "OilTemp",
+  "OilPress",
+  "OilLevel",
+  "ManifoldPress",
+  "FuelLevel",
+  "Engine0_RPM",
+  "RRbrakeLinePress",
+  "RRspeed",
+  "RRpressure",
+  "RRcoldPressure",
+  "RRodometer",
+  "RRtempL",
+  "RRtempM",
+  "RRtempR",
+  "RRtempCL",
+  "RRtempCM",
+  "RRtempCR",
+  "RRwearL",
+  "RRwearM",
+  "RRwearR",
+  "LRbrakeLinePress",
+  "LRspeed",
+  "LRpressure",
+  "LRcoldPressure",
+  "LRodometer",
+  "LRtempL",
+  "LRtempM",
+  "LRtempR",
+  "LRtempCL",
+  "LRtempCM",
+  "LRtempCR",
+  "LRwearL",
+  "LRwearM",
+  "LRwearR",
+  "LRshockDefl",
+  "LRshockVel",
+  "RRshockDefl",
+  "RRshockVel",
+  "LFshockDefl",
+  "LFshockVel",
+  "RFshockDefl",
+  "RFshockVel",
+  "LFrideHeight",
+  "RFrideHeight",
+  "LRrideHeight",
+  "RRrideHeight"
+ ],
+ "channels": {
+  "SessionTime": {
+   "units": "s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 8.350000007947282,
+    "last": 1102.383333340607,
+    "sum": 36455907.783840664,
+    "min": 8.350000007947282,
+    "max": 1102.383333340607
+   }
+  },
+  "SessionTick": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 57206.0,
+    "last": 122847.0,
+    "sum": 5909519513.0,
+    "min": 57206.0,
+    "max": 122847.0
+   }
+  },
+  "SessionNum": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 2.0,
+    "last": 2.0,
+    "sum": 131284.0,
+    "min": 2.0,
+    "max": 2.0
+   }
+  },
+  "SessionState": {
+   "units": "irsdk_SessionState",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1.0,
+    "last": 6.0,
+    "sum": 257065.0,
+    "min": 1.0,
+    "max": 6.0
+   }
+  },
+  "SessionUniqueID": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 3.0,
+    "last": 3.0,
+    "sum": 196926.0,
+    "min": 3.0,
+    "max": 3.0
+   }
+  },
+  "SessionFlags": {
+   "units": "irsdk_Flags",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 268435968.0,
+    "last": 268698113.0,
+    "sum": 18456272102971.0,
+    "min": 268435968.0,
+    "max": 2147746308.0
+   }
+  },
+  "SessionTimeRemain": {
+   "units": "s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 110.66666665871938,
+    "last": 2683.3999999927264,
+    "sum": 27458386.762202263,
+    "min": -1.0,
+    "max": 2698.6833333260456
+   }
+  },
+  "SessionLapsRemain": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 32767.0,
+    "last": 32767.0,
+    "sum": 2150891414.0,
+    "min": 32767.0,
+    "max": 32767.0
+   }
+  },
+  "SessionLapsRemainEx": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 32767.0,
+    "last": 32767.0,
+    "sum": 2150891414.0,
+    "min": 32767.0,
+    "max": 32767.0
+   }
+  },
+  "SessionTimeTotal": {
+   "units": "s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 900.0,
+    "last": 900.0,
+    "sum": 59077800.0,
+    "min": 900.0,
+    "max": 900.0
+   }
+  },
+  "SessionLapsTotal": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 32767.0,
+    "last": 32767.0,
+    "sum": 2150891414.0,
+    "min": 32767.0,
+    "max": 32767.0
+   }
+  },
+  "SessionJokerLapsRemain": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "SessionOnJokerLap": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "SessionTimeOfDay": {
+   "units": "s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 45308.0,
+    "last": 46402.0,
+    "sum": 3010006234.0,
+    "min": 45308.0,
+    "max": 46402.0
+   }
+  },
+  "DriverMarker": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "PushToTalk": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "PushToPass": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "ManualBoost": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "ManualNoBoost": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "IsOnTrack": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1.0,
+    "last": 1.0,
+    "sum": 65642.0,
+    "min": 1.0,
+    "max": 1.0
+   }
+  },
+  "FrameRate": {
+   "units": "fps",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 119.60002136230469,
+    "last": 120.012939453125,
+    "sum": 7868080.51991272,
+    "min": 0.0,
+    "max": 120.76541900634766
+   }
+  },
+  "CpuUsageFG": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.49604737758636475,
+    "last": 0.49264296889305115,
+    "sum": 32307.1671153903,
+    "min": 0.4839394986629486,
+    "max": 0.9324824810028076
+   }
+  },
+  "GpuUsage": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.13480594754219055,
+    "last": 0.21060675382614136,
+    "sum": 13299.147229745984,
+    "min": 0.13480594754219055,
+    "max": 0.28426268696784973
+   }
+  },
+  "ChanAvgLatency": {
+   "units": "s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.16677571833133698,
+    "last": 0.16666768491268158,
+    "sum": 10940.652320966125,
+    "min": 0.16666768491268158,
+    "max": 0.1669357866048813
+   }
+  },
+  "ChanLatency": {
+   "units": "s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.1666666716337204,
+    "last": 0.1666666716337204,
+    "sum": 10940.533659368753,
+    "min": 0.1666666716337204,
+    "max": 0.20000000298023224
+   }
+  },
+  "ChanQuality": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.9977743625640869,
+    "last": 0.9999915957450867,
+    "sum": 65568.64978259802,
+    "min": 0.9977743625640869,
+    "max": 0.9999915957450867
+   }
+  },
+  "ChanPartnerQuality": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1.0,
+    "last": 1.0,
+    "sum": 65642.0,
+    "min": 1.0,
+    "max": 1.0
+   }
+  },
+  "CpuUsageBG": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.039670929312705994,
+    "last": 0.12102603167295456,
+    "sum": 8887.187189090997,
+    "min": 0.039670929312705994,
+    "max": 0.16801582276821136
+   }
+  },
+  "ChanClockSkew": {
+   "units": "s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": -0.10000000521540642,
+    "min": -0.01666666753590107,
+    "max": 0.0
+   }
+  },
+  "MemPageFaultSec": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 1017789.0,
+    "min": 0.0,
+    "max": 4635.0
+   }
+  },
+  "MemSoftPageFaultSec": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 20978.0,
+    "last": 1616.0,
+    "sum": 766291221.0,
+    "min": 0.0,
+    "max": 468214.0
+   }
+  },
+  "PlayerCarPosition": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 3.0,
+    "sum": 216964.0,
+    "min": 0.0,
+    "max": 5.0
+   }
+  },
+  "PlayerCarClassPosition": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 3.0,
+    "sum": 216964.0,
+    "min": 0.0,
+    "max": 5.0
+   }
+  },
+  "PlayerCarClass": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 3188.0,
+    "last": 3188.0,
+    "sum": 209266696.0,
+    "min": 3188.0,
+    "max": 3188.0
+   }
+  },
+  "PlayerTrackSurface": {
+   "units": "irsdk_TrkLoc",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": -1.0,
+    "last": 0.0,
+    "sum": 196274.0,
+    "min": -1.0,
+    "max": 3.0
+   }
+  },
+  "PlayerTrackSurfaceMaterial": {
+   "units": "irsdk_TrkSurf",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": -1.0,
+    "last": 19.0,
+    "sum": 72628.0,
+    "min": -1.0,
+    "max": 19.0
+   }
+  },
+  "PlayerCarIdx": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 7.0,
+    "last": 7.0,
+    "sum": 459494.0,
+    "min": 7.0,
+    "max": 7.0
+   }
+  },
+  "PlayerCarTeamIncidentCount": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 2.0,
+    "sum": 86013.0,
+    "min": 0.0,
+    "max": 2.0
+   }
+  },
+  "PlayerCarMyIncidentCount": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 2.0,
+    "sum": 86013.0,
+    "min": 0.0,
+    "max": 2.0
+   }
+  },
+  "PlayerCarDriverIncidentCount": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 2.0,
+    "sum": 86013.0,
+    "min": 0.0,
+    "max": 2.0
+   }
+  },
+  "PlayerCarWeightPenalty": {
+   "units": "kg",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "PlayerCarPowerAdjust": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "PlayerCarDryTireSetLimit": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "PlayerCarTowTime": {
+   "units": "s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "PlayerCarInPitStall": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "PlayerCarPitSvStatus": {
+   "units": "irsdk_PitSvStatus",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "PlayerTireCompound": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "PlayerFastRepairsUsed": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "PaceMode": {
+   "units": "irsdk_PaceMode",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1.0,
+    "last": 1.0,
+    "sum": 65642.0,
+    "min": 1.0,
+    "max": 1.0
+   }
+  },
+  "OnPitRoad": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "SteeringWheelAngle": {
+   "units": "rad",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0432903915643692,
+    "last": 0.11708494275808334,
+    "sum": 4204.035834758299,
+    "min": -2.038788318634033,
+    "max": 1.733620285987854
+   }
+  },
+  "Throttle": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.030518345534801483,
+    "sum": 47943.18078832408,
+    "min": -4.6566128730773926e-09,
+    "max": 1.0000001192092896
+   }
+  },
+  "Brake": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1.0,
+    "last": 0.0,
+    "sum": 6692.371970138243,
+    "min": -8.940696716308594e-08,
+    "max": 1.0
+   }
+  },
+  "Clutch": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 1.0,
+    "sum": 61185.5093941465,
+    "min": 0.0,
+    "max": 1.0
+   }
+  },
+  "Gear": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 3.0,
+    "sum": 269491.0,
+    "min": 0.0,
+    "max": 6.0
+   }
+  },
+  "RPM": {
+   "units": "revs/min",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 300.0,
+    "last": 300.0,
+    "sum": 395845307.1720886,
+    "min": 300.0,
+    "max": 7356.7880859375
+   }
+  },
+  "Lap": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 11.0,
+    "sum": 365757.0,
+    "min": 0.0,
+    "max": 11.0
+   }
+  },
+  "LapCompleted": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 10.0,
+    "sum": 300116.0,
+    "min": -1.0,
+    "max": 10.0
+   }
+  },
+  "LapDist": {
+   "units": "m",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 3956.65625,
+    "sum": 157418597.94496098,
+    "min": 0.0,
+    "max": 4406.85107421875
+   }
+  },
+  "LapDistPct": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.897831916809082,
+    "sum": 35720.93001653852,
+    "min": 0.0,
+    "max": 0.9999886751174927
+   }
+  },
+  "CarDistAhead": {
+   "units": "m",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 607.386474609375,
+    "last": 523.085205078125,
+    "sum": 7133387.282268286,
+    "min": 0.001617431640625,
+    "max": 4342.8173828125
+   }
+  },
+  "CarDistBehind": {
+   "units": "m",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1652.809814453125,
+    "last": 145.40869140625,
+    "sum": 5337166.29848671,
+    "min": 0.0003662109375,
+    "max": 1652.809814453125
+   }
+  },
+  "LapBestLap": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 9.0,
+    "sum": 276123.0,
+    "min": -1.0,
+    "max": 9.0
+   }
+  },
+  "LapBestLapTime": {
+   "units": "s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 91.11199951171875,
+    "sum": 4530799.229049683,
+    "min": -1.0,
+    "max": 92.556396484375
+   }
+  },
+  "LapLastLapTime": {
+   "units": "s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 91.29419708251953,
+    "sum": 5094685.707893372,
+    "min": 0.0,
+    "max": 99.58309936523438
+   }
+  },
+  "LapCurrentLapTime": {
+   "units": "s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 96.6518325805664,
+    "sum": 2932876.409191251,
+    "min": 0.0,
+    "max": 101.06363677978516
+   }
+  },
+  "LapLasNLapSeq": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "LapLastNLapTime": {
+   "units": "s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "LapBestNLapLap": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "LapBestNLapTime": {
+   "units": "s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "LapDeltaToBestLap": {
+   "units": "s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 13.697943687438965,
+    "sum": 74128.28159110204,
+    "min": -0.12691372632980347,
+    "max": 13.697943687438965
+   }
+  },
+  "LapDeltaToBestLap_DD": {
+   "units": "s/s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.9984607100486755,
+    "sum": 1724.0902160406113,
+    "min": -0.20658230781555176,
+    "max": 0.9999880790710449
+   }
+  },
+  "LapDeltaToBestLap_OK": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 1.0,
+    "sum": 61014.0,
+    "min": 0.0,
+    "max": 1.0
+   }
+  },
+  "LapDeltaToOptimalLap": {
+   "units": "s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 13.872782707214355,
+    "sum": 81256.3632499243,
+    "min": -0.07818061113357544,
+    "max": 13.872782707214355
+   }
+  },
+  "LapDeltaToOptimalLap_DD": {
+   "units": "s/s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.9984607100486755,
+    "sum": 1839.210327386856,
+    "min": -0.23104572296142578,
+    "max": 0.9999880790710449
+   }
+  },
+  "LapDeltaToOptimalLap_OK": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 1.0,
+    "sum": 61014.0,
+    "min": 0.0,
+    "max": 1.0
+   }
+  },
+  "LapDeltaToSessionBestLap": {
+   "units": "s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 13.231212615966797,
+    "sum": -684.4169903262009,
+    "min": -4.5460896492004395,
+    "max": 13.231212615966797
+   }
+  },
+  "LapDeltaToSessionBestLap_DD": {
+   "units": "s/s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.9984478950500488,
+    "sum": 557.098222732544,
+    "min": -1.5709507465362549,
+    "max": 0.9999879598617554
+   }
+  },
+  "LapDeltaToSessionBestLap_OK": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 1.0,
+    "sum": 55243.0,
+    "min": 0.0,
+    "max": 1.0
+   }
+  },
+  "LapDeltaToSessionOptimalLap": {
+   "units": "s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 13.554031372070312,
+    "sum": 8858.578517180067,
+    "min": -4.5460896492004395,
+    "max": 13.554031372070312
+   }
+  },
+  "LapDeltaToSessionOptimalLap_DD": {
+   "units": "s/s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.998467743396759,
+    "sum": 787.5894863009453,
+    "min": -1.5709507465362549,
+    "max": 0.9999881386756897
+   }
+  },
+  "LapDeltaToSessionOptimalLap_OK": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 1.0,
+    "sum": 55243.0,
+    "min": 0.0,
+    "max": 1.0
+   }
+  },
+  "LapDeltaToSessionLastlLap": {
+   "units": "s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 13.047118186950684,
+    "sum": -3193.2297941229117,
+    "min": -4.5460896492004395,
+    "max": 13.047118186950684
+   }
+  },
+  "LapDeltaToSessionLastlLap_DD": {
+   "units": "s/s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.9984498620033264,
+    "sum": 498.39823681116104,
+    "min": -1.5709507465362549,
+    "max": 0.9999879598617554
+   }
+  },
+  "LapDeltaToSessionLastlLap_OK": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 1.0,
+    "sum": 55243.0,
+    "min": 0.0,
+    "max": 1.0
+   }
+  },
+  "Speed": {
+   "units": "m/s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.08701673150062561,
+    "sum": 2889509.03065197,
+    "min": 0.0,
+    "max": 65.68456268310547
+   }
+  },
+  "Yaw": {
+   "units": "rad",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": -0.3681979775428772,
+    "sum": 27350.11189566697,
+    "min": -3.1415631771087646,
+    "max": 3.1415369510650635
+   }
+  },
+  "YawNorth": {
+   "units": "rad",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 3.1876633167266846,
+    "sum": 204984.53754532337,
+    "min": 0.0,
+    "max": 6.283141136169434
+   }
+  },
+  "Pitch": {
+   "units": "rad",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": -0.012193000875413418,
+    "sum": -95.515926957201,
+    "min": -0.0692119225859642,
+    "max": 0.09677013009786606
+   }
+  },
+  "Roll": {
+   "units": "rad",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": -0.04834529757499695,
+    "sum": -1220.8272535130177,
+    "min": -0.08182127773761749,
+    "max": 0.07416434586048126
+   }
+  },
+  "EnterExitReset": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 1.0,
+    "sum": 120319.0,
+    "min": 0.0,
+    "max": 2.0
+   }
+  },
+  "Lat": {
+   "units": "deg",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": -38.498495595976145,
+    "sum": -2527397.7126792236,
+    "min": -38.510382852101166,
+    "max": 0.0
+   }
+  },
+  "Lon": {
+   "units": "deg",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 145.23066700320828,
+    "sum": 9533336.582858521,
+    "min": 0.0,
+    "max": 145.23825881924478
+   }
+  },
+  "Alt": {
+   "units": "m",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 53.59113693237305,
+    "sum": 2946160.4418945312,
+    "min": 0.0,
+    "max": 60.59113311767578
+   }
+  },
+  "TrackTemp": {
+   "units": "C",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 23.296363830566406,
+    "last": 26.111114501953125,
+    "sum": 1818901.8143920898,
+    "min": 23.29633331298828,
+    "max": 30.0
+   }
+  },
+  "TrackTempCrew": {
+   "units": "C",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 23.296363830566406,
+    "last": 26.111114501953125,
+    "sum": 1818901.8143920898,
+    "min": 23.29633331298828,
+    "max": 30.0
+   }
+  },
+  "AirTemp": {
+   "units": "C",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 20.296363830566406,
+    "last": 20.255979537963867,
+    "sum": 1331400.7822933197,
+    "min": 20.255979537963867,
+    "max": 20.296363830566406
+   }
+  },
+  "TrackWetness": {
+   "units": "irsdk_TrackWetness",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1.0,
+    "last": 1.0,
+    "sum": 65642.0,
+    "min": 1.0,
+    "max": 1.0
+   }
+  },
+  "Skies": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 3.0,
+    "last": 2.0,
+    "sum": 175669.0,
+    "min": 2.0,
+    "max": 3.0
+   }
+  },
+  "AirDensity": {
+   "units": "kg/m^3",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1.1861993074417114,
+    "last": 1.1853249073028564,
+    "sum": 77858.1735187769,
+    "min": 1.1853249073028564,
+    "max": 1.1864081621170044
+   }
+  },
+  "AirPressure": {
+   "units": "Pa",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 100565.4296875,
+    "last": 100482.3671875,
+    "sum": 6600629074.6796875,
+    "min": 100482.3671875,
+    "max": 100582.640625
+   }
+  },
+  "WindVel": {
+   "units": "m/s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 9.433045387268066,
+    "last": 10.461727142333984,
+    "sum": 620792.6971158981,
+    "min": 7.572309970855713,
+    "max": 11.478239059448242
+   }
+  },
+  "WindDir": {
+   "units": "rad",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 4.300528526306152,
+    "last": 3.9571404457092285,
+    "sum": 261504.80178427696,
+    "min": 3.781423568725586,
+    "max": 4.303695201873779
+   }
+  },
+  "RelativeHumidity": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.7220450639724731,
+    "last": 0.7286523580551147,
+    "sum": 47601.95465648174,
+    "min": 0.7220450639724731,
+    "max": 0.7286523580551147
+   }
+  },
+  "FogLevel": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "Precipitation": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "SolarAltitude": {
+   "units": "rad",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1.003563404083252,
+    "last": 1.0275964736938477,
+    "sum": 66709.37819290161,
+    "min": 1.003563404083252,
+    "max": 1.0275964736938477
+   }
+  },
+  "SolarAzimuth": {
+   "units": "rad",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.46687817573547363,
+    "last": 0.3246632516384125,
+    "sum": 26036.487707406282,
+    "min": 0.3246632516384125,
+    "max": 0.46687817573547363
+   }
+  },
+  "WeatherDeclaredWet": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "PitsOpen": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1.0,
+    "last": 1.0,
+    "sum": 65642.0,
+    "min": 1.0,
+    "max": 1.0
+   }
+  },
+  "PlayerIncidents": {
+   "units": "irsdk_IncidentFlags",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 3116.0,
+    "min": 0.0,
+    "max": 776.0
+   }
+  },
+  "PitRepairLeft": {
+   "units": "s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "PitOptRepairLeft": {
+   "units": "s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "PitstopActive": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "FastRepairUsed": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "FastRepairAvailable": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1.0,
+    "last": 1.0,
+    "sum": 65642.0,
+    "min": 1.0,
+    "max": 1.0
+   }
+  },
+  "LFTiresUsed": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1.0,
+    "last": 1.0,
+    "sum": 65642.0,
+    "min": 1.0,
+    "max": 1.0
+   }
+  },
+  "RFTiresUsed": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1.0,
+    "last": 1.0,
+    "sum": 65642.0,
+    "min": 1.0,
+    "max": 1.0
+   }
+  },
+  "LRTiresUsed": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1.0,
+    "last": 1.0,
+    "sum": 65642.0,
+    "min": 1.0,
+    "max": 1.0
+   }
+  },
+  "RRTiresUsed": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1.0,
+    "last": 1.0,
+    "sum": 65642.0,
+    "min": 1.0,
+    "max": 1.0
+   }
+  },
+  "LeftTireSetsUsed": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1.0,
+    "last": 1.0,
+    "sum": 65642.0,
+    "min": 1.0,
+    "max": 1.0
+   }
+  },
+  "RightTireSetsUsed": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1.0,
+    "last": 1.0,
+    "sum": 65642.0,
+    "min": 1.0,
+    "max": 1.0
+   }
+  },
+  "FrontTireSetsUsed": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1.0,
+    "last": 1.0,
+    "sum": 65642.0,
+    "min": 1.0,
+    "max": 1.0
+   }
+  },
+  "RearTireSetsUsed": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1.0,
+    "last": 1.0,
+    "sum": 65642.0,
+    "min": 1.0,
+    "max": 1.0
+   }
+  },
+  "TireSetsUsed": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1.0,
+    "last": 1.0,
+    "sum": 65642.0,
+    "min": 1.0,
+    "max": 1.0
+   }
+  },
+  "LFTiresAvailable": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1.0,
+    "last": 1.0,
+    "sum": 65642.0,
+    "min": 1.0,
+    "max": 1.0
+   }
+  },
+  "RFTiresAvailable": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1.0,
+    "last": 1.0,
+    "sum": 65642.0,
+    "min": 1.0,
+    "max": 1.0
+   }
+  },
+  "LRTiresAvailable": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1.0,
+    "last": 1.0,
+    "sum": 65642.0,
+    "min": 1.0,
+    "max": 1.0
+   }
+  },
+  "RRTiresAvailable": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1.0,
+    "last": 1.0,
+    "sum": 65642.0,
+    "min": 1.0,
+    "max": 1.0
+   }
+  },
+  "LeftTireSetsAvailable": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1.0,
+    "last": 1.0,
+    "sum": 65642.0,
+    "min": 1.0,
+    "max": 1.0
+   }
+  },
+  "RightTireSetsAvailable": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1.0,
+    "last": 1.0,
+    "sum": 65642.0,
+    "min": 1.0,
+    "max": 1.0
+   }
+  },
+  "FrontTireSetsAvailable": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1.0,
+    "last": 1.0,
+    "sum": 65642.0,
+    "min": 1.0,
+    "max": 1.0
+   }
+  },
+  "RearTireSetsAvailable": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1.0,
+    "last": 1.0,
+    "sum": 65642.0,
+    "min": 1.0,
+    "max": 1.0
+   }
+  },
+  "TireSetsAvailable": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1.0,
+    "last": 1.0,
+    "sum": 65642.0,
+    "min": 1.0,
+    "max": 1.0
+   }
+  },
+  "IsOnTrackCar": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1.0,
+    "last": 1.0,
+    "sum": 65642.0,
+    "min": 1.0,
+    "max": 1.0
+   }
+  },
+  "SteeringWheelAngleMax": {
+   "units": "rad",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 6.719511985778809,
+    "last": 6.719511985778809,
+    "sum": 441082.20577049255,
+    "min": 6.719511985778809,
+    "max": 6.719511985778809
+   }
+  },
+  "ShiftPowerPct": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 17.718572694718063,
+    "min": 0.0,
+    "max": 0.15260444581508636
+   }
+  },
+  "ShiftGrindRPM": {
+   "units": "RPM",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "ThrottleRaw": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.03051834926009178,
+    "sum": 47806.53825379489,
+    "min": 0.0,
+    "max": 1.0
+   }
+  },
+  "BrakeRaw": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 2242.3719751654426,
+    "min": 0.0,
+    "max": 0.9773620963096619
+   }
+  },
+  "ClutchRaw": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1.0,
+    "last": 1.0,
+    "sum": 63346.68314629793,
+    "min": 0.0,
+    "max": 1.0
+   }
+  },
+  "HandbrakeRaw": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "BrakeABSactive": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "BrakeABScutPct": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1.0,
+    "last": 1.0,
+    "sum": 65642.0,
+    "min": 1.0,
+    "max": 1.0
+   }
+  },
+  "Shifter": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": -417.0,
+    "min": -1.0,
+    "max": 1.0
+   }
+  },
+  "EngineWarnings": {
+   "units": "irsdk_EngineWarnings",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 12.0,
+    "last": 12.0,
+    "sum": 17928.0,
+    "min": 0.0,
+    "max": 32.0
+   }
+  },
+  "FuelLevelPct": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.3499999940395355,
+    "last": 0.08125153183937073,
+    "sum": 14485.184996575117,
+    "min": 0.08125153183937073,
+    "max": 0.3499999940395355
+   }
+  },
+  "PitSvFlags": {
+   "units": "irsdk_PitSvFlags",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 79.0,
+    "sum": 5260552.0,
+    "min": 0.0,
+    "max": 95.0
+   }
+  },
+  "PitSvLFP": {
+   "units": "kPa",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 117.21100616455078,
+    "last": 117.21100616455078,
+    "sum": 7693964.866653442,
+    "min": 117.21100616455078,
+    "max": 117.21100616455078
+   }
+  },
+  "PitSvRFP": {
+   "units": "kPa",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 117.21100616455078,
+    "last": 117.21100616455078,
+    "sum": 7693964.866653442,
+    "min": 117.21100616455078,
+    "max": 117.21100616455078
+   }
+  },
+  "PitSvLRP": {
+   "units": "kPa",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 117.21100616455078,
+    "last": 117.21100616455078,
+    "sum": 7693964.866653442,
+    "min": 117.21100616455078,
+    "max": 117.21100616455078
+   }
+  },
+  "PitSvRRP": {
+   "units": "kPa",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 117.21100616455078,
+    "last": 117.21100616455078,
+    "sum": 7693964.866653442,
+    "min": 117.21100616455078,
+    "max": 117.21100616455078
+   }
+  },
+  "PitSvFuel": {
+   "units": "l or kWh",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 187480.0,
+    "min": 0.0,
+    "max": 40.0
+   }
+  },
+  "PitSvTireCompound": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "P2P_Status": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "P2P_Count": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "SteeringWheelPctTorque": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.01691603474318981,
+    "last": 0.038141001015901566,
+    "sum": 18891.233642415165,
+    "min": 5.642332780553261e-06,
+    "max": 1.0
+   }
+  },
+  "SteeringWheelPctTorqueSign": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.01691603474318981,
+    "last": 0.038141001015901566,
+    "sum": -6733.109828814294,
+    "min": -1.0,
+    "max": 1.0
+   }
+  },
+  "SteeringWheelPctTorqueSignStops": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.012842124328017235,
+    "sum": -6778.459110105323,
+    "min": -1.0,
+    "max": 1.0
+   }
+  },
+  "SteeringWheelPctIntensity": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1.0,
+    "last": 1.0,
+    "sum": 65642.0,
+    "min": 1.0,
+    "max": 1.0
+   }
+  },
+  "SteeringWheelPctSmoothing": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "SteeringWheelPctDamper": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "SteeringWheelLimiter": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "SteeringWheelMaxForceNm": {
+   "units": "N*m",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 50.63829803466797,
+    "last": 50.63829803466797,
+    "sum": 3323999.159591675,
+    "min": 50.63829803466797,
+    "max": 50.63829803466797
+   }
+  },
+  "SteeringWheelUseLinear": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1.0,
+    "last": 1.0,
+    "sum": 65642.0,
+    "min": 1.0,
+    "max": 1.0
+   }
+  },
+  "ShiftIndicatorPct": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 21131.765130202588,
+    "min": 0.0,
+    "max": 1.0
+   }
+  },
+  "TireLF_RumblePitch": {
+   "units": "Hz",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 44035.347858428955,
+    "min": 0.0,
+    "max": 72.71553802490234
+   }
+  },
+  "TireRF_RumblePitch": {
+   "units": "Hz",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 63910.85788726807,
+    "min": 0.0,
+    "max": 64.74271392822266
+   }
+  },
+  "TireLR_RumblePitch": {
+   "units": "Hz",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 34929.45677566528,
+    "min": 0.0,
+    "max": 72.78274536132812
+   }
+  },
+  "TireRR_RumblePitch": {
+   "units": "Hz",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 58960.42583465576,
+    "min": 0.0,
+    "max": 64.78812408447266
+   }
+  },
+  "SteeringWheelTorque": {
+   "units": "N*m",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.8565992116928101,
+    "last": 1.9313952922821045,
+    "sum": -341047.74174131564,
+    "min": -72.02042388916016,
+    "max": 58.027976989746094
+   }
+  },
+  "VelocityZ": {
+   "units": "m/s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": -0.16731803119182587,
+    "last": -0.0027340210508555174,
+    "sum": -5325.020408605229,
+    "min": -0.5136442184448242,
+    "max": 0.26179683208465576
+   }
+  },
+  "VelocityY": {
+   "units": "m/s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.004482699558138847,
+    "last": 0.0019125723047181964,
+    "sum": -34605.51878203523,
+    "min": -6.015110969543457,
+    "max": 5.463293552398682
+   }
+  },
+  "VelocityX": {
+   "units": "m/s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": -0.0002819567162077874,
+    "last": 0.08699571341276169,
+    "sum": 2887498.295891827,
+    "min": -0.2754598557949066,
+    "max": 65.66974639892578
+   }
+  },
+  "YawRate": {
+   "units": "rad/s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": -0.0012739788508042693,
+    "last": 0.0011207398492842913,
+    "sum": 4122.170225956959,
+    "min": -1.0939154624938965,
+    "max": 0.8012917637825012
+   }
+  },
+  "PitchRate": {
+   "units": "rad/s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": -0.003997260704636574,
+    "last": 0.0025787006597965956,
+    "sum": -453.4347237273798,
+    "min": -0.29020199179649353,
+    "max": 0.24891397356987
+   }
+  },
+  "RollRate": {
+   "units": "rad/s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0010945417452603579,
+    "last": -0.0003467428032308817,
+    "sum": 81.38565691879506,
+    "min": -0.5700305104255676,
+    "max": 0.6118852496147156
+   }
+  },
+  "VertAccel": {
+   "units": "m/s^2",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1.5803699493408203,
+    "last": 9.759504318237305,
+    "sum": 663091.6751984693,
+    "min": 0.04526630416512489,
+    "max": 20.527877807617188
+   }
+  },
+  "LatAccel": {
+   "units": "m/s^2",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.015916459262371063,
+    "last": -0.43535926938056946,
+    "sum": 212655.27830863383,
+    "min": -30.770973205566406,
+    "max": 31.004383087158203
+   }
+  },
+  "LongAccel": {
+   "units": "m/s^2",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": -0.30138835310935974,
+    "last": 1.1083519458770752,
+    "sum": 28830.46192219021,
+    "min": -24.062070846557617,
+    "max": 14.966485023498535
+   }
+  },
+  "dcStarter": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "dcPitSpeedLimiterToggle": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "dcTearOffVisor": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": false,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "dpTireChange": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 1.0,
+    "sum": 65640.0,
+    "min": 0.0,
+    "max": 1.0
+   }
+  },
+  "dpFuelFill": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 4687.0,
+    "min": 0.0,
+    "max": 1.0
+   }
+  },
+  "dpFuelAutoFillEnabled": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 55230.0,
+    "min": 0.0,
+    "max": 1.0
+   }
+  },
+  "dpFuelAutoFillActive": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 55224.0,
+    "min": 0.0,
+    "max": 1.0
+   }
+  },
+  "dpFuelAddKg": {
+   "units": "kg",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 187480.0,
+    "min": 0.0,
+    "max": 40.0
+   }
+  },
+  "dpFastRepair": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 1.0,
+    "sum": 65640.0,
+    "min": 0.0,
+    "max": 1.0
+   }
+  },
+  "dcBrakeBias": {
+   "units": "",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 56.9842643737793,
+    "last": 56.9842643737793,
+    "sum": 3740561.0820236206,
+    "min": 56.9842643737793,
+    "max": 56.9842643737793
+   }
+  },
+  "dpLFTireColdPress": {
+   "units": "Pa",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 117.21099853515625,
+    "last": 117.21099853515625,
+    "sum": 7693964.365844727,
+    "min": 117.21099853515625,
+    "max": 117.21099853515625
+   }
+  },
+  "dpRFTireColdPress": {
+   "units": "Pa",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 117.21099853515625,
+    "last": 117.21099853515625,
+    "sum": 7693964.365844727,
+    "min": 117.21099853515625,
+    "max": 117.21099853515625
+   }
+  },
+  "dpLRTireColdPress": {
+   "units": "Pa",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 117.21099853515625,
+    "last": 117.21099853515625,
+    "sum": 7693964.365844727,
+    "min": 117.21099853515625,
+    "max": 117.21099853515625
+   }
+  },
+  "dpRRTireColdPress": {
+   "units": "Pa",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 117.21099853515625,
+    "last": 117.21099853515625,
+    "sum": 7693964.365844727,
+    "min": 117.21099853515625,
+    "max": 117.21099853515625
+   }
+  },
+  "RFbrakeLinePress": {
+   "units": "bar",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 526864.5891168916,
+    "min": -7.038665444270009e-06,
+    "max": 78.72613525390625
+   }
+  },
+  "RFspeed": {
+   "units": "m/s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.09315252304077148,
+    "sum": 2860864.4821324153,
+    "min": 0.0,
+    "max": 65.41674041748047
+   }
+  },
+  "RFpressure": {
+   "units": "kPa",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 117.21100616455078,
+    "last": 118.4219741821289,
+    "sum": 7820662.5311431885,
+    "min": 114.6451644897461,
+    "max": 121.52159881591797
+   }
+  },
+  "RFcoldPressure": {
+   "units": "kPa",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 117.21100616455078,
+    "last": 117.21100616455078,
+    "sum": 7693964.866653442,
+    "min": 117.21100616455078,
+    "max": 117.21100616455078
+   }
+  },
+  "RFodometer": {
+   "units": "m",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 48100.0,
+    "sum": 1484112000.0,
+    "min": 0.0,
+    "max": 48100.0
+   }
+  },
+  "RFtempL": {
+   "units": "C",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 47.933929443359375,
+    "last": 71.77716064453125,
+    "sum": 4116828.173400879,
+    "min": 40.8057861328125,
+    "max": 127.95675659179688
+   }
+  },
+  "RFtempM": {
+   "units": "C",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 47.933929443359375,
+    "last": 68.92355346679688,
+    "sum": 4009732.5647888184,
+    "min": 40.6484375,
+    "max": 123.13192749023438
+   }
+  },
+  "RFtempR": {
+   "units": "C",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 47.933929443359375,
+    "last": 71.44183349609375,
+    "sum": 4155078.254638672,
+    "min": 43.80584716796875,
+    "max": 97.71603393554688
+   }
+  },
+  "RFtempCL": {
+   "units": "C",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 110.24285888671875,
+    "last": 110.24285888671875,
+    "sum": 7236561.743041992,
+    "min": 110.24285888671875,
+    "max": 110.24285888671875
+   }
+  },
+  "RFtempCM": {
+   "units": "C",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 106.6590576171875,
+    "last": 106.6590576171875,
+    "sum": 7001313.860107422,
+    "min": 106.6590576171875,
+    "max": 106.6590576171875
+   }
+  },
+  "RFtempCR": {
+   "units": "C",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 101.14291381835938,
+    "last": 101.14291381835938,
+    "sum": 6639223.148864746,
+    "min": 101.14291381835938,
+    "max": 101.14291381835938
+   }
+  },
+  "RFwearL": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.9712229371070862,
+    "last": 0.9712229371070862,
+    "sum": 63753.01603758335,
+    "min": 0.9712229371070862,
+    "max": 0.9712229371070862
+   }
+  },
+  "RFwearM": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.9716081023216248,
+    "last": 0.9716081023216248,
+    "sum": 63778.29905259609,
+    "min": 0.9716081023216248,
+    "max": 0.9716081023216248
+   }
+  },
+  "RFwearR": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.9788286089897156,
+    "last": 0.9788286089897156,
+    "sum": 64252.26755130291,
+    "min": 0.9788286089897156,
+    "max": 0.9788286089897156
+   }
+  },
+  "LFbrakeLinePress": {
+   "units": "bar",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 526864.5891168916,
+    "min": -7.038665444270009e-06,
+    "max": 78.72613525390625
+   }
+  },
+  "LFspeed": {
+   "units": "m/s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.08678382635116577,
+    "sum": 2861003.4968012627,
+    "min": 0.0,
+    "max": 65.74359130859375
+   }
+  },
+  "LFpressure": {
+   "units": "kPa",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 117.21100616455078,
+    "last": 111.23192596435547,
+    "sum": 7432198.689453125,
+    "min": 111.23192596435547,
+    "max": 117.21100616455078
+   }
+  },
+  "LFcoldPressure": {
+   "units": "kPa",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 117.21100616455078,
+    "last": 117.21100616455078,
+    "sum": 7693964.866653442,
+    "min": 117.21100616455078,
+    "max": 117.21100616455078
+   }
+  },
+  "LFodometer": {
+   "units": "m",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 48000.0,
+    "sum": 1480954500.0,
+    "min": 0.0,
+    "max": 48000.0
+   }
+  },
+  "LFtempL": {
+   "units": "C",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 47.933929443359375,
+    "last": 60.426177978515625,
+    "sum": 3563787.8520202637,
+    "min": 44.9588623046875,
+    "max": 79.96194458007812
+   }
+  },
+  "LFtempM": {
+   "units": "C",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 47.933929443359375,
+    "last": 57.83087158203125,
+    "sum": 3604117.359100342,
+    "min": 40.370513916015625,
+    "max": 97.95294189453125
+   }
+  },
+  "LFtempR": {
+   "units": "C",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 47.933929443359375,
+    "last": 60.730010986328125,
+    "sum": 3758861.2045288086,
+    "min": 40.551177978515625,
+    "max": 100.22787475585938
+   }
+  },
+  "LFtempCL": {
+   "units": "C",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 77.78729248046875,
+    "last": 77.78729248046875,
+    "sum": 5106113.45300293,
+    "min": 77.78729248046875,
+    "max": 77.78729248046875
+   }
+  },
+  "LFtempCM": {
+   "units": "C",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 86.91586303710938,
+    "last": 86.91586303710938,
+    "sum": 5705331.081481934,
+    "min": 86.91586303710938,
+    "max": 86.91586303710938
+   }
+  },
+  "LFtempCR": {
+   "units": "C",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 91.386474609375,
+    "last": 91.386474609375,
+    "sum": 5998790.966308594,
+    "min": 91.386474609375,
+    "max": 91.386474609375
+   }
+  },
+  "LFwearL": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.991624116897583,
+    "last": 0.991624116897583,
+    "sum": 65092.190281391144,
+    "min": 0.991624116897583,
+    "max": 0.991624116897583
+   }
+  },
+  "LFwearM": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.9862863421440125,
+    "last": 0.9862863421440125,
+    "sum": 64741.808071017265,
+    "min": 0.9862863421440125,
+    "max": 0.9862863421440125
+   }
+  },
+  "LFwearR": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.9847832322120667,
+    "last": 0.9847832322120667,
+    "sum": 64643.14092886448,
+    "min": 0.9847832322120667,
+    "max": 0.9847832322120667
+   }
+  },
+  "FuelUsePerHour": {
+   "units": "kg/h",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 35.58680725097656,
+    "last": 0.0,
+    "sum": 1881906.7515761312,
+    "min": 0.0,
+    "max": 35.656578063964844
+   }
+  },
+  "Voltage": {
+   "units": "V",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 13.800000190734863,
+    "last": 13.800000190734863,
+    "sum": 905859.6125202179,
+    "min": 13.800000190734863,
+    "max": 13.800000190734863
+   }
+  },
+  "WaterTemp": {
+   "units": "C",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 77.0,
+    "last": 83.7342300415039,
+    "sum": 5848517.252754211,
+    "min": 75.555908203125,
+    "max": 93.92678833007812
+   }
+  },
+  "WaterLevel": {
+   "units": "l",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 6.71999979019165,
+    "last": 6.71999979019165,
+    "sum": 441114.2262277603,
+    "min": 6.71999979019165,
+    "max": 6.71999979019165
+   }
+  },
+  "FuelPress": {
+   "units": "bar",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 3.9000000953674316,
+    "last": 3.9000000953674316,
+    "sum": 256003.80626010895,
+    "min": 3.9000000953674316,
+    "max": 3.9000000953674316
+   }
+  },
+  "OilTemp": {
+   "units": "C",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 77.0,
+    "last": 108.57670593261719,
+    "sum": 6775807.598854065,
+    "min": 77.0,
+    "max": 110.72747039794922
+   }
+  },
+  "OilPress": {
+   "units": "bar",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0006141200428828597,
+    "sum": 218985.29093946377,
+    "min": 0.0,
+    "max": 3.3999993801116943
+   }
+  },
+  "OilLevel": {
+   "units": "l",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 6.624000549316406,
+    "last": 6.624000549316406,
+    "sum": 434812.64405822754,
+    "min": 6.624000549316406,
+    "max": 6.624000549316406
+   }
+  },
+  "ManifoldPress": {
+   "units": "bar",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 1.0,
+    "last": 1.004162073135376,
+    "sum": 54805.45674392581,
+    "min": 0.24946865439414978,
+    "max": 1.007497787475586
+   }
+  },
+  "FuelLevel": {
+   "units": "l",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 14.0,
+    "last": 3.250061273574829,
+    "sum": 579407.399846077,
+    "min": 3.250061273574829,
+    "max": 14.0
+   }
+  },
+  "Engine0_RPM": {
+   "units": "revs/min",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.007550080306828022,
+    "last": 0.23379036784172058,
+    "sum": 395817874.64166045,
+    "min": 0.0,
+    "max": 7356.791015625
+   }
+  },
+  "RRbrakeLinePress": {
+   "units": "bar",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 397714.4751140175,
+    "min": -5.31327987118857e-06,
+    "max": 59.42802810668945
+   }
+  },
+  "RRspeed": {
+   "units": "m/s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.07701478153467178,
+    "sum": 2931481.7470894055,
+    "min": 0.0,
+    "max": 66.6003646850586
+   }
+  },
+  "RRpressure": {
+   "units": "kPa",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 117.21100616455078,
+    "last": 117.17328643798828,
+    "sum": 7761288.078781128,
+    "min": 114.55711364746094,
+    "max": 120.21723937988281
+   }
+  },
+  "RRcoldPressure": {
+   "units": "kPa",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 117.21100616455078,
+    "last": 117.21100616455078,
+    "sum": 7693964.866653442,
+    "min": 117.21100616455078,
+    "max": 117.21100616455078
+   }
+  },
+  "RRodometer": {
+   "units": "m",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 48200.0,
+    "sum": 1485031700.0,
+    "min": 0.0,
+    "max": 48200.0
+   }
+  },
+  "RRtempL": {
+   "units": "C",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 47.931671142578125,
+    "last": 69.619140625,
+    "sum": 3876464.0607299805,
+    "min": 40.219085693359375,
+    "max": 91.89791870117188
+   }
+  },
+  "RRtempM": {
+   "units": "C",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 47.931671142578125,
+    "last": 67.3555908203125,
+    "sum": 3801866.128387451,
+    "min": 40.048187255859375,
+    "max": 91.10671997070312
+   }
+  },
+  "RRtempR": {
+   "units": "C",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 47.931671142578125,
+    "last": 70.27371215820312,
+    "sum": 3993858.18850708,
+    "min": 44.292694091796875,
+    "max": 89.85845947265625
+   }
+  },
+  "RRtempCL": {
+   "units": "C",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 106.75332641601562,
+    "last": 106.75332641601562,
+    "sum": 7007501.852600098,
+    "min": 106.75332641601562,
+    "max": 106.75332641601562
+   }
+  },
+  "RRtempCM": {
+   "units": "C",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 103.85879516601562,
+    "last": 103.85879516601562,
+    "sum": 6817499.032287598,
+    "min": 103.85879516601562,
+    "max": 103.85879516601562
+   }
+  },
+  "RRtempCR": {
+   "units": "C",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 97.86563110351562,
+    "last": 97.86563110351562,
+    "sum": 6424095.756896973,
+    "min": 97.86563110351562,
+    "max": 97.86563110351562
+   }
+  },
+  "RRwearL": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.9799508452415466,
+    "last": 0.9799508452415466,
+    "sum": 64325.933383345604,
+    "min": 0.9799508452415466,
+    "max": 0.9799508452415466
+   }
+  },
+  "RRwearM": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.9797288179397583,
+    "last": 0.9797288179397583,
+    "sum": 64311.359067201614,
+    "min": 0.9797288179397583,
+    "max": 0.9797288179397583
+   }
+  },
+  "RRwearR": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.9826939105987549,
+    "last": 0.9826939105987549,
+    "sum": 64505.99367952347,
+    "min": 0.9826939105987549,
+    "max": 0.9826939105987549
+   }
+  },
+  "LRbrakeLinePress": {
+   "units": "bar",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.0,
+    "sum": 397714.4751140175,
+    "min": -5.31327987118857e-06,
+    "max": 59.42802810668945
+   }
+  },
+  "LRspeed": {
+   "units": "m/s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 0.07722944766283035,
+    "sum": 2926274.424524151,
+    "min": 0.0,
+    "max": 66.76862335205078
+   }
+  },
+  "LRpressure": {
+   "units": "kPa",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 117.21100616455078,
+    "last": 111.45325469970703,
+    "sum": 7456832.873756409,
+    "min": 111.45325469970703,
+    "max": 117.21100616455078
+   }
+  },
+  "LRcoldPressure": {
+   "units": "kPa",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 117.21100616455078,
+    "last": 117.21100616455078,
+    "sum": 7693964.866653442,
+    "min": 117.21100616455078,
+    "max": 117.21100616455078
+   }
+  },
+  "LRodometer": {
+   "units": "m",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0,
+    "last": 48100.0,
+    "sum": 1482017700.0,
+    "min": 0.0,
+    "max": 48100.0
+   }
+  },
+  "LRtempL": {
+   "units": "C",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 47.931671142578125,
+    "last": 61.034759521484375,
+    "sum": 3540315.2227783203,
+    "min": 44.453521728515625,
+    "max": 94.4951171875
+   }
+  },
+  "LRtempM": {
+   "units": "C",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 47.931671142578125,
+    "last": 59.04443359375,
+    "sum": 3509624.0990600586,
+    "min": 39.871978759765625,
+    "max": 96.42337036132812
+   }
+  },
+  "LRtempR": {
+   "units": "C",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 47.931671142578125,
+    "last": 61.4217529296875,
+    "sum": 3605772.308166504,
+    "min": 40.044097900390625,
+    "max": 97.36068725585938
+   }
+  },
+  "LRtempCL": {
+   "units": "C",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 78.49856567382812,
+    "last": 78.49856567382812,
+    "sum": 5152802.847961426,
+    "min": 78.49856567382812,
+    "max": 78.49856567382812
+   }
+  },
+  "LRtempCM": {
+   "units": "C",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 90.28460693359375,
+    "last": 90.28460693359375,
+    "sum": 5926462.168334961,
+    "min": 90.28460693359375,
+    "max": 90.28460693359375
+   }
+  },
+  "LRtempCR": {
+   "units": "C",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 93.53515625,
+    "last": 93.53515625,
+    "sum": 6139834.7265625,
+    "min": 93.53515625,
+    "max": 93.53515625
+   }
+  },
+  "LRwearL": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.9927074313163757,
+    "last": 0.9927074313163757,
+    "sum": 65163.301206469536,
+    "min": 0.9927074313163757,
+    "max": 0.9927074313163757
+   }
+  },
+  "LRwearM": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.9871906638145447,
+    "last": 0.9871906638145447,
+    "sum": 64801.16955411434,
+    "min": 0.9871906638145447,
+    "max": 0.9871906638145447
+   }
+  },
+  "LRwearR": {
+   "units": "%",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.9872445464134216,
+    "last": 0.9872445464134216,
+    "sum": 64804.70651566982,
+    "min": 0.9872445464134216,
+    "max": 0.9872445464134216
+   }
+  },
+  "LRshockDefl": {
+   "units": "m",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.002264873357489705,
+    "last": 0.02296609990298748,
+    "sum": 1239.428827931999,
+    "min": -0.0001346834615105763,
+    "max": 0.04328703135251999
+   }
+  },
+  "LRshockVel": {
+   "units": "m/s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.055614084005355835,
+    "last": -0.0006927753565832973,
+    "sum": -31.775914886715597,
+    "min": -0.5878046751022339,
+    "max": 0.522723376750946
+   }
+  },
+  "RRshockDefl": {
+   "units": "m",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.002275829203426838,
+    "last": 0.012080572545528412,
+    "sum": 1436.710312974371,
+    "min": -0.0002598786086309701,
+    "max": 0.04496794566512108
+   }
+  },
+  "RRshockVel": {
+   "units": "m/s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.05649705231189728,
+    "last": -0.0009419075795449317,
+    "sum": -28.9679403476394,
+    "min": -0.45303618907928467,
+    "max": 0.6640176177024841
+   }
+  },
+  "LFshockDefl": {
+   "units": "m",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0026199081912636757,
+    "last": 0.013547047041356564,
+    "sum": 1151.9878155004699,
+    "min": 0.0026199081912636757,
+    "max": 0.03735795244574547
+   }
+  },
+  "LFshockVel": {
+   "units": "m/s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.012074473313987255,
+    "last": 0.0028274040669202805,
+    "sum": -15.924632809563853,
+    "min": -0.479381799697876,
+    "max": 0.4209688603878021
+   }
+  },
+  "RFshockDefl": {
+   "units": "m",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.0025966980028897524,
+    "last": 0.01890234835445881,
+    "sum": 1326.8732635593042,
+    "min": 0.0025966980028897524,
+    "max": 0.03806576132774353
+   }
+  },
+  "RFshockVel": {
+   "units": "m/s",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.011728190816938877,
+    "last": 0.0026158522814512253,
+    "sum": -15.27669916445561,
+    "min": -0.34869545698165894,
+    "max": 0.46755993366241455
+   }
+  },
+  "LFrideHeight": {
+   "units": "m",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.04861470311880112,
+    "last": 0.016805298626422882,
+    "sum": 1142.3948885053396,
+    "min": -0.002304866909980774,
+    "max": 0.08060536533594131
+   }
+  },
+  "RFrideHeight": {
+   "units": "m",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.05056021362543106,
+    "last": 0.012240737676620483,
+    "sum": 1055.2067007273436,
+    "min": -0.006718158721923828,
+    "max": 0.0746191218495369
+   }
+  },
+  "LRrideHeight": {
+   "units": "m",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.06261048465967178,
+    "last": 0.026537470519542694,
+    "sum": 1726.175924576819,
+    "min": 0.0049592554569244385,
+    "max": 0.09164292365312576
+   }
+  },
+  "RRrideHeight": {
+   "units": "m",
+   "dec_pts": 0,
+   "interpolate": true,
+   "timecodes": {
+    "length": 65642,
+    "first": 8350.0,
+    "last": 1102383.0,
+    "sum": 36455907783.0,
+    "min": 8350.0,
+    "max": 1102383.0
+   },
+   "values": {
+    "length": 65642,
+    "first": 0.06576915830373764,
+    "last": 0.03041357547044754,
+    "sum": 1645.6099618524313,
+    "min": -0.0008021295070648193,
+    "max": 0.08175498992204666
+   }
+  }
+ },
+ "laps_raw": [
+  {
+   "num": 0,
+   "start_time": 8350,
+   "end_time": 85500,
+   "lap_type": "full",
+   "session": 0
+  },
+  {
+   "num": 1,
+   "start_time": 85500,
+   "end_time": 181683,
+   "lap_type": "full",
+   "session": 0
+  },
+  {
+   "num": 2,
+   "start_time": 181683,
+   "end_time": 274233,
+   "lap_type": "full",
+   "session": 0
+  },
+  {
+   "num": 3,
+   "start_time": 274233,
+   "end_time": 366217,
+   "lap_type": "full",
+   "session": 0
+  },
+  {
+   "num": 4,
+   "start_time": 366217,
+   "end_time": 457533,
+   "lap_type": "full",
+   "session": 0
+  },
+  {
+   "num": 5,
+   "start_time": 457533,
+   "end_time": 549150,
+   "lap_type": "full",
+   "session": 0
+  },
+  {
+   "num": 6,
+   "start_time": 549150,
+   "end_time": 640400,
+   "lap_type": "full",
+   "session": 0
+  },
+  {
+   "num": 7,
+   "start_time": 640400,
+   "end_time": 732167,
+   "lap_type": "full",
+   "session": 0
+  },
+  {
+   "num": 8,
+   "start_time": 732167,
+   "end_time": 823350,
+   "lap_type": "full",
+   "session": 0
+  },
+  {
+   "num": 9,
+   "start_time": 823350,
+   "end_time": 914467,
+   "lap_type": "full",
+   "session": 0
+  },
+  {
+   "num": 10,
+   "start_time": 914467,
+   "end_time": 1005750,
+   "lap_type": "full",
+   "session": 0
+  },
+  {
+   "num": 11,
+   "start_time": 1005750,
+   "end_time": 1102383,
+   "lap_type": "partial",
+   "session": 0
+  }
+ ],
+ "metadata": {
+  "session_info_yaml": "---\nWeekendInfo:\n TrackName: phillipisland\n TrackID: 152\n TrackLength: 4.4069 km\n TrackLengthOfficial: 4.44 km\n TrackDisplayName: Phillip Island Circuit\n TrackDisplayShortName: Phillip Island\n TrackConfigName: \n TrackCity: Cowes\n TrackState: Victoria\n TrackCountry: Australia\n TrackAltitude: 47.96 m\n TrackLatitude: -38.502368 m\n TrackLongitude: 145.232198 m\n TrackNorthOffset: 2.8195 rad\n TrackNumTurns: 12\n TrackPitSpeedLimit: 72.00 kph\n TrackPaceSpeed: 26.82 kph\n TrackNumPitStalls: 44\n TrackType: road course\n TrackDirection: neutral\n TrackWeatherType: Realistic\n TrackSkies: Dynamic\n TrackSurfaceTemp: 23.42 C\n TrackSurfaceTempCrew: 23.42 C\n TrackAirTemp: 20.42 C\n TrackAirPressure: 29.74 Hg\n TrackAirDensity: 1.19 kg/m^3\n TrackWindVel: 8.91 m/s\n TrackWindDir: 4.72 rad\n TrackRelativeHumidity: 71 %\n TrackFogLevel: 0 %\n TrackPrecipitation: 0 %\n TrackCleanup: 1\n TrackDynamicTrack: 1\n TrackVersion: 2025.11.25.03\n SeriesID: 540\n SeasonID: 5944\n SessionID: 302271458\n SubSessionID: 83886469\n LeagueID: 0\n Official: 1\n RaceWeek: 10\n EventType: Race\n Category: Formula\n SimMode: full\n TeamRacing: 0\n MinDrivers: 0\n MaxDrivers: 1\n DCRuleSet: None\n QualifierMustStartRace: 0\n NumCarClasses: 1\n NumCarTypes: 2\n HeatRacing: 0\n BuildType: Release\n BuildTarget: Members\n BuildVersion: 2026.02.02.02\n RaceFarm: AU-Syd\n WeekendOptions:\n  NumStarters: 26\n  StartingGrid: 2x2 inline pole on left\n  QualifyScoring: best lap\n  CourseCautions: local\n  StandingStart: 1\n  ShortParadeLap: 0\n  Restarts: double file lapped cars behind\n  WeatherType: Realistic\n  Skies: Dynamic\n  WindDirection: N\n  WindSpeed: 3.22 km/h\n  WeatherTemp: 25.56 C\n  RelativeHumidity: 45 %\n  FogLevel: 0 %\n  TimeOfDay: 12:00 pm\n  Date: 2026-02-28\n  EarthRotationSpeedupFactor: 1\n  Unofficial: 0\n  CommercialMode: consumer\n  NightMode: variable\n  IsFixedSetup: 1\n  StrictLapsChecking: default\n  HasOpenRegistration: 0\n  HardcoreLevel: 1\n  NumJokerLaps: 0\n  IncidentLimit: 17\n  IncidentWarningInitialLimit: unlimited\n  IncidentWarningSubsequentLimit: unlimited\n  FastRepairsLimit: 1\n  GreenWhiteCheckeredLimit: 0\n TelemetryOptions:\n  TelemetryDiskFile: \"\"\n\nSessionInfo:\n CurrentSessionNum: 2\n Sessions:\n - SessionNum: 0\n   SessionLaps: unlimited\n   SessionTime: 180.0000 sec\n   SessionNumLapsToAvg: 0\n   SessionType: Practice\n   SessionTrackRubberState: high usage\n   SessionName: PRACTICE\n   SessionSubType: \n   SessionSkipped: 0\n   SessionRunGroupsUsed: 0\n   SessionEnforceTireCompoundChange: 0\n   ResultsPositions:\n   - Position: 1\n     ClassPosition: 0\n     CarIdx: 6\n     Lap: 1\n     Time: 95.5990\n     FastestLap: 1\n     FastestTime: 95.5990\n     LastTime: 95.5990\n     LapsLed: 0\n     LapsComplete: 1\n     JokerLapsComplete: 0\n     LapsDriven: 1.058\n     Incidents: 0\n     ReasonOutId: 0\n     ReasonOutStr: Running\n   - Position: 2\n     ClassPosition: 1\n     CarIdx: 8\n     Lap: 1\n     Time: 95.8925\n     FastestLap: 1\n     FastestTime: 95.8925\n     LastTime: 95.8925\n     LapsLed: 0\n     LapsComplete: 1\n     JokerLapsComplete: 0\n     LapsDriven: 1.358\n     Incidents: 0\n     ReasonOutId: 0\n     ReasonOutStr: Running\n   - Position: 3\n     ClassPosition: 2\n     CarIdx: 7\n     Lap: 1\n     Time: 96.0418\n     FastestLap: 1\n     FastestTime: 96.0418\n     LastTime: 96.0418\n     LapsLed: 0\n     LapsComplete: 1\n     JokerLapsComplete: 0\n     LapsDriven: 1.324\n     Incidents: 0\n     ReasonOutId: 0\n     ReasonOutStr: Running\n   - Position: 4\n     ClassPosition: 3\n     CarIdx: 10\n     Lap: 1\n     Time: 97.7814\n     FastestLap: 1\n     FastestTime: 97.7814\n     LastTime: 97.7814\n     LapsLed: 0\n     LapsComplete: 1\n     JokerLapsComplete: 0\n     LapsDriven: 1.223\n     Incidents: 2\n     ReasonOutId: 0\n     ReasonOutStr: Running\n   - Position: 5\n     ClassPosition: 4\n     CarIdx: 13\n     Lap: 1\n     Time: 99.6341\n     FastestLap: 1\n     FastestTime: 99.6341\n     LastTime: 99.6341\n     LapsLed: 0\n     LapsComplete: 1\n     JokerLapsComplete: 0\n     LapsDriven: 1.040\n     Incidents: 0\n     ReasonOutId: 0\n     ReasonOutStr: Running\n   - Position: 6\n     ClassPosition: 5\n     CarIdx: 4\n     Lap: 1\n     Time: 100.9612\n     FastestLap: 1\n     FastestTime: 100.9612\n     LastTime: 100.9612\n     LapsLed: 0\n     LapsComplete: 1\n     JokerLapsComplete: 0\n     LapsDriven: 1.221\n     Incidents: 1\n     ReasonOutId: 0\n     ReasonOutStr: Running\n   - Position: 7\n     ClassPosition: 6\n     CarIdx: 1\n     Lap: 0\n     Time: -1.0000\n     FastestLap: -1\n     FastestTime: -1.0000\n     LastTime: -1.0000\n     LapsLed: 0\n     LapsComplete: 0\n     JokerLapsComplete: 0\n     LapsDriven: 0.000\n     Incidents: 0\n     ReasonOutId: 0\n     ReasonOutStr: Running\n   - Position: 8\n     ClassPosition: 7\n     CarIdx: 2\n     Lap: 0\n     Time: -1.0000\n     FastestLap: -1\n     FastestTime: -1.0000\n     LastTime: -1.0000\n     LapsLed: 0\n     LapsComplete: 0\n     JokerLapsComplete: 0\n     LapsDriven: 0.000\n     Incidents: 0\n     ReasonOutId: 0\n     ReasonOutStr: Running\n   - Position: 9\n     ClassPosition: 8\n     CarIdx: 3\n     Lap: 0\n     Time: -1.0000\n     FastestLap: -1\n     FastestTime: -1.0000\n     LastTime: -1.0000\n     LapsLed: 0\n     LapsComplete: 0\n     JokerLapsComplete: 0\n     LapsDriven: 0.000\n     Incidents: 0\n     ReasonOutId: 0\n     ReasonOutStr: Running\n   - Position: 10\n     ClassPosition: 9\n     CarIdx: 5\n     Lap: 0\n     Time: -1.0000\n     FastestLap: -1\n     FastestTime: -1.0000\n     LastTime: -1.0000\n     LapsLed: 0\n     LapsComplete: 0\n     JokerLapsComplete: 0\n     LapsDriven: 0.805\n     Incidents: 0\n     ReasonOutId: 0\n     ReasonOutStr: Running\n   - Position: 11\n     ClassPosition: 10\n     CarIdx: 9\n     Lap: 0\n     Time: -1.0000\n     FastestLap: -1\n     FastestTime: -1.0000\n     LastTime: -1.0000\n     LapsLed: 0\n     LapsComplete: 0\n     JokerLapsComplete: 0\n     LapsDriven: 0.030\n     Incidents: 4\n     ReasonOutId: 0\n     ReasonOutStr: Running\n   - Position: 12\n     ClassPosition: 11\n     CarIdx: 11\n     Lap: 0\n     Time: -1.0000\n     FastestLap: -1\n     FastestTime: -1.0000\n     LastTime: -1.0000\n     LapsLed: 0\n     LapsComplete: 0\n     JokerLapsComplete: 0\n     LapsDriven: 0.000\n     Incidents: 0\n     ReasonOutId: 0\n     ReasonOutStr: Running\n   - Position: 13\n     ClassPosition: 12\n     CarIdx: 12\n     Lap: 0\n     Time: -1.0000\n     FastestLap: -1\n     FastestTime: -1.0000\n     LastTime: -1.0000\n     LapsLed: 0\n     LapsComplete: 1\n     JokerLapsComplete: 0\n     LapsDriven: 0.504\n     Incidents: 6\n     ReasonOutId: 0\n     ReasonOutStr: Running\n   - Position: 14\n     ClassPosition: 13\n     CarIdx: 14\n     Lap: 0\n     Time: -1.0000\n     FastestLap: -1\n     FastestTime: -1.0000\n     LastTime: -1.0000\n     LapsLed: 0\n     LapsComplete: 1\n     JokerLapsComplete: 0\n     LapsDriven: 0.517\n     Incidents: 4\n     ReasonOutId: 0\n     ReasonOutStr: Running\n   ResultsFastestLap:\n   - CarIdx: 6\n     FastestLap: 1\n     FastestTime: 95.5990\n   ResultsAverageLapTime: -1.0000\n   ResultsNumCautionFlags: 0\n   ResultsNumCautionLaps: 0\n   ResultsNumLeadChanges: 0\n   ResultsLapsComplete: -1\n   ResultsOfficial: 1\n - SessionNum: 1\n   SessionLaps: 2\n   SessionTime: 480.0000 sec\n   SessionNumLapsToAvg: 0\n   SessionType: Lone Qualify\n   SessionTrackRubberState: carry over\n   SessionName: QUALIFY\n   SessionSubType: \n   SessionSkipped: 0\n   SessionRunGroupsUsed: 0\n   SessionEnforceTireCompoundChange: 0\n   ResultsPositions:\n   - Position: 1\n     ClassPosition: 0\n     CarIdx: 1\n     Lap: 1\n     Time: 90.7912\n     FastestLap: 1\n     FastestTime: 90.7912\n     LastTime: 91.2787\n     LapsLed: 0\n     LapsComplete: 2\n     JokerLapsComplete: 0\n     LapsDriven: 3.068\n     Incidents: 0\n     ReasonOutId: 0\n     ReasonOutStr: Running\n   - Position: 2\n     ClassPosition: 1\n     CarIdx: 5\n     Lap: 1\n     Time: 91.0703\n     FastestLap: 1\n     FastestTime: 91.0703\n     LastTime: 91.1655\n     LapsLed: 0\n     LapsComplete: 2\n     JokerLapsComplete: 0\n     LapsDriven: 3.551\n     Incidents: 0\n     ReasonOutId: 0\n     ReasonOutStr: Running\n   - Position: 3\n     ClassPosition: 2\n     CarIdx: 3\n     Lap: 1\n     Time: 91.0953\n     FastestLap: 1\n     FastestTime: 91.0953\n     LastTime: 91.0953\n     LapsLed: 0\n     LapsComplete: 1\n     JokerLapsComplete: 0\n     LapsDriven: 2.564\n     Incidents: 3\n     ReasonOutId: 0\n     ReasonOutStr: Running\n   - Position: 4\n     ClassPosition: 3\n     CarIdx: 7\n     Lap: 1\n     Time: 91.1581\n     FastestLap: 1\n     FastestTime: 91.1581\n     LastTime: 91.5117\n     LapsLed: 0\n     LapsComplete: 2\n     JokerLapsComplete: 0\n     LapsDriven: 3.887\n     Incidents: 0\n     ReasonOutId: 0\n     ReasonOutStr: Running\n   - Position: 5\n     ClassPosition: 4\n     CarIdx: 2\n     Lap: 2\n     Time: 91.3181\n     FastestLap: 2\n     FastestTime: 91.3181\n     LastTime: 91.3181\n     LapsLed: 0\n     LapsComplete: 2\n     JokerLapsComplete: 0\n     LapsDriven: 3.089\n     Incidents: 0\n     ReasonOutId: 0\n     ReasonOutStr: Running\n   - Position: 6\n     ClassPosition: 5\n     CarIdx: 11\n     Lap: 2\n     Time: 91.3575\n     FastestLap: 2\n     FastestTime: 91.3575\n     LastTime: 91.3575\n     LapsLed: 0\n     LapsComplete: 2\n     JokerLapsComplete: 0\n     LapsDriven: 3.178\n     Incidents: 0\n     ReasonOutId: 0\n     ReasonOutStr: Running\n   - Position: 7\n     ClassPosition: 6\n     CarIdx: 12\n     Lap: 1\n     Time: 91.9141\n     FastestLap: 1\n     FastestTime: 91.9141\n     LastTime: 92.1556\n     LapsLed: 0\n     LapsComplete: 2\n     JokerLapsComplete: 0\n     LapsDriven: 3.563\n     Incidents: 2\n     ReasonOutId: 0\n     ReasonOutStr: Running\n   - Position: 8\n     ClassPosition: 7\n     CarIdx: 6\n     Lap: 2\n     Time: 92.1350\n     FastestLap: 2\n     FastestTime: 92.1350\n     LastTime: 92.1350\n     LapsLed: 0\n     LapsComplete: 2\n     JokerLapsComplete: 0\n     LapsDriven: 3.088\n     Incidents: 2\n     ReasonOutId: 0\n     ReasonOutStr: Running\n   - Position: 9\n     ClassPosition: 8\n     CarIdx: 10\n     Lap: 1\n     Time: 92.3040\n     FastestLap: 1\n     FastestTime: 92.3040\n     LastTime: -1.0000\n     LapsLed: 0\n     LapsComplete: 2\n     JokerLapsComplete: 0\n     LapsDriven: 3.086\n     Incidents: 3\n     ReasonOutId: 0\n     ReasonOutStr: Running\n   - Position: 10\n     ClassPosition: 9\n     CarIdx: 8\n     Lap: 1\n     Time: 92.3288\n     FastestLap: 1\n     FastestTime: 92.3288\n     LastTime: 92.4202\n     LapsLed: 0\n     LapsComplete: 2\n     JokerLapsComplete: 0\n     LapsDriven: 3.088\n     Incidents: 0\n     ReasonOutId: 0\n     ReasonOutStr: Running\n   - Position: 11\n     ClassPosition: 10\n     CarIdx: 4\n     Lap: 1\n     Time: 93.4616\n     FastestLap: 1\n     FastestTime: 93.4616\n     LastTime: 94.1771\n     LapsLed: 0\n     LapsComplete: 2\n     JokerLapsComplete: 0\n     LapsDriven: 3.110\n     Incidents: 2\n     ReasonOutId: 0\n     ReasonOutStr: Running\n   - Position: 12\n     ClassPosition: 11\n     CarIdx: 9\n     Lap: 2\n     Time: 94.4319\n     FastestLap: 2\n     FastestTime: 94.4319\n     LastTime: 94.4319\n     LapsLed: 0\n     LapsComplete: 2\n     JokerLapsComplete: 0\n     LapsDriven: 3.109\n     Incidents: 1\n     ReasonOutId: 0\n     ReasonOutStr: Running\n   - Position: 13\n     ClassPosition: 12\n     CarIdx: 13\n     Lap: 2\n     Time: 96.1627\n     FastestLap: 2\n     FastestTime: 96.1627\n     LastTime: 96.1627\n     LapsLed: 0\n     LapsComplete: 2\n     JokerLapsComplete: 0\n     LapsDriven: 3.512\n     Incidents: 0\n     ReasonOutId: 0\n     ReasonOutStr: Running\n   - Position: 14\n     ClassPosition: 13\n     CarIdx: 14\n     Lap: 0\n     Time: -1.0000\n     FastestLap: -1\n     FastestTime: -1.0000\n     LastTime: -1.0000\n     LapsLed: 0\n     LapsComplete: 2\n     JokerLapsComplete: 0\n     LapsDriven: 3.113\n     Incidents: 3\n     ReasonOutId: 0\n     ReasonOutStr: Running\n   ResultsFastestLap:\n   - CarIdx: 1\n     FastestLap: 1\n     FastestTime: 90.7912\n   ResultsAverageLapTime: -1.0000\n   ResultsNumCautionFlags: 0\n   ResultsNumCautionLaps: 0\n   ResultsNumLeadChanges: 0\n   ResultsLapsComplete: -1\n   ResultsOfficial: 1\n - SessionNum: 2\n   SessionLaps: unlimited\n   SessionTime: 900.0000 sec\n   SessionNumLapsToAvg: 0\n   SessionType: Race\n   SessionTrackRubberState: carry over\n   SessionName: RACE\n   SessionSubType: \n   SessionSkipped: 0\n   SessionRunGroupsUsed: 0\n   SessionEnforceTireCompoundChange: 0\n   ResultsPositions:\n   ResultsFastestLap:\n   - CarIdx: 255\n     FastestLap: 0\n     FastestTime: -1.0000\n   ResultsAverageLapTime: -1.0000\n   ResultsNumCautionFlags: 0\n   ResultsNumCautionLaps: 0\n   ResultsNumLeadChanges: 0\n   ResultsLapsComplete: -1\n   ResultsOfficial: 0\n\nQualifyResultsInfo:\n Results:\n - Position: 0\n   ClassPosition: 0\n   CarIdx: 1\n   FastestLap: 1\n   FastestTime: 90.7912\n - Position: 1\n   ClassPosition: 1\n   CarIdx: 5\n   FastestLap: 1\n   FastestTime: 91.0703\n - Position: 2\n   ClassPosition: 2\n   CarIdx: 3\n   FastestLap: 1\n   FastestTime: 91.0953\n - Position: 3\n   ClassPosition: 3\n   CarIdx: 7\n   FastestLap: 1\n   FastestTime: 91.1581\n - Position: 4\n   ClassPosition: 4\n   CarIdx: 2\n   FastestLap: 2\n   FastestTime: 91.3181\n - Position: 5\n   ClassPosition: 5\n   CarIdx: 11\n   FastestLap: 2\n   FastestTime: 91.3575\n - Position: 6\n   ClassPosition: 6\n   CarIdx: 12\n   FastestLap: 1\n   FastestTime: 91.9141\n - Position: 7\n   ClassPosition: 7\n   CarIdx: 6\n   FastestLap: 2\n   FastestTime: 92.1350\n - Position: 8\n   ClassPosition: 8\n   CarIdx: 10\n   FastestLap: 1\n   FastestTime: 92.3040\n - Position: 9\n   ClassPosition: 9\n   CarIdx: 8\n   FastestLap: 1\n   FastestTime: 92.3288\n - Position: 10\n   ClassPosition: 10\n   CarIdx: 4\n   FastestLap: 1\n   FastestTime: 93.4616\n - Position: 11\n   ClassPosition: 11\n   CarIdx: 9\n   FastestLap: 2\n   FastestTime: 94.4319\n - Position: 12\n   ClassPosition: 12\n   CarIdx: 13\n   FastestLap: 2\n   FastestTime: 96.1627\n - Position: 13\n   ClassPosition: 13\n   CarIdx: 14\n   FastestLap: 0\n   FastestTime: -1.0000\n\nCameraInfo:\n Groups:\n - GroupNum: 1\n   GroupName: Nose\n   Cameras:\n   - CameraNum: 1\n     CameraName: CamNose\n - GroupNum: 2\n   GroupName: Gearbox\n   Cameras:\n   - CameraNum: 1\n     CameraName: CamGearbox\n - GroupNum: 3\n   GroupName: Roll Bar\n   Cameras:\n   - CameraNum: 1\n     CameraName: CamRoll Bar\n - GroupNum: 4\n   GroupName: LF Susp\n   Cameras:\n   - CameraNum: 1\n     CameraName: CamLF Susp\n - GroupNum: 5\n   GroupName: LR Susp\n   Cameras:\n   - CameraNum: 1\n     CameraName: CamLR Susp\n - GroupNum: 6\n   GroupName: Gyro\n   Cameras:\n   - CameraNum: 1\n     CameraName: CamGyro\n - GroupNum: 7\n   GroupName: RF Susp\n   Cameras:\n   - CameraNum: 1\n     CameraName: CamRF Susp\n - GroupNum: 8\n   GroupName: RR Susp\n   Cameras:\n   - CameraNum: 1\n     CameraName: CamRR Susp\n - GroupNum: 9\n   GroupName: Cockpit\n   Cameras:\n   - CameraNum: 1\n     CameraName: CamCockpit\n - GroupNum: 10\n   GroupName: Blimp\n   Cameras:\n   - CameraNum: 1\n     CameraName: CamBlimp\n - GroupNum: 11\n   GroupName: Chopper\n   Cameras:\n   - CameraNum: 1\n     CameraName: CamChopper\n - GroupNum: 12\n   GroupName: Chase\n   Cameras:\n   - CameraNum: 1\n     CameraName: CamChase\n - GroupNum: 13\n   GroupName: Far Chase\n   Cameras:\n   - CameraNum: 1\n     CameraName: CamFar Chase\n - GroupNum: 14\n   GroupName: Rear Chase\n   Cameras:\n   - CameraNum: 1\n     CameraName: CamRear Chase\n - GroupNum: 15\n   GroupName: Pit Lane\n   Cameras:\n   - CameraNum: 1\n     CameraName: CamPit Lane\n - GroupNum: 16\n   GroupName: Pit Lane 2\n   Cameras:\n   - CameraNum: 1\n     CameraName: CamPit Lane 2\n - GroupNum: 17\n   GroupName: Scenic\n   IsScenic: true\n   Cameras:\n   - CameraNum: 1\n     CameraName: Scenic_00\n   - CameraNum: 2\n     CameraName: Scenic_01\n   - CameraNum: 3\n     CameraName: Scenic_03\n   - CameraNum: 4\n     CameraName: Scenic_04\n   - CameraNum: 5\n     CameraName: Scenic_05\n   - CameraNum: 6\n     CameraName: Scenic_06\n - GroupNum: 18\n   GroupName: TV1\n   Cameras:\n   - CameraNum: 1\n     CameraName: CamTV1_00\n   - CameraNum: 2\n     CameraName: CamTV1_01\n   - CameraNum: 3\n     CameraName: CamTV1_02\n   - CameraNum: 4\n     CameraName: CamTV1_03\n   - CameraNum: 5\n     CameraName: CamTV1_04\n   - CameraNum: 6\n     CameraName: CamTV1_05\n   - CameraNum: 7\n     CameraName: CamTV1_06\n   - CameraNum: 8\n     CameraName: CamTV1_07\n   - CameraNum: 9\n     CameraName: CamTV1_08\n   - CameraNum: 10\n     CameraName: CamTV1_09\n   - CameraNum: 11\n     CameraName: CamTV1_10\n   - CameraNum: 12\n     CameraName: CamTV1_11\n - GroupNum: 19\n   GroupName: TV2\n   Cameras:\n   - CameraNum: 1\n     CameraName: CamTV2_06\n   - CameraNum: 2\n     CameraName: CamTV2_10\n   - CameraNum: 3\n     CameraName: CamTV2_11\n   - CameraNum: 4\n     CameraName: CamTV2_09\n   - CameraNum: 5\n     CameraName: CamTV2_08\n   - CameraNum: 6\n     CameraName: CamTV2_07\n   - CameraNum: 7\n     CameraName: CamTV2_05\n   - CameraNum: 8\n     CameraName: CamTV2_04\n   - CameraNum: 9\n     CameraName: CamTV2_03\n   - CameraNum: 10\n     CameraName: CamTV2_02\n   - CameraNum: 11\n     CameraName: CamTV2_01\n   - CameraNum: 12\n     CameraName: CamTV2_00\n - GroupNum: 20\n   GroupName: TV3\n   Cameras:\n   - CameraNum: 1\n     CameraName: CamTV3_00\n   - CameraNum: 2\n     CameraName: CamTV3_01\n   - CameraNum: 3\n     CameraName: CamTV3_02\n   - CameraNum: 4\n     CameraName: CamTV3_03\n   - CameraNum: 5\n     CameraName: CamTV3_04\n   - CameraNum: 6\n     CameraName: CamTV3_05\n   - CameraNum: 7\n     CameraName: CamTV3_06\n   - CameraNum: 8\n     CameraName: CamTV3_07\n   - CameraNum: 9\n     CameraName: CamTV3_08\n   - CameraNum: 10\n     CameraName: CamTV3_09\n   - CameraNum: 11\n     CameraName: CamTV3_10\n   - CameraNum: 12\n     CameraName: CamTV3_11\n   - CameraNum: 13\n     CameraName: CamTV3_12\n\nRadioInfo:\n SelectedRadioNum: 0\n Radios:\n - RadioNum: 0\n   HopCount: 2\n   NumFrequencies: 5\n   TunedToFrequencyNum: 0\n   ScanningIsOn: 1\n   Frequencies:\n   - FrequencyNum: 0\n     FrequencyName: \"@ALLTEAMS\"\n     Priority: 12\n     CarIdx: -1\n     EntryIdx: -1\n     ClubID: 0\n     CanScan: 1\n     CanSquawk: 1\n     Muted: 0\n     IsMutable: 1\n     IsDeletable: 0\n   - FrequencyNum: 1\n     FrequencyName: \"@DRIVERS\"\n     Priority: 15\n     CarIdx: -1\n     EntryIdx: -1\n     ClubID: 0\n     CanScan: 1\n     CanSquawk: 0\n     Muted: 0\n     IsMutable: 1\n     IsDeletable: 0\n   - FrequencyNum: 2\n     FrequencyName: \"@TEAM\"\n     Priority: 60\n     CarIdx: 7\n     EntryIdx: -1\n     ClubID: 0\n     CanScan: 1\n     CanSquawk: 1\n     Muted: 0\n     IsMutable: 0\n     IsDeletable: 0\n   - FrequencyNum: 3\n     FrequencyName: \"@RACECONTROL\"\n     Priority: 80\n     CarIdx: -1\n     EntryIdx: -1\n     ClubID: 0\n     CanScan: 1\n     CanSquawk: 0\n     Muted: 0\n     IsMutable: 0\n     IsDeletable: 0\n   - FrequencyNum: 4\n     FrequencyName: \"@PRIVATE\"\n     Priority: 70\n     CarIdx: -1\n     EntryIdx: 7\n     ClubID: 0\n     CanScan: 1\n     CanSquawk: 1\n     Muted: 0\n     IsMutable: 0\n     IsDeletable: 0\n\nDriverInfo:\n DriverCarIdx: 7\n DriverUserID: 356922\n PaceCarIdx: 0\n DriverIsAdmin: 0\n DriverHeadPosX: -0.114\n DriverHeadPosY: 0.000\n DriverHeadPosZ: 0.395\n DriverCarIsElectric: 0\n DriverCarIdleRPM: 1200.000\n DriverCarRedLine: 7300.000\n DriverCarEngCylinderCount: 4\n DriverCarFuelKgPerLtr: 0.750\n DriverCarFuelMaxLtr: 40.000\n DriverCarMaxFuelPct: 1.000\n DriverCarGearNumForward: 6\n DriverCarGearNeutral: 1\n DriverCarGearReverse: 1\n DriverGearboxType: Sequential\n DriverGearboxControlType: Sequential\n DriverCarShiftAid: Manual\n DriverCarSLFirstRPM: 6300.000\n DriverCarSLShiftRPM: 6500.000\n DriverCarSLLastRPM: 6900.000\n DriverCarSLBlinkRPM: 7000.000\n DriverCarVersion: 2025.12.03.02\n DriverPitTrkPct: 0.983242\n DriverCarEstLapTime: 87.8547\n DriverSetupName: phillipisland.sto\n DriverSetupIsModified: 0\n DriverSetupLoadTypeName: fixed\n DriverSetupPassedTech: 1\n DriverIncidentCount: 0\n DriverBrakeCurvingFactor: 0.001\n DriverTires:\n - TireIndex: 0\n   TireCompoundType: \"Hard\"\n - TireIndex: 1\n   TireCompoundType: \"Wet\"\n Drivers:\n - CarIdx: 0\n   UserName: Pace Car\n   AbbrevName: \n   Initials: \n   UserID: -1\n   TeamID: 0\n   TeamName: Pace Car\n   CarNumber: \"0\"\n   CarNumberRaw: 0\n   CarPath: safety pcporsche911cup\n   CarClassID: 11\n   CarID: 108\n   CarIsPaceCar: 1\n   CarIsAI: 0\n   CarIsElectric: 0\n   CarScreenName: safety pcporsche911cup\n   CarScreenNameShort: safety pcporsche911cup\n   CarCfg: -1\n   CarCfgName: \n   CarCfgCustomPaintExt: \n   CarClassShortName: \n   CarClassRelSpeed: 0\n   CarClassLicenseLevel: 0\n   CarClassMaxFuelPct: 1.000 %\n   CarClassWeightPenalty: 0.000 kg\n   CarClassPowerAdjust: 0.000 %\n   CarClassDryTireSetLimit: 0 %\n   CarClassColor: 0xffffff\n   CarClassEstLapTime: 90.0720\n   IRating: 0\n   LicLevel: 1\n   LicSubLevel: 0\n   LicString: R 0.00\n   LicColor: 0xffffff\n   IsSpectator: 0\n   CarDesignStr: 0,ffffff,ffffff,ffffff\n   HelmetDesignStr: 0,ffffff,ffffff,ffffff\n   SuitDesignStr: 0,ffffff,ffffff,ffffff\n   BodyType: 0\n   FaceType: 0\n   HelmetType: 0\n   CarNumberDesignStr: 0,0,ffffff,ffffff,ffffff\n   CarSponsor_1: 0\n   CarSponsor_2: 0\n   ClubName: None\n   ClubID: 0\n   FlairName: -none-\n   FlairID: 0\n   DivisionName: Division 1\n   DivisionID: 0\n   CurDriverIncidentCount: -1\n   TeamIncidentCount: -1\n - CarIdx: 1\n   UserName: Jesus M Gonzalez\n   AbbrevName: Gonzalez, J\n   Initials: JG\n   UserID: 858336\n   TeamID: 0\n   TeamName: Jesus M Gonzalez\n   CarNumber: \"1\"\n   CarNumberRaw: 1\n   CarPath: formulair04\n   CarClassID: 3188\n   CarID: 148\n   CarIsPaceCar: 0\n   CarIsAI: 0\n   CarIsElectric: 0\n   CarScreenName: FIA F4\n   CarScreenNameShort: FIA F4\n   CarCfg: -1\n   CarCfgName: \n   CarCfgCustomPaintExt: \n   CarClassShortName: FIA F4\n   CarClassRelSpeed: 47\n   CarClassLicenseLevel: 0\n   CarClassMaxFuelPct: 1.000 %\n   CarClassWeightPenalty: 0.000 kg\n   CarClassPowerAdjust: 0.000 %\n   CarClassDryTireSetLimit: 0 %\n   CarClassColor: 0xffffff\n   CarClassEstLapTime: 87.8547\n   IRating: 3636\n   LicLevel: 19\n   LicSubLevel: 352\n   LicString: A 3.52\n   LicColor: 0x0153db\n   IsSpectator: 0\n   CarDesignStr: 4,8a8a8a,ffffff,ffffff,404040\n   HelmetDesignStr: 16,00ede6,000000,2c2a2b\n   SuitDesignStr: 8,111111,05c3ff,353535\n   BodyType: 0\n   FaceType: 6\n   HelmetType: 0\n   CarNumberDesignStr: 27,2,ff4343,000000,8a8a8a\n   CarSponsor_1: 223\n   CarSponsor_2: 0\n   ClubName: None\n   ClubID: 0\n   FlairName: Puerto Rico\n   FlairID: 169\n   DivisionName: Division 2\n   DivisionID: 1\n   CurDriverIncidentCount: -1\n   TeamIncidentCount: -1\n - CarIdx: 2\n   UserName: Brent Cers\n   AbbrevName: Cers, B\n   Initials: BC\n   UserID: 128226\n   TeamID: 0\n   TeamName: Brent Cers\n   CarNumber: \"2\"\n   CarNumberRaw: 2\n   CarPath: formulair04\n   CarClassID: 3188\n   CarID: 148\n   CarIsPaceCar: 0\n   CarIsAI: 0\n   CarIsElectric: 0\n   CarScreenName: FIA F4\n   CarScreenNameShort: FIA F4\n   CarCfg: -1\n   CarCfgName: \n   CarCfgCustomPaintExt: \n   CarClassShortName: FIA F4\n   CarClassRelSpeed: 47\n   CarClassLicenseLevel: 0\n   CarClassMaxFuelPct: 1.000 %\n   CarClassWeightPenalty: 0.000 kg\n   CarClassPowerAdjust: 0.000 %\n   CarClassDryTireSetLimit: 0 %\n   CarClassColor: 0xffffff\n   CarClassEstLapTime: 87.8547\n   IRating: 3136\n   LicLevel: 10\n   LicSubLevel: 279\n   LicString: C 2.79\n   LicColor: 0xfeec04\n   IsSpectator: 0\n   CarDesignStr: 1,bbbbbb,e0b100,035200\n   HelmetDesignStr: 66,ffffff,a8fff2,7e7e7e\n   SuitDesignStr: 32,ffffff,a8fff2,7e7e7e\n   BodyType: 0\n   FaceType: 8\n   HelmetType: 0\n   CarNumberDesignStr: 0,0,ffffff,777777,000000\n   CarSponsor_1: 0\n   CarSponsor_2: 0\n   ClubName: None\n   ClubID: 0\n   FlairName: Australia\n   FlairID: 16\n   DivisionName: Division 2\n   DivisionID: 1\n   CurDriverIncidentCount: -1\n   TeamIncidentCount: -1\n - CarIdx: 3\n   UserName: Lynton Dell\n   AbbrevName: Dell, L\n   Initials: LD\n   UserID: 1177674\n   TeamID: 0\n   TeamName: Lynton Dell\n   CarNumber: \"3\"\n   CarNumberRaw: 3\n   CarPath: formulair04\n   CarClassID: 3188\n   CarID: 148\n   CarIsPaceCar: 0\n   CarIsAI: 0\n   CarIsElectric: 0\n   CarScreenName: FIA F4\n   CarScreenNameShort: FIA F4\n   CarCfg: -1\n   CarCfgName: \n   CarCfgCustomPaintExt: \n   CarClassShortName: FIA F4\n   CarClassRelSpeed: 47\n   CarClassLicenseLevel: 0\n   CarClassMaxFuelPct: 1.000 %\n   CarClassWeightPenalty: 0.000 kg\n   CarClassPowerAdjust: 0.000 %\n   CarClassDryTireSetLimit: 0 %\n   CarClassColor: 0xffffff\n   CarClassEstLapTime: 87.8547\n   IRating: 2700\n   LicLevel: 11\n   LicSubLevel: 329\n   LicString: C 3.29\n   LicColor: 0xfeec04\n   IsSpectator: 0\n   CarDesignStr: 8,8d8b8b,8d8b8b,8d8b8b.000000\n   HelmetDesignStr: 1,8d8b8b,8d8b8b,8d8b8b\n   SuitDesignStr: 1,8d8b8b,8d8b8b,8d8b8b\n   BodyType: 0\n   FaceType: 10\n   HelmetType: 0\n   CarNumberDesignStr: 0,0,f4f4f4,777777,000000\n   CarSponsor_1: 2\n   CarSponsor_2: 2\n   ClubName: None\n   ClubID: 0\n   FlairName: United Kingdom\n   FlairID: 222\n   DivisionName: Division 3\n   DivisionID: 2\n   CurDriverIncidentCount: -1\n   TeamIncidentCount: -1\n - CarIdx: 4\n   UserName: Chris Nankiville\n   AbbrevName: Nankiville, C\n   Initials: CN\n   UserID: 512100\n   TeamID: 0\n   TeamName: Chris Nankiville\n   CarNumber: \"4\"\n   CarNumberRaw: 4\n   CarPath: formulair04\n   CarClassID: 3188\n   CarID: 148\n   CarIsPaceCar: 0\n   CarIsAI: 0\n   CarIsElectric: 0\n   CarScreenName: FIA F4\n   CarScreenNameShort: FIA F4\n   CarCfg: -1\n   CarCfgName: \n   CarCfgCustomPaintExt: \n   CarClassShortName: FIA F4\n   CarClassRelSpeed: 47\n   CarClassLicenseLevel: 0\n   CarClassMaxFuelPct: 1.000 %\n   CarClassWeightPenalty: 0.000 kg\n   CarClassPowerAdjust: 0.000 %\n   CarClassDryTireSetLimit: 0 %\n   CarClassColor: 0xffffff\n   CarClassEstLapTime: 87.8547\n   IRating: 1977\n   LicLevel: 18\n   LicSubLevel: 255\n   LicString: A 2.55\n   LicColor: 0x0153db\n   IsSpectator: 0\n   CarDesignStr: 1,0029ff,0085ff,6d6e71\n   HelmetDesignStr: 52,ffffff,6d6d6d,080808\n   SuitDesignStr: 7,110303,ed2129,6d6e71\n   BodyType: 0\n   FaceType: 0\n   HelmetType: 0\n   CarNumberDesignStr: 0,0,ffffff,777777,000000\n   CarSponsor_1: 0\n   CarSponsor_2: 0\n   ClubName: None\n   ClubID: 0\n   FlairName: Australia\n   FlairID: 16\n   DivisionName: Division 4\n   DivisionID: 3\n   CurDriverIncidentCount: -1\n   TeamIncidentCount: -1\n - CarIdx: 5\n   UserName: Andrew Yong2\n   AbbrevName: Yong2, A\n   Initials: AY\n   UserID: 1255301\n   TeamID: 0\n   TeamName: Andrew Yong2\n   CarNumber: \"5\"\n   CarNumberRaw: 5\n   CarPath: formulair04\n   CarClassID: 3188\n   CarID: 148\n   CarIsPaceCar: 0\n   CarIsAI: 0\n   CarIsElectric: 0\n   CarScreenName: FIA F4\n   CarScreenNameShort: FIA F4\n   CarCfg: -1\n   CarCfgName: \n   CarCfgCustomPaintExt: \n   CarClassShortName: FIA F4\n   CarClassRelSpeed: 47\n   CarClassLicenseLevel: 0\n   CarClassMaxFuelPct: 1.000 %\n   CarClassWeightPenalty: 0.000 kg\n   CarClassPowerAdjust: 0.000 %\n   CarClassDryTireSetLimit: 0 %\n   CarClassColor: 0xffffff\n   CarClassEstLapTime: 87.8547\n   IRating: 1915\n   LicLevel: 7\n   LicSubLevel: 372\n   LicString: D 3.72\n   LicColor: 0xfc8a27\n   IsSpectator: 0\n   CarDesignStr: 3,0a0a0a,2b41d6,7eff2f\n   HelmetDesignStr: 36,0a0a0a,2b41d6,7eff2f\n   SuitDesignStr: 5,0a0a0a,0858b6,a0f620\n   BodyType: 0\n   FaceType: 0\n   HelmetType: 0\n   CarNumberDesignStr: 0,0,ffffff,777777,000000\n   CarSponsor_1: 0\n   CarSponsor_2: 0\n   ClubName: None\n   ClubID: 0\n   FlairName: Australia\n   FlairID: 16\n   DivisionName: Division 5\n   DivisionID: 4\n   CurDriverIncidentCount: -1\n   TeamIncidentCount: -1\n - CarIdx: 6\n   UserName: PJ Irwin\n   AbbrevName: Irwin, P\n   Initials: PI\n   UserID: 623116\n   TeamID: 0\n   TeamName: PJ Irwin\n   CarNumber: \"6\"\n   CarNumberRaw: 6\n   CarPath: formulair04\n   CarClassID: 3188\n   CarID: 148\n   CarIsPaceCar: 0\n   CarIsAI: 0\n   CarIsElectric: 0\n   CarScreenName: FIA F4\n   CarScreenNameShort: FIA F4\n   CarCfg: -1\n   CarCfgName: \n   CarCfgCustomPaintExt: \n   CarClassShortName: FIA F4\n   CarClassRelSpeed: 47\n   CarClassLicenseLevel: 0\n   CarClassMaxFuelPct: 1.000 %\n   CarClassWeightPenalty: 0.000 kg\n   CarClassPowerAdjust: 0.000 %\n   CarClassDryTireSetLimit: 0 %\n   CarClassColor: 0xffffff\n   CarClassEstLapTime: 87.8547\n   IRating: 1906\n   LicLevel: 10\n   LicSubLevel: 266\n   LicString: C 2.66\n   LicColor: 0xfeec04\n   IsSpectator: 0\n   CarDesignStr: 0,ffffff,ffffff,ffffff.ebeae6\n   HelmetDesignStr: 3,ff0000,ff0000,ffffff\n   SuitDesignStr: 21,ff0000,ff0000,ffffff\n   BodyType: 0\n   FaceType: 0\n   HelmetType: 0\n   CarNumberDesignStr: 28,0,ffffff,000000,ff0000\n   CarSponsor_1: 276\n   CarSponsor_2: 246\n   ClubName: None\n   ClubID: 0\n   FlairName: Australia\n   FlairID: 16\n   DivisionName: Division 4\n   DivisionID: 3\n   CurDriverIncidentCount: -1\n   TeamIncidentCount: -1\n - CarIdx: 7\n   UserName: Chris Dewan\n   AbbrevName: Dewan, C\n   Initials: CD\n   UserID: 356922\n   TeamID: 0\n   TeamName: Chris Dewan\n   CarNumber: \"7\"\n   CarNumberRaw: 7\n   CarPath: formulair04\n   CarClassID: 3188\n   CarID: 148\n   CarIsPaceCar: 0\n   CarIsAI: 0\n   CarIsElectric: 0\n   CarScreenName: FIA F4\n   CarScreenNameShort: FIA F4\n   CarCfg: -1\n   CarCfgName: \n   CarCfgCustomPaintExt: \n   CarClassShortName: FIA F4\n   CarClassRelSpeed: 47\n   CarClassLicenseLevel: 0\n   CarClassMaxFuelPct: 1.000 %\n   CarClassWeightPenalty: 0.000 kg\n   CarClassPowerAdjust: 0.000 %\n   CarClassDryTireSetLimit: 0 %\n   CarClassColor: 0xffffff\n   CarClassEstLapTime: 87.8547\n   IRating: 1884\n   LicLevel: 13\n   LicSubLevel: 152\n   LicString: B 1.52\n   LicColor: 0x00c702\n   IsSpectator: 0\n   CarDesignStr: 7,ffffff,ec3a3a,c78f00\n   HelmetDesignStr: 1,d7162d,efd600,111111\n   SuitDesignStr: 1,9ec2ff,afffe4,111111\n   BodyType: 0\n   FaceType: 0\n   HelmetType: 0\n   CarNumberDesignStr: 0,0,ffffff,777777,000000\n   CarSponsor_1: 0\n   CarSponsor_2: 0\n   ClubName: None\n   ClubID: 0\n   FlairName: Japan\n   FlairID: 104\n   DivisionName: Division 4\n   DivisionID: 3\n   CurDriverIncidentCount: 0\n   TeamIncidentCount: 0\n - CarIdx: 8\n   UserName: Stefan G\ufffdsser\n   AbbrevName: G\ufffdsser, S\n   Initials: SG\n   UserID: 1190673\n   TeamID: 0\n   TeamName: Stefan G\ufffdsser\n   CarNumber: \"8\"\n   CarNumberRaw: 8\n   CarPath: formulair04\n   CarClassID: 3188\n   CarID: 148\n   CarIsPaceCar: 0\n   CarIsAI: 0\n   CarIsElectric: 0\n   CarScreenName: FIA F4\n   CarScreenNameShort: FIA F4\n   CarCfg: -1\n   CarCfgName: \n   CarCfgCustomPaintExt: \n   CarClassShortName: FIA F4\n   CarClassRelSpeed: 47\n   CarClassLicenseLevel: 0\n   CarClassMaxFuelPct: 1.000 %\n   CarClassWeightPenalty: 0.000 kg\n   CarClassPowerAdjust: 0.000 %\n   CarClassDryTireSetLimit: 0 %\n   CarClassColor: 0xffffff\n   CarClassEstLapTime: 87.8547\n   IRating: 1765\n   LicLevel: 18\n   LicSubLevel: 278\n   LicString: A 2.78\n   LicColor: 0x0153db\n   IsSpectator: 0\n   CarDesignStr: 17,004fff,0085ff,1b5795\n   HelmetDesignStr: 22,004fff,0085ff,1b5795\n   SuitDesignStr: 31,005eff,ff6b00,12dd26\n   BodyType: 1\n   FaceType: 0\n   HelmetType: 0\n   CarNumberDesignStr: 16,0,0057ff,ff0000,000000\n   CarSponsor_1: 0\n   CarSponsor_2: 0\n   ClubName: None\n   ClubID: 0\n   FlairName: Germany\n   FlairID: 77\n   DivisionName: Division 5\n   DivisionID: 4\n   CurDriverIncidentCount: -1\n   TeamIncidentCount: -1\n - CarIdx: 9\n   UserName: Luke Paton\n   AbbrevName: Paton, L\n   Initials: LP\n   UserID: 498964\n   TeamID: 0\n   TeamName: Luke Paton\n   CarNumber: \"9\"\n   CarNumberRaw: 9\n   CarPath: formulair04\n   CarClassID: 3188\n   CarID: 148\n   CarIsPaceCar: 0\n   CarIsAI: 0\n   CarIsElectric: 0\n   CarScreenName: FIA F4\n   CarScreenNameShort: FIA F4\n   CarCfg: -1\n   CarCfgName: \n   CarCfgCustomPaintExt: \n   CarClassShortName: FIA F4\n   CarClassRelSpeed: 47\n   CarClassLicenseLevel: 0\n   CarClassMaxFuelPct: 1.000 %\n   CarClassWeightPenalty: 0.000 kg\n   CarClassPowerAdjust: 0.000 %\n   CarClassDryTireSetLimit: 0 %\n   CarClassColor: 0xffffff\n   CarClassEstLapTime: 87.8547\n   IRating: 1532\n   LicLevel: 6\n   LicSubLevel: 212\n   LicString: D 2.12\n   LicColor: 0xfc8a27\n   IsSpectator: 0\n   CarDesignStr: 12,ff0000,ffffff,0000ff\n   HelmetDesignStr: 2,ff0000,ffffff,0000ff\n   SuitDesignStr: 1,ffffff,ff0000,0000ff\n   BodyType: 0\n   FaceType: 0\n   HelmetType: 0\n   CarNumberDesignStr: 0,0,ffffff,777777,000000\n   CarSponsor_1: 0\n   CarSponsor_2: 0\n   ClubName: None\n   ClubID: 0\n   FlairName: Australia\n   FlairID: 16\n   DivisionName: Division 6\n   DivisionID: 5\n   CurDriverIncidentCount: -1\n   TeamIncidentCount: -1\n - CarIdx: 10\n   UserName: Jerry Agathos\n   AbbrevName: Agathos, J\n   Initials: JA\n   UserID: 547804\n   TeamID: 0\n   TeamName: Jerry Agathos\n   CarNumber: \"10\"\n   CarNumberRaw: 10\n   CarPath: formulair04\n   CarClassID: 3188\n   CarID: 148\n   CarIsPaceCar: 0\n   CarIsAI: 0\n   CarIsElectric: 0\n   CarScreenName: FIA F4\n   CarScreenNameShort: FIA F4\n   CarCfg: -1\n   CarCfgName: \n   CarCfgCustomPaintExt: \n   CarClassShortName: FIA F4\n   CarClassRelSpeed: 47\n   CarClassLicenseLevel: 0\n   CarClassMaxFuelPct: 1.000 %\n   CarClassWeightPenalty: 0.000 kg\n   CarClassPowerAdjust: 0.000 %\n   CarClassDryTireSetLimit: 0 %\n   CarClassColor: 0xffffff\n   CarClassEstLapTime: 87.8547\n   IRating: 1439\n   LicLevel: 11\n   LicSubLevel: 338\n   LicString: C 3.38\n   LicColor: 0xfeec04\n   IsSpectator: 0\n   CarDesignStr: 4,7c8083,000000,2b2929\n   HelmetDesignStr: 14,f5fbff,1ba4b3,14b9e3\n   SuitDesignStr: 32,187bb8,f0f1f2,ffffff\n   BodyType: 0\n   FaceType: 0\n   HelmetType: 0\n   CarNumberDesignStr: 0,0,ffffff,777777,000000\n   CarSponsor_1: 0\n   CarSponsor_2: 0\n   ClubName: None\n   ClubID: 0\n   FlairName: Greece\n   FlairID: 80\n   DivisionName: Division 7\n   DivisionID: 6\n   CurDriverIncidentCount: -1\n   TeamIncidentCount: -1\n - CarIdx: 11\n   UserName: Bill Theodossiadis\n   AbbrevName: Theodossiadis, B\n   Initials: BT\n   UserID: 1267030\n   TeamID: 0\n   TeamName: Bill Theodossiadis\n   CarNumber: \"11\"\n   CarNumberRaw: 11\n   CarPath: formulair04\n   CarClassID: 3188\n   CarID: 148\n   CarIsPaceCar: 0\n   CarIsAI: 0\n   CarIsElectric: 0\n   CarScreenName: FIA F4\n   CarScreenNameShort: FIA F4\n   CarCfg: -1\n   CarCfgName: \n   CarCfgCustomPaintExt: \n   CarClassShortName: FIA F4\n   CarClassRelSpeed: 47\n   CarClassLicenseLevel: 0\n   CarClassMaxFuelPct: 1.000 %\n   CarClassWeightPenalty: 0.000 kg\n   CarClassPowerAdjust: 0.000 %\n   CarClassDryTireSetLimit: 0 %\n   CarClassColor: 0xffffff\n   CarClassEstLapTime: 87.8547\n   IRating: 1376\n   LicLevel: 11\n   LicSubLevel: 323\n   LicString: C 3.23\n   LicColor: 0xfeec04\n   IsSpectator: 0\n   CarDesignStr: 10,ffffff,0b4b80,231f20\n   HelmetDesignStr: 62,202423,f0f0f0,c007e6\n   SuitDesignStr: 34,ffffff,1c2bed,231f20\n   BodyType: 0\n   FaceType: 8\n   HelmetType: 0\n   CarNumberDesignStr: 0,0,ffffff,777777,000000\n   CarSponsor_1: 290\n   CarSponsor_2: 0\n   ClubName: None\n   ClubID: 0\n   FlairName: Greece\n   FlairID: 80\n   DivisionName: Division 6\n   DivisionID: 5\n   CurDriverIncidentCount: -1\n   TeamIncidentCount: -1\n - CarIdx: 12\n   UserName: Gary Patel\n   AbbrevName: Patel, G\n   Initials: GP\n   UserID: 1246198\n   TeamID: 0\n   TeamName: Gary Patel\n   CarNumber: \"12\"\n   CarNumberRaw: 12\n   CarPath: formulair04\n   CarClassID: 3188\n   CarID: 148\n   CarIsPaceCar: 0\n   CarIsAI: 0\n   CarIsElectric: 0\n   CarScreenName: FIA F4\n   CarScreenNameShort: FIA F4\n   CarCfg: -1\n   CarCfgName: \n   CarCfgCustomPaintExt: \n   CarClassShortName: FIA F4\n   CarClassRelSpeed: 47\n   CarClassLicenseLevel: 0\n   CarClassMaxFuelPct: 1.000 %\n   CarClassWeightPenalty: 0.000 kg\n   CarClassPowerAdjust: 0.000 %\n   CarClassDryTireSetLimit: 0 %\n   CarClassColor: 0xffffff\n   CarClassEstLapTime: 87.8547\n   IRating: 1129\n   LicLevel: 6\n   LicSubLevel: 240\n   LicString: D 2.40\n   LicColor: 0xfc8a27\n   IsSpectator: 0\n   CarDesignStr: 23,fa8b43,000000,000000\n   HelmetDesignStr: 61,faf344,000000,e60f0f\n   SuitDesignStr: 2,ed871c,000000,000000\n   BodyType: 0\n   FaceType: 0\n   HelmetType: 0\n   CarNumberDesignStr: 0,0,ffffff,777777,000000\n   CarSponsor_1: 0\n   CarSponsor_2: 0\n   ClubName: None\n   ClubID: 0\n   FlairName: Australia\n   FlairID: 16\n   DivisionName: Division 8\n   DivisionID: 7\n   CurDriverIncidentCount: -1\n   TeamIncidentCount: -1\n - CarIdx: 13\n   UserName: Thimo Schaa\n   AbbrevName: Schaa, T\n   Initials: TS\n   UserID: 1425617\n   TeamID: 0\n   TeamName: Thimo Schaa\n   CarNumber: \"13\"\n   CarNumberRaw: 13\n   CarPath: formulair04\n   CarClassID: 3188\n   CarID: 148\n   CarIsPaceCar: 0\n   CarIsAI: 0\n   CarIsElectric: 0\n   CarScreenName: FIA F4\n   CarScreenNameShort: FIA F4\n   CarCfg: -1\n   CarCfgName: \n   CarCfgCustomPaintExt: \n   CarClassShortName: FIA F4\n   CarClassRelSpeed: 47\n   CarClassLicenseLevel: 0\n   CarClassMaxFuelPct: 1.000 %\n   CarClassWeightPenalty: 0.000 kg\n   CarClassPowerAdjust: 0.000 %\n   CarClassDryTireSetLimit: 0 %\n   CarClassColor: 0xffffff\n   CarClassEstLapTime: 87.8547\n   IRating: 886\n   LicLevel: 15\n   LicSubLevel: 389\n   LicString: B 3.89\n   LicColor: 0x00c702\n   IsSpectator: 0\n   CarDesignStr: 10,ffffff,ffffff,df1b1b.000000\n   HelmetDesignStr: 1,ec232d,ffffff,2e358f\n   SuitDesignStr: 1,ec232d,ffffff,2e358f\n   BodyType: 0\n   FaceType: 0\n   HelmetType: 0\n   CarNumberDesignStr: 37,0,000000,ffffff,ffffff\n   CarSponsor_1: 333\n   CarSponsor_2: 97\n   ClubName: None\n   ClubID: 0\n   FlairName: Germany\n   FlairID: 77\n   DivisionName: Rookie\n   DivisionID: 10\n   CurDriverIncidentCount: -1\n   TeamIncidentCount: -1\n - CarIdx: 14\n   UserName: Louis Chappell\n   AbbrevName: Chappell, L\n   Initials: LC\n   UserID: 1014666\n   TeamID: 0\n   TeamName: Louis Chappell\n   CarNumber: \"14\"\n   CarNumberRaw: 14\n   CarPath: formulair04\n   CarClassID: 3188\n   CarID: 148\n   CarIsPaceCar: 0\n   CarIsAI: 0\n   CarIsElectric: 0\n   CarScreenName: FIA F4\n   CarScreenNameShort: FIA F4\n   CarCfg: -1\n   CarCfgName: \n   CarCfgCustomPaintExt: \n   CarClassShortName: FIA F4\n   CarClassRelSpeed: 47\n   CarClassLicenseLevel: 0\n   CarClassMaxFuelPct: 1.000 %\n   CarClassWeightPenalty: 0.000 kg\n   CarClassPowerAdjust: 0.000 %\n   CarClassDryTireSetLimit: 0 %\n   CarClassColor: 0xffffff\n   CarClassEstLapTime: 87.8547\n   IRating: 885\n   LicLevel: 6\n   LicSubLevel: 246\n   LicString: D 2.46\n   LicColor: 0xfc8a27\n   IsSpectator: 0\n   CarDesignStr: 23,5e5e5e,135324,111111\n   HelmetDesignStr: 1,5e5e5e,135324,111111\n   SuitDesignStr: 1,5e5e5e,135324,111111\n   BodyType: 0\n   FaceType: 0\n   HelmetType: 0\n   CarNumberDesignStr: 0,0,ffffff,777777,000000\n   CarSponsor_1: 0\n   CarSponsor_2: 0\n   ClubName: None\n   ClubID: 0\n   FlairName: United Kingdom\n   FlairID: 222\n   DivisionName: Rookie\n   DivisionID: 10\n   CurDriverIncidentCount: -1\n   TeamIncidentCount: -1\n\nSplitTimeInfo:\n Sectors:\n - SectorNum: 0\n   SectorStartPct: 0.000000\n - SectorNum: 1\n   SectorStartPct: 0.371176\n - SectorNum: 2\n   SectorStartPct: 0.628746\n\nCarSetup:\n UpdateCount: 6\n TiresAero:\n  TireType:\n   TireType: Dry\n  LeftFront:\n   ColdPressure: 117 kPa\n   LastHotPressure: 117 kPa\n   LastTempsOMI: 66C, 66C, 66C\n   TreadRemaining: 100%, 100%, 100%\n  LeftRear:\n   ColdPressure: 117 kPa\n   LastHotPressure: 117 kPa\n   LastTempsOMI: 66C, 66C, 66C\n   TreadRemaining: 100%, 100%, 100%\n  RightFront:\n   ColdPressure: 117 kPa\n   LastHotPressure: 117 kPa\n   LastTempsIMO: 66C, 66C, 66C\n   TreadRemaining: 100%, 100%, 100%\n  RightRear:\n   ColdPressure: 117 kPa\n   LastHotPressure: 117 kPa\n   LastTempsIMO: 66C, 66C, 66C\n   TreadRemaining: 100%, 100%, 100%\n  Aero:\n   FrontMainplaneAngle: 1 deg\n   RearWingAngle: 5 deg\n  AeroCalculator:\n   FrontRhAtSpeed: 18.0 mm\n   RearRhAtSpeed: 26.0 mm\n   DownforceToDrag: 1.35:1\n   AeroBalance: 44.5%\n Chassis:\n  Front:\n   PushrodOffset: 7.0 mm\n   ArbBlade:  5 \n   DamperCompressionStiffness: +7 clicks\n   DamperReboundStiffness: +6 clicks\n   BrakePressureBias: 57.0%\n   CrossWeight: 50.0%\n  LeftFront:\n   CornerWeight: 1352 N\n   RideHeight: 20.1 mm\n   SpringRate: 106 N/mm\n   Caster: +11.0 deg\n   Camber: -4.0 deg\n   ToeIn: -1.6 mm\n  LeftRear:\n   CornerWeight: 1887 N\n   SpringRate: 106 N/mm\n   Camber: -3.9 deg\n   ToeIn: +0.0 mm\n  Rear:\n   RideHeight: 30.5 mm\n   PushrodOffset: -16.0 mm\n   ArbBlade:  3\n   DamperCompressionStiffness: +10 clicks\n   DamperReboundStiffness: +9 clicks\n   FuelLevel: 14.0 L\n  RightFront:\n   CornerWeight: 1352 N\n   RideHeight: 20.1 mm\n   SpringRate: 106 N/mm\n   Caster: +11.0 deg\n   Camber: -4.0 deg\n   ToeIn: -1.6 mm\n  RightRear:\n   CornerWeight: 1887 N\n   SpringRate: 106 N/mm\n   Camber: -3.9 deg\n   ToeIn: +0.0 mm\n\n...\n",
+  "track_name": "phillipisland",
+  "track_length": "4.4069 km",
+  "track_display_name": "Phillip Island Circuit",
+  "track_city": "Cowes",
+  "track_country": "Australia",
+  "series_id": "540",
+  "season_id": "5944",
+  "session_id": "302271458",
+  "sub_session_id": "83886469",
+  "tick_rate": "60",
+  "record_count": "65642",
+  "lap_count": "12",
+  "session_start_date": "1772192438",
+  "start_time": "8.350000007947282",
+  "end_time": "1102.383333340607",
+  "event_type": "Race",
+  "session_type": "Race",
+  "session_name": "RACE",
+  "driver_name": "Chris Dewan",
+  "driver_user_id": "356922",
+  "driver_irating": "1884",
+  "driver_license": "B 1.52",
+  "car_name": "FIA F4",
+  "car_id": "148",
+  "car_gear_count": "6",
+  "car_redline_rpm": "7300.0",
+  "car_shift_rpm": "6500.0",
+  "car_idle_rpm": "1200.0",
+  "track_id": "152",
+  "track_type": "road course",
+  "weather_temp": "20.42 C",
+  "weather_surface_temp": "23.42 C",
+  "weather_humidity": "71 %",
+  "weather_skies": "Dynamic",
+  "weather_wind_speed": "8.91 m/s",
+  "weather_wind_dir": "4.72 rad",
+  "num_drivers": "14"
+ },
+ "session": {
+  "laps": [
+   {
+    "num": 1,
+    "lap_time_s": 96.183
+   },
+   {
+    "num": 2,
+    "lap_time_s": 92.55
+   },
+   {
+    "num": 3,
+    "lap_time_s": 91.984
+   },
+   {
+    "num": 4,
+    "lap_time_s": 91.316
+   },
+   {
+    "num": 5,
+    "lap_time_s": 91.617
+   },
+   {
+    "num": 6,
+    "lap_time_s": 91.25
+   },
+   {
+    "num": 7,
+    "lap_time_s": 91.767
+   },
+   {
+    "num": 8,
+    "lap_time_s": 91.183
+   },
+   {
+    "num": 9,
+    "lap_time_s": 91.117
+   },
+   {
+    "num": 10,
+    "lap_time_s": 91.283
+   }
+  ],
+  "speed_kmh": {
+   "length": 65642,
+   "first": 0.0,
+   "last": 0.31326023340225223,
+   "sum": 10402232.510347093,
+   "min": 0.0,
+   "max": 236.46442565917968
+  },
+  "distance_m": {
+   "length": 65642,
+   "first": 0.0,
+   "last": 0.0,
+   "sum": 137500034.6719054,
+   "min": 0.0,
+   "max": 4427.307224073401
+  },
+  "lap_end_distance_m": {
+   "1": 4422.735194320676,
+   "2": 4427.307224073401,
+   "3": 4408.904839540468,
+   "4": 4406.767681468945,
+   "5": 4417.060603105554,
+   "6": 4416.0062427177445,
+   "7": 4410.871438966767,
+   "8": 4414.673626852038,
+   "9": 4408.119859222417,
+   "10": 4414.093509191514
+  }
+ }
+}
