@@ -10,6 +10,12 @@
     <DataTemplate DataType="vm:TimeDistanceViewModel">
       <views:TimeDistanceView />
     </DataTemplate>
+    <DataTemplate DataType="vm:SuspensionViewModel">
+      <views:SuspensionView />
+    </DataTemplate>
+    <DataTemplate DataType="vm:SuspensionConfigViewModel">
+      <views:SuspensionConfigView />
+    </DataTemplate>
   </Window.DataTemplates>
   <DockPanel>
     <Grid DockPanel.Dock="Top" Margin="8,6" ColumnDefinitions="*,*,*,Auto" IsVisible="{Binding !IsTopCollapsed}">

@@ -16,6 +16,9 @@ public static class ChartSurfaces
     /// <summary>Create a surface able to render <see cref="StripChartSpec"/>.</summary>
     public static IChartSurface CreateStripChart() => FollowTheme(new ScottPlotStripChart());
 
+    /// <summary>Create a surface able to render <see cref="HistogramGridSpec"/>.</summary>
+    public static IChartSurface CreateHistogramGrid() => FollowTheme(new ScottPlotHistogramGrid());
+
     /// <summary>The chart theme matching the app's current (OS-driven) variant.</summary>
     public static ChartTheme CurrentTheme => ThemeFor(Application.Current?.ActualThemeVariant);
 

@@ -1,0 +1,25 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:InfernoAnalyzer.App.ViewModels"
+             xmlns:views="using:InfernoAnalyzer.App.Views"
+             x:Class="InfernoAnalyzer.App.Views.SuspensionView"
+             x:DataType="vm:SuspensionViewModel">
+  <DockPanel>
+    <Border DockPanel.Dock="Top" Padding="8,4" Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}">
+      <DockPanel>
+        <ToggleButton DockPanel.Dock="Right" Content="Statistics" IsChecked="{Binding ShowStats}" Padding="8,2" FontSize="11" />
+        <TextBlock Text="Suspension velocity distribution — wheel velocity histograms per corner" VerticalAlignment="Center" FontSize="11" />
+      </DockPanel>
+    </Border>
+    <ScrollViewer DockPanel.Dock="Right" Width="520" IsVisible="{Binding ShowStats}" Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}" Padding="6">
+      <ItemsControl ItemsSource="{Binding Stats}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:StatsTable">
+            <views:StatsTableView Table="{Binding}" />
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+    <ContentControl x:Name="ChartHost" />
+  </DockPanel>
+</UserControl>
