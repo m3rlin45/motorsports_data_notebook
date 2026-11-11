@@ -282,7 +282,8 @@ view and fed the view model's spec.
 | Roll Gradient tab | done 2026-10-29 | `ScatterGridSpec` (track map + scatter panels with fit lines, binned means, annotations) + `ScottPlotScatterGrid` (map hover snaps to the track and highlights the index-aligned samples on every panel, equal-units map); config with GPS/lateral/shock channels and track widths, motion ratios shared with the Suspension config as in Python; min |G| entry; roll table |
 | Driver tab | done 2026-10-29 | `BoxPlotSpec` + `ScottPlotBoxPlot` (stacked boxes with numpy quartiles, 1.5 IQR whiskers, fliers, mean line, gold opportunity bands, hover stats), `TrackMapSpec` + `ScottPlotTrackMap` (segments coloured by type, accel width by opportunity, apex labels, gold stars), the detail overlay reuses the strip chart (viridis laps, brake/entry/apex/exit markers); config with thresholds per session and the 95th-percentile auto throttle threshold; Summary/Detail/Map views, corner selector, stats tables |
 | Tire Grip tab | done 2026-10-29 | `LineGridSpec` + `ScottPlotLineGrid` (bucket-percentile lines with markers, hover showing the bucket's metric, G and count); pressure/temperature switch and percentile entry; A/B overlay; stats tables (per-corner means and the comparison/detail tables) |
-| Save Profile, split-times table, track store/editor | next | |
+| Save Profile | done 2026-10-29 | merges every tab's channel names (first tab owns a shared key, so Suspension's shock entries win over Roll Gradient's — Python lets the last panel win), the Suspension motion ratios and the Roll Gradient track widths into a `VehicleProfile` saved under logger ID + vehicle for the session the active config edits; the loaded shock calibration is kept only while the entered ratios still derive from it |
+| Split-times table, track store/editor | next | |
 
 Lesson from corners: match numpy's operation order exactly (`x * (π/180)`,
 not `x * π / 180`; pairwise sums) before loosening a tolerance.
