@@ -41,7 +41,10 @@
       <views:SessionPanelView Grid.Column="1" DataContext="{Binding SessionB}" Margin="0,0,4,0" />
       <Border Grid.Column="2" Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}" CornerRadius="6" Padding="8">
         <DockPanel>
-          <TextBlock DockPanel.Dock="Top" Text="{Binding ActiveTab.Header}" FontWeight="Bold" FontSize="13" />
+          <DockPanel DockPanel.Dock="Top">
+            <Button DockPanel.Dock="Right" Content="Save Profile" Command="{Binding SaveProfileCommand}" Padding="8,2" FontSize="11" />
+            <TextBlock Text="{Binding ActiveTab.Header}" FontWeight="Bold" FontSize="13" VerticalAlignment="Center" />
+          </DockPanel>
           <TextBlock DockPanel.Dock="Bottom" Text="{Binding Status}" FontSize="11" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" TextWrapping="Wrap" Margin="0,4,0,0" />
           <ContentControl Content="{Binding ActiveTab.Config}" />
         </DockPanel>

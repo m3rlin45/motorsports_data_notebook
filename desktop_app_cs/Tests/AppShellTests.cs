@@ -186,4 +186,42 @@ public class AppShellTests
         Assert.Contains("A: CMD_Inferno", viewModel.CollapsedSummary);
         Assert.Contains("B: No file", viewModel.CollapsedSummary);
     }
+
+    [Fact]
+    public async Task Save_profile_merges_every_tab_and_round_trips_through_the_store()
+    {
+        var dir = Directory.CreateTempSubdirectory("inferno-profile-save");
+        try
+        {
+            var path = Path.Combine(dir.FullName, "profiles.yaml");
+            var window = new MainWindowViewModel(new ProfileStore(path));
+            foreach (var tab in window.Tabs)
+            {
+                tab.Debounce = TimeSpan.Zero;
+            }
+
+            window.SessionA.Apply(Sample.Value, SessionParityTests.SamplePath());
+            window.ActiveTab = window.Suspension;
+            window.Suspension.SuspensionConfig.EntriesA.First(e => e.Key == "shock_fl").Value = "MyFL";
+            window.Suspension.SuspensionConfig.RatiosA.FrontLeft = "0.9";
+            window.RollGradient.RollConfig.WidthsA.Rear = "1550";
+
+            window.SaveProfile();
+
+            Assert.StartsWith("Profile saved for logger 6701209", window.Suspension.Status);
+            var reloaded = new ProfileStore(path).GetProfileForLogger("6701209", "Inferno 86")!;
+            Assert.Equal(Path.GetFileNameWithoutExtension(SessionParityTests.SamplePath()), reloaded.Name);
+            Assert.Equal("MyFL", reloaded.ChannelNames["shock_fl"]);
+            Assert.Equal("PPS", reloaded.ChannelNames["throttle"]);
+            Assert.Equal("TPMS_Press_LF", reloaded.ChannelNames["tpms_press_fl"]);
+            Assert.Equal(0.9, reloaded.MotionRatios.FrontLeft, 1e-12);
+            Assert.Equal(1550, reloaded.TrackWidths!.RearMm);
+            Assert.Null(reloaded.ShockCalibration); // ratios no longer derive from the 86 calibration
+            await Task.CompletedTask;
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
 }
