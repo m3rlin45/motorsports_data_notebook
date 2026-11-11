@@ -1,25 +1,25 @@
 {
-  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|0c38956870852215c5d413a085729f17f9d1fc8c",
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|b11236521f58216f5a6298ef1f886a51e1df97d1",
   "_model": "claude-sonnet-5-5",
   "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
   "_extracted_at": "2026-10-29T00:21:53.484777+00:00",
   "_notes_files": [],
   "_sessions": [
-    "511aeb3b6316ee83",
-    "06ed32a8e1264049",
-    "53276d307d23c617",
-    "c486846bbf4cfd03",
-    "22650e6ef6799d69",
-    "b995b5ce66413c69",
-    "e3dc18f3605129d0",
-    "59e2b0f0c7a09bd1",
-    "6936ab3813b7ba1c"
+    "2025-07-24_075907_Inferno-86_sodegaura_a0829-0830",
+    "2025-07-24_085435_Inferno-86_sodegaura_a0831",
+    "2025-07-24_092735_Inferno-86_sodegaura_a0832",
+    "2025-07-24_092914_Inferno-86_sodegaura_a0833",
+    "2025-07-24_112919_Inferno-86_sodegaura_a0837",
+    "2025-07-24_130043_Inferno-86_sodegaura_a0843-0844",
+    "2025-07-24_140118_Inferno-86_sodegaura_a0847",
+    "2025-07-24_145907_Inferno-86_sodegaura_a0851-0852",
+    "2025-07-24_160844_Inferno-86_Generic-testing_a0828"
   ],
-  "input": "DATE: 2025-07-24 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=511aeb3b6316ee83 start=07:59 car=\"Inferno 86\" track=sodegaura laps=1 type=\"\" comment=\"when did the stroke sensors break\"\n2. session_id=06ed32a8e1264049 start=08:54 car=\"Inferno 86\" track=sodegaura laps=1 type=\"\" comment=\"when did the stroke sensors break\"\n3. session_id=53276d307d23c617 start=09:27 car=\"Inferno 86\" track=sodegaura laps=1 type=\"\" comment=\"when did the stroke sensors break\"\n4. session_id=c486846bbf4cfd03 start=09:29 car=\"Inferno 86\" track=sodegaura laps=16 type=\"Generic testing\" comment=\"Front Roll bar 3/3\"\n5. session_id=22650e6ef6799d69 start=11:29 car=\"Inferno 86\" track=sodegaura laps=15 type=\"Generic testing\" comment=\"Front bar 4/4\"\n6. session_id=b995b5ce66413c69 start=13:00 car=\"Inferno 86\" track=sodegaura laps=12 type=\"Generic testing\" comment=\"A050 First Use / Front Bar 4/4\"\n7. session_id=e3dc18f3605129d0 start=14:01 car=\"Inferno 86\" track=sodegaura laps=15 type=\"Generic testing\" comment=\"Front bar 3/3 / A050\"\n8. session_id=59e2b0f0c7a09bd1 start=14:59 car=\"Inferno 86\" track=sodegaura laps=17 type=\"Generic testing\" comment=\"A050 / Front Bar 3/3\"\n9. session_id=6936ab3813b7ba1c start=16:08 car=\"Inferno 86\" track=unknown laps=1 type=\"\" comment=\"when did the stroke sensors break\"\n",
+  "input": "DATE: 2025-07-24 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=2025-07-24_075907_Inferno-86_sodegaura_a0829-0830 start=07:59 car=\"Inferno 86\" track=sodegaura laps=1 type=\"\" comment=\"when did the stroke sensors break\"\n2. session_id=2025-07-24_085435_Inferno-86_sodegaura_a0831 start=08:54 car=\"Inferno 86\" track=sodegaura laps=1 type=\"\" comment=\"when did the stroke sensors break\"\n3. session_id=2025-07-24_092735_Inferno-86_sodegaura_a0832 start=09:27 car=\"Inferno 86\" track=sodegaura laps=1 type=\"\" comment=\"when did the stroke sensors break\"\n4. session_id=2025-07-24_092914_Inferno-86_sodegaura_a0833 start=09:29 car=\"Inferno 86\" track=sodegaura laps=16 type=\"Generic testing\" comment=\"Front Roll bar 3/3\"\n5. session_id=2025-07-24_112919_Inferno-86_sodegaura_a0837 start=11:29 car=\"Inferno 86\" track=sodegaura laps=15 type=\"Generic testing\" comment=\"Front bar 4/4\"\n6. session_id=2025-07-24_130043_Inferno-86_sodegaura_a0843-0844 start=13:00 car=\"Inferno 86\" track=sodegaura laps=12 type=\"Generic testing\" comment=\"A050 First Use / Front Bar 4/4\"\n7. session_id=2025-07-24_140118_Inferno-86_sodegaura_a0847 start=14:01 car=\"Inferno 86\" track=sodegaura laps=15 type=\"Generic testing\" comment=\"Front bar 3/3 / A050\"\n8. session_id=2025-07-24_145907_Inferno-86_sodegaura_a0851-0852 start=14:59 car=\"Inferno 86\" track=sodegaura laps=17 type=\"Generic testing\" comment=\"A050 / Front Bar 3/3\"\n9. session_id=2025-07-24_160844_Inferno-86_Generic-testing_a0828 start=16:08 car=\"Inferno 86\" track=unknown laps=1 type=\"\" comment=\"when did the stroke sensors break\"\n",
   "data": {
     "sessions": [
       {
-        "session_id": "511aeb3b6316ee83",
+        "session_id": "2025-07-24_075907_Inferno-86_sodegaura_a0829-0830",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -45,7 +45,7 @@
         "notes": "when did the stroke sensors break"
       },
       {
-        "session_id": "06ed32a8e1264049",
+        "session_id": "2025-07-24_085435_Inferno-86_sodegaura_a0831",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -71,7 +71,7 @@
         "notes": "when did the stroke sensors break"
       },
       {
-        "session_id": "53276d307d23c617",
+        "session_id": "2025-07-24_092735_Inferno-86_sodegaura_a0832",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -97,7 +97,7 @@
         "notes": "when did the stroke sensors break"
       },
       {
-        "session_id": "c486846bbf4cfd03",
+        "session_id": "2025-07-24_092914_Inferno-86_sodegaura_a0833",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -125,7 +125,7 @@
         "notes": ""
       },
       {
-        "session_id": "22650e6ef6799d69",
+        "session_id": "2025-07-24_112919_Inferno-86_sodegaura_a0837",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -153,7 +153,7 @@
         "notes": ""
       },
       {
-        "session_id": "b995b5ce66413c69",
+        "session_id": "2025-07-24_130043_Inferno-86_sodegaura_a0843-0844",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -181,7 +181,7 @@
         "notes": "A050 first use"
       },
       {
-        "session_id": "e3dc18f3605129d0",
+        "session_id": "2025-07-24_140118_Inferno-86_sodegaura_a0847",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -209,7 +209,7 @@
         "notes": ""
       },
       {
-        "session_id": "59e2b0f0c7a09bd1",
+        "session_id": "2025-07-24_145907_Inferno-86_sodegaura_a0851-0852",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -237,7 +237,7 @@
         "notes": ""
       },
       {
-        "session_id": "6936ab3813b7ba1c",
+        "session_id": "2025-07-24_160844_Inferno-86_Generic-testing_a0828",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,

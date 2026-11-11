@@ -35,10 +35,8 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-import pyarrow.parquet as pq
 from scipy.optimize import least_squares  # type: ignore[import-untyped]
 
-from ..tire_etl.paths import timeseries_dir
 from .cleaning import mask_stale_session_prefix
 from .energy_balance import P_ATM_BAR, T_ZERO_C_TO_K, speed_pressure_factor
 from .heat_input import (
@@ -156,26 +154,73 @@ def cooling_power_factor(T: np.ndarray, t_eff: float | np.ndarray, n: float) -> 
 # ---------------------------------------------------------------- data prep
 
 
+@dataclass
+class SessionSeries:
+    """One session's native-rate inputs for the fit, each on its own clock.
+
+    ``kin``: the validated kinematics (``t_session_s, lap_num, speed_ms,
+    lat_g, long_g`` on the chosen sensor's clock — the IMU's 50-100 Hz
+    when it passed validation, see :mod:`..tire_etl.kinematics`);
+    ``tpms``: the masked TPMS streams on each corner's 1.25 Hz clock (a
+    corner's columns are NaN outside its own rows); ``surf``: the IR zone
+    channels on the IR controller's clocks. :func:`_bin_stint` maps the
+    TPMS and IR samples onto the rolling clock defined by ``kin``.
+    """
+
+    kin: pd.DataFrame
+    tpms: pd.DataFrame | None
+    surf: pd.DataFrame | None
+
+
 @lru_cache(maxsize=4)
-def _session_timeseries(root_str: str, session_id: str) -> pd.DataFrame | None:
-    files = list(timeseries_dir(Path(root_str)).glob(f"*/{session_id}.parquet"))
-    if not files:
+def _session_timeseries(root_str: str, session_id: str) -> SessionSeries | None:
+    from ..tire_etl.dataset import load_group
+    from ..tire_etl.kinematics import load_kinematics
+
+    root = Path(root_str)
+    kin = load_kinematics(root, session_id)
+    if kin is None or "lap_num" not in kin.schema.names:
         return None
-    cols = ["lap_num", "sample_idx", "t_session_s", "speed_ms", "lat_g", "long_g"]
-    cols += [f"tpms_press_{c}_bar" for c in CORNERS]
-    # Temperatures are read only so the per-corner wake rule can see both
-    # streams of a module; the fit itself uses the pressure.
-    cols += [f"tpms_temp_{c}_c" for c in CORNERS]
-    cols += [f"surf_temp_{c}_ch{i}_c" for c in CORNERS for i in range(1, 9)]
-    schema = pq.read_schema(files[0])
-    cols = [c for c in cols if c in schema.names]
-    # The dataset is raw: mask the stale TPMS prefix / wake-up step here.
-    df: pd.DataFrame = mask_stale_session_prefix(pq.read_table(files[0], columns=cols)).to_pandas()
-    return df
+    kin_cols = [
+        c
+        for c in ("t_session_s", "lap_num", "speed_ms", "lat_g", "long_g")
+        if c in kin.schema.names
+    ]
+    kin_df: pd.DataFrame = kin.select(kin_cols).to_pandas()
+    tpms_cols = [f"tpms_press_{c}_bar" for c in CORNERS] + [f"tpms_temp_{c}_c" for c in CORNERS]
+    tpms = load_group(root, session_id, "tpms", columns=tpms_cols)
+    tpms_df: pd.DataFrame | None = None
+    if tpms is not None:
+        # The dataset is raw: mask the stale TPMS prefix / wake-up step here.
+        # Temperatures are read only so the per-corner wake rule can see
+        # both streams of a module; the fit itself uses the pressure.
+        keep = ["t_session_s", "lap_num"] + [c for c in tpms_cols if c in tpms.schema.names]
+        tpms_df = mask_stale_session_prefix(tpms.select(keep)).to_pandas()
+    surf = load_group(root, session_id, "surface")
+    surf_df: pd.DataFrame | None = None
+    if surf is not None:
+        zcols = [c for c in surf.schema.names if c.startswith("surf_temp_") and "_ch" in c]
+        if zcols:
+            surf_df = surf.select(["t_session_s", "lap_num"] + zcols).to_pandas()
+    return SessionSeries(kin=kin_df, tpms=tpms_df, surf=surf_df)
+
+
+def _bins_on_roll(
+    t_other: np.ndarray, t: np.ndarray, roll: np.ndarray, v: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Rolling-clock bin of samples taken on another clock, and whether the
+    car was moving there: ``(bin, moving)``; samples outside the kinematics'
+    time span get bin -1."""
+    inside = (t_other >= t[0]) & (t_other <= t[-1])
+    b = np.full(t_other.shape, -1, dtype=int)
+    b[inside] = np.floor(np.interp(t_other[inside], t, roll)).astype(int)
+    moving = np.zeros(t_other.shape, dtype=bool)
+    moving[inside] = np.interp(t_other[inside], t, np.nan_to_num(v, nan=0.0)) > MOVING_SPEED_MS
+    return b, moving
 
 
 def _bin_stint(
-    ts: pd.DataFrame,
+    ss: SessionSeries,
     lap_nums: list[int],
     heat: HeatInput = DEFAULT_HEAT_INPUT,
     car: str = "",
@@ -185,15 +230,20 @@ def _bin_stint(
 ) -> dict[str, Any] | None:
     """1 Hz bins on the rolling clock for the given laps of one stint.
 
-    ``heat`` picks the heat-input form; ``q`` is evaluated per sample before
-    binning so a nonlinear slip activation sees the native-rate g. With a
-    ``geometry`` and ``load_exp > 0`` the per-corner input
-    ``q_i = (W_i/W_i,static)^p · q`` is binned too (``"q4"``)."""
+    The clock is the validated kinematics' (``ss.kin``, the IMU rate when
+    the IMU passed): ``heat`` picks the heat-input form and ``q`` is
+    evaluated per sample before binning so a nonlinear slip activation sees
+    the native-rate g, as are the non-negative acceleration parts. TPMS
+    pressures and IR temperatures keep their own clocks and are mapped onto
+    the same rolling second. With a ``geometry`` and ``load_exp > 0`` the
+    per-corner input ``q_i = (W_i/W_i,static)^p · q`` is binned too
+    (``"q4"``)."""
     # The clock and g² span every lap from the first to the last fitted one (a lap
     # the usability filters dropped mid-stint still heats the tire and advances the
     # clock); observations are scored only in the fitted laps.
     lo, hi = min(lap_nums), max(lap_nums)
-    sub = ts[(ts["lap_num"] >= lo) & (ts["lap_num"] <= hi)].sort_values(["lap_num", "sample_idx"])
+    kin = ss.kin
+    sub = kin[(kin["lap_num"] >= lo) & (kin["lap_num"] <= hi)].sort_values("t_session_s")
     if len(sub) < 10:
         return None
     t = sub["t_session_s"].to_numpy(dtype=float)
@@ -206,7 +256,6 @@ def _bin_stint(
         else np.full(len(sub), 10.0)
     )
     moving = np.nan_to_num(v, nan=0.0) > MOVING_SPEED_MS
-    in_fit = np.isin(lap, lap_nums)
     roll = np.cumsum(np.where(moving, dt, 0.0))
     b = np.floor(roll).astype(int)
     n = int(b.max()) + 1
@@ -275,41 +324,59 @@ def _bin_stint(
         "long_pos": _bin1(np.maximum(lng_c, 0.0)),
         "long_neg": _bin1(np.maximum(-lng_c, 0.0)),
     }
+    # TPMS pressure on each corner's own clock, mapped onto the rolling second.
     press = np.full((n, 4), np.nan)
-    for j, c in enumerate(CORNERS):
-        col = f"tpms_press_{c}_bar"
-        if col not in sub.columns:
-            continue
-        p = sub[col].to_numpy(dtype=float)
-        ok = np.isfinite(p) & moving & in_fit
-        s = np.bincount(b[ok], weights=p[ok], minlength=n)
-        k = np.bincount(b[ok], minlength=n)
-        press[:, j] = np.where(k > 0, s / np.maximum(k, 1), np.nan)
+    if ss.tpms is not None and len(ss.tpms):
+        tp = ss.tpms
+        tt = tp["t_session_s"].to_numpy(dtype=float)
+        bt, moving_t = _bins_on_roll(tt, t, roll, v)
+        in_fit = np.isin(tp["lap_num"].to_numpy(), lap_nums)
+        for j, c in enumerate(CORNERS):
+            col = f"tpms_press_{c}_bar"
+            if col not in tp.columns:
+                continue
+            p = tp[col].to_numpy(dtype=float)
+            ok = np.isfinite(p) & moving_t & in_fit & (bt >= 0) & (bt < n)
+            s_ = np.bincount(bt[ok], weights=p[ok], minlength=n)
+            k = np.bincount(bt[ok], minlength=n)
+            press[:, j] = np.where(k > 0, s_ / np.maximum(k, 1), np.nan)
     lap_end = np.zeros(n, dtype=bool)
     for ln in np.unique(lap):
         m = lap == ln
         lap_end[int(b[m].max())] = True
     # IR tread temperature: mean and spread across the zones, sentinel-masked.
+    # A corner's eight zones sit on two IR clocks (zones 1-4 and 5-8): each
+    # row carries the zones of its own clock, the second averages both.
     surf = np.full((n, 4), np.nan)
     zr = np.full((n, 4), np.nan)
-    for j, c in enumerate(CORNERS):
-        zcols = [f"surf_temp_{c}_ch{i}_c" for i in range(1, 9) if f"surf_temp_{c}_ch{i}_c" in sub]
-        if not zcols:
-            continue
-        z = sub[zcols].to_numpy(dtype=float)
-        z = np.where((z > IR_VALID_C[0]) & (z < IR_VALID_C[1]), z, np.nan)
-        with np.errstate(all="ignore"), warnings.catch_warnings():
-            warnings.simplefilter("ignore", RuntimeWarning)  # all-NaN rows
-            zmean = np.nanmean(z, axis=1)
-            zrange = np.nanmax(z, axis=1) - np.nanmin(z, axis=1)
-        ok = np.isfinite(zmean) & moving
-        k = np.bincount(b[ok], minlength=n)
-        surf[:, j] = np.where(
-            k > 0, np.bincount(b[ok], weights=zmean[ok], minlength=n) / np.maximum(k, 1), np.nan
-        )
-        zr[:, j] = np.where(
-            k > 0, np.bincount(b[ok], weights=zrange[ok], minlength=n) / np.maximum(k, 1), np.nan
-        )
+    if ss.surf is not None and len(ss.surf):
+        sf = ss.surf
+        ts_ = sf["t_session_s"].to_numpy(dtype=float)
+        bs, moving_s = _bins_on_roll(ts_, t, roll, v)
+        for j, c in enumerate(CORNERS):
+            zcols = [
+                f"surf_temp_{c}_ch{i}_c" for i in range(1, 9) if f"surf_temp_{c}_ch{i}_c" in sf
+            ]
+            if not zcols:
+                continue
+            z = sf[zcols].to_numpy(dtype=float)
+            z = np.where((z > IR_VALID_C[0]) & (z < IR_VALID_C[1]), z, np.nan)
+            with np.errstate(all="ignore"), warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)  # all-NaN rows
+                zmean = np.nanmean(z, axis=1)
+                zrange = np.nanmax(z, axis=1) - np.nanmin(z, axis=1)
+            ok = np.isfinite(zmean) & moving_s & (bs >= 0) & (bs < n)
+            k = np.bincount(bs[ok], minlength=n)
+            surf[:, j] = np.where(
+                k > 0,
+                np.bincount(bs[ok], weights=zmean[ok], minlength=n) / np.maximum(k, 1),
+                np.nan,
+            )
+            zr[:, j] = np.where(
+                k > 0,
+                np.bincount(bs[ok], weights=zrange[ok], minlength=n) / np.maximum(k, 1),
+                np.nan,
+            )
     return {
         "g2": g2_bin,
         "v": v_bin,

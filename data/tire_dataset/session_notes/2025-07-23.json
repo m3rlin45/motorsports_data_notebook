@@ -1,18 +1,18 @@
 {
-  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|eed9417e5919134fe700fde18044aed07081dbc5",
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|aef28873a3c59d1fff0f95a35b528c751d84c628",
   "_model": "claude-sonnet-5-5",
   "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
   "_extracted_at": "2026-10-29T00:21:40.108277+00:00",
   "_notes_files": [],
   "_sessions": [
-    "39db26c697536bd5",
-    "70d4a26a75ee5001"
+    "2025-07-23_013540_Inferno-86_Generic-testing_a0788-0808",
+    "2025-07-23_023757_Inferno-86_Generic-testing_a0809-0827"
   ],
-  "input": "DATE: 2025-07-23 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=39db26c697536bd5 start=01:35 car=\"Inferno 86\" track=unknown laps=12 type=\"\" comment=\"\"\n2. session_id=70d4a26a75ee5001 start=02:37 car=\"Inferno 86\" track=unknown laps=13 type=\"\" comment=\"when did the stroke sensors break\"\n",
+  "input": "DATE: 2025-07-23 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=2025-07-23_013540_Inferno-86_Generic-testing_a0788-0808 start=01:35 car=\"Inferno 86\" track=unknown laps=12 type=\"\" comment=\"\"\n2. session_id=2025-07-23_023757_Inferno-86_Generic-testing_a0809-0827 start=02:37 car=\"Inferno 86\" track=unknown laps=13 type=\"\" comment=\"when did the stroke sensors break\"\n",
   "data": {
     "sessions": [
       {
-        "session_id": "39db26c697536bd5",
+        "session_id": "2025-07-23_013540_Inferno-86_Generic-testing_a0788-0808",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -38,7 +38,7 @@
         "notes": ""
       },
       {
-        "session_id": "70d4a26a75ee5001",
+        "session_id": "2025-07-23_023757_Inferno-86_Generic-testing_a0809-0827",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,

@@ -12,8 +12,8 @@
     "g2_pace_source": null,
     "corners": {
       "fl": {
-        "cold_pressure_bar": 1.513906297565768,
-        "predicted_hot_temp_c": 39.552585916265365,
+        "cold_pressure_bar": 1.51283459690557,
+        "predicted_hot_temp_c": 39.68595067023075,
         "K_source_bucket": [
           "FJ",
           "fl",
@@ -22,8 +22,8 @@
         "g2_scale": 1.0
       },
       "fr": {
-        "cold_pressure_bar": 1.5592999109190742,
-        "predicted_hot_temp_c": 34.00626435422357,
+        "cold_pressure_bar": 1.5583620739919426,
+        "predicted_hot_temp_c": 34.11886080413179,
         "K_source_bucket": [
           "FJ",
           "fr",
@@ -32,8 +32,8 @@
         "g2_scale": 1.0
       },
       "rl": {
-        "cold_pressure_bar": 1.4744262612389347,
-        "predicted_hot_temp_c": 44.54182711728923,
+        "cold_pressure_bar": 1.4699333707560136,
+        "predicted_hot_temp_c": 45.119719056989716,
         "K_source_bucket": [
           "FJ",
           "rl",
@@ -42,8 +42,8 @@
         "g2_scale": 1.0
       },
       "rr": {
-        "cold_pressure_bar": 1.5260295517435951,
-        "predicted_hot_temp_c": 38.05182242420325,
+        "cold_pressure_bar": 1.5221011983973414,
+        "predicted_hot_temp_c": 38.5365415628553,
         "K_source_bucket": [
           "FJ",
           "rr",
@@ -67,8 +67,8 @@
     "g2_pace_source": null,
     "corners": {
       "fl": {
-        "cold_pressure_bar": 1.443187502950253,
-        "predicted_hot_temp_c": 45.288514874738794,
+        "cold_pressure_bar": 1.4413927691515576,
+        "predicted_hot_temp_c": 45.522607632230944,
         "K_source_bucket": [
           "FJ",
           "fl",
@@ -77,8 +77,8 @@
         "g2_scale": 1.0
       },
       "fr": {
-        "cold_pressure_bar": 1.5045695509378079,
-        "predicted_hot_temp_c": 37.484216449962304,
+        "cold_pressure_bar": 1.502885309663652,
+        "predicted_hot_temp_c": 37.69324838861733,
         "K_source_bucket": [
           "FJ",
           "fr",
@@ -87,8 +87,8 @@
         "g2_scale": 1.0
       },
       "rl": {
-        "cold_pressure_bar": 1.4173178737209464,
-        "predicted_hot_temp_c": 48.69637711813504,
+        "cold_pressure_bar": 1.4117746353920588,
+        "predicted_hot_temp_c": 49.43611090066768,
         "K_source_bucket": [
           "FJ",
           "rl",
@@ -97,8 +97,8 @@
         "g2_scale": 1.0
       },
       "rr": {
-        "cold_pressure_bar": 1.481114485693746,
-        "predicted_hot_temp_c": 40.42077816683723,
+        "cold_pressure_bar": 1.4761713013094755,
+        "predicted_hot_temp_c": 41.046759969137455,
         "K_source_bucket": [
           "FJ",
           "rr",
@@ -121,8 +121,8 @@
     "g2_pace_source": null,
     "corners": {
       "fl": {
-        "cold_pressure_bar": 1.398510917403463,
-        "predicted_hot_temp_c": 51.22000572098244,
+        "cold_pressure_bar": 1.4044344916617297,
+        "predicted_hot_temp_c": 50.42088650076411,
         "K_source_bucket": [
           "FJ",
           "fl",
@@ -131,8 +131,8 @@
         "g2_scale": 1.0
       },
       "fr": {
-        "cold_pressure_bar": 1.4682567629675458,
-        "predicted_hot_temp_c": 42.05424117652048,
+        "cold_pressure_bar": 1.4774338234502786,
+        "predicted_hot_temp_c": 40.88664252734153,
         "K_source_bucket": [
           "FJ",
           "fr",
@@ -141,8 +141,8 @@
         "g2_scale": 1.0
       },
       "rl": {
-        "cold_pressure_bar": 1.403585769841602,
-        "predicted_hot_temp_c": 50.535141492276004,
+        "cold_pressure_bar": 1.430083302913428,
+        "predicted_hot_temp_c": 47.00569139841817,
         "K_source_bucket": [
           "FJ",
           "rl",
@@ -151,8 +151,8 @@
         "g2_scale": 1.0
       },
       "rr": {
-        "cold_pressure_bar": 1.472409914680858,
-        "predicted_hot_temp_c": 41.52476140598876,
+        "cold_pressure_bar": 1.4940855709343395,
+        "predicted_hot_temp_c": 38.78997875082623,
         "K_source_bucket": [
           "FJ",
           "rr",
@@ -175,8 +175,8 @@
     "g2_pace_source": null,
     "corners": {
       "fl": {
-        "cold_pressure_bar": 1.5230340329241696,
-        "predicted_hot_temp_c": 35.21088211552997,
+        "cold_pressure_bar": 1.5260322664278485,
+        "predicted_hot_temp_c": 34.844878109852644,
         "K_source_bucket": [
           "FJ",
           "fl",
@@ -185,8 +185,8 @@
         "g2_scale": 1.0
       },
       "fr": {
-        "cold_pressure_bar": 1.5534549158380058,
-        "predicted_hot_temp_c": 31.53718878659757,
+        "cold_pressure_bar": 1.552402133388056,
+        "predicted_hot_temp_c": 31.662862292697177,
         "K_source_bucket": [
           "FJ",
           "fr",
@@ -195,8 +195,8 @@
         "g2_scale": 1.0
       },
       "rl": {
-        "cold_pressure_bar": 1.5370749234409637,
-        "predicted_hot_temp_c": 33.504325740137645,
+        "cold_pressure_bar": 1.5390185128229437,
+        "predicted_hot_temp_c": 33.26958539128365,
         "K_source_bucket": [
           "FJ",
           "rl",
@@ -205,8 +205,8 @@
         "g2_scale": 1.0
       },
       "rr": {
-        "cold_pressure_bar": 1.562448320564112,
-        "predicted_hot_temp_c": 30.467830555398486,
+        "cold_pressure_bar": 1.561694975235782,
+        "predicted_hot_temp_c": 30.5571187323508,
         "K_source_bucket": [
           "FJ",
           "rr",
@@ -229,8 +229,8 @@
     "g2_pace_source": null,
     "corners": {
       "fl": {
-        "cold_pressure_bar": 1.4502666641098187,
-        "predicted_hot_temp_c": 52.08194788250339,
+        "cold_pressure_bar": 1.4482203648344063,
+        "predicted_hot_temp_c": 52.35378693296319,
         "K_source_bucket": [
           "Inferno 86",
           "fl",
@@ -239,8 +239,8 @@
         "g2_scale": 1.0
       },
       "fr": {
-        "cold_pressure_bar": 1.4670019622419197,
-        "predicted_hot_temp_c": 49.875685506874284,
+        "cold_pressure_bar": 1.4652067564885187,
+        "predicted_hot_temp_c": 50.1109183398169,
         "K_source_bucket": [
           "Inferno 86",
           "fr",
@@ -249,8 +249,8 @@
         "g2_scale": 1.0
       },
       "rl": {
-        "cold_pressure_bar": 1.4444561126574227,
-        "predicted_hot_temp_c": 52.85503476974557,
+        "cold_pressure_bar": 1.442773057110415,
+        "predicted_hot_temp_c": 53.0796502249244,
         "K_source_bucket": [
           "Inferno 86",
           "rl",
@@ -259,8 +259,8 @@
         "g2_scale": 1.0
       },
       "rr": {
-        "cold_pressure_bar": 1.4592734662611426,
-        "predicted_hot_temp_c": 50.890823817589684,
+        "cold_pressure_bar": 1.4577716775583474,
+        "predicted_hot_temp_c": 51.08882465424073,
         "K_source_bucket": [
           "Inferno 86",
           "rr",
@@ -284,8 +284,8 @@
     "g2_pace_source": null,
     "corners": {
       "fl": {
-        "cold_pressure_bar": 1.4910751678096434,
-        "predicted_hot_temp_c": 46.75403593509544,
+        "cold_pressure_bar": 1.4892651996307622,
+        "predicted_hot_temp_c": 46.986641173550616,
         "K_source_bucket": [
           "FJ",
           "fl",
@@ -294,8 +294,8 @@
         "g2_scale": 1.0
       },
       "fr": {
-        "cold_pressure_bar": 1.5533664538043768,
-        "predicted_hot_temp_c": 38.949737510318954,
+        "cold_pressure_bar": 1.5516696090960114,
+        "predicted_hot_temp_c": 39.157281929937,
         "K_source_bucket": [
           "FJ",
           "fr",
@@ -304,8 +304,8 @@
         "g2_scale": 1.0
       },
       "rl": {
-        "cold_pressure_bar": 1.4710515837944027,
-        "predicted_hot_temp_c": 49.346302880217145,
+        "cold_pressure_bar": 1.4654206726583934,
+        "predicted_hot_temp_c": 50.082870088949086,
         "K_source_bucket": [
           "FJ",
           "rl",
@@ -314,8 +314,8 @@
         "g2_scale": 1.0
       },
       "rr": {
-        "cold_pressure_bar": 1.5361314198451734,
-        "predicted_hot_temp_c": 41.070703928919336,
+        "cold_pressure_bar": 1.531114510893124,
+        "predicted_hot_temp_c": 41.69351915741886,
         "K_source_bucket": [
           "FJ",
           "rr",
@@ -339,44 +339,44 @@
     "g2_pace_source": "curve",
     "corners": {
       "fl": {
-        "cold_pressure_bar": 1.5043127896706685,
-        "predicted_hot_temp_c": 40.750485291766324,
+        "cold_pressure_bar": 1.5012715364129638,
+        "predicted_hot_temp_c": 41.13215152015904,
         "K_source_bucket": [
           "FJ",
           "fl",
           "dry"
         ],
-        "g2_scale": 1.079017875369102
+        "g2_scale": 1.095174374108421
       },
       "fr": {
-        "cold_pressure_bar": 1.5540298170945541,
-        "predicted_hot_temp_c": 34.64006366271296,
+        "cold_pressure_bar": 1.552035521745276,
+        "predicted_hot_temp_c": 34.88058707521504,
         "K_source_bucket": [
           "FJ",
           "fr",
           "dry"
         ],
-        "g2_scale": 1.061060326301956
+        "g2_scale": 1.0732878561127213
       },
       "rl": {
-        "cold_pressure_bar": 1.4628784585176589,
-        "predicted_hot_temp_c": 46.03140226584132,
+        "cold_pressure_bar": 1.4559012549556027,
+        "predicted_hot_temp_c": 46.938195082668834,
         "K_source_bucket": [
           "FJ",
           "rl",
           "dry"
         ],
-        "g2_scale": 1.074455204816843
+        "g2_scale": 1.0893508461530084
       },
       "rr": {
-        "cold_pressure_bar": 1.5197324408730437,
-        "predicted_hot_temp_c": 38.82955276855831,
+        "cold_pressure_bar": 1.5143452787052651,
+        "predicted_hot_temp_c": 39.4979909731397,
         "K_source_bucket": [
           "FJ",
           "rr",
           "dry"
         ],
-        "g2_scale": 1.0553778554664874
+        "g2_scale": 1.0670341057959998
       }
     }
   },
@@ -394,44 +394,44 @@
     "g2_pace_source": "curve",
     "corners": {
       "fl": {
-        "cold_pressure_bar": 1.5458906377933124,
-        "predicted_hot_temp_c": 35.62406449845303,
+        "cold_pressure_bar": 1.5432039992567663,
+        "predicted_hot_temp_c": 35.95025315693656,
         "K_source_bucket": [
           "FJ",
           "fl",
           "dry"
         ],
-        "g2_scale": 0.7535986924136021
+        "g2_scale": 0.766703012683468
       },
       "fr": {
-        "cold_pressure_bar": 1.5777183905049124,
-        "predicted_hot_temp_c": 31.811551616979127,
+        "cold_pressure_bar": 1.5756588400720988,
+        "predicted_hot_temp_c": 32.055405222841934,
         "K_source_bucket": [
           "FJ",
           "fr",
           "dry"
         ],
-        "g2_scale": 0.8001753987346676
+        "g2_scale": 0.8124540066605183
       },
       "rl": {
-        "cold_pressure_bar": 1.5128427093600751,
-        "predicted_hot_temp_c": 39.684940711506336,
+        "cold_pressure_bar": 1.5065112220838732,
+        "predicted_hot_temp_c": 40.47516675526591,
         "K_source_bucket": [
           "FJ",
           "rl",
           "dry"
         ],
-        "g2_scale": 0.7676225827138924
+        "g2_scale": 0.7816767248688077
       },
       "rr": {
-        "cold_pressure_bar": 1.5479851848909805,
-        "predicted_hot_temp_c": 35.3702397021138,
+        "cold_pressure_bar": 1.5432713118557664,
+        "predicted_hot_temp_c": 35.942072220323716,
         "K_source_bucket": [
           "FJ",
           "rr",
           "dry"
         ],
-        "g2_scale": 0.8182204572022982
+        "g2_scale": 0.8279158572698766
       }
     }
   },
@@ -449,44 +449,44 @@
     "g2_pace_source": "curve",
     "corners": {
       "fl": {
-        "cold_pressure_bar": 1.287722609630634,
-        "predicted_hot_temp_c": 72.82944552717998,
+        "cold_pressure_bar": 1.2858251690895917,
+        "predicted_hot_temp_c": 73.11663959398268,
         "K_source_bucket": [
           "Inferno 86",
           "fl",
           "dry"
         ],
-        "g2_scale": 1.6100337304679238
+        "g2_scale": 1.6151375567021624
       },
       "fr": {
-        "cold_pressure_bar": 1.3227139842432876,
-        "predicted_hot_temp_c": 67.61731158867279,
+        "cold_pressure_bar": 1.3199417546783865,
+        "predicted_hot_temp_c": 68.02451371520594,
         "K_source_bucket": [
           "Inferno 86",
           "fr",
           "dry"
         ],
-        "g2_scale": 1.5616081927757317
+        "g2_scale": 1.5648371486813581
       },
       "rl": {
-        "cold_pressure_bar": 1.28345154221455,
-        "predicted_hot_temp_c": 73.47658058089472,
+        "cold_pressure_bar": 1.279425346069281,
+        "predicted_hot_temp_c": 74.08883428114828,
         "K_source_bucket": [
           "Inferno 86",
           "rl",
           "dry"
         ],
-        "g2_scale": 1.508887089654518
+        "g2_scale": 1.5148369222146112
       },
       "rr": {
-        "cold_pressure_bar": 1.3156376710140418,
-        "predicted_hot_temp_c": 68.6586559515124,
+        "cold_pressure_bar": 1.3118788937069379,
+        "predicted_hot_temp_c": 69.21438688657976,
         "K_source_bucket": [
           "Inferno 86",
           "rr",
           "dry"
         ],
-        "g2_scale": 1.461717109951381
+        "g2_scale": 1.4657926669273034
       }
     }
   },
@@ -504,8 +504,8 @@
     "g2_pace_source": "exponent",
     "corners": {
       "fl": {
-        "cold_pressure_bar": 1.477752506522426,
-        "predicted_hot_temp_c": 46.29473788905287,
+        "cold_pressure_bar": 1.4765227000876213,
+        "predicted_hot_temp_c": 46.453369665053366,
         "K_source_bucket": [
           "FJ",
           "fl",
@@ -514,8 +514,8 @@
         "g2_scale": 1.423828125
       },
       "fr": {
-        "cold_pressure_bar": 1.5056331900150344,
-        "predicted_hot_temp_c": 42.740212164395416,
+        "cold_pressure_bar": 1.503123112471029,
+        "predicted_hot_temp_c": 43.056980014915595,
         "K_source_bucket": [
           "FJ",
           "fr",
@@ -524,8 +524,8 @@
         "g2_scale": 1.423828125
       },
       "rl": {
-        "cold_pressure_bar": 1.46486514379629,
-        "predicted_hot_temp_c": 47.964930766944335,
+        "cold_pressure_bar": 1.465393645776465,
+        "predicted_hot_temp_c": 47.896093939582244,
         "K_source_bucket": [
           "FJ",
           "rl",
@@ -534,8 +534,8 @@
         "g2_scale": 1.423828125
       },
       "rr": {
-        "cold_pressure_bar": 1.4932559666154073,
-        "predicted_hot_temp_c": 44.308379965081315,
+        "cold_pressure_bar": 1.4927037126754938,
+        "predicted_hot_temp_c": 44.37871228745189,
         "K_source_bucket": [
           "FJ",
           "rr",
@@ -559,8 +559,8 @@
     "g2_pace_source": null,
     "corners": {
       "fl": {
-        "cold_pressure_bar": 1.465845023685739,
-        "predicted_hot_temp_c": 50.0272444518241,
+        "cold_pressure_bar": 1.4641121188563946,
+        "predicted_hot_temp_c": 50.254521207357705,
         "K_source_bucket": [
           "Inferno 86",
           "A050",
@@ -570,8 +570,8 @@
         "g2_scale": 1.0
       },
       "fr": {
-        "cold_pressure_bar": 1.4809119885094466,
-        "predicted_hot_temp_c": 48.06453872242663,
+        "cold_pressure_bar": 1.479569828496929,
+        "predicted_hot_temp_c": 48.238408118786325,
         "K_source_bucket": [
           "Inferno 86",
           "A050",
@@ -581,8 +581,8 @@
         "g2_scale": 1.0
       },
       "rl": {
-        "cold_pressure_bar": 1.450372639924634,
-        "predicted_hot_temp_c": 52.06788197264172,
+        "cold_pressure_bar": 1.4494617494566575,
+        "predicted_hot_temp_c": 52.188821958240545,
         "K_source_bucket": [
           "Inferno 86",
           "A050",
@@ -592,8 +592,8 @@
         "g2_scale": 1.0
       },
       "rr": {
-        "cold_pressure_bar": 1.466697234874423,
-        "predicted_hot_temp_c": 49.91559099887653,
+        "cold_pressure_bar": 1.4657243142541048,
+        "predicted_hot_temp_c": 50.043065580435055,
         "K_source_bucket": [
           "Inferno 86",
           "A050",
@@ -618,8 +618,8 @@
     "g2_pace_source": null,
     "corners": {
       "fl": {
-        "cold_pressure_bar": 1.4609229767881966,
-        "predicted_hot_temp_c": 50.67362532941112,
+        "cold_pressure_bar": 1.4570725925995829,
+        "predicted_hot_temp_c": 51.181076908425624,
         "K_source_bucket": [
           "Inferno 86",
           "A052",
@@ -629,8 +629,8 @@
         "g2_scale": 1.0
       },
       "fr": {
-        "cold_pressure_bar": 1.4762779212454844,
-        "predicted_hot_temp_c": 48.6656545203875,
+        "cold_pressure_bar": 1.4729490961452885,
+        "predicted_hot_temp_c": 49.09884905321197,
         "K_source_bucket": [
           "Inferno 86",
           "A052",
@@ -640,8 +640,8 @@
         "g2_scale": 1.0
       },
       "rl": {
-        "cold_pressure_bar": 1.4451589689798965,
-        "predicted_hot_temp_c": 52.76132523889167,
+        "cold_pressure_bar": 1.442030788289638,
+        "predicted_hot_temp_c": 53.17880953894135,
         "K_source_bucket": [
           "Inferno 86",
           "A052",
@@ -651,8 +651,8 @@
         "g2_scale": 1.0
       },
       "rr": {
-        "cold_pressure_bar": 1.4617913713152202,
-        "predicted_hot_temp_c": 50.55939685853675,
+        "cold_pressure_bar": 1.4587281893514152,
+        "predicted_hot_temp_c": 50.962686978309144,
         "K_source_bucket": [
           "Inferno 86",
           "A052",
@@ -677,8 +677,8 @@
     "g2_pace_source": null,
     "corners": {
       "fl": {
-        "cold_pressure_bar": 1.4502666641098187,
-        "predicted_hot_temp_c": 52.08194788250339,
+        "cold_pressure_bar": 1.4482203648344063,
+        "predicted_hot_temp_c": 52.35378693296319,
         "K_source_bucket": [
           "Inferno 86",
           "fl",
@@ -687,8 +687,8 @@
         "g2_scale": 1.0
       },
       "fr": {
-        "cold_pressure_bar": 1.4670019622419197,
-        "predicted_hot_temp_c": 49.875685506874284,
+        "cold_pressure_bar": 1.4652067564885187,
+        "predicted_hot_temp_c": 50.1109183398169,
         "K_source_bucket": [
           "Inferno 86",
           "fr",
@@ -697,8 +697,8 @@
         "g2_scale": 1.0
       },
       "rl": {
-        "cold_pressure_bar": 1.4444561126574227,
-        "predicted_hot_temp_c": 52.85503476974557,
+        "cold_pressure_bar": 1.442773057110415,
+        "predicted_hot_temp_c": 53.0796502249244,
         "K_source_bucket": [
           "Inferno 86",
           "rl",
@@ -707,8 +707,8 @@
         "g2_scale": 1.0
       },
       "rr": {
-        "cold_pressure_bar": 1.4592734662611426,
-        "predicted_hot_temp_c": 50.890823817589684,
+        "cold_pressure_bar": 1.4577716775583474,
+        "predicted_hot_temp_c": 51.08882465424073,
         "K_source_bucket": [
           "Inferno 86",
           "rr",
@@ -732,8 +732,8 @@
     "g2_pace_source": null,
     "corners": {
       "fl": {
-        "cold_pressure_bar": 1.5286415333833605,
-        "predicted_hot_temp_c": 34.52706285319832,
+        "cold_pressure_bar": 1.5320254981078616,
+        "predicted_hot_temp_c": 34.11586307341279,
         "K_source_bucket": [
           "FJ",
           "WET",
@@ -743,8 +743,8 @@
         "g2_scale": 1.0
       },
       "fr": {
-        "cold_pressure_bar": 1.5696110864215997,
-        "predicted_hot_temp_c": 29.621498812078066,
+        "cold_pressure_bar": 1.571250566317123,
+        "predicted_hot_temp_c": 29.42844575387265,
         "K_source_bucket": [
           "FJ",
           "WET",
@@ -754,8 +754,8 @@
         "g2_scale": 1.0
       },
       "rl": {
-        "cold_pressure_bar": 1.5683421837080904,
-        "predicted_hot_temp_c": 29.771084633956892,
+        "cold_pressure_bar": 1.5710334208277428,
+        "predicted_hot_temp_c": 29.45400105943461,
         "K_source_bucket": [
           "FJ",
           "WET",
@@ -765,8 +765,8 @@
         "g2_scale": 1.0
       },
       "rr": {
-        "cold_pressure_bar": 1.5617041203030229,
-        "predicted_hot_temp_c": 30.556034523600722,
+        "cold_pressure_bar": 1.5685739772396072,
+        "predicted_hot_temp_c": 29.74374839657368,
         "K_source_bucket": [
           "FJ",
           "WET",
@@ -790,8 +790,8 @@
     "g2_pace_source": null,
     "corners": {
       "fl": {
-        "cold_pressure_bar": 1.513906297565768,
-        "predicted_hot_temp_c": 39.552585916265365,
+        "cold_pressure_bar": 1.51283459690557,
+        "predicted_hot_temp_c": 39.68595067023075,
         "K_source_bucket": [
           "FJ",
           "fl",
@@ -800,8 +800,8 @@
         "g2_scale": 1.0
       },
       "fr": {
-        "cold_pressure_bar": 1.5592999109190742,
-        "predicted_hot_temp_c": 34.00626435422357,
+        "cold_pressure_bar": 1.5583620739919426,
+        "predicted_hot_temp_c": 34.11886080413179,
         "K_source_bucket": [
           "FJ",
           "fr",
@@ -810,8 +810,8 @@
         "g2_scale": 1.0
       },
       "rl": {
-        "cold_pressure_bar": 1.4744262612389347,
-        "predicted_hot_temp_c": 44.54182711728923,
+        "cold_pressure_bar": 1.4699333707560136,
+        "predicted_hot_temp_c": 45.119719056989716,
         "K_source_bucket": [
           "FJ",
           "rl",
@@ -820,8 +820,8 @@
         "g2_scale": 1.0
       },
       "rr": {
-        "cold_pressure_bar": 1.5260295517435951,
-        "predicted_hot_temp_c": 38.05182242420325,
+        "cold_pressure_bar": 1.5221011983973414,
+        "predicted_hot_temp_c": 38.5365415628553,
         "K_source_bucket": [
           "FJ",
           "rr",
@@ -844,8 +844,8 @@
     "g2_pace_source": null,
     "corners": {
       "fl": {
-        "cold_pressure_bar": 1.513906297565768,
-        "predicted_hot_temp_c": 39.552585916265365,
+        "cold_pressure_bar": 1.51283459690557,
+        "predicted_hot_temp_c": 39.68595067023075,
         "K_source_bucket": [
           "FJ",
           "fl",
@@ -854,8 +854,8 @@
         "g2_scale": 1.0
       },
       "fr": {
-        "cold_pressure_bar": 1.5592999109190742,
-        "predicted_hot_temp_c": 34.00626435422357,
+        "cold_pressure_bar": 1.5583620739919426,
+        "predicted_hot_temp_c": 34.11886080413179,
         "K_source_bucket": [
           "FJ",
           "fr",
@@ -864,8 +864,8 @@
         "g2_scale": 1.0
       },
       "rl": {
-        "cold_pressure_bar": 1.4744262612389347,
-        "predicted_hot_temp_c": 44.54182711728923,
+        "cold_pressure_bar": 1.4699333707560136,
+        "predicted_hot_temp_c": 45.119719056989716,
         "K_source_bucket": [
           "FJ",
           "rl",
@@ -874,8 +874,8 @@
         "g2_scale": 1.0
       },
       "rr": {
-        "cold_pressure_bar": 1.5260295517435951,
-        "predicted_hot_temp_c": 38.05182242420325,
+        "cold_pressure_bar": 1.5221011983973414,
+        "predicted_hot_temp_c": 38.5365415628553,
         "K_source_bucket": [
           "FJ",
           "rr",

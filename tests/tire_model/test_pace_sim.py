@@ -10,6 +10,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from motorsports_data_notebook.tire_model.heat_input import CarFacts, ShareParams
+from tests._timeseries_fixture import write_session_timeseries
 from motorsports_data_notebook.tire_model.pace_sim import (
     CORNERS,
     GRID_FACTORS,
@@ -63,9 +64,7 @@ def _write_session_ts(root: Path, session_id: str, laps: dict[int, LapSamples]) 
         rows["speed_ms"].extend(s.speed_ms.tolist())
         rows["lat_g"].extend(s.lat_g.tolist())
         rows["long_g"].extend(s.long_g.tolist())
-    out = root / "timeseries" / "2026-01"
-    out.mkdir(parents=True, exist_ok=True)
-    pq.write_table(pa.table(rows), out / f"{session_id}.parquet")
+    write_session_timeseries(root, session_id, pa.table(rows))
 
 
 def _laps_meta(session_id: str, lap_times: list[float], car: str = "ToyCar") -> pd.DataFrame:
@@ -195,7 +194,8 @@ class TestFastLapCheck:
         assert len(frame) == 1
         summary = summarize_fast_lap_check(frame)
         assert set(summary["corner"]) == set(CORNERS)
-        np.testing.assert_allclose(summary["bias_log"], 0.0, atol=1e-9)
+        # float32 storage of speed and g (schema 7) rounds the ratio at ~1e-7
+        np.testing.assert_allclose(summary["bias_log"], 0.0, atol=1e-5)
         assert (summary["mean_log_obs"] > 0).all()
 
     def test_sessions_without_fast_laps_are_skipped(self, tmp_path: Path) -> None:

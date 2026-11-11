@@ -1,18 +1,18 @@
 {
-  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|ae760f4756f516c59661ad1e57f99431224483a9",
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|48f6e3adaa9d303fb2c1a6b4d2a5c0ad7305066d",
   "_model": "claude-sonnet-5-5",
   "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
   "_extracted_at": "2026-10-29T00:23:26.683722+00:00",
   "_notes_files": [],
   "_sessions": [
-    "958947d157432e2c",
-    "6428324c434c71da"
+    "2026-05-05_085636_KK-SII_tsukuba-2000_a0119",
+    "2026-05-05_153607_KK-SII_tsukuba-2000_a0125-0126"
   ],
-  "input": "DATE: 2026-05-05 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=958947d157432e2c start=08:56 car=\"KK-SII\" track=tsukuba_2000 laps=16 type=\"Car Qualifying testing\" comment=\"qualifying\"\n2. session_id=6428324c434c71da start=15:36 car=\"KK-SII\" track=tsukuba_2000 laps=17 type=\"Car Race\" comment=\"kill switch flipped by accident part way through\"\n",
+  "input": "DATE: 2026-05-05 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=2026-05-05_085636_KK-SII_tsukuba-2000_a0119 start=08:56 car=\"KK-SII\" track=tsukuba_2000 laps=16 type=\"Car Qualifying testing\" comment=\"qualifying\"\n2. session_id=2026-05-05_153607_KK-SII_tsukuba-2000_a0125-0126 start=15:36 car=\"KK-SII\" track=tsukuba_2000 laps=17 type=\"Car Race\" comment=\"kill switch flipped by accident part way through\"\n",
   "data": {
     "sessions": [
       {
-        "session_id": "958947d157432e2c",
+        "session_id": "2026-05-05_085636_KK-SII_tsukuba-2000_a0119",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -38,7 +38,7 @@
         "notes": ""
       },
       {
-        "session_id": "6428324c434c71da",
+        "session_id": "2026-05-05_153607_KK-SII_tsukuba-2000_a0125-0126",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,

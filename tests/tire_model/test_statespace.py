@@ -12,6 +12,7 @@ import pytest
 from motorsports_data_notebook.tire_model import statespace as ss
 from motorsports_data_notebook.tire_model.cleaning import mask_stale_session_prefix
 from motorsports_data_notebook.tire_model.energy_balance import P_ATM_BAR, T_ZERO_C_TO_K
+from tests._timeseries_fixture import write_session_timeseries
 
 CORNERS = ("fl", "fr", "rl", "rr")
 TRUE_K = 30.0
@@ -76,9 +77,7 @@ def _make_stint(
                 }
             )
     ts = pd.DataFrame(rows)
-    out = root / "timeseries" / "2026-01"
-    out.mkdir(parents=True, exist_ok=True)
-    ts.to_parquet(out / f"{sid}.parquet")
+    write_session_timeseries(root, sid, ts)
     # The dataset is raw and the fit masks the TPMS streams on load; the
     # production anchor is the first *live* reading of the cleaned laps.
     # Mirror that: anchor where the masked series becomes finite (quantised

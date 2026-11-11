@@ -1,5 +1,5 @@
 {
-  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|5d4c60ce49bc9a273eedb798c0aaaade4bed9c8e",
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|3143502a127503d5ea24ef74f112569465a863aa",
   "_model": "claude-sonnet-5-5",
   "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
   "_extracted_at": "2026-10-29T00:21:26.478786+00:00",
@@ -10,15 +10,15 @@
     }
   ],
   "_sessions": [
-    "9db3d02e6b43546e",
-    "7eb89dded5aba726",
-    "56bfd87ba89e00c1"
+    "2025-05-05_091949_Inferno-86_sodegaura_a0357",
+    "2025-05-05_102105_Inferno-86_sodegaura_a0360",
+    "2025-05-05_112417_Inferno-86_sodegaura_a0361"
   ],
-  "input": "DATE: 2025-05-05 (times are local to the track)\n\nRUN NOTES FILE \"2025-05-05 Sodegaura.txt\":\nGoals:\n\nFull dry session with TC on\n\nBrake later/smoother on T1\n\n3-4 2 brake zones with gas in middle\n\nWait longer on T1 exits\n\n\n9:30 Session:\nAmbient: 20.3c 41%\n\nFront Tires: silver, most worn 1.75 Bar\nFront Dampers: 27\n\nRear Tires: black, less worn than front, 1.75 Bar\n\nRear Dampers: 25\n\nNo TC this run\n\nHot: all 2.2\n\nTires overheated and got too much over and understeer part way through\n\nLater braking for 1 is super powerful, but it also risks spins\n\n10:30\n\nhot 2.1\n\nTC on\n\nTons of TC interventions, especially on corner exit, Maybe I should be more careful there\n\n11:30\n\nTires same\nTC track\n\nFront Dampers 27\nRear Dampers 23\n\nLots of sliding, lots of judder from front under breaking\n\nLOGGED SESSIONS:\n1. session_id=9db3d02e6b43546e start=09:19 car=\"Inferno 86\" track=sodegaura laps=18 type=\"Generic testing\" comment=\"Tires heavily worn,  2.2 hot / New Brakes / Dampers: f 27, r 25\"\n2. session_id=7eb89dded5aba726 start=10:21 car=\"Inferno 86\" track=sodegaura laps=21 type=\"Generic testing\" comment=\"With TC on and pretty worn tires\"\n3. session_id=56bfd87ba89e00c1 start=11:24 car=\"Inferno 86\" track=sodegaura laps=18 type=\"Generic testing\" comment=\"TC Track, very dead tires, lots of judder towards the end\"\n",
+  "input": "DATE: 2025-05-05 (times are local to the track)\n\nRUN NOTES FILE \"2025-05-05 Sodegaura.txt\":\nGoals:\n\nFull dry session with TC on\n\nBrake later/smoother on T1\n\n3-4 2 brake zones with gas in middle\n\nWait longer on T1 exits\n\n\n9:30 Session:\nAmbient: 20.3c 41%\n\nFront Tires: silver, most worn 1.75 Bar\nFront Dampers: 27\n\nRear Tires: black, less worn than front, 1.75 Bar\n\nRear Dampers: 25\n\nNo TC this run\n\nHot: all 2.2\n\nTires overheated and got too much over and understeer part way through\n\nLater braking for 1 is super powerful, but it also risks spins\n\n10:30\n\nhot 2.1\n\nTC on\n\nTons of TC interventions, especially on corner exit, Maybe I should be more careful there\n\n11:30\n\nTires same\nTC track\n\nFront Dampers 27\nRear Dampers 23\n\nLots of sliding, lots of judder from front under breaking\n\nLOGGED SESSIONS:\n1. session_id=2025-05-05_091949_Inferno-86_sodegaura_a0357 start=09:19 car=\"Inferno 86\" track=sodegaura laps=18 type=\"Generic testing\" comment=\"Tires heavily worn,  2.2 hot / New Brakes / Dampers: f 27, r 25\"\n2. session_id=2025-05-05_102105_Inferno-86_sodegaura_a0360 start=10:21 car=\"Inferno 86\" track=sodegaura laps=21 type=\"Generic testing\" comment=\"With TC on and pretty worn tires\"\n3. session_id=2025-05-05_112417_Inferno-86_sodegaura_a0361 start=11:24 car=\"Inferno 86\" track=sodegaura laps=18 type=\"Generic testing\" comment=\"TC Track, very dead tires, lots of judder towards the end\"\n",
   "data": {
     "sessions": [
       {
-        "session_id": "9db3d02e6b43546e",
+        "session_id": "2025-05-05_091949_Inferno-86_sodegaura_a0357",
         "note_file": "2025-05-05 Sodegaura.txt",
         "note_session_index": 1,
         "match_confidence": 0.95,
@@ -51,7 +51,7 @@
         "notes": "Goal: full dry session with TC on, brake later/smoother into T1. Front tires (silver) most worn, rear (black) less worn than front. Hot pressure 2.2 bar all around."
       },
       {
-        "session_id": "7eb89dded5aba726",
+        "session_id": "2025-05-05_102105_Inferno-86_sodegaura_a0360",
         "note_file": "2025-05-05 Sodegaura.txt",
         "note_session_index": 2,
         "match_confidence": 0.9,
@@ -82,7 +82,7 @@
         "notes": "Hot pressure 2.1 bar. Pretty worn tires. Maybe should be more careful on corner exit."
       },
       {
-        "session_id": "56bfd87ba89e00c1",
+        "session_id": "2025-05-05_112417_Inferno-86_sodegaura_a0361",
         "note_file": "2025-05-05 Sodegaura.txt",
         "note_session_index": 3,
         "match_confidence": 0.9,

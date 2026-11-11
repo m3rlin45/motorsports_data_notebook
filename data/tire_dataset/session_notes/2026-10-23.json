@@ -1,19 +1,19 @@
 {
-  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|7e512d4fe6ef05400ca8e6c0a6779ceb2b07288d",
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|a04decc696d8bbc2b4e6b580a48a6265bc699d26",
   "_model": "claude-sonnet-5-5",
   "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
   "_extracted_at": "2026-10-29T00:24:05.747780+00:00",
   "_notes_files": [],
   "_sessions": [
-    "c1222949d4518cd5",
-    "221c493704149ecc",
-    "f4ce9e59f09fce6a"
+    "2026-10-23_123918_KK-F_tsukuba-2000_a0363",
+    "2026-10-23_141700_KK-F_tsukuba-2000_a0366-0367",
+    "2026-10-23_144512_Inferno-86_tsukuba-2000_a6193"
   ],
-  "input": "DATE: 2026-10-23 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=c1222949d4518cd5 start=12:39 car=\"KK-F\" track=tsukuba_2000 laps=17 type=\"Bike Generic testing\" comment=\"Front and rear bars full soft\"\n2. session_id=221c493704149ecc start=14:17 car=\"KK-F\" track=tsukuba_2000 laps=16 type=\"Bike Generic testing\" comment=\"rear bar disconnected / front soft / front and rear full soft bar\"\n3. session_id=f4ce9e59f09fce6a start=14:45 car=\"Inferno 86\" track=tsukuba_2000 laps=18 type=\"Bike Generic testing\" comment=\"re-71rs\"\n",
+  "input": "DATE: 2026-10-23 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=2026-10-23_123918_KK-F_tsukuba-2000_a0363 start=12:39 car=\"KK-F\" track=tsukuba_2000 laps=17 type=\"Bike Generic testing\" comment=\"Front and rear bars full soft\"\n2. session_id=2026-10-23_141700_KK-F_tsukuba-2000_a0366-0367 start=14:17 car=\"KK-F\" track=tsukuba_2000 laps=16 type=\"Bike Generic testing\" comment=\"rear bar disconnected / front soft / front and rear full soft bar\"\n3. session_id=2026-10-23_144512_Inferno-86_tsukuba-2000_a6193 start=14:45 car=\"Inferno 86\" track=tsukuba_2000 laps=18 type=\"Bike Generic testing\" comment=\"re-71rs\"\n",
   "data": {
     "sessions": [
       {
-        "session_id": "c1222949d4518cd5",
+        "session_id": "2026-10-23_123918_KK-F_tsukuba-2000_a0363",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -41,7 +41,7 @@
         "notes": ""
       },
       {
-        "session_id": "221c493704149ecc",
+        "session_id": "2026-10-23_141700_KK-F_tsukuba-2000_a0366-0367",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -71,7 +71,7 @@
         "notes": ""
       },
       {
-        "session_id": "f4ce9e59f09fce6a",
+        "session_id": "2026-10-23_144512_Inferno-86_tsukuba-2000_a6193",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,

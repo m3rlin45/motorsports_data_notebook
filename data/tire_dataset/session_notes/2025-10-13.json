@@ -1,5 +1,5 @@
 {
-  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|fdc58f8ddd59224cae65fd1c3a0e9b2ccbfe158f",
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|9d63f1763573d8c80afcf0a9264c8747afaf616a",
   "_model": "claude-sonnet-5-5",
   "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
   "_extracted_at": "2026-10-29T00:22:29.292487+00:00",
@@ -10,17 +10,17 @@
     }
   ],
   "_sessions": [
-    "cc686c307fe888ba",
-    "d5a745e0b4c10d2f",
-    "ecc17d155fe45e3a",
-    "11f4cc498bda3417",
-    "f0c7d7bfd927d734"
+    "2025-10-13_084948_Inferno-86_fuji_a1708",
+    "2025-10-13_091224_Inferno-86_fuji_a1710",
+    "2025-10-13_102050_Inferno-86_fuji_a1716",
+    "2025-10-13_110147_Inferno-86_fuji_a1720",
+    "2025-10-13_114827_Inferno-86_fuji_a1725"
   ],
-  "input": "DATE: 2025-10-13 (times are local to the track)\n\nRUN NOTES FILE \"2025-10-13-Fuji.txt\":\nNS-4 A 8:50:\nTires: 71RS 30% used (center rib is screwed though)\n\nFront 2/2 15\n\nRear 3/4 20\n\nTires 1.75 all around\n\n\nNS-4 B 10:10:\nTires dropped all 2.1 -> 1.95\n\nno other changes\n\nAnalysis:\nRear drops on straight, front rises more rake?\n\n\n\nS-4 11:00:\n\nNo changes\n\nNS-4 11:40\n\nFront 2/2 (was it 3/3 the whole time?)\n\nBetter turn-in!\n\nLOGGED SESSIONS:\n1. session_id=cc686c307fe888ba start=08:49 car=\"Inferno 86\" track=fuji laps=3 type=\"Generic testing\" comment=\"Brake bedding\"\n2. session_id=d5a745e0b4c10d2f start=09:12 car=\"Inferno 86\" track=fuji laps=9 type=\"Generic testing\" comment=\"Brake bedding\"\n3. session_id=ecc17d155fe45e3a start=10:20 car=\"Inferno 86\" track=fuji laps=9 type=\"Generic testing\" comment=\"Front 2/2 15 / Rear 3/4 20 / re71rs used\"\n4. session_id=11f4cc498bda3417 start=11:01 car=\"Inferno 86\" track=fuji laps=8 type=\"Generic testing\" comment=\"Dropped front to 2/2, was 3/3 the whole time\"\n5. session_id=f0c7d7bfd927d734 start=11:48 car=\"Inferno 86\" track=fuji laps=10 type=\"Generic testing\" comment=\"Dropped front to 2/2, was 3/3 the whole time\"\n",
+  "input": "DATE: 2025-10-13 (times are local to the track)\n\nRUN NOTES FILE \"2025-10-13-Fuji.txt\":\nNS-4 A 8:50:\nTires: 71RS 30% used (center rib is screwed though)\n\nFront 2/2 15\n\nRear 3/4 20\n\nTires 1.75 all around\n\n\nNS-4 B 10:10:\nTires dropped all 2.1 -> 1.95\n\nno other changes\n\nAnalysis:\nRear drops on straight, front rises more rake?\n\n\n\nS-4 11:00:\n\nNo changes\n\nNS-4 11:40\n\nFront 2/2 (was it 3/3 the whole time?)\n\nBetter turn-in!\n\nLOGGED SESSIONS:\n1. session_id=2025-10-13_084948_Inferno-86_fuji_a1708 start=08:49 car=\"Inferno 86\" track=fuji laps=3 type=\"Generic testing\" comment=\"Brake bedding\"\n2. session_id=2025-10-13_091224_Inferno-86_fuji_a1710 start=09:12 car=\"Inferno 86\" track=fuji laps=9 type=\"Generic testing\" comment=\"Brake bedding\"\n3. session_id=2025-10-13_102050_Inferno-86_fuji_a1716 start=10:20 car=\"Inferno 86\" track=fuji laps=9 type=\"Generic testing\" comment=\"Front 2/2 15 / Rear 3/4 20 / re71rs used\"\n4. session_id=2025-10-13_110147_Inferno-86_fuji_a1720 start=11:01 car=\"Inferno 86\" track=fuji laps=8 type=\"Generic testing\" comment=\"Dropped front to 2/2, was 3/3 the whole time\"\n5. session_id=2025-10-13_114827_Inferno-86_fuji_a1725 start=11:48 car=\"Inferno 86\" track=fuji laps=10 type=\"Generic testing\" comment=\"Dropped front to 2/2, was 3/3 the whole time\"\n",
   "data": {
     "sessions": [
       {
-        "session_id": "cc686c307fe888ba",
+        "session_id": "2025-10-13_084948_Inferno-86_fuji_a1708",
         "note_file": "2025-10-13-Fuji.txt",
         "note_session_index": 1,
         "match_confidence": 1.0,
@@ -49,7 +49,7 @@
         "notes": "Brake bedding. Tires 30% used; center rib is damaged."
       },
       {
-        "session_id": "d5a745e0b4c10d2f",
+        "session_id": "2025-10-13_091224_Inferno-86_fuji_a1710",
         "note_file": "2025-10-13-Fuji.txt",
         "note_session_index": 1,
         "match_confidence": 0.5,
@@ -78,7 +78,7 @@
         "notes": "Brake bedding. Tires 30% used; center rib is damaged."
       },
       {
-        "session_id": "ecc17d155fe45e3a",
+        "session_id": "2025-10-13_102050_Inferno-86_fuji_a1716",
         "note_file": "2025-10-13-Fuji.txt",
         "note_session_index": 2,
         "match_confidence": 1.0,
@@ -108,7 +108,7 @@
         "notes": "No other changes. Analysis: rear drops on the straight; front rises more (rake?)."
       },
       {
-        "session_id": "11f4cc498bda3417",
+        "session_id": "2025-10-13_110147_Inferno-86_fuji_a1720",
         "note_file": "2025-10-13-Fuji.txt",
         "note_session_index": 3,
         "match_confidence": 0.9,
@@ -136,7 +136,7 @@
         "notes": "Run notes say no changes (block labelled S-4)."
       },
       {
-        "session_id": "f0c7d7bfd927d734",
+        "session_id": "2025-10-13_114827_Inferno-86_fuji_a1725",
         "note_file": "2025-10-13-Fuji.txt",
         "note_session_index": 4,
         "match_confidence": 1.0,

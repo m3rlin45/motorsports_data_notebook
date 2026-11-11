@@ -1,19 +1,19 @@
 {
-  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|7f78ec6822c84d28056f7f6de08ad7dfe66ea818",
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|43b360de9395f6a0a10326f26b5b612bd62f0ef9",
   "_model": "claude-sonnet-5-5",
   "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
   "_extracted_at": "2026-10-29T00:23:04.193434+00:00",
   "_notes_files": [],
   "_sessions": [
-    "89b9c2164f35e48d",
-    "d7667f1b40bddd84",
-    "6e703166d3a6549e"
+    "2026-02-18_125927_KK-SII_tsukuba-2000_a0004-0005",
+    "2026-02-18_141902_KK-SII_tsukuba-2000_a0012",
+    "2026-02-18_152610_KK-SII_tsukuba-2000_a0013"
   ],
-  "input": "DATE: 2026-02-18 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=89b9c2164f35e48d start=12:59 car=\"KK-SII\" track=tsukuba_2000 laps=9 type=\"Car Generic testing\" comment=\"no power\"\n2. session_id=d7667f1b40bddd84 start=14:19 car=\"KK-SII\" track=tsukuba_2000 laps=17 type=\"Car Generic testing\" comment=\"engine works!\"\n3. session_id=6e703166d3a6549e start=15:26 car=\"KK-SII\" track=tsukuba_2000 laps=20 type=\"Car Generic testing\" comment=\"\"\n",
+  "input": "DATE: 2026-02-18 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=2026-02-18_125927_KK-SII_tsukuba-2000_a0004-0005 start=12:59 car=\"KK-SII\" track=tsukuba_2000 laps=9 type=\"Car Generic testing\" comment=\"no power\"\n2. session_id=2026-02-18_141902_KK-SII_tsukuba-2000_a0012 start=14:19 car=\"KK-SII\" track=tsukuba_2000 laps=17 type=\"Car Generic testing\" comment=\"engine works!\"\n3. session_id=2026-02-18_152610_KK-SII_tsukuba-2000_a0013 start=15:26 car=\"KK-SII\" track=tsukuba_2000 laps=20 type=\"Car Generic testing\" comment=\"\"\n",
   "data": {
     "sessions": [
       {
-        "session_id": "89b9c2164f35e48d",
+        "session_id": "2026-02-18_125927_KK-SII_tsukuba-2000_a0004-0005",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -41,7 +41,7 @@
         "notes": "no power"
       },
       {
-        "session_id": "d7667f1b40bddd84",
+        "session_id": "2026-02-18_141902_KK-SII_tsukuba-2000_a0012",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
@@ -67,7 +67,7 @@
         "notes": "engine works!"
       },
       {
-        "session_id": "6e703166d3a6549e",
+        "session_id": "2026-02-18_152610_KK-SII_tsukuba-2000_a0013",
         "note_file": null,
         "note_session_index": null,
         "match_confidence": 0.0,
