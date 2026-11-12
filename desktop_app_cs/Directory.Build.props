@@ -21,6 +21,7 @@
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <AvaloniaVersion>12.1.4</AvaloniaVersion>
     <ScottPlotVersion>5.1.59</ScottPlotVersion>
+    <YamlDotNetVersion>18.1.0</YamlDotNetVersion>
   </PropertyGroup>
 
 </Project>
