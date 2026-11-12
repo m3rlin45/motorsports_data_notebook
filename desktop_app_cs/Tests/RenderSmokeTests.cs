@@ -4,21 +4,25 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media.Imaging;
 using InfernoAnalyzer.App;
+using InfernoAnalyzer.App.ViewModels;
+using InfernoAnalyzer.App.Views;
 using InfernoAnalyzer.Charting;
+using InfernoAnalyzer.Core.Profiles;
 
 namespace InfernoAnalyzer.Tests;
 
 /// <summary>
-/// Renders the spike window headlessly against the committed fixture and
-/// writes the frame to <c>bin/.../renders/</c>. Proves the ScottPlot adapter
-/// draws without a display and leaves an image to eyeball.
+/// Renders the Time/Distance view headlessly against the committed fixture
+/// and writes the frames to <c>bin/.../renders/</c>. Proves the ScottPlot
+/// adapter draws without a display and leaves images to eyeball.
 /// </summary>
 public class RenderSmokeTests
 {
     private static string FixturePath =>
         Path.Combine(AppContext.BaseDirectory, "fixtures", "laps.json");
 
-    private static string RenderDir
+    /// <summary>Where the PNGs go.</summary>
+    public static string RenderDir
     {
         get
         {
@@ -28,29 +32,38 @@ public class RenderSmokeTests
         }
     }
 
+    /// <summary>A window showing the Time/Distance tab for a fixture.</summary>
+    private static (Window Window, TimeDistanceViewModel ViewModel, TimeDistanceView View) ShowFixture(string path, double width = 1280, double height = 860)
+    {
+        var vm = new TimeDistanceViewModel(new SessionViewModel("A", new ProfileStore("/nonexistent/profiles.yaml")));
+        var view = new TimeDistanceView { DataContext = vm };
+        var window = new Window { Width = width, Height = height, Content = view, Background = Avalonia.Media.Brushes.Black };
+        window.Show();
+        vm.ShowFixture(Fixture.Load(path));
+        return (window, vm, view);
+    }
+
     [AvaloniaFact]
     public void Strip_chart_renders_distance_and_time_modes()
     {
         Assert.True(File.Exists(FixturePath), $"fixture missing: {FixturePath}");
-
-        var window = new MainWindow(FixturePath) { Width = 1280, Height = 860 };
-        window.Show();
+        var (window, vm, _) = ShowFixture(FixturePath);
 
         // Park the cursor mid-lap so the frame shows the crosshair and value labels too.
-        window.Cursors.SetCursor(2158.0);
+        vm.Cursors.SetCursor(2158.0);
         var distance = window.CaptureRenderedFrame();
         Assert.NotNull(distance);
         distance!.Save(Path.Combine(RenderDir, "strip_chart_distance.png"), new PngBitmapEncoderOptions());
 
-        window.TimeRadio.IsChecked = true;
+        vm.IsTime = true;
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-        window.Cursors.SetCursor(60.0);
+        vm.Cursors.SetCursor(60.0);
         var time = window.CaptureRenderedFrame();
         Assert.NotNull(time);
         time!.Save(Path.Combine(RenderDir, "strip_chart_time.png"), new PngBitmapEncoderOptions());
 
-        Assert.StartsWith("CMD_Inferno", window.FixtureLabel.Text);
-        Assert.Contains("2 laps", window.FixtureLabel.Text);
+        Assert.StartsWith("2 laps", vm.Summary);
+        Assert.Equal(XAxisMode.Time, vm.Spec!.XAxis);
     }
 
     /// <summary>
@@ -65,18 +78,14 @@ public class RenderSmokeTests
         Assert.SkipWhen(string.IsNullOrEmpty(path) || !File.Exists(path), "set INFERNO_DENSE_FIXTURE to a dense fixture path");
 
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        var window = new MainWindow(path!) { Width = 1280, Height = 860 };
+        var (window, vm, _) = ShowFixture(path!);
         var loadMs = sw.ElapsedMilliseconds;
-        window.Show();
         var frame = window.CaptureRenderedFrame();
         var renderMs = sw.ElapsedMilliseconds - loadMs;
 
         Assert.NotNull(frame);
-        var output = Path.Combine(RenderDir, "strip_chart_dense.png");
-        frame!.Save(output, new PngBitmapEncoderOptions());
-        File.WriteAllText(
-            Path.Combine(RenderDir, "strip_chart_dense.txt"),
-            $"{window.FixtureLabel.Text}\nload+build {loadMs} ms, first render {renderMs} ms\n");
+        frame!.Save(Path.Combine(RenderDir, "strip_chart_dense.png"), new PngBitmapEncoderOptions());
+        File.WriteAllText(Path.Combine(RenderDir, "strip_chart_dense.txt"), $"{vm.Summary}\nload+build {loadMs} ms, first render {renderMs} ms\n");
     }
 
     /// <summary>
@@ -112,19 +121,19 @@ public class RenderSmokeTests
     [AvaloniaFact]
     public void Hovering_a_panel_moves_the_linked_cursor()
     {
-        var window = new MainWindow(FixturePath) { Width = 1280, Height = 860 };
-        window.Show();
+        var (window, vm, _) = ShowFixture(FixturePath);
         window.CaptureRenderedFrame(); // ScottPlot needs one render before it can map pixels to data
 
         var moves = new List<double?>();
-        window.Cursors.CursorChanged += moves.Add;
+        vm.Cursors.CursorChanged += moves.Add;
 
+        // The channel column on the left is 200 px wide; x = 640 is well inside the chart.
         window.MouseMove(new Point(640, 300));
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
 
         var x = Assert.Single(moves);
         Assert.NotNull(x);
         Assert.InRange(x!.Value, 1500, 3000); // roughly mid-lap on the 4.5 km Fuji fixture
-        Assert.Equal(x, window.Cursors.Cursor);
+        Assert.Equal(x, vm.Cursors.Cursor);
     }
 }

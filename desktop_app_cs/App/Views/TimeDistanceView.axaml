@@ -1,0 +1,28 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:InfernoAnalyzer.App.ViewModels"
+             x:Class="InfernoAnalyzer.App.Views.TimeDistanceView"
+             x:DataType="vm:TimeDistanceViewModel">
+  <DockPanel>
+    <Border DockPanel.Dock="Left" Width="200" Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}" Padding="6">
+      <DockPanel>
+        <TextBlock DockPanel.Dock="Top" Text="X axis" FontWeight="Bold" Margin="0,0,0,2" />
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="12" Margin="0,0,0,8">
+          <RadioButton x:Name="DistanceRadio" Content="Distance" GroupName="xaxis" IsChecked="{Binding IsDistance}" FontSize="11" />
+          <RadioButton x:Name="TimeRadio" Content="Time" GroupName="xaxis" IsChecked="{Binding IsTime}" FontSize="11" />
+        </StackPanel>
+        <TextBlock DockPanel.Dock="Top" Text="Channels" FontWeight="Bold" Margin="0,0,0,4" IsVisible="{Binding !!Channels.Count}" />
+        <ScrollViewer IsVisible="{Binding !!Channels.Count}">
+          <ItemsControl ItemsSource="{Binding Channels}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ChannelChoiceViewModel">
+                <CheckBox IsChecked="{Binding IsSelected}" Content="{Binding Name}" FontSize="11" MinHeight="22" Padding="4,0" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </DockPanel>
+    </Border>
+    <ContentControl x:Name="ChartHost" />
+  </DockPanel>
+</UserControl>

@@ -121,7 +121,7 @@ public sealed class ScottPlotStripChart : IChartSurface
             plot.Axes.Left.Label.Text = subplot.Units;
             plot.Axes.Bottom.Label.Text = isBottom ? strip.XLabel : string.Empty;
             plot.Axes.Bottom.TickLabelStyle.IsVisible = isBottom;
-            plot.Legend.IsVisible = isTop;
+            plot.Legend.IsVisible = isTop && strip.Legend;
             plot.Legend.Alignment = Alignment.UpperRight;
 
             foreach (var trace in subplot.Traces)
