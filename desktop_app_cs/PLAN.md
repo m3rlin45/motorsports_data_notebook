@@ -273,8 +273,9 @@ summaries where large) from the Fuji 86 sample, laps 14 and 12.
 | `Numerics` | done | numpy/pandas primitives: pairwise `Sum`/`Mean` (bit-identical to numpy), `Gradient`, centred `RollingMeanCentered` with pandas' even-window offset, `CumulativeSum`, `ArgMax` |
 | `corners` | done 2026-10-29 | `GpsToLocalXy`, `ComputeCurvature`, `IdentifyCorners(FromCurvature)`; corner lists identical to Python on both laps, curvature arrays to 1e-7 relative (pandas' rolling mean uses a compensated running sum, so the last bits differ) |
 | `zones` | done 2026-10-29 | single-lap and averaged zones, accel merging, `CreateTrackSegments`, segment stats, G utilization (both inline-G paths), `LapSelection` (`get_top_laps` / `get_best_lap`); every output identical to Python on laps 14 & 12, lap arrays reproduced end to end from the C# loader |
-| `suspension` | next | |
-| `roll_gradient`, `driver_analysis`, `tire_grip` | | |
+| `suspension` | done 2026-10-29 | shock velocity (numpy.gradient with coordinates, edge-padded box smoothing), wheel velocity, zero-centred histogram, moments and range shares, single- and multi-lap analysis, symmetry and group-difference tables; velocity derivation bit-identical on a dumped slice, histograms within one sample per bin and moments to 1e-6 end to end from the C# loader (the 500 Hz inputs are not dumped) |
+| `roll_gradient` | next | |
+| `driver_analysis`, `tire_grip` | | |
 
 Lesson from corners: match numpy's operation order exactly (`x * (π/180)`,
 not `x * π / 180`; pairwise sums) before loosening a tolerance.
