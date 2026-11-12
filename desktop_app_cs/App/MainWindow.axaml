@@ -16,6 +16,12 @@
     <DataTemplate DataType="vm:SuspensionConfigViewModel">
       <views:SuspensionConfigView />
     </DataTemplate>
+    <DataTemplate DataType="vm:RollGradientViewModel">
+      <views:RollGradientView />
+    </DataTemplate>
+    <DataTemplate DataType="vm:RollGradientConfigViewModel">
+      <views:RollGradientConfigView />
+    </DataTemplate>
   </Window.DataTemplates>
   <DockPanel>
     <Grid DockPanel.Dock="Top" Margin="8,6" ColumnDefinitions="*,*,*,Auto" IsVisible="{Binding !IsTopCollapsed}">
