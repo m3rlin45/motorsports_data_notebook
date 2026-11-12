@@ -116,6 +116,14 @@ public class AppShellTests
 
         window.TimeDistance.IsTime = true;
         Assert.Equal(3, window.TimeDistance.Spec!.Subplots.Count); // no delta panel against time
+
+        // The channel search hides non-matching rows but keeps their selection.
+        window.TimeDistance.ChannelFilter = "shock";
+        Assert.All(window.TimeDistance.Channels, c => Assert.Equal(c.Name.Contains("shock", StringComparison.OrdinalIgnoreCase), c.IsMatch));
+        Assert.Contains(window.TimeDistance.Channels, c => c.IsMatch);
+        Assert.Contains(window.TimeDistance.Channels, c => c.Name == "PPS" && c.IsSelected && !c.IsMatch);
+        window.TimeDistance.ChannelFilter = string.Empty;
+        Assert.All(window.TimeDistance.Channels, c => Assert.True(c.IsMatch));
     }
 
     [Fact]
