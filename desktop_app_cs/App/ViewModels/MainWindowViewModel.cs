@@ -17,7 +17,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Profiles = profiles ?? new ProfileStore();
         SessionA = new SessionViewModel("SESSION A (Primary)", Profiles);
         SessionB = new SessionViewModel("SESSION B (Compare)", Profiles);
-        TimeDistance = new TimeDistanceViewModel(SessionA);
+        TimeDistance = new TimeDistanceViewModel(SessionA, SessionB);
         Tabs = new ObservableCollection<AnalysisTabViewModel> { TimeDistance };
         _activeTab = TimeDistance;
         TimeDistance.SetActive(true);

@@ -30,21 +30,24 @@ public sealed partial class ChannelChoiceViewModel : ObservableObject
 }
 
 /// <summary>
-/// The Time/Distance tab: the selected laps of Session A overlaid as a
-/// strip chart (one panel per chosen channel plus delta time), with the
-/// linked crosshair. Also hosts the demo fixtures (`cs-run path.json`).
+/// The Time/Distance tab: the selected laps of Session A (and of Session B
+/// when one is loaded) overlaid as a strip chart (one panel per chosen
+/// channel plus delta time), with the linked crosshair. Also hosts the demo
+/// fixtures (`cs-run path.json`).
 /// </summary>
 public sealed partial class TimeDistanceViewModel : AnalysisTabViewModel
 {
     private readonly SessionViewModel _sessionA;
+    private readonly SessionViewModel? _sessionB;
     private Fixture? _fixture;
     private bool _suppressChannelEvents;
     private List<string> _defaultOrder = new();
 
-    /// <summary>Create the tab over <paramref name="sessionA"/>.</summary>
-    public TimeDistanceViewModel(SessionViewModel sessionA)
+    /// <summary>Create the tab over <paramref name="sessionA"/> and the optional comparison <paramref name="sessionB"/>.</summary>
+    public TimeDistanceViewModel(SessionViewModel sessionA, SessionViewModel? sessionB = null)
     {
         _sessionA = sessionA;
+        _sessionB = sessionB;
     }
 
     /// <inheritdoc />
@@ -149,7 +152,33 @@ public sealed partial class TimeDistanceViewModel : AnalysisTabViewModel
         }
     }
 
-    private sealed record Parameters(LogFile Log, List<int> Laps, List<string> Channels, string Timebase);
+    private sealed record Parameters(LogFile Log, List<int> Laps, List<string> Channels, string Timebase, LogFile? LogB, List<int> LapsB, Dictionary<string, string> MapB);
+
+    /// <summary>
+    /// Session A channel name → Session B channel name through the vehicle
+    /// profiles (the same key on both), so e.g. A's <c>PPS</c> panel shows B's
+    /// <c>Throttle_PCT</c>. Names without a profile key map to themselves.
+    /// </summary>
+    public Dictionary<string, string> ChannelMapToB()
+    {
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        var a = _sessionA.Profile?.ChannelNames;
+        var b = _sessionB?.Profile?.ChannelNames;
+        if (a is null || b is null)
+        {
+            return map;
+        }
+
+        foreach (var (key, nameA) in a)
+        {
+            if (b.TryGetValue(key, out var nameB) && nameB != nameA)
+            {
+                map[nameA] = nameB;
+            }
+        }
+
+        return map;
+    }
 
     /// <inheritdoc />
     protected override object? GetParameters()
@@ -175,7 +204,9 @@ public sealed partial class TimeDistanceViewModel : AnalysisTabViewModel
             return null;
         }
 
-        return new Parameters(_sessionA.Log, laps, channels, Timebase);
+        var logB = _sessionB?.Log;
+        var lapsB = logB is null ? new List<int>() : _sessionB!.SelectedLaps;
+        return new Parameters(_sessionA.Log, laps, channels, Timebase, logB, lapsB, ChannelMapToB());
     }
 
     /// <inheritdoc />
@@ -184,7 +215,15 @@ public sealed partial class TimeDistanceViewModel : AnalysisTabViewModel
         var p = (Parameters)parameters;
         // Fastest selected lap first: it is the delta-time reference.
         var ordered = p.Laps.OrderBy(n => p.Log.Laps.First(l => l.Num == n).LapTimeMs).ToList();
-        _fixture = LapSeriesBuilder.Build(p.Log, ordered, p.Channels, p.Timebase);
+        if (p.LogB is null || p.LapsB.Count == 0)
+        {
+            _fixture = LapSeriesBuilder.Build(p.Log, ordered, p.Channels, p.Timebase);
+            return;
+        }
+
+        var a = LapSeriesBuilder.Build(p.Log, ordered, p.Channels, p.Timebase, "A", null);
+        var b = LapSeriesBuilder.Build(p.LogB, p.LapsB, p.Channels, p.Timebase, "B", p.MapB);
+        _fixture = LapSeriesBuilder.Merge(a, b);
     }
 
     /// <inheritdoc />
@@ -206,7 +245,7 @@ public sealed partial class TimeDistanceViewModel : AnalysisTabViewModel
     /// </summary>
     private void ColourLapLists(Fixture fixture)
     {
-        foreach (var item in _sessionA.Laps)
+        foreach (var item in _sessionA.Laps.Concat(_sessionB?.Laps ?? Enumerable.Empty<LapItemViewModel>()))
         {
             item.TraceColor = null;
         }
@@ -214,7 +253,8 @@ public sealed partial class TimeDistanceViewModel : AnalysisTabViewModel
         for (var i = 0; i < fixture.Laps.Count; i++)
         {
             var lap = fixture.Laps[i];
-            var item = _sessionA.Laps.FirstOrDefault(l => l.Num == lap.Num);
+            var session = lap.Session == "B" ? _sessionB : _sessionA;
+            var item = session?.Laps.FirstOrDefault(l => l.Num == lap.Num);
             if (item is not null)
             {
                 item.TraceColor = StripChartBuilder.ColorFor(i);
