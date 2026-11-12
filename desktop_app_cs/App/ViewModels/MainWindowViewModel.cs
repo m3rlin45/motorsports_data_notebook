@@ -18,7 +18,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         SessionA = new SessionViewModel("SESSION A (Primary)", Profiles);
         SessionB = new SessionViewModel("SESSION B (Compare)", Profiles);
         TimeDistance = new TimeDistanceViewModel(SessionA, SessionB);
-        Tabs = new ObservableCollection<AnalysisTabViewModel> { TimeDistance };
+        Suspension = new SuspensionViewModel(SessionA, SessionB);
+        Tabs = new ObservableCollection<AnalysisTabViewModel> { TimeDistance, Suspension };
         _activeTab = TimeDistance;
         TimeDistance.SetActive(true);
 
@@ -39,6 +40,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     /// <summary>The Time/Distance tab.</summary>
     public TimeDistanceViewModel TimeDistance { get; }
+
+    /// <summary>The Suspension tab.</summary>
+    public SuspensionViewModel Suspension { get; }
 
     /// <summary>Analysis tabs in display order.</summary>
     public ObservableCollection<AnalysisTabViewModel> Tabs { get; }
