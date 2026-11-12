@@ -1,0 +1,31 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:InfernoAnalyzer.App.ViewModels"
+             xmlns:controls="using:InfernoAnalyzer.App.Controls"
+             xmlns:tracks="using:InfernoAnalyzer.Core.Tracks"
+             x:Class="InfernoAnalyzer.App.Views.SectorsView"
+             x:DataType="vm:SectorsViewModel">
+  <DockPanel>
+    <Border DockPanel.Dock="Top" Padding="8,4" Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}">
+      <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+        <TextBlock Text="Track:" FontSize="11" VerticalAlignment="Center" />
+        <ComboBox ItemsSource="{Binding Tracks}" SelectedItem="{Binding SelectedTrack}" MinWidth="200" FontSize="11">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="tracks:TrackDefinition">
+              <TextBlock Text="{Binding Name}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+        <TextBox Text="{Binding TrackName}" Width="180" FontSize="11" MinHeight="24" IsEnabled="{Binding HasTrack}" />
+        <Button Content="New track from session" Command="{Binding NewTrackCommand}" Padding="8,2" FontSize="11" />
+        <Button Content="Delete gate" Command="{Binding DeleteGateCommand}" Padding="8,2" FontSize="11" />
+        <Button Content="Save track" Command="{Binding SaveTrackCommand}" Padding="8,2" FontSize="11" IsEnabled="{Binding IsDirty}" />
+        <TextBlock Text="Click the line to add a gate, drag a gate to move it" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+      </StackPanel>
+    </Border>
+    <ScrollViewer DockPanel.Dock="Right" MinWidth="320" HorizontalScrollBarVisibility="Auto" Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}" Padding="6">
+      <controls:SplitTableControl x:Name="SplitTable" Table="{Binding Table}" HighlightedLap="{Binding HighlightedLap}" />
+    </ScrollViewer>
+    <controls:TrackEditorControl x:Name="Editor" ViewModel="{Binding}" Margin="4" />
+  </DockPanel>
+</UserControl>
