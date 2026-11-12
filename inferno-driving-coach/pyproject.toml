@@ -27,7 +27,7 @@ dependencies = [
     "libxrk>=0.12.0",
     "ipywidgets>=8.0.0,<9.0.0",
     "pyyaml>=6.0,<7.0",
-    "libibt>=0.0.4",
+    "libibt>=0.2.0",
     "matplotlib>=3.9.0",
 ]
 

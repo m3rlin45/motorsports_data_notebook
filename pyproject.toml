@@ -15,7 +15,7 @@ dependencies = [
     "libxrk>=0.13.0",
     "ipywidgets>=8.0.0,<9.0.0",
     "pyyaml>=6.0,<7.0",
-    "libibt>=0.0.5",
+    "libibt>=0.2.0",
     # Styler.format lap-time tables render through jinja2 (pandas imports it
     # lazily, which Pyodide's auto-loader can't see — declaring it here keeps
     # the notebooks to a single %pip install).

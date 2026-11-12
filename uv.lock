@@ -791,7 +791,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "customtkinter", specifier = ">=5.2.0" },
-    { name = "libibt", specifier = ">=0.0.1" },
+    { name = "libibt", specifier = ">=0.2.0" },
     { name = "libxrk", specifier = ">=0.12.0" },
     { name = "matplotlib", specifier = ">=3.10.7,<4.0.0" },
     { name = "motorsports-data-notebook", editable = "." },
@@ -829,7 +829,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "ipywidgets", specifier = ">=8.0.0,<9.0.0" },
-    { name = "libibt", specifier = ">=0.0.4" },
+    { name = "libibt", specifier = ">=0.2.0" },
     { name = "libxrk", specifier = ">=0.12.0" },
     { name = "matplotlib", specifier = ">=3.9.0" },
     { name = "mcp", specifier = ">=1.2.0" },
@@ -1286,29 +1286,28 @@ wheels = [
 
 [[package]]
 name = "libibt"
-version = "0.0.5"
+version = "0.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy" },
     { name = "pyarrow" },
-    { name = "pyyaml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d8/3d/906e00f46c2efa20715f64b8563a02b0e9a6470044d8df96becfe6faca2d/libibt-0.0.5.tar.gz", hash = "sha256:73485c365132e8b5dd29d4f42d391b8b8bedeee9862c4dc88f371763d2735e8e", size = 24918, upload-time = "2026-08-17T17:36:30.837Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f9/0c/75e9106530d5cab9a79ab604a029a4657ab1bff46b79706a305fc779051e/libibt-0.2.0.tar.gz", hash = "sha256:c1fac72cde2354b1b511512c29bc1c22e38e61ce09e544a80b87dae8fe5904b9", size = 47330, upload-time = "2026-11-11T22:05:47.541Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1a/a4/42031f7fcf329d3906d58eba9acb4264e63c9af6af03df9e9f35fd6410ff/libibt-0.0.5-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:3cc50a67c4f995eb78905e024d35546ace8c756dbe713138249dafd3e0bb2fa6", size = 301306, upload-time = "2026-08-17T17:36:01.741Z" },
-    { url = "https://files.pythonhosted.org/packages/aa/08/ea93944767ecf16d4667a985ac8c2d70d95e42cd093dc2361166a1a8079e/libibt-0.0.5-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:f1216ef03560028db558bba605dc8d8aea7200eed6c8cb4fc223e5c1cb46c6be", size = 284752, upload-time = "2026-08-17T17:36:02.959Z" },
-    { url = "https://files.pythonhosted.org/packages/a0/2c/f278c87bed1833d89c332fbcda07d888bb86f402ff1dff361794324b7f4d/libibt-0.0.5-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:d36f68b09ff1c139096ef2e2eda30b86fce51aefd978b7019fb6a6e504318b12", size = 297791, upload-time = "2026-08-17T17:36:04.222Z" },
-    { url = "https://files.pythonhosted.org/packages/0a/a8/da2643f8c5213ea1ed48c7f742b51868d083b17caff4dd0c6f6a17f98dc3/libibt-0.0.5-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:8f4593a32088c83be82807f5a9bccf7e3fc56c2a48b7c35a6a11bf3b46192e8a", size = 313159, upload-time = "2026-08-17T17:36:05.611Z" },
-    { url = "https://files.pythonhosted.org/packages/6f/2d/416e2a5feb02fe348470c31e46853e334b677a929334f871efbd31fb59f7/libibt-0.0.5-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:126a5502f5fc2bf1ebdeed4bc1d83cb7ad53b321f79630d77923f21278a645e5", size = 363258, upload-time = "2026-08-17T17:36:06.923Z" },
-    { url = "https://files.pythonhosted.org/packages/32/82/2b0269f6aa456ca8a19a41f14f0d0a31d4bcec273528e6c92accd940ea2f/libibt-0.0.5-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:c99b9b7bfacb1a724eb15944e93246648149e0b1e00b01d53c124e54ea32100e", size = 392956, upload-time = "2026-08-17T17:36:08.233Z" },
-    { url = "https://files.pythonhosted.org/packages/0e/24/f837d5f38bc2b4be185dd9d8924e1d99d785041524b193d2d6144108bac5/libibt-0.0.5-cp312-cp312-win_amd64.whl", hash = "sha256:398a62a08c19b389c9445f7683588eca89465954f36b029d2a33a9494b94d377", size = 238217, upload-time = "2026-08-17T17:36:09.883Z" },
-    { url = "https://files.pythonhosted.org/packages/c9/e5/ef35636d19c790fb579cdc1a3ffd83be7f0c78963b5138bf9407daf89891/libibt-0.0.5-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:b2ee8bec0397c3faaf02162efda795c52a3e427fc92a7d50d89ffa4629ab86f2", size = 301117, upload-time = "2026-08-17T17:36:11.379Z" },
-    { url = "https://files.pythonhosted.org/packages/3b/cb/c445e551fa96d8a7cf90b96d13671b8137cf609b7568eb44dddceb5ca43d/libibt-0.0.5-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:165e3c11456aca67cdadbc7bd82456c8e80fe19f646fc5356e4eadd7594d262a", size = 284707, upload-time = "2026-08-17T17:36:12.65Z" },
-    { url = "https://files.pythonhosted.org/packages/e7/7f/2a5e5bea3c2b6600a52aa80ea2aa55529aebaf2fdd67bb0ab098b63fc1ae/libibt-0.0.5-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:9f8ca8a369e7c7de8d13bbbc75e45f72f7e79157a7b51247ce89d5fa6d678f04", size = 297700, upload-time = "2026-08-17T17:36:14.047Z" },
-    { url = "https://files.pythonhosted.org/packages/64/d8/fc1bd2cc42e2354f06f45fd03472cf504b4bce622d03899773cb833b8d2f/libibt-0.0.5-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:36a504353d05d5f34c30ae1a548e82c9a0926fe4308d82611b786e68687da218", size = 312912, upload-time = "2026-08-17T17:36:15.754Z" },
-    { url = "https://files.pythonhosted.org/packages/1f/5f/046e2a54a60d23e1b05097e8012dcd2b9c7a258a748358e3eb4143ce3164/libibt-0.0.5-cp313-cp313-musllinux_1_2_aarch64.whl", hash = "sha256:1f7179b698ff9aed33c879bfac9a9d69b223ff273be508c989caba6808d7e609", size = 363112, upload-time = "2026-08-17T17:36:16.956Z" },
-    { url = "https://files.pythonhosted.org/packages/6d/bc/0d9de40d13a610807d3fea8450f823763a36401b12f22994806986e6b2dd/libibt-0.0.5-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:71c929c4ac6d97c08979d0134269e2479a964058e18250ef52d5b6c51b5929bb", size = 392617, upload-time = "2026-08-17T17:36:18.313Z" },
-    { url = "https://files.pythonhosted.org/packages/43/73/67e80b81ab0d2960bf81f29ce9bc903efa959ec86cdf788dc6c886b1f638/libibt-0.0.5-cp313-cp313-win_amd64.whl", hash = "sha256:6a9cdb358960f1f7c13f5271a89c96cc0ffb5ce50ca6baaa922f8e70d374e750", size = 238033, upload-time = "2026-08-17T17:36:19.564Z" },
+    { url = "https://files.pythonhosted.org/packages/0e/bb/0e36a09d436397fac99899ee17e80954310dce004aa6903d1d54d5591dc9/libibt-0.2.0-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:9bf951d192d3c918a5bd2f194deb0a9c954954e0363c49528a054931765bf9b6", size = 412276, upload-time = "2026-11-11T22:05:16.064Z" },
+    { url = "https://files.pythonhosted.org/packages/d5/e5/9294bb8f24fbac01ca87ec5ff740b3f124c662caeb31eb480fdf5bffe275/libibt-0.2.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:c2ee878ec5428d23d4d4ecbeff070c7bc65eff3d3a28964fe4376bd570c98e2c", size = 384063, upload-time = "2026-11-11T22:05:17.37Z" },
+    { url = "https://files.pythonhosted.org/packages/ff/a2/781ace30b3524743aa94b17eee59e4e488b99326a84b3940331616c12da0/libibt-0.2.0-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:f4fed6ef80106e82fbcb03612fd57b88548f492c1f02cd70df4bf4537d52be07", size = 399011, upload-time = "2026-11-11T22:05:18.992Z" },
+    { url = "https://files.pythonhosted.org/packages/7a/70/c70b19f94271f5460664c21e2ff3bcface6078be7348c629fdc4dbc02af7/libibt-0.2.0-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:5f5726a283b0abb5d5eb2688318aa0033aca9dada1d00e42f94a642ab06e7747", size = 421662, upload-time = "2026-11-11T22:05:20.582Z" },
+    { url = "https://files.pythonhosted.org/packages/2b/42/8bda09f3e6d7912778697e84ae2d0546e632bf35b90c29758ab00403d1de/libibt-0.2.0-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:d59a24f4cd950142dae2a9870f8d40c561ba6c27a909891f9c5742bc42c9c6e5", size = 464883, upload-time = "2026-11-11T22:05:21.905Z" },
+    { url = "https://files.pythonhosted.org/packages/01/2c/1192de8fa70b958d430e2704d334afdc6eb56b5fde839a49b8333f9c228f/libibt-0.2.0-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:d0c76a1b7b11bb4fa1ce21ce98431e2b5152de7875ff5cec0173c2e408fa614b", size = 501510, upload-time = "2026-11-11T22:05:23.355Z" },
+    { url = "https://files.pythonhosted.org/packages/ac/11/9e532107f92bbf27ec0661496061c3398651f44556f13e5a9f32c6ea5bc0/libibt-0.2.0-cp312-cp312-win_amd64.whl", hash = "sha256:fde161bcae73ee305d5fba026323c7e9dcee9bc6e4eb9ab910a6d7c8fe2e3e9a", size = 358751, upload-time = "2026-11-11T22:05:24.897Z" },
+    { url = "https://files.pythonhosted.org/packages/86/25/3aa77fdfb2a2bb383e047927d2aea6ced2b29fe69f924b1635cf264d5521/libibt-0.2.0-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:a0414fe6ac289a52f5c9e5182264a85f25db94eab598023a54c04ff2d48e19ab", size = 412032, upload-time = "2026-11-11T22:05:26.34Z" },
+    { url = "https://files.pythonhosted.org/packages/6d/d2/1220738d4193cc021949ea1d52a41d16054c491ff4232d71806e15f90be2/libibt-0.2.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:128e65f3f1ea4365caab3d84fce43af19d9638091a29f1b480759ec83305ba84", size = 383932, upload-time = "2026-11-11T22:05:27.795Z" },
+    { url = "https://files.pythonhosted.org/packages/ae/5b/ced44929d76b2e648a47d9459db1172d287cc17f75f9c8c5a2d0189d7188/libibt-0.2.0-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:f3088814338198dffc7e0c9a8e91baaf9582b5485364b0f1358a1e6bd8a03398", size = 398731, upload-time = "2026-11-11T22:05:29.151Z" },
+    { url = "https://files.pythonhosted.org/packages/fe/ad/d4894eeee154d72df31d85ce5b65aa50fcfd257e81d32bef0a32b22297dd/libibt-0.2.0-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:f765b690ea3da3c3d9f631ede1e897205cda5052e3b38be1fd6f3e58dfa959b1", size = 421297, upload-time = "2026-11-11T22:05:30.698Z" },
+    { url = "https://files.pythonhosted.org/packages/2f/46/ff0f9538223430cb44205590aeb2f605f2a244c320a06383030a6131f949/libibt-0.2.0-cp313-cp313-musllinux_1_2_aarch64.whl", hash = "sha256:6e7f9bffb6c7b2d5fc9928f3bf25a85ca13b9ed7c717b951eba81517d70535ce", size = 464699, upload-time = "2026-11-11T22:05:32.028Z" },
+    { url = "https://files.pythonhosted.org/packages/84/25/44cc336c6f02292a2209ce816491144c91850bfe9e365ba6a7c1e703f1df/libibt-0.2.0-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:1939e3144558bd9542fe964f6c528b9788021333424d1621058ebfc5e02df7f0", size = 501196, upload-time = "2026-11-11T22:05:33.387Z" },
+    { url = "https://files.pythonhosted.org/packages/e4/51/67930c4b1b59c55aa115518e23980e84bf33976ad659d366c77de9c9c8e8/libibt-0.2.0-cp313-cp313-win_amd64.whl", hash = "sha256:6f17ae166967ec10a06fced6d45cd5d32a7451c624e18bf1a267a554f76f908f", size = 358499, upload-time = "2026-11-11T22:05:34.934Z" },
 ]
 
 [[package]]
@@ -1585,7 +1584,7 @@ requires-dist = [
     { name = "jupyterlab", marker = "extra == 'app'", specifier = ">=4.4.10,<5.0.0" },
     { name = "jupyterlite-core", marker = "extra == 'jupyterlite'", specifier = "==0.8.1" },
     { name = "jupyterlite-pyodide-kernel", marker = "extra == 'jupyterlite'", specifier = "==0.8.3" },
-    { name = "libibt", specifier = ">=0.0.5" },
+    { name = "libibt", specifier = ">=0.2.0" },
     { name = "libxrk", specifier = ">=0.13.0" },
     { name = "matplotlib", marker = "extra == 'app'", specifier = ">=3.10.7,<4.0.0" },
     { name = "nbconvert", marker = "extra == 'jupyterlite'", specifier = ">=7.0.0" },

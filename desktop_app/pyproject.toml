@@ -17,7 +17,7 @@ dependencies = [
     "numpy>=2.0.0,<3.0.0",
     "pyarrow>=18.0.0,<23.0.0",
     "libxrk>=0.12.0",
-    "libibt>=0.0.1",
+    "libibt>=0.2.0",
     "pyyaml>=6.0,<7.0",
     "motorsports-data-notebook",
 ]
