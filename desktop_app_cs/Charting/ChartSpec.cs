@@ -292,3 +292,12 @@ public sealed record TrackMapPointSpec(double X, double Y, string Color, double 
 /// <summary>A standalone track map with coloured segments and marked points (equal units).</summary>
 public sealed record TrackMapSpec(string Title, IReadOnlyList<TrackMapPathSpec> Paths, IReadOnlyList<TrackMapPointSpec> Points) : ChartSpec;
 
+/// <summary>A line with markers through (X, Y), each point carrying a sample count for the hover label.</summary>
+public sealed record LineSeriesSpec(string Label, double[] X, double[] Y, long[] Counts, string Color);
+
+/// <summary>One panel of a line grid.</summary>
+public sealed record LinePanelSpec(string Title, IReadOnlyList<LineSeriesSpec> Series, string Annotation = "");
+
+/// <summary>A grid of line panels sharing axis labels (the tire-grip view).</summary>
+public sealed record LineGridSpec(string Title, IReadOnlyList<LinePanelSpec> Panels, int Columns, string XLabel, string YLabel) : ChartSpec;
+
