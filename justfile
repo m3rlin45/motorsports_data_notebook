@@ -127,6 +127,12 @@ cs-build:
 cs-test:
     cd desktop_app_cs && dotnet test Tests/InfernoAnalyzer.Tests.csproj
 
+# The same tests compiled with NativeAOT and run as a native executable, the mode the app ships in
+# (linux-x64; requires clang, zlib1g-dev and `just cs-native`). CI does this on Windows and Linux.
+cs-test-aot *ARGS:
+    cd desktop_app_cs && dotnet publish Tests/InfernoAnalyzer.Tests.csproj -c Release -r linux-x64 \
+        && Tests/bin/Release/net10.0/linux-x64/publish/InfernoAnalyzer.Tests -noColor {{ARGS}}
+
 cs-format:
     cd desktop_app_cs && dotnet format InfernoAnalyzer.slnx
 
@@ -169,13 +175,14 @@ cs-fixture-dense:
         "workspace_template/data/CMD_Inferno 86_Fuji GP Sh_Generic testing_a_2248.xrz" \
         --top 20 --timebase LF_Shock_Pot --out desktop_app_cs/App/fixtures/laps_dense.json
 
-# Windows single-file exe cross-compiled from Linux (trimmed, not AOT)
+# Windows exe cross-compiled from Linux for a quick look: trimmed single-file, not AOT, parser DLLs
+# beside it. The release build is CI's NativeAOT one (cross-OS NativeAOT is not supported).
 cs-publish-win:
     cd desktop_app_cs && dotnet publish App/InfernoAnalyzer.App.csproj -c Release -r win-x64 --self-contained \
         -p:PublishAot=false -p:PublishTrimmed=true -p:TrimMode=full \
         -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
 
-# Linux NativeAOT binary (requires clang, zlib1g-dev)
+# Linux NativeAOT binary with the parsers linked in (requires clang, zlib1g-dev and `just cs-native`)
 cs-publish-linux:
     cd desktop_app_cs && dotnet publish App/InfernoAnalyzer.App.csproj -c Release -r linux-x64 --self-contained
 

@@ -1,6 +1,5 @@
 using Avalonia.Controls;
 using Avalonia.Headless;
-using Avalonia.Headless.XUnit;
 using Avalonia.Media.Imaging;
 using InfernoAnalyzer.App.Settings;
 using InfernoAnalyzer.App.ViewModels;
@@ -31,7 +30,7 @@ public class TireGripTabTests
     }
 
     [Fact]
-    public async Task Tire_grip_tab_builds_four_panels_in_both_metric_modes()
+    public Task Tire_grip_tab_builds_four_panels_in_both_metric_modes() => Ui.Run(async () =>
     {
         var window = await LoadedWindow();
         var tab = window.TireGrip;
@@ -57,10 +56,10 @@ public class TireGripTabTests
         tab.IsTemperature = true;
         await tab.RunNowAsync();
         Assert.StartsWith("Temperature (", tab.Spec!.XLabel);
-    }
+    });
 
     [Fact]
-    public async Task Session_b_adds_a_second_series_and_comparison_tables()
+    public Task Session_b_adds_a_second_series_and_comparison_tables() => Ui.Run(async () =>
     {
         var window = await LoadedWindow();
         window.SessionB.Apply(Sample.Value, SessionParityTests.SamplePath());
@@ -68,10 +67,10 @@ public class TireGripTabTests
 
         Assert.Equal(2, window.TireGrip.Spec!.Panels[0].Series.Count);
         Assert.Equal(2, window.TireGrip.Stats.Count);
-    }
+    });
 
-    [AvaloniaFact]
-    public async Task Tire_grip_view_renders()
+    [Fact]
+    public Task Tire_grip_view_renders() => Ui.Run(async () =>
     {
         var viewModel = await LoadedWindow();
         var view = new TireGripView { DataContext = viewModel.TireGrip };
@@ -80,11 +79,11 @@ public class TireGripTabTests
 
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save(Path.Combine(RenderSmokeTests.RenderDir, "tire_grip.png"), new PngBitmapEncoderOptions());
-    }
+        RenderSmokeTests.SaveRender(frame!, "tire_grip.png");
+    });
 
     [Fact]
-    public async Task Session_b_without_laps_is_not_compared_and_the_percentile_is_validated()
+    public Task Session_b_without_laps_is_not_compared_and_the_percentile_is_validated() => Ui.Run(async () =>
     {
         var window = await LoadedWindow();
         var tab = window.TireGrip;
@@ -103,10 +102,10 @@ public class TireGripTabTests
         await tab.RunNowAsync();
         Assert.Equal("Analysis complete", tab.Status);
         Assert.Contains("Pressure: {1:0.0}", tab.Spec!.HoverFormat); // the hover names what the x axis is
-    }
+    });
 
     [Fact]
-    public void The_last_tab_and_its_settings_come_back_on_the_next_launch()
+    public Task The_last_tab_and_its_settings_come_back_on_the_next_launch() => Ui.Run(() =>
     {
         var dir = Directory.CreateTempSubdirectory("inferno-settings");
         try
@@ -129,5 +128,5 @@ public class TireGripTabTests
         {
             dir.Delete(recursive: true);
         }
-    }
+    });
 }

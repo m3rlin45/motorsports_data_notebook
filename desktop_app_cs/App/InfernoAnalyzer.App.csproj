@@ -9,7 +9,7 @@
     <IsAotCompatible>true</IsAotCompatible>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <InvariantGlobalization>true</InvariantGlobalization>
-    <!-- NativeAOT for linux-x64; Windows cross-builds pass -p:PublishAot=false (see justfile). -->
+    <!-- NativeAOT on Windows and Linux (CI); the Windows cross-build from Linux passes -p:PublishAot=false (see justfile). -->
     <PublishAot>true</PublishAot>
   </PropertyGroup>
 
@@ -36,13 +36,6 @@
   <!-- Window icon and About image (regenerate with tools/make_icon.py). -->
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" />
-  </ItemGroup>
-
-  <!-- Demo fixtures extracted by tools/extract_fixture.py; copied next to the exe (`cs-run path.json`). -->
-  <ItemGroup>
-    <None Include="fixtures\**\*.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
   </ItemGroup>
 
 </Project>
