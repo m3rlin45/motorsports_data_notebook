@@ -246,7 +246,93 @@ def suspension_fixture(log, profile) -> dict:
     }
 
 
-MODULES = {"corners": corners_fixture, "zones": zones_fixture, "suspension": suspension_fixture}
+def roll_gradient_fixture(log, profile) -> dict:
+    """Roll gradient per lap and multi-lap; inputs come from the C# loader, outputs dumped."""
+    from motorsports_data_notebook import roll_gradient as R
+
+    keys = [
+        "shock_fl",
+        "shock_fr",
+        "shock_rl",
+        "shock_rr",
+        "lateral_g",
+        "gps_latitude",
+        "gps_longitude",
+    ]
+    names = {k: profile.channel_names[k] for k in keys}
+    mr, tw = profile.motion_ratios, profile.track_widths
+    assert tw is not None
+
+    def axle(a: R.AxleRollData) -> dict:
+        return {
+            "axle": a.axle,
+            "lateral_g": summary(a.lateral_g),
+            "roll_deg": summary(a.roll_deg),
+            "gradient_deg_per_g": a.gradient_deg_per_g,
+            "intercept_deg": a.intercept_deg,
+            "r2": a.r2,
+            "bin_centers_g": a.bin_centers_g.tolist(),
+            "bin_mean_deg": a.bin_mean_deg.tolist(),
+            "bin_counts": a.bin_counts.tolist(),
+            "n_samples": a.n_samples,
+        }
+
+    def result(r: R.RollGradientResult) -> dict:
+        return {
+            "front": axle(r.front),
+            "rear": axle(r.rear),
+            "lateral_g_unit": r.lateral_g_unit,
+            "roll_ratio": r.roll_ratio,
+            "roll_ratio_intercept_deg": r.roll_ratio_intercept_deg,
+            "roll_ratio_r2": r.roll_ratio_r2,
+            "ratio_bin_centers_deg": r.ratio_bin_centers_deg.tolist(),
+            "ratio_bin_mean_deg": r.ratio_bin_mean_deg.tolist(),
+            "ratio_bin_counts": r.ratio_bin_counts.tolist(),
+            "x_m": summary(r.x_m) if r.has_track_map else None,
+            "y_m": summary(r.y_m) if r.has_track_map else None,
+            "gradient_ratio": r.gradient_ratio,
+            "mean_gradient_deg_per_g": r.mean_gradient_deg_per_g,
+            "signs_consistent": r.signs_consistent,
+        }
+
+    single = {
+        str(n): result(R.analyze_roll_gradient(log.filter_by_lap(n), names, mr, tw)) for n in LAPS
+    }
+    multi = result(R.analyze_roll_gradient_multi_lap(log, LAPS, names, mr, tw))
+    rng = np.random.default_rng(7)
+    g = rng.normal(0, 0.8, 500)
+    roll = 1.7 * g + 0.2 + rng.normal(0, 0.1, 500)
+    fit = R.fit_roll_gradient(g, roll, min_lateral_g=0.2)
+    centers, means, counts = R.bin_roll_by_lateral_g(g, roll, 0.25, 3)
+    return {
+        "channels": names,
+        "motion_ratios": {
+            "front_left": mr.front_left,
+            "front_right": mr.front_right,
+            "rear_left": mr.rear_left,
+            "rear_right": mr.rear_right,
+        },
+        "track_widths": {"front_mm": tw.front_mm, "rear_mm": tw.rear_mm},
+        "single_lap": single,
+        "multi_lap": multi,
+        "synthetic": {
+            "lateral_g": g.tolist(),
+            "roll_deg": roll.tolist(),
+            "fit": list(fit),
+            "bin_centers": centers.tolist(),
+            "bin_means": means.tolist(),
+            "bin_counts": counts.tolist(),
+            "smoothed_even": R._smooth(roll[:12], 4).tolist(),
+        },
+    }
+
+
+MODULES = {
+    "corners": corners_fixture,
+    "zones": zones_fixture,
+    "suspension": suspension_fixture,
+    "roll_gradient": roll_gradient_fixture,
+}
 
 
 def main(argv: list[str] | None = None) -> int:
