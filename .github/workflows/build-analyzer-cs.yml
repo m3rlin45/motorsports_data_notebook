@@ -46,6 +46,11 @@ jobs:
         working-directory: desktop_app_cs
         run: dotnet test Tests/InfernoAnalyzer.Tests.csproj --verbosity normal
 
+  # The shipping mode: NativeAOT, one file. The parser libraries are linked into the executable;
+  # the graphics libraries (shared libraries only) are embedded and unpacked to a per-user cache
+  # folder at start-up. The test suite is compiled the same way and run as a native executable
+  # before the app is published, so what CI tests is what ships (trimming, AOT code generation, the
+  # statically linked parsers).
   build-windows:
     needs: test
     runs-on: windows-latest
@@ -55,31 +60,77 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      # A host build: the MSVC toolchain, which is what the .NET native linker needs to link against.
       - name: Build parser FFI libraries
         run: python desktop_app_cs/tools/build_native.py --rids win-x64
+
+      - name: Point the IBT parity test at libibt's sample
+        shell: bash
+        run: echo "INFERNO_IBT_SAMPLE=$(cygpath -w "$(ls "$PWD"/desktop_app_cs/native/src/libibt-*/tests/test_data/test.ibt)")" >> "$GITHUB_ENV"
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
 
-      - name: Publish
+      - name: Publish tests (NativeAOT)
         working-directory: desktop_app_cs
-        run: >
-          dotnet publish App/InfernoAnalyzer.App.csproj
-          -c Release -r win-x64 --self-contained
-          -p:PublishAot=false -p:PublishTrimmed=true -p:TrimMode=full
-          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+        run: dotnet publish Tests/InfernoAnalyzer.Tests.csproj -c Release -r win-x64 -p:InfernoRequireStaticNative=true
 
-      - name: Check parser libraries are published
+      - name: Run tests (NativeAOT)
+        working-directory: desktop_app_cs
+        run: Tests/bin/Release/net10.0/win-x64/publish/InfernoAnalyzer.Tests.exe -noColor
+
+      - name: Publish (NativeAOT)
+        working-directory: desktop_app_cs
+        run: dotnet publish App/InfernoAnalyzer.App.csproj -c Release -r win-x64 --self-contained -p:InfernoRequireStaticNative=true -p:InfernoSelfExtract=true
+
+      - name: Check what was published
         shell: bash
-        run: test -f desktop_app_cs/App/bin/Release/net10.0/win-x64/publish/runtimes/win-x64/native/xrk_ffi.dll
+        run: python desktop_app_cs/tools/check_publish.py desktop_app_cs/App/bin/Release/net10.0/win-x64/publish win-x64
+
+      # The real window on the real platform backend: start it on the sample session and see that
+      # it is still running twenty seconds later, with a main window, no crash log, and the graphics
+      # libraries loaded from the cache folder it unpacked them to.
+      - name: Start the published app
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path 'desktop_app_cs/App/bin/Release/net10.0/win-x64/publish/InfernoAnalyzer.exe'
+          $sample = Resolve-Path 'workspace_template/data/CMD_Inferno 86_Fuji GP Sh_Generic testing_a_2248.xrz'
+          $crashLog = Join-Path $env:APPDATA 'motorsports_data_notebook/analyzer_crash.log'
+          $app = Start-Process -FilePath $exe -ArgumentList "`"$sample`"" -PassThru
+          Start-Sleep -Seconds 20
+          $app.Refresh()
+          $failed = $false
+          if ($app.HasExited) { Write-Host "::error::The app exited on its own (exit code $($app.ExitCode))"; $failed = $true }
+          else {
+            Write-Host "Running, main window title: '$($app.MainWindowTitle)'"
+            if ([string]::IsNullOrEmpty($app.MainWindowTitle)) { Write-Host "::error::The app has no main window"; $failed = $true }
+            $cache = Join-Path $env:LOCALAPPDATA 'InfernoAnalyzer\native'
+            foreach ($name in 'libSkiaSharp.dll', 'libHarfBuzzSharp.dll', 'av_libglesv2.dll') {
+              $module = $app.Modules | Where-Object { $_.ModuleName -ieq $name } | Select-Object -First 1
+              if ($null -eq $module) {
+                # ANGLE is only loaded once the GPU path is tried, which a runner without a GPU may skip.
+                if ($name -eq 'av_libglesv2.dll') { Write-Host "::warning::$name is not loaded" }
+                else { Write-Host "::error::$name is not loaded"; $failed = $true }
+              }
+              elseif (-not $module.FileName.StartsWith($cache, [StringComparison]::OrdinalIgnoreCase)) {
+                Write-Host "::error::$name was loaded from $($module.FileName), not from $cache"; $failed = $true
+              }
+              else { Write-Host "Loaded $($module.FileName)" }
+            }
+            Stop-Process -Id $app.Id -Force
+          }
+          if (Test-Path $crashLog) { Write-Host "::error::The app wrote a crash log"; Get-Content $crashLog; $failed = $true }
+          if ($failed) { exit 1 }
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: InfernoAnalyzer-Windows
-          path: desktop_app_cs/App/bin/Release/net10.0/win-x64/publish/
+          path: |
+            desktop_app_cs/App/bin/Release/net10.0/win-x64/publish/
+            !desktop_app_cs/App/bin/Release/net10.0/win-x64/publish/*.pdb
           retention-days: 30
 
   build-linux:
@@ -99,21 +150,35 @@ jobs:
       - name: Build parser FFI libraries
         run: python3 desktop_app_cs/tools/build_native.py --rids linux-x64
 
+      - name: Point the IBT parity test at libibt's sample
+        run: echo "INFERNO_IBT_SAMPLE=$(ls "$PWD"/desktop_app_cs/native/src/libibt-*/tests/test_data/test.ibt)" >> "$GITHUB_ENV"
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
 
-      - name: Publish
+      - name: Publish tests (NativeAOT)
         working-directory: desktop_app_cs
-        run: dotnet publish App/InfernoAnalyzer.App.csproj -c Release -r linux-x64 --self-contained
+        run: dotnet publish Tests/InfernoAnalyzer.Tests.csproj -c Release -r linux-x64 -p:InfernoRequireStaticNative=true
 
-      - name: Check parser libraries are published
-        run: test -f desktop_app_cs/App/bin/Release/net10.0/linux-x64/publish/runtimes/linux-x64/native/libxrk_ffi.so
+      - name: Run tests (NativeAOT)
+        working-directory: desktop_app_cs
+        run: Tests/bin/Release/net10.0/linux-x64/publish/InfernoAnalyzer.Tests -noColor
+
+      - name: Publish (NativeAOT)
+        working-directory: desktop_app_cs
+        run: dotnet publish App/InfernoAnalyzer.App.csproj -c Release -r linux-x64 --self-contained -p:InfernoRequireStaticNative=true -p:InfernoSelfExtract=true
+
+      - name: Check what was published
+        run: python3 desktop_app_cs/tools/check_publish.py desktop_app_cs/App/bin/Release/net10.0/linux-x64/publish linux-x64
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: InfernoAnalyzer-Linux
-          path: desktop_app_cs/App/bin/Release/net10.0/linux-x64/publish/
+          path: |
+            desktop_app_cs/App/bin/Release/net10.0/linux-x64/publish/
+            !desktop_app_cs/App/bin/Release/net10.0/linux-x64/publish/*.pdb
+            !desktop_app_cs/App/bin/Release/net10.0/linux-x64/publish/*.dbg
           retention-days: 30
