@@ -1099,9 +1099,9 @@ Fitted tables:
 
 Config + provenance:
 
-- `car_aliases` — raw car label → pooled fit label (e.g. `KK-F` / `KK-SII`
-  → `FJ`: near-identical FJ-series machines on the same tires train one
-  car). All predictors resolve an input car through this map before any
+- `car_aliases` — raw car label → pooled fit label (e.g. `KK-F` / `KK-F-V2`
+  / `KK-SII` → `FJ`: near-identical FJ-series machines on the same tires
+  train one car; the KK-F-V2 is the KK-F with a new intake). All predictors resolve an input car through this map before any
   lookup, so raw names keep working; the fitted tables carry only pooled
   labels.
 - `g2_lap_time_model` — pace-scaling method (`uniform_scaled_lap_shares`), physics fallback exponent, multiplier clamp

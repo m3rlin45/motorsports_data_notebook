@@ -44,9 +44,11 @@ SCHEMA_VERSION = 5
 
 # Cars pooled under one label for every fitted quantity. KK-F and KK-SII are
 # near-identical FJ-series machines running the same tires, so their laps
-# train a single "FJ" car. The map is emitted into tire_model.json as
-# ``car_aliases`` so predictors keep accepting the raw car names.
-CAR_FIT_ALIASES = {"KK-F": "FJ", "KK-SII": "FJ"}
+# train a single "FJ" car; the KK-F-V2 is the KK-F with a new intake (from
+# 2026-11-13) and is pooled exactly as the KK-F is. The map is emitted into
+# tire_model.json as ``car_aliases`` so predictors keep accepting the raw car
+# names.
+CAR_FIT_ALIASES = {"KK-F": "FJ", "KK-F-V2": "FJ", "KK-SII": "FJ"}
 
 
 # Energy-balance config (see plan)
