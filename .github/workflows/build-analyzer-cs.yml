@@ -1,0 +1,86 @@
+name: Build Inferno Analyzer (C#)
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'desktop_app_cs/**'
+      - 'pyproject.toml'
+      - '.github/workflows/build-analyzer-cs.yml'
+  pull_request:
+    paths:
+      - 'desktop_app_cs/**'
+      - 'pyproject.toml'
+      - '.github/workflows/build-analyzer-cs.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Check formatting
+        working-directory: desktop_app_cs
+        run: dotnet format InfernoAnalyzer.slnx --verify-no-changes
+
+      - name: Run tests
+        working-directory: desktop_app_cs
+        run: dotnet test Tests/InfernoAnalyzer.Tests.csproj --verbosity normal
+
+  build-windows:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish
+        working-directory: desktop_app_cs
+        run: >
+          dotnet publish App/InfernoAnalyzer.App.csproj
+          -c Release -r win-x64 --self-contained
+          -p:PublishAot=false -p:PublishTrimmed=true -p:TrimMode=full
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: InfernoAnalyzer-Windows
+          path: desktop_app_cs/App/bin/Release/net10.0/win-x64/publish/
+          retention-days: 30
+
+  build-linux:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install AOT dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang zlib1g-dev
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish
+        working-directory: desktop_app_cs
+        run: dotnet publish App/InfernoAnalyzer.App.csproj -c Release -r linux-x64 --self-contained
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: InfernoAnalyzer-Linux
+          path: desktop_app_cs/App/bin/Release/net10.0/linux-x64/publish/
+          retention-days: 30

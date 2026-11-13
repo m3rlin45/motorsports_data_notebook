@@ -1,0 +1,10 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="InfernoAnalyzer.App.App">
+  <!-- No RequestedThemeVariant: the app follows the OS light/dark setting unless the user picks one (View > Theme). -->
+  <Application.Styles>
+    <!-- Compact density: this is a data tool; the default touch-sized controls waste the space the charts need. -->
+    <FluentTheme DensityStyle="Compact" />
+    <StyleInclude Source="avares://InfernoAnalyzer/Styles/AppStyles.axaml" />
+  </Application.Styles>
+</Application>
