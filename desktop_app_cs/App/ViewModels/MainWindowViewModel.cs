@@ -31,7 +31,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         var styles = new LapStyleAllocator();
         SessionA = new SessionViewModel("Session A", Profiles, SessionSlot.A, styles);
         SessionB = new SessionViewModel("Session B", Profiles, SessionSlot.B, styles);
-        TimeDistance = new TimeDistanceViewModel(SessionA, Settings);
+        TimeDistance = new TimeDistanceViewModel(SessionA, SessionB, Settings);
         Tabs = new ObservableCollection<AnalysisTabViewModel> { TimeDistance };
 
         foreach (var tab in Tabs)
