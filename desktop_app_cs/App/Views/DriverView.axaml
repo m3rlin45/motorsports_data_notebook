@@ -1,0 +1,53 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:InfernoAnalyzer.App.ViewModels"
+             xmlns:views="using:InfernoAnalyzer.App.Views"
+             xmlns:controls="using:InfernoAnalyzer.App.Controls"
+             x:Class="InfernoAnalyzer.App.Views.DriverView"
+             x:DataType="vm:DriverViewModel">
+  <DockPanel>
+    <Border DockPanel.Dock="Top" Classes="toolbar">
+      <DockPanel>
+        <ToggleButton DockPanel.Dock="Right" Content="Statistics" IsChecked="{Binding ShowStats}" Margin="8,0,0,0"
+                      ToolTip.Tip="Show the consistency tables beside the chart" />
+        <Button DockPanel.Dock="Right" Content="Channels…"
+                Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).EditProfileCommand}"
+                ToolTip.Tip="Throttle, brake, lateral G and GPS channel names and the detection thresholds for this vehicle" />
+        <!-- The three views are one choice, so they are one control. -->
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="12" Margin="0,0,16,0">
+          <RadioButton Content="Summary" GroupName="drvview" IsChecked="{Binding IsSummary}" ToolTip.Tip="Box plots per corner (Esc)" />
+          <RadioButton Content="Detail" GroupName="drvview" IsChecked="{Binding IsDetail}" ToolTip.Tip="Every lap through the selected corner" />
+          <RadioButton Content="Track map" GroupName="drvview" IsChecked="{Binding IsMap}" ToolTip.Tip="Braking and acceleration zones on the track" />
+        </StackPanel>
+        <TextBlock Classes="title" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                   Text="{Binding SummarySpec.Title, FallbackValue='Driver consistency', TargetNullValue='Driver consistency'}" />
+      </DockPanel>
+    </Border>
+    <Grid ColumnDefinitions="184,8,*,Auto,Auto">
+      <Border Grid.Column="0" Classes="card">
+        <DockPanel>
+          <TextBlock DockPanel.Dock="Top" Classes="section" Text="Corners" Margin="0,0,0,4" />
+          <ListBox x:Name="CornerList" Classes="rows" ItemsSource="{Binding Corners}" SelectedItem="{Binding SelectedCorner}"
+                   AutomationProperties.Name="Corners" ToolTip.Tip="Pick a corner to see every lap through it">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:CornerChoice">
+                <TextBlock Text="{Binding Label}" VerticalAlignment="Center" />
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </DockPanel>
+      </Border>
+      <Border Grid.Column="2" Classes="card flush">
+        <Panel>
+          <controls:ChartHost x:Name="SummaryChart" Spec="{Binding SummarySpec}" EmptyText="{Binding EmptyMessage}" IsVisible="{Binding IsSummary}" />
+          <controls:ChartHost x:Name="DetailChart" Spec="{Binding DetailSpec}" EmptyText="{Binding EmptyMessage}" IsVisible="{Binding IsDetail}" />
+          <controls:ChartHost x:Name="MapChart" Spec="{Binding MapSpec}" EmptyText="{Binding EmptyMessage}" IsVisible="{Binding IsMap}" />
+        </Panel>
+      </Border>
+      <GridSplitter Grid.Column="3" Width="8" IsVisible="{Binding ShowStats}" />
+      <Border Grid.Column="4" Classes="card" Width="480" MinWidth="160" IsVisible="{Binding ShowStats}">
+        <views:StatsPaneView Tables="{Binding Stats}" />
+      </Border>
+    </Grid>
+  </DockPanel>
+</UserControl>

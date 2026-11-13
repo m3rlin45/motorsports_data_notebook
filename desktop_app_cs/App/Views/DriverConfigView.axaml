@@ -1,0 +1,22 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:InfernoAnalyzer.App.ViewModels"
+             xmlns:views="using:InfernoAnalyzer.App.Views"
+             x:Class="InfernoAnalyzer.App.Views.DriverConfigView"
+             x:DataType="vm:DriverConfigViewModel">
+  <StackPanel Spacing="4">
+    <views:ChannelEntriesView />
+    <TextBlock Classes="section" Text="Detection thresholds" Margin="0,4,0,4" />
+    <StackPanel Orientation="Horizontal" Spacing="12" DataContext="{Binding Thresholds}" x:DataType="vm:DriverThresholdsViewModel">
+      <StackPanel Orientation="Horizontal" ToolTip.Tip="Track curvature (1/m) above which a section counts as a corner">
+        <TextBlock Classes="label" Text="Corner curvature" /><TextBox Classes="number" Text="{Binding CornerThreshold.Text}" IsEnabled="{Binding IsEditable}" AutomationProperties.Name="Corner detection threshold" />
+      </StackPanel>
+      <StackPanel Orientation="Horizontal" ToolTip.Tip="Throttle position (%) that counts as full throttle; set from the session's throttle range when it loads">
+        <TextBlock Classes="label" Text="Full throttle %" /><TextBox Classes="number" Text="{Binding ThrottleThreshold.Text}" IsEnabled="{Binding IsEditable}" AutomationProperties.Name="Throttle threshold" />
+      </StackPanel>
+      <StackPanel Orientation="Horizontal" ToolTip.Tip="How long (ms) the throttle must stay above the threshold to count as accepted">
+        <TextBlock Classes="label" Text="Sustain ms" /><TextBox Classes="number" Text="{Binding SustainMs.Text}" IsEnabled="{Binding IsEditable}" AutomationProperties.Name="Sustain time" />
+      </StackPanel>
+    </StackPanel>
+  </StackPanel>
+</UserControl>
