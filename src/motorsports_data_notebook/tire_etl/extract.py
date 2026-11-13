@@ -629,7 +629,7 @@ def extract_session(
     from ..profiles import (
         DEFAULT_CHANNEL_NAMES,
         get_logger_id,
-        get_profile_for_logger,
+        get_profile_for_log,
     )
     from . import EXTRACTOR_VERSION
 
@@ -764,9 +764,9 @@ def extract_session(
         layout=det,
     )
 
-    # Resolve profile + channel names.
+    # Resolve profile + channel names (logger ID plus vehicle name).
     logger_id = get_logger_id(log) or ""
-    profile = get_profile_for_logger(logger_id) if logger_id else None
+    profile = get_profile_for_log(log) if logger_id else None
     channel_names = dict(DEFAULT_CHANNEL_NAMES)
     profile_name = "default"
     if profile is not None:
