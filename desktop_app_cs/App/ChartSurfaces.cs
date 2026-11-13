@@ -23,11 +23,15 @@ public static class ChartSurfaces
     public static IChartSurface CreateFor(ChartSpec spec) => spec switch
     {
         StripChartSpec => CreateStripChart(),
+        HistogramGridSpec => CreateHistogramGrid(),
         _ => throw new NotSupportedException($"No chart surface renders {spec.GetType().Name}"),
     };
 
     /// <summary>Create a surface able to render <see cref="StripChartSpec"/>.</summary>
     public static IChartSurface CreateStripChart() => Themed(new ScottPlotStripChart());
+
+    /// <summary>Create a surface able to render <see cref="HistogramGridSpec"/>.</summary>
+    public static IChartSurface CreateHistogramGrid() => Themed(new ScottPlotHistogramGrid());
 
     /// <summary>The chart theme matching the app's current variant.</summary>
     public static ChartTheme CurrentTheme => ThemeFor(Application.Current?.ActualThemeVariant);

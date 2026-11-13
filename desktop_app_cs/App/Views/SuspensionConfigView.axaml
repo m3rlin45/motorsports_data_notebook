@@ -1,0 +1,17 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:InfernoAnalyzer.App.ViewModels"
+             xmlns:views="using:InfernoAnalyzer.App.Views"
+             x:Class="InfernoAnalyzer.App.Views.SuspensionConfigView"
+             x:DataType="vm:SuspensionConfigViewModel">
+  <StackPanel Spacing="4">
+    <views:ChannelEntriesView />
+    <TextBlock Classes="section" Text="Motion ratios (pot travel / wheel travel)" Margin="0,4,0,4" />
+    <StackPanel Orientation="Horizontal" Spacing="12" DataContext="{Binding Ratios}" x:DataType="vm:MotionRatiosViewModel">
+      <StackPanel Orientation="Horizontal"><TextBlock Classes="label" Text="FL" /><TextBox Classes="number" Text="{Binding FrontLeft.Text}" IsEnabled="{Binding IsEditable}" AutomationProperties.Name="Front-left motion ratio" /></StackPanel>
+      <StackPanel Orientation="Horizontal"><TextBlock Classes="label" Text="FR" /><TextBox Classes="number" Text="{Binding FrontRight.Text}" IsEnabled="{Binding IsEditable}" AutomationProperties.Name="Front-right motion ratio" /></StackPanel>
+      <StackPanel Orientation="Horizontal"><TextBlock Classes="label" Text="RL" /><TextBox Classes="number" Text="{Binding RearLeft.Text}" IsEnabled="{Binding IsEditable}" AutomationProperties.Name="Rear-left motion ratio" /></StackPanel>
+      <StackPanel Orientation="Horizontal"><TextBlock Classes="label" Text="RR" /><TextBox Classes="number" Text="{Binding RearRight.Text}" IsEnabled="{Binding IsEditable}" AutomationProperties.Name="Rear-right motion ratio" /></StackPanel>
+    </StackPanel>
+  </StackPanel>
+</UserControl>

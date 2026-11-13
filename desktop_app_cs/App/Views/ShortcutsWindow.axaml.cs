@@ -23,9 +23,12 @@ public partial class ShortcutsWindow : Window
         Row("Drop files", "One file opens as Session A, two as A and B");
         Row("Space", "Tick the highlighted laps (Shift+click highlights a range)");
         Section("Window");
+        Row($"{cmd}+1 … {cmd}+6", "Switch to a tab");
         Row($"{cmd}+B", "Show or hide the session sidebar");
+        Row($"{cmd}+T", "Show or hide the statistics pane");
         Row($"{cmd}+0", "Fit the chart in view");
         Row($"{cmd}+Shift+C", "Copy the chart as an image");
+        Row($"{cmd}+P", "Vehicle profile (channel names)");
         Section("Strip chart");
         Row("Click", "Pin the cursor; Esc releases it");
         Row("Left / Right", "Step the cursor one sample (Shift: ten)");

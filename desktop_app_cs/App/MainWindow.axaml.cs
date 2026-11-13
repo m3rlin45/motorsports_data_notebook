@@ -26,6 +26,7 @@ public partial class MainWindow : Window
 {
     private readonly TabViewLocator _views;
     private readonly KeyModifiers _cmd;
+    private ProfileWindow? _profileWindow;
     private NativeMenu? _recentMenu;
     private NativeMenu? _viewMenu;
     private bool _titleBarHooked;
@@ -49,6 +50,7 @@ public partial class MainWindow : Window
 
         viewModel.SessionA.PickFile = () => PickFileAsync("Open Session A");
         viewModel.SessionB.PickFile = () => PickFileAsync("Open Session B");
+        viewModel.ProfileEditorRequested += ShowProfileWindow;
         viewModel.PropertyChanged += OnViewModelPropertyChanged;
         viewModel.RecentFiles.CollectionChanged += OnRecentFilesChanged;
         viewModel.SessionA.PropertyChanged += OnSessionPropertyChanged;
@@ -328,6 +330,19 @@ public partial class MainWindow : Window
         }
     }
 
+    private void ShowProfileWindow()
+    {
+        if (_profileWindow is not null)
+        {
+            _profileWindow.Activate();
+            return;
+        }
+
+        _profileWindow = new ProfileWindow(ViewModel);
+        _profileWindow.Closed += (_, _) => _profileWindow = null;
+        _profileWindow.Show(this);
+    }
+
     // ---------------------------------------------------------------- menu and keys
 
     private KeyGesture Gesture(Key key, bool shift = false) => new(key, shift ? _cmd | KeyModifiers.Shift : _cmd);
@@ -376,6 +391,8 @@ public partial class MainWindow : Window
             new NativeMenuItemSeparator(),
             Item("_Close Session B", () => vm.SessionB.Close()),
             Item("S_wap A and B", () => vm.SwapSessions()),
+            new NativeMenuItemSeparator(),
+            Item("Vehicle _Profile…", ShowProfileWindow, Gesture(Key.P)),
             new NativeMenuItemSeparator(),
             Item("E_xit", Close),
         };
@@ -485,6 +502,7 @@ public partial class MainWindow : Window
 
         Bind(Gesture(Key.O), () => _ = vm.OpenSessionA());
         Bind(Gesture(Key.O, shift: true), () => _ = vm.OpenSessionB());
+        Bind(Gesture(Key.P), ShowProfileWindow);
         Bind(Gesture(Key.T), ToggleStats);
         Bind(Gesture(Key.B), vm.ToggleSidebar);
         Bind(Gesture(Key.D0), FitCharts);
