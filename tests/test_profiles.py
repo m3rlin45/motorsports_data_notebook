@@ -773,6 +773,39 @@ class TestBuiltinKKF:
         assert get_profile_for_log(log).name == "KK-F"
 
 
+class TestBuiltinKKFV2:
+    """The KK-F-V2 is the KK-F with a new intake, logged under its own vehicle name."""
+
+    def test_kk_f_v2_resolves_by_vehicle_to_its_own_profile(self):
+        profile = get_profile_for_logger("8401203", "KK-F-V2")
+        assert profile is not None
+        assert profile.name == "KK-F-V2"
+        # The vehicle name contains "KK-F": it must not fall back to that profile or the default.
+        assert get_profile_for_logger("8401203", "KK-F").name == "KK-F"
+        assert get_profile_for_logger("8401203").name == "KK-SII"
+
+    def test_kk_f_v2_copies_everything_from_the_kk_f(self):
+        v1 = get_profile_for_logger("8401203", "KK-F")
+        v2 = get_profile_for_logger("8401203", "KK-F-V2")
+        assert v2.channel_names == v1.channel_names
+        assert v2.motion_ratios == v1.motion_ratios
+        assert v2.track_widths == v1.track_widths
+        assert v2.shock_calibration == v1.shock_calibration
+        assert v2.shock_calibration.rear.excluded_points == [1, 2]
+
+    def test_kk_f_v2_from_xrz_file_name(self):
+        log = MockLogFile(
+            metadata={"Logger ID": 8401203, "Vehicle": ""},
+            file_name="CMD_KK-F-V2_Tsukuba_Car_Generic testing_a_0401.xrz",
+        )
+        assert get_vehicle_name(log) == "KK-F-V2"
+        assert get_profile_for_log(log).name == "KK-F-V2"
+
+    def test_kk_f_v2_from_xrk_metadata(self):
+        log = MockLogFile(metadata={"Logger ID": 8401203, "Vehicle": "KK-F-V2"}, file_name="x.xrk")
+        assert get_profile_for_log(log).name == "KK-F-V2"
+
+
 class TestBuiltin86PotWheel:
     """The 86 profile uses the same pot/wheel convention via shock_calibration."""
 
