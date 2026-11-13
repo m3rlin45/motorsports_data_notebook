@@ -1,0 +1,16 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:InfernoAnalyzer.App.ViewModels"
+             xmlns:views="using:InfernoAnalyzer.App.Views"
+             x:Class="InfernoAnalyzer.App.Views.RollGradientConfigView"
+             x:DataType="vm:RollGradientConfigViewModel">
+  <StackPanel Spacing="4">
+    <views:ChannelEntriesView />
+    <TextBlock Classes="section" Text="Track width, hub centre to hub centre (mm)" Margin="0,4,0,4" />
+    <StackPanel Orientation="Horizontal" Spacing="12" DataContext="{Binding Widths}" x:DataType="vm:TrackWidthsViewModel">
+      <StackPanel Orientation="Horizontal"><TextBlock Classes="label" Text="Front" /><TextBox Classes="number" Text="{Binding Front.Text}" IsEnabled="{Binding IsEditable}" AutomationProperties.Name="Front track width" /></StackPanel>
+      <StackPanel Orientation="Horizontal"><TextBlock Classes="label" Text="Rear" /><TextBox Classes="number" Text="{Binding Rear.Text}" IsEnabled="{Binding IsEditable}" AutomationProperties.Name="Rear track width" /></StackPanel>
+    </StackPanel>
+    <TextBlock Classes="subtle" Text="The motion ratios are shared with the Suspension page." Margin="0,4,0,0" />
+  </StackPanel>
+</UserControl>

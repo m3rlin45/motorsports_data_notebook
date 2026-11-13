@@ -45,6 +45,7 @@ public sealed class TabViewLocator : IDataTemplate
     {
         TimeDistanceViewModel => new TimeDistanceView(),
         SuspensionViewModel => new SuspensionView(),
+        RollGradientViewModel => new RollGradientView(),
         _ => new TextBlock { Text = tab.Header },
     };
 
