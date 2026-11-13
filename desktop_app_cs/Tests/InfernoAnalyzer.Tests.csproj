@@ -1,21 +1,31 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <!--
+    The test project is NativeAOT-publishable, so CI runs the suite in the mode the app ships in:
+    `dotnet test` runs it under the JIT (the inner loop), `dotnet publish -r <rid>` produces a native
+    test executable that links the same static libraries as the app.
+  -->
   <PropertyGroup>
     <IsPackable>false</IsPackable>
+    <OutputType>Exe</OutputType>
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 
   <!--
-    xunit v3 (not v2 as in tire_pressure_calculator/Tests): Avalonia 12's
-    Avalonia.Headless.XUnit is built on xunit.v3, and the two cannot coexist.
+    xunit v3 4.x, AOT flavour: tests are discovered by a source generator instead of reflection.
+    Avalonia.Headless.XUnit is reflection-based and built on xunit v3 3.x, so UI tests go through
+    Avalonia.Headless directly (see Ui.cs).
   -->
   <ItemGroup>
-    <PackageReference Include="Avalonia.Headless.XUnit" Version="$(AvaloniaVersion)" />
+    <PackageReference Include="Avalonia.Headless" Version="$(AvaloniaVersion)" />
     <!-- Real Skia drawing in headless tests, so render smoke tests produce actual PNGs. -->
     <PackageReference Include="Avalonia.Skia" Version="$(AvaloniaVersion)" />
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
-    <PackageReference Include="xunit.v3" Version="3.2.2" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <!-- mtp-off: `dotnet test` stays on VSTest, the runner the repository-wide global.json selects. -->
+    <PackageReference Include="xunit.v3.aot.mtp-off" Version="4.0.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.1" />
   </ItemGroup>
 
   <ItemGroup>
@@ -28,11 +38,31 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
-  <!-- Python-parity fixtures (Phase 2) are copied next to the test DLL. -->
+  <!--
+    Python-parity fixtures (Phase 2) are copied next to the test executable, and with them the app's
+    demo fixture (App/fixtures/laps.json, which `cs-run path.json` loads). One folder name only: a
+    second one differing in case ("fixtures") breaks a clean build on a case-sensitive file system,
+    because MSBuild's Copy task remembers the directories it has made without regard to case.
+  -->
   <ItemGroup>
     <None Include="Fixtures\**\*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="..\App\fixtures\laps.json" Link="Fixtures\laps.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
+
+  <!--
+    xunit requires UseAppHost, which a NativeAOT publish neither needs nor always has: a
+    distribution-built SDK (Ubuntu's) carries no app host for the portable runtime identifier and does
+    not fetch one for an AOT publish, and the build then fails copying a file that was never made.
+  -->
+  <Target Name="InfernoDropAppHostFromAotPublish" AfterTargets="_ComputeNETCoreBuildOutputFiles" BeforeTargets="AssignTargetPaths"
+          Condition="'$(_IsPublishing)' == 'true' and '$(PublishAot)' == 'true' and '$(AppHostIntermediatePath)' != ''">
+    <ItemGroup>
+      <None Remove="$(AppHostIntermediatePath)" />
+    </ItemGroup>
+  </Target>
 
 </Project>

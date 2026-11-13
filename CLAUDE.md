@@ -145,9 +145,10 @@ desktop_app_cs/
   Charting/          # ChartSpec records, ChartTheme + ChartColors tokens, IChartSurface, CursorLinkGroup; no chart-lib deps
   Charting.ScottPlot/ # the ScottPlot 5 backend: ScottPlotSurface<TSpec> bases, PlotStyle/MapStyle, one surface per spec kind
   App/               # Avalonia MVVM app: ViewModels (one per tab), Views, Controls (ChartHost, custom-drawn split table + track editor), Styles/AppStyles.axaml, Settings
-  Tests/             # xunit v3 + Avalonia.Headless; Fixtures/*.json dumped by tools/extract_*_fixture.py
+  Tests/             # xunit v3 (AOT flavour) + Avalonia.Headless; Fixtures/*.json dumped by tools/extract_*_fixture.py
   tools/             # fixture extractors (uv run), build_native.py (builds the parser FFI libs, pinned by commit), make_icon.py
   native/runtimes/   # built FFI libraries (git-ignored), copied into Core's output
+  native/static/     # the same as static libraries (host builds only), linked into a NativeAOT publish
 ```
 
 ```bash
@@ -155,8 +156,11 @@ just cs-native                 # build libxrk-ffi/libibt-ffi for the host (needs
 just cs-build / cs-test / cs-format
 just cs-run FILE               # run the app, optionally opening a session file
 just cs-kernel-fixture MODULE  # regenerate a parity fixture from the Python library
-just cs-publish-linux          # NativeAOT binary;  just cs-publish-win = trimmed single-file exe
+just cs-test-aot               # the tests as a NativeAOT executable (the shipping mode; CI runs this on Windows and Linux)
+just cs-publish-linux          # NativeAOT binary;  just cs-publish-win = trimmed single-file exe for a quick look
 ```
+
+The app ships as a NativeAOT executable with the parsers linked in statically (`Directory.Build.targets`); the Windows one can only be built on Windows, so CI builds it (`build-analyzer-cs.yml`: AOT-compiled tests, publish, `tools/check_publish.py`, a start-up check). The test project is itself NativeAOT-publishable, which rules out reflection-based test extensions: UI tests are plain `[Fact]`s whose body runs through `Ui.Run(...)` (the headless Avalonia app's UI thread, a fresh application per test), not `[AvaloniaFact]`. Tests that drive view models go through `Ui.Run` too, so their continuations run on one thread as in the app. Save captured frames with `RenderSmokeTests.SaveRender`.
 
 Conventions:
 
