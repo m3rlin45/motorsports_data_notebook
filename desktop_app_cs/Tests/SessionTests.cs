@@ -122,7 +122,7 @@ public class SessionParityTests
     [Fact]
     public void Lap_pipeline_matches_the_spike_fixture()
     {
-        var fixture = InfernoAnalyzer.App.Fixture.Load(Path.Combine(AppContext.BaseDirectory, "fixtures", "laps.json"));
+        var fixture = InfernoAnalyzer.App.Fixture.Load(Path.Combine(AppContext.BaseDirectory, "Fixtures", "laps.json"));
         var session = SessionLoader.PostProcess(Raw.Value, BuiltinOnly, SessionLoader.DefaultLapTypes);
         var profile = BuiltinOnly.GetProfileForLog(session.Metadata, session.FileName)!;
         var names = new Dictionary<string, string>
