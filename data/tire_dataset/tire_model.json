@@ -5,6 +5,7 @@
   "data_through_local": "2026-10-25 10:59 JST",
   "car_aliases": {
     "KK-F": "FJ",
+    "KK-F-V2": "FJ",
     "KK-SII": "FJ"
   },
   "fit_method": "physical",
