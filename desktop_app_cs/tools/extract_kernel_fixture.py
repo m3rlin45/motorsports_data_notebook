@@ -327,8 +327,70 @@ def roll_gradient_fixture(log, profile) -> dict:
     }
 
 
+def driver_analysis_fixture(log, profile) -> dict:
+    """Throttle acceptance per corner (lap-14 corners) for each lap, on the zones arrays."""
+    from motorsports_data_notebook import corners as C
+    from motorsports_data_notebook import driver_analysis as D
+
+    names = profile.channel_names
+    throttle, lateral, lat, lon = (
+        names["throttle"],
+        names["lateral_g"],
+        names["gps_latitude"],
+        names["gps_longitude"],
+    )
+    ref = log.filter_by_lap(LAPS[0])
+    corners = C.identify_corners(
+        ref.channels[lat].column(lat).to_numpy(), ref.channels[lon].column(lon).to_numpy()
+    )
+    laps = {}
+    for num in LAPS:
+        aligned = (
+            log.filter_by_lap(num)
+            .select_channels(["distance_m", throttle, lateral])
+            .resample_to_channel("distance_m")
+            .channels
+        )
+        distance = aligned["distance_m"].column("distance_m").to_numpy()
+        timecodes = aligned["distance_m"].column("timecodes").to_numpy()
+        thr = aligned[throttle].column(throttle).to_numpy(zero_copy_only=False).astype(np.float64)
+        latg = aligned[lateral].column(lateral).to_numpy(zero_copy_only=False).astype(np.float64)
+        smoothed, eff = D.prepare_throttle_acceptance(thr, latg, throttle_threshold=98.0)
+        results = []
+        for c in corners:
+            r = D.find_throttle_acceptance_from_arrays(
+                distance,
+                timecodes,
+                thr,
+                latg,
+                c,
+                smoothed_lateral_g=smoothed,
+                effective_threshold=eff,
+            )
+            results.append(r)
+        laps[str(num)] = {
+            "inputs": {
+                "distance": distance.tolist(),
+                "timecodes": timecodes.tolist(),
+                "throttle": thr.tolist(),
+                "lateral_g": latg.tolist(),
+            },
+            "effective_threshold": float(eff),
+            "smoothed_lateral_g": summary(smoothed),
+            "throttle_acceptance": results,
+        }
+    import dataclasses
+
+    return {
+        "channels": {"throttle": throttle, "lateral_g": lateral},
+        "corners": [dataclasses.asdict(c) for c in corners],
+        "laps": laps,
+    }
+
+
 MODULES = {
     "corners": corners_fixture,
+    "driver_analysis": driver_analysis_fixture,
     "zones": zones_fixture,
     "suspension": suspension_fixture,
     "roll_gradient": roll_gradient_fixture,
