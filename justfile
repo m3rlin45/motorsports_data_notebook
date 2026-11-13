@@ -143,6 +143,18 @@ cs-fixture *ARGS:
     uv run python desktop_app_cs/tools/extract_fixture.py \
         "workspace_template/data/CMD_Inferno 86_Fuji GP Sh_Generic testing_a_2248.xrz" {{ARGS}}
 
+# Build the libxrk/libibt FFI libraries for this machine (needs cargo); add RIDS="--rids linux-x64 win-x64" for cross builds
+cs-native *ARGS:
+    python3 desktop_app_cs/tools/build_native.py {{ARGS}}
+
+# Python-parity fixture for the C# session loader (Tests/Fixtures/session_86.json; Rust backend, as the C# port binds).
+# The oracle is libxrk's Python package built from the same pinned commit as the FFI library, not the installed wheel.
+# For an iRacing sample pass the .ibt and --out desktop_app_cs/Tests/Fixtures/session_ibt.json: the installed libibt wheel
+# is the release the FFI library is pinned to.
+cs-session-fixture *ARGS:
+    LIBXRK_BACKEND=rust uv run --with "$(python3 desktop_app_cs/tools/build_native.py --source-dir libxrk)" \
+        python desktop_app_cs/tools/extract_session_fixture.py {{ARGS}}
+
 # Python-parity fixture for the C# profiles loader (Tests/Fixtures/profiles.json)
 cs-profiles-fixture:
     uv run python desktop_app_cs/tools/extract_profiles_fixture.py
