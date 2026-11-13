@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
-using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using InfernoAnalyzer.App;
 using InfernoAnalyzer.Charting;
@@ -18,7 +17,7 @@ namespace InfernoAnalyzer.Tests;
 public class DataAreaInputTests
 {
     private static string FixturePath =>
-        Path.Combine(AppContext.BaseDirectory, "fixtures", "laps.json");
+        Path.Combine(AppContext.BaseDirectory, "Fixtures", "laps.json");
 
     private static (Window Window, ScottPlotStripChart Chart) Show()
     {
@@ -43,8 +42,8 @@ public class DataAreaInputTests
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
     }
 
-    [AvaloniaFact]
-    public void Dragging_the_data_area_pans_x_only()
+    [Fact]
+    public Task Dragging_the_data_area_pans_x_only() => Ui.Run(() =>
     {
         var (window, chart) = Show();
         var plot = chart.Plots[0];
@@ -58,10 +57,10 @@ public class DataAreaInputTests
         Assert.Equal(y0.Max, plot.Axes.Left.Range.Max);
         // The x pan is mirrored to the other panels.
         Assert.Equal(plot.Axes.Bottom.Range.Min, chart.Plots[^1].Axes.Bottom.Range.Min);
-    }
+    });
 
-    [AvaloniaFact]
-    public void Dragging_the_y_axis_pans_y()
+    [Fact]
+    public Task Dragging_the_y_axis_pans_y() => Ui.Run(() =>
     {
         var (window, chart) = Show();
         var plot = chart.Plots[0];
@@ -70,10 +69,10 @@ public class DataAreaInputTests
         Drag(window, new Point(30, 120), new Point(30, 60));
 
         Assert.NotEqual(y0.Min, plot.Axes.Left.Range.Min);
-    }
+    });
 
-    [AvaloniaFact]
-    public void Wheel_over_the_data_area_zooms_x_only()
+    [Fact]
+    public Task Wheel_over_the_data_area_zooms_x_only() => Ui.Run(() =>
     {
         var (window, chart) = Show();
         var plot = chart.Plots[0];
@@ -86,10 +85,10 @@ public class DataAreaInputTests
         Assert.True(plot.Axes.Bottom.Range.Span < x0.Span);
         Assert.Equal(y0.Min, plot.Axes.Left.Range.Min);
         Assert.Equal(y0.Max, plot.Axes.Left.Range.Max);
-    }
+    });
 
-    [AvaloniaFact]
-    public void Wheel_over_the_y_axis_zooms_y()
+    [Fact]
+    public Task Wheel_over_the_y_axis_zooms_y() => Ui.Run(() =>
     {
         var (window, chart) = Show();
         var plot = chart.Plots[0];
@@ -99,5 +98,5 @@ public class DataAreaInputTests
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
 
         Assert.True(plot.Axes.Left.Range.Span < y0.Span);
-    }
+    });
 }

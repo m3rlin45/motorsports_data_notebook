@@ -9,7 +9,7 @@
     <IsAotCompatible>true</IsAotCompatible>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <InvariantGlobalization>true</InvariantGlobalization>
-    <!-- NativeAOT for linux-x64; Windows cross-builds pass -p:PublishAot=false (see justfile). -->
+    <!-- NativeAOT on Windows and Linux (CI); the Windows cross-build from Linux passes -p:PublishAot=false (see justfile). -->
     <PublishAot>true</PublishAot>
   </PropertyGroup>
 
@@ -38,11 +38,44 @@
     <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
 
-  <!-- Demo fixtures extracted by tools/extract_fixture.py; copied next to the exe (`cs-run path.json`). -->
-  <ItemGroup>
-    <None Include="fixtures\**\*.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
+  <!--
+    One file: with -p:InfernoSelfExtract=true a NativeAOT publish embeds the graphics libraries that
+    exist as shared libraries only (SkiaSharp, HarfBuzzSharp and, on Windows, ANGLE) together with a
+    manifest of their hashes, and leaves them out of the publish folder. NativeBundle unpacks them to
+    a per-user cache folder at start-up and loads them from there. Opt-in, so that the app built as
+    a reference of the test project does not carry them.
+  -->
+  <Target Name="InfernoEmbedGraphics" BeforeTargets="PrepareForBuild" DependsOnTargets="ResolvePackageAssets"
+          Condition="'$(InfernoSelfExtract)' == 'true' and '$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' != ''">
+    <ItemGroup>
+      <!--
+        On Linux two packages supply libSkiaSharp.so: Avalonia's SkiaSharp.NativeAssets.Linux and, through
+        ScottPlot, an older SkiaSharp.NativeAssets.Linux.NoDependencies. A publish ships the former, so
+        that is the one embedded (a second copy would fail the compile as a duplicate resource name).
+      -->
+      <_InfernoGraphics Include="@(NativeCopyLocalItems)"
+                        Condition="('%(Filename)' == 'libSkiaSharp' or '%(Filename)' == 'libHarfBuzzSharp' or '%(Filename)' == 'av_libglesv2') and !$([System.String]::Copy('%(NuGetPackageId)').EndsWith('.NoDependencies'))" />
+    </ItemGroup>
+    <Error Condition="'@(_InfernoGraphics)' == ''" Text="InfernoSelfExtract: no graphics libraries found for $(RuntimeIdentifier)." />
+    <GetFileHash Files="@(_InfernoGraphics)" Algorithm="SHA256" HashEncoding="hex">
+      <Output TaskParameter="Items" ItemName="_InfernoGraphicsHashed" />
+    </GetFileHash>
+    <WriteLinesToFile File="$(IntermediateOutputPath)native-manifest.txt" Overwrite="true" WriteOnlyWhenDifferent="true"
+                      Lines="@(_InfernoGraphicsHashed->'%(Filename)%(Extension) %(FileHash)')" />
+    <ItemGroup>
+      <EmbeddedResource Include="@(_InfernoGraphics)" LogicalName="native/%(Filename)%(Extension)" />
+      <EmbeddedResource Include="$(IntermediateOutputPath)native-manifest.txt" LogicalName="native/manifest" />
+      <FileWrites Include="$(IntermediateOutputPath)native-manifest.txt" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="InfernoDropEmbeddedGraphics" AfterTargets="ComputeResolvedFilesToPublishList"
+          Condition="'$(InfernoSelfExtract)' == 'true' and '$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' != ''">
+    <ItemGroup>
+      <_InfernoEmbeddedGraphics Include="@(ResolvedFileToPublish)"
+                                Condition="'%(Filename)' == 'libSkiaSharp' or '%(Filename)' == 'libHarfBuzzSharp' or '%(Filename)' == 'av_libglesv2'" />
+      <ResolvedFileToPublish Remove="@(_InfernoEmbeddedGraphics)" />
+    </ItemGroup>
+  </Target>
 
 </Project>

@@ -7,6 +7,12 @@ crate with cargo for each requested runtime, and copies the shared library
 to `desktop_app_cs/native/runtimes/<rid>/native/` where the C# projects pick
 it up (see Core/InfernoAnalyzer.Core.csproj and Core/Io/NativeLoader.cs).
 
+A build for the host runtime also copies the static library to
+`desktop_app_cs/native/static/<rid>/`, which a NativeAOT publish links into
+the executable (see native/StaticNative.targets). A cross build does not:
+the static library has to come from the toolchain the .NET linker uses (MSVC
+on Windows), and the win-x64 cross build from Linux is a MinGW one.
+
     python3 desktop_app_cs/tools/build_native.py                  # host runtime only
     python3 desktop_app_cs/tools/build_native.py --rids linux-x64 win-x64
     python3 desktop_app_cs/tools/build_native.py --source-libxrk ~/src/libxrk  # a local checkout
@@ -21,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import io
+import os
 import platform
 import shutil
 import subprocess
@@ -59,6 +66,9 @@ RIDS = {
     "osx-x64": ("x86_64-apple-darwin", "lib{lib}.dylib"),
     "osx-arm64": ("aarch64-apple-darwin", "lib{lib}.dylib"),
 }
+
+# Static-library file name pattern of a host build, by OS prefix of the runtime identifier.
+STATIC_PATTERNS = {"win": "{lib}.lib", "linux": "lib{lib}.a", "osx": "lib{lib}.a"}
 
 
 def host_rid() -> str:
@@ -102,8 +112,13 @@ def build(name: str, spec: dict, source: Path, rid: str, out_root: Path) -> Path
     if rid != host_rid():
         cmd += ["--target", triple]
         target_dir = source / "target" / triple / "release"
+    env = dict(os.environ)
+    if rid == host_rid() and rid.startswith("win-"):
+        # NativeAOT links the static C runtime; a static library built against the DLL runtime
+        # (the Rust default on MSVC) would pull the other one into the same executable.
+        env["RUSTFLAGS"] = (env.get("RUSTFLAGS", "") + " -C target-feature=+crt-static").strip()
     print(f"[{name}] {' '.join(cmd)}  (in {source})", file=sys.stderr)
-    subprocess.run(cmd, cwd=source, check=True)
+    subprocess.run(cmd, cwd=source, check=True, env=env)
     built = target_dir / pattern.format(lib=spec["lib"])
     if not built.exists():
         raise SystemExit(f"[{name}] expected {built} after the build")
@@ -112,6 +127,17 @@ def build(name: str, spec: dict, source: Path, rid: str, out_root: Path) -> Path
     dest = dest_dir / built.name
     shutil.copy2(built, dest)
     print(f"[{name}] -> {dest} ({dest.stat().st_size // 1024} KiB)", file=sys.stderr)
+    if rid == host_rid():
+        static = target_dir / STATIC_PATTERNS[rid.split("-")[0]].format(lib=spec["lib"])
+        if not static.exists():
+            raise SystemExit(f"[{name}] expected {static} after the build")
+        static_dir = out_root.parent / "static" / rid
+        static_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(static, static_dir / static.name)
+        print(
+            f"[{name}] -> {static_dir / static.name} ({static.stat().st_size // 1024} KiB)",
+            file=sys.stderr,
+        )
     return dest
 
 

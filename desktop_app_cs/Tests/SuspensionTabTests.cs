@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
-using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
 using Avalonia.Media.Imaging;
 using Avalonia.Styling;
@@ -37,7 +36,7 @@ public class SuspensionTabTests
     }
 
     [Fact]
-    public async Task Suspension_tab_builds_four_panels_and_stats_from_the_profile_config()
+    public Task Suspension_tab_builds_four_panels_and_stats_from_the_profile_config() => Ui.Run(async () =>
     {
         var window = await LoadedWindow();
         var tab = window.Suspension;
@@ -61,10 +60,10 @@ public class SuspensionTabTests
         Assert.Equal(4, tab.Stats[0].Rows.Count);
         Assert.Equal("FL", tab.Stats[0].Rows[0][0]);
         Assert.Equal(2, tab.Stats[2].Rows.Count);
-    }
+    });
 
     [Fact]
-    public async Task Changing_a_channel_entry_or_ratio_reruns_the_analysis()
+    public Task Changing_a_channel_entry_or_ratio_reruns_the_analysis() => Ui.Run(async () =>
     {
         var window = await LoadedWindow();
         var tab = window.Suspension;
@@ -85,10 +84,10 @@ public class SuspensionTabTests
         tab.SuspensionConfig.Reset();
         await tab.RunNowAsync();
         Assert.Equal(100.0, tab.Spec!.Panels[0].Series[0].Values.Sum(), 1e-9);
-    }
+    });
 
     [Fact]
-    public async Task Session_b_gets_its_own_entries_and_a_comparison_chart()
+    public Task Session_b_gets_its_own_entries_and_a_comparison_chart() => Ui.Run(async () =>
     {
         var window = await LoadedWindow();
         window.SessionB.Apply(Sample.Value, SessionParityTests.SamplePath());
@@ -105,10 +104,10 @@ public class SuspensionTabTests
         tab.SuspensionConfig.ActiveSession = SessionSlot.B;
         Assert.True(tab.SuspensionConfig.Entries[0].IsEditable);
         Assert.Equal(SessionSlot.B, tab.SuspensionConfig.ActiveSession);
-    }
+    });
 
-    [AvaloniaFact]
-    public async Task Suspension_view_renders_in_dark_and_light_themes()
+    [Fact]
+    public Task Suspension_view_renders_in_dark_and_light_themes() => Ui.Run(async () =>
     {
         var app = Application.Current!;
         var viewModel = await LoadedWindow();
@@ -124,7 +123,7 @@ public class SuspensionTabTests
                 Avalonia.Threading.Dispatcher.UIThread.RunJobs();
                 var frame = window.CaptureRenderedFrame();
                 Assert.NotNull(frame);
-                frame!.Save(Path.Combine(RenderSmokeTests.RenderDir, $"suspension_{name}.png"), new PngBitmapEncoderOptions());
+                RenderSmokeTests.SaveRender(frame!, $"suspension_{name}.png");
                 Assert.Equal(variant, app.ActualThemeVariant);
                 Assert.Equal(ChartSurfaces.ThemeFor(variant), ChartSurfaces.CurrentTheme);
             }
@@ -133,10 +132,10 @@ public class SuspensionTabTests
         {
             app.RequestedThemeVariant = ThemeVariant.Default;
         }
-    }
+    });
 
-    [AvaloniaFact]
-    public async Task Vehicle_profile_window_renders_the_suspension_page()
+    [Fact]
+    public Task Vehicle_profile_window_renders_the_suspension_page() => Ui.Run(async () =>
     {
         var viewModel = await LoadedWindow();
         var window = new ProfileWindow(viewModel);
@@ -145,15 +144,15 @@ public class SuspensionTabTests
 
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save(Path.Combine(RenderSmokeTests.RenderDir, "profile_window.png"), new PngBitmapEncoderOptions());
+        RenderSmokeTests.SaveRender(frame!, "profile_window.png");
 
         Assert.Same(viewModel.Suspension.SuspensionConfig, viewModel.SelectedConfigSection!.Config);
         Assert.Contains(window.GetVisualDescendants().OfType<TextBox>(), box => box.Text == "LF_Shock_Pot");
         window.Close();
-    }
+    });
 
     [Fact]
-    public async Task Session_b_without_laps_is_not_compared_instead_of_blocking_the_tab()
+    public Task Session_b_without_laps_is_not_compared_instead_of_blocking_the_tab() => Ui.Run(async () =>
     {
         var window = await LoadedWindow();
         window.SessionB.Apply(Sample.Value, SessionParityTests.SamplePath());
@@ -165,10 +164,10 @@ public class SuspensionTabTests
         Assert.Equal("Analysis complete", tab.Status);
         Assert.Single(tab.Spec!.Panels[0].Series);
         Assert.Equal(3, tab.Stats.Count);
-    }
+    });
 
     [Fact]
-    public async Task An_invalid_motion_ratio_is_reported_instead_of_silently_replaced()
+    public Task An_invalid_motion_ratio_is_reported_instead_of_silently_replaced() => Ui.Run(async () =>
     {
         var window = await LoadedWindow();
         var tab = window.Suspension;
@@ -186,10 +185,10 @@ public class SuspensionTabTests
         await tab.RunNowAsync();
         Assert.Equal("Analysis complete", tab.Status);
         Assert.NotNull(tab.Spec);
-    }
+    });
 
     [Fact]
-    public async Task Switching_the_shown_session_does_not_rerun_the_analysis()
+    public Task Switching_the_shown_session_does_not_rerun_the_analysis() => Ui.Run(async () =>
     {
         var window = await LoadedWindow();
         window.SessionB.Apply(Sample.Value, SessionParityTests.SamplePath());
@@ -204,10 +203,10 @@ public class SuspensionTabTests
         window.Suspension.SuspensionConfig.RatiosA.FrontLeft.Text = "0.95";
         Assert.Equal(1, ratioChanges);
         Assert.Equal("0.95", window.Suspension.SuspensionConfig.RatiosB.FrontLeft.Text); // B follows A while synced
-    }
+    });
 
     [Fact]
-    public async Task Stats_tables_copy_as_tab_separated_text()
+    public Task Stats_tables_copy_as_tab_separated_text() => Ui.Run(async () =>
     {
         var window = await LoadedWindow();
         var lines = window.Suspension.Stats[0].ToTsv().Split('\n');
@@ -216,10 +215,10 @@ public class SuspensionTabTests
         Assert.StartsWith("Corner\tSkew\t", lines[1]);
         Assert.Equal(6, lines.Length);
         Assert.StartsWith("FL\t", lines[2]);
-    }
+    });
 
     [Fact]
-    public async Task Closing_session_b_returns_every_tab_to_single_session_analysis()
+    public Task Closing_session_b_returns_every_tab_to_single_session_analysis() => Ui.Run(async () =>
     {
         var window = new MainWindowViewModel(BuiltinOnly);
         foreach (var tab in window.Tabs)
@@ -243,10 +242,10 @@ public class SuspensionTabTests
         Assert.False(window.Suspension.SuspensionConfig.HasSessionB);
         Assert.False(window.SwapSessionsCommand.CanExecute(null));
         Assert.DoesNotContain(" vs ", window.WindowTitle);
-    }
+    });
 
-    [AvaloniaFact]
-    public async Task Tab_views_are_kept_across_switches()
+    [Fact]
+    public Task Tab_views_are_kept_across_switches() => Ui.Run(async () =>
     {
         var viewModel = await LoadedWindow();
         var window = new MainWindow(viewModel) { Width = 1300, Height = 900 };
@@ -268,10 +267,10 @@ public class SuspensionTabTests
         Assert.Same(view, locator.ViewOf(viewModel.Suspension));
         Assert.Same(surface, view.GetLogicalDescendants().OfType<ChartHost>().Single().Surface);
         Assert.NotSame(view, locator.ViewOf(viewModel.TimeDistance));
-    }
+    });
 
     [Fact]
-    public void The_statistics_pane_state_round_trips_through_the_settings_dictionary()
+    public Task The_statistics_pane_state_round_trips_through_the_settings_dictionary() => Ui.Run(() =>
     {
         var window = new MainWindowViewModel(BuiltinOnly);
         window.Suspension.ShowStats = true;
@@ -287,5 +286,5 @@ public class SuspensionTabTests
         state.Clear();
         window.TimeDistance.SaveState(state);
         Assert.DoesNotContain("stats", state.Keys);
-    }
+    });
 }
