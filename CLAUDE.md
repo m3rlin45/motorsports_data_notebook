@@ -135,6 +135,38 @@ Run (displays via WSLg on WSL2):
 /home/m3rlin45/code/motorsports_data_notebook/desktop_app/dist/InfernoAnalyzer
 ```
 
+## C# Desktop Analyzer (desktop_app_cs/)
+
+The `desktop_app_cs/` directory is the .NET 10 / Avalonia 12 rebuild of the desktop analyzer (plan and status in `desktop_app_cs/PLAN.md` — read it first). It reads XRK/XRZ/IBT files through C-ABI builds of the Rust parsers (`libxrk-ffi`, `libibt-ffi`, Arrow C Data Interface) and ports the Python kernels with per-module parity fixtures.
+
+```
+desktop_app_cs/
+  Core/              # InfernoAnalyzer.Core — Io (FFI readers, LogFile), Profiles, Tracks, Analysis kernels; no UI deps
+  Charting/          # ChartSpec records, ChartTheme + ChartColors tokens, IChartSurface, CursorLinkGroup; no chart-lib deps
+  Charting.ScottPlot/ # the ScottPlot 5 backend: ScottPlotSurface<TSpec> bases, PlotStyle/MapStyle, one surface per spec kind
+  App/               # Avalonia MVVM app: ViewModels (one per tab), Views, Controls (ChartHost, custom-drawn split table + track editor), Styles/AppStyles.axaml, Settings
+  Tests/             # xunit v3 + Avalonia.Headless; Fixtures/*.json dumped by tools/extract_*_fixture.py
+  tools/             # fixture extractors (uv run), build_native.py (builds the parser FFI libs, pinned by commit), make_icon.py
+  native/runtimes/   # built FFI libraries (git-ignored), copied into Core's output
+```
+
+```bash
+just cs-native                 # build libxrk-ffi/libibt-ffi for the host (needs cargo); add --rids win-x64 for the cross-build
+just cs-build / cs-test / cs-format
+just cs-run FILE               # run the app, optionally opening a session file
+just cs-kernel-fixture MODULE  # regenerate a parity fixture from the Python library
+just cs-publish-linux          # NativeAOT binary;  just cs-publish-win = trimmed single-file exe
+```
+
+Conventions:
+
+- **Kernels** match numpy operation order before tolerances are loosened (pairwise sums, `x * (π/180)`, numpy `_lerp`, float32 round-trips). Multi-lap kernels take an optional `CancellationToken` checked between laps.
+- **Charting** code never leaks ScottPlot types above `Charting.ScottPlot`. Specs name colours by `ChartColors` token, never a hex literal, so they draw in light, dark and high-contrast themes; a backend derives from `ScottPlotSurface<TSpec>` (or `ScottPlotGridSurface<TSpec>`) and styles plots through `PlotStyle` / `MapStyle` only. Re-run the dataviz palette validator after touching the lap hues in `ChartColors`.
+- **Tabs** derive from `AnalysisTabViewModel<TParameters, TResult>`: `GetParameters` snapshots everything (labels included) on the UI thread or returns `Hint("why not")`, `Analyze` computes from the snapshot alone on a worker, `Display` shows it; `ClearDisplay` drops the specs so the chart area shows the reason instead of a stale chart. Numbers typed by the user are `NumericFieldViewModel`s: an invalid one is a `Hint`, never a silent default. Read laps with `session.SelectedIn(Scope)`.
+- **Views** use the classes and tokens in `App/Styles/AppStyles.axaml` (no inline font sizes, paddings or colours) and host charts in `ChartHost`. A new tab adds a case to `TabViewLocator` (and `ConfigViewLocator`, `ChartSurfaces.CreateFor`) and lays its toolbar out in the common order: title, parameters, view switch, Channels…, Statistics.
+- `builtin_profiles.yaml` is embedded from `src/` so profile changes need no C# edits.
+- PR screenshots of a view are the headless render tests' PNGs (`Tests/bin/Debug/net10.0/renders/`), taken at the commit that adds the view and published as described under PR Screenshots.
+
 ## Tire Pressure Calculator
 
 The `tire_pressure_calculator/` directory contains the cold tire pressure calculator: a manual Gay-Lussac mode (four FL/FR/RL/RR quadrants: current temp °C + target hot temp °C + target hot pressure bar → cold gauge pressure to set) and a Circuit Prediction mode that predicts per-corner hot temps from the fitted tire warmup model (`data/tire_dataset/tire_model.json`), with inputs for track, car, tire compound (forced per-car choice — one tire on all four corners), condition, lap, ambient, cloud cover, and target lap time (m:ss.s text), plus prefill of the corner-card targets (hot temp from the model's per-car medians; hot pressure from the team table `data/tire_dataset/hot_pressure_targets.yaml` per car + compound, copied into `tire_model.json`). Circuit Prediction is the default mode. In that mode a Preview button beside the mode toggle (Setup while previewing) swaps the four cards' fields for pressure-over-stint charts (`web/js/chart.js`, data from `predictCornerTrajectory` in `model.js`): time from pit exit on x with a tick per lap, gauge pressure on y, the target as a dashed line, the viewport showing 1.5 × the target lap and scrolling on to five times it; the web app only so far. Corner targets are remembered per configuration (car + compound + condition, `TargetMemory` in the settings JSON): a configuration is prefilled the first time it is opened and after Reset, otherwise the targets the user left for it come back. Two implementations share the same behavior, strings, and settings JSON shape:
