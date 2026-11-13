@@ -130,6 +130,14 @@ public class AppShellTests
 
         window.TimeDistance.IsTime = true;
         Assert.Equal(3, window.TimeDistance.Spec!.Subplots.Count); // no delta panel against time
+
+        // The channel search hides non-matching rows but keeps their selection.
+        window.TimeDistance.ChannelFilter = "shock";
+        Assert.All(window.TimeDistance.Channels, c => Assert.Equal(c.Name.Contains("shock", StringComparison.OrdinalIgnoreCase), c.IsMatch));
+        Assert.Contains(window.TimeDistance.Channels, c => c.IsMatch);
+        Assert.Contains(window.TimeDistance.Channels, c => c.Name == "PPS" && c.IsSelected && !c.IsMatch);
+        window.TimeDistance.ChannelFilter = string.Empty;
+        Assert.All(window.TimeDistance.Channels, c => Assert.True(c.IsMatch));
     }
 
     [Fact]
@@ -270,6 +278,29 @@ public class AppShellTests
 
         // The set is remembered per vehicle for the next launch.
         Assert.Equal(picked, window.Settings.ChannelsByVehicle["6701209|Inferno 86"]);
+    }
+
+    [Fact]
+    public async Task Search_enter_ticks_the_first_match()
+    {
+        var window = new MainWindowViewModel(BuiltinOnly);
+        window.SessionA.Apply(Sample.Value, SessionParityTests.SamplePath());
+        var tab = window.TimeDistance;
+        var asked = 0;
+        tab.SearchRequested += () => asked++;
+        tab.FindChannelCommand.Execute(null);
+        Assert.Equal(1, asked);
+
+        tab.ToggleFirstMatch(); // no search: nothing happens
+        Assert.Equal(3, tab.ShownChannels.Count);
+
+        tab.ChannelFilter = "lf_shock";
+        Assert.Equal("LF_Shock_Pot", tab.FilteredChannels[0].Name);
+        tab.ToggleFirstMatch();
+        Assert.Contains(tab.ShownChannels, c => c.Name == "LF_Shock_Pot");
+        tab.ToggleFirstMatch();
+        Assert.DoesNotContain(tab.ShownChannels, c => c.Name == "LF_Shock_Pot");
+        await Task.CompletedTask;
     }
 
     [Fact]

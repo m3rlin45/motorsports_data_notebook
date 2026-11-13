@@ -29,6 +29,10 @@ public sealed partial class ChannelChoiceViewModel : ObservableObject
     private bool _isSelected;
 
     partial void OnIsSelectedChanged(bool value) => _onToggled(this);
+
+    /// <summary>Whether the channel passes the current search filter (selection is kept while hidden).</summary>
+    [ObservableProperty]
+    private bool _isMatch = true;
 }
 
 /// <summary>
@@ -59,6 +63,7 @@ public sealed partial class TimeDistanceViewModel : AnalysisTabViewModel<TimeDis
         Commands = new[]
         {
             new TabCommand("Distance / time _axis", "F9", ToggleXAxisCommand),
+            new TabCommand("_Find channel", "Cmd+F", FindChannelCommand),
         };
     }
 
@@ -83,11 +88,62 @@ public sealed partial class TimeDistanceViewModel : AnalysisTabViewModel<TimeDis
     /// <summary>The plotted channels in panel order (top to bottom); reorder with <see cref="MoveShown"/>.</summary>
     public ObservableCollection<ChannelChoiceViewModel> ShownChannels { get; } = new();
 
+    /// <summary>The channels passing the search filter, for the list.</summary>
+    public ObservableCollection<ChannelChoiceViewModel> FilteredChannels { get; } = new();
+
     /// <summary>Whether a session's channels are listed.</summary>
     public bool HasChannels => Channels.Count > 0;
 
     /// <summary>Whether any channel is plotted.</summary>
     public bool HasShownChannels => ShownChannels.Count > 0;
+
+    /// <summary>Search text; channels whose name does not contain it (case-insensitive) are hidden.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasChannelFilter))]
+    private string _channelFilter = string.Empty;
+
+    /// <summary>Whether a search is in effect.</summary>
+    public bool HasChannelFilter => ChannelFilter.Length > 0;
+
+    partial void OnChannelFilterChanged(string value) => ApplyChannelFilter();
+
+    /// <summary>Raised when the search box should take the keyboard focus.</summary>
+    public event Action? SearchRequested;
+
+    /// <summary>Put the caret in the channel search box.</summary>
+    [RelayCommand]
+    public void FindChannel() => SearchRequested?.Invoke();
+
+    /// <summary>Empty the search box (the clear button, Esc).</summary>
+    [RelayCommand]
+    public void ClearChannelFilter() => ChannelFilter = string.Empty;
+
+    /// <summary>
+    /// Enter in the search box: tick or untick the first match, so adding a
+    /// channel is "type a few letters, Enter" without reaching for the mouse.
+    /// </summary>
+    [RelayCommand]
+    public void ToggleFirstMatch()
+    {
+        if (HasChannelFilter && FilteredChannels.FirstOrDefault() is { } first)
+        {
+            first.IsSelected = !first.IsSelected;
+        }
+    }
+
+    private void ApplyChannelFilter()
+    {
+        var filter = ChannelFilter.Trim();
+        FilteredChannels.Clear();
+        foreach (var channel in Channels)
+        {
+            channel.IsMatch = filter.Length == 0 || channel.Name.Contains(filter, StringComparison.OrdinalIgnoreCase);
+            if (channel.IsMatch)
+            {
+                FilteredChannels.Add(channel);
+            }
+        }
+    }
 
     /// <summary>Channel whose timecodes every series is resampled onto.</summary>
     [ObservableProperty]
@@ -194,6 +250,7 @@ public sealed partial class TimeDistanceViewModel : AnalysisTabViewModel<TimeDis
         }
 
         _suppressChannelEvents = false;
+        ApplyChannelFilter();
         OnPropertyChanged(nameof(HasChannels));
         OnPropertyChanged(nameof(HasShownChannels));
         if (log is null)
