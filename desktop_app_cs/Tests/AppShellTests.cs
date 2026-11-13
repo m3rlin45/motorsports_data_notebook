@@ -1,6 +1,5 @@
 using Avalonia.Controls;
 using Avalonia.Headless;
-using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
 using Avalonia.Media.Imaging;
 using InfernoAnalyzer.App;
@@ -23,7 +22,7 @@ public class AppShellTests
 
     /// <summary>The label of an iRacing session comes from the metadata libibt derives from the session info.</summary>
     [Fact]
-    public void Session_label_names_the_iracing_car_and_driver()
+    public Task Session_label_names_the_iracing_car_and_driver() => Ui.Run(() =>
     {
         var speed = new Channel("Speed", new long[] { 0, 1000, 2000 }, new double[] { 30, 40, 50 });
         var metadata = new Dictionary<string, string>
@@ -41,10 +40,10 @@ public class AppShellTests
         Assert.Equal("Logger iracing · FIA F4 · A Driver", session.Details);
         Assert.Equal("iRacing", session.Profile?.Name);
         Assert.Null(session.VehicleName); // the profile lookup is by logger ID alone, as in Python
-    }
+    });
 
     [Fact]
-    public void Session_slot_lists_laps_resolves_the_profile_and_preselects_the_top_laps()
+    public Task Session_slot_lists_laps_resolves_the_profile_and_preselects_the_top_laps() => Ui.Run(() =>
     {
         var session = new SessionViewModel("SESSION A (Primary)", BuiltinOnly);
         var loaded = 0;
@@ -76,10 +75,10 @@ public class AppShellTests
         session.SelectAll();
         Assert.Equal(session.Laps.Count, session.SelectedLaps.Count);
         Assert.Equal(5, selections);
-    }
+    });
 
     [Fact]
-    public async Task Loading_a_bad_file_reports_the_error_without_a_session()
+    public Task Loading_a_bad_file_reports_the_error_without_a_session() => Ui.Run(async () =>
     {
         var session = new SessionViewModel("A", BuiltinOnly);
         var bad = Path.Combine(Path.GetTempPath(), $"inferno-bad-{Guid.NewGuid():N}.xrz");
@@ -95,10 +94,10 @@ public class AppShellTests
 
         Assert.False(session.HasSession);
         Assert.Empty(session.Laps);
-    }
+    });
 
     [Fact]
-    public async Task Time_distance_tab_builds_a_strip_chart_from_the_selected_laps()
+    public Task Time_distance_tab_builds_a_strip_chart_from_the_selected_laps() => Ui.Run(async () =>
     {
         var window = new MainWindowViewModel(BuiltinOnly);
         window.TimeDistance.Debounce = TimeSpan.Zero;
@@ -138,10 +137,10 @@ public class AppShellTests
         Assert.Contains(window.TimeDistance.Channels, c => c.Name == "PPS" && c.IsSelected && !c.IsMatch);
         window.TimeDistance.ChannelFilter = string.Empty;
         Assert.All(window.TimeDistance.Channels, c => Assert.True(c.IsMatch));
-    }
+    });
 
     [Fact]
-    public async Task Time_distance_tab_overlays_session_b_laps_with_session_labels()
+    public Task Time_distance_tab_overlays_session_b_laps_with_session_labels() => Ui.Run(async () =>
     {
         var window = new MainWindowViewModel(BuiltinOnly);
         window.TimeDistance.Debounce = TimeSpan.Zero;
@@ -182,10 +181,10 @@ public class AppShellTests
         Assert.Equal(countA, window.TimeDistance.Spec!.Subplots[0].Traces.Count);
         Assert.StartsWith("Lap 14", window.TimeDistance.Spec.Subplots[0].Traces[0].Label);
         Assert.All(window.SessionB.Laps, l => Assert.Null(l.Style));
-    }
+    });
 
     [Fact]
-    public void Lap_series_builder_translates_channel_names_for_the_comparison_session()
+    public Task Lap_series_builder_translates_channel_names_for_the_comparison_session() => Ui.Run(() =>
     {
         var log = Sample.Value;
         // Pretend the comparison vehicle logs throttle as "GPS Speed": the PPS panel shows that channel.
@@ -200,10 +199,10 @@ public class AppShellTests
         Assert.Equal(plain.Units["GPS Speed"], mapped.Units["PPS"]);
         Assert.NotNull(lap.Before);
         Assert.Equal("B", lap.Before!.Session);
-    }
+    });
 
-    [AvaloniaFact]
-    public async Task Main_window_renders_with_a_loaded_session()
+    [Fact]
+    public Task Main_window_renders_with_a_loaded_session() => Ui.Run(async () =>
     {
         var viewModel = new MainWindowViewModel(BuiltinOnly);
         viewModel.TimeDistance.Debounce = TimeSpan.Zero;
@@ -217,7 +216,7 @@ public class AppShellTests
 
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save(Path.Combine(RenderSmokeTests.RenderDir, "main_window_session.png"), new PngBitmapEncoderOptions());
+        RenderSmokeTests.SaveRender(frame!, "main_window_session.png");
 
         // The status line shows the startup tab's status without a tab switch first.
         Assert.Equal("Analysis complete", window.FindControl<TextBlock>("StatusText")!.Text);
@@ -226,10 +225,10 @@ public class AppShellTests
 
         viewModel.ToggleSidebar();
         Assert.True(viewModel.IsSidebarCollapsed);
-    }
+    });
 
     [Fact]
-    public async Task Save_profile_merges_every_tab_and_round_trips_through_the_store()
+    public Task Save_profile_merges_every_tab_and_round_trips_through_the_store() => Ui.Run(async () =>
     {
         var dir = Directory.CreateTempSubdirectory("inferno-profile-save");
         try
@@ -264,10 +263,10 @@ public class AppShellTests
         {
             dir.Delete(recursive: true);
         }
-    }
+    });
 
     [Fact]
-    public void Closing_a_session_unloads_it_and_tells_the_tabs()
+    public Task Closing_a_session_unloads_it_and_tells_the_tabs() => Ui.Run(() =>
     {
         var session = new SessionViewModel("A", BuiltinOnly);
         var loaded = 0;
@@ -285,10 +284,10 @@ public class AppShellTests
         Assert.Empty(session.SelectedIn(LapScope.Analysis));
         Assert.Equal(string.Empty, session.FileName);
         Assert.Equal("Session", session.SessionLabel);
-    }
+    });
 
     [Fact]
-    public async Task Ticked_channels_survive_the_next_session_and_a_comparison_load()
+    public Task Ticked_channels_survive_the_next_session_and_a_comparison_load() => Ui.Run(async () =>
     {
         var window = new MainWindowViewModel(BuiltinOnly);
         window.TimeDistance.Debounce = TimeSpan.Zero;
@@ -316,10 +315,10 @@ public class AppShellTests
 
         // The set is remembered per vehicle for the next launch.
         Assert.Equal(picked, window.Settings.ChannelsByVehicle["6701209|Inferno 86"]);
-    }
+    });
 
     [Fact]
-    public async Task Search_enter_ticks_the_first_match()
+    public Task Search_enter_ticks_the_first_match() => Ui.Run(async () =>
     {
         var window = new MainWindowViewModel(BuiltinOnly);
         window.SessionA.Apply(Sample.Value, SessionParityTests.SamplePath());
@@ -339,10 +338,10 @@ public class AppShellTests
         tab.ToggleFirstMatch();
         Assert.DoesNotContain(tab.ShownChannels, c => c.Name == "LF_Shock_Pot");
         await Task.CompletedTask;
-    }
+    });
 
     [Fact]
-    public async Task Redrawing_for_the_same_session_keeps_the_view_key_and_a_new_file_changes_it()
+    public Task Redrawing_for_the_same_session_keeps_the_view_key_and_a_new_file_changes_it() => Ui.Run(async () =>
     {
         var window = new MainWindowViewModel(BuiltinOnly);
         window.TimeDistance.Debounce = TimeSpan.Zero;
@@ -359,10 +358,10 @@ public class AppShellTests
         window.SessionA.Apply(Sample.Value, "/elsewhere/other_run.xrz");
         await window.TimeDistance.RunNowAsync();
         Assert.NotEqual(key, window.TimeDistance.Spec!.ViewKey);
-    }
+    });
 
     [Fact]
-    public async Task Opening_two_files_fills_both_sessions_and_one_goes_to_the_target()
+    public Task Opening_two_files_fills_both_sessions_and_one_goes_to_the_target() => Ui.Run(async () =>
     {
         var window = new MainWindowViewModel(BuiltinOnly);
         var sample = SessionParityTests.SamplePath();
@@ -377,10 +376,10 @@ public class AppShellTests
         Assert.True(window.SessionA.HasSession);
         Assert.True(window.SessionB.HasSession);
         Assert.Equal(new[] { sample }, window.RecentFiles);
-    }
+    });
 
     [Fact]
-    public async Task Settings_remember_recent_files_and_view_state_between_runs()
+    public Task Settings_remember_recent_files_and_view_state_between_runs() => Ui.Run(async () =>
     {
         var dir = Directory.CreateTempSubdirectory("inferno-settings");
         try
@@ -412,27 +411,30 @@ public class AppShellTests
         {
             dir.Delete(recursive: true);
         }
-    }
+    });
 
     [Fact]
-    public void Recent_files_are_newest_first_without_duplicates_and_capped()
+    public Task Recent_files_are_newest_first_without_duplicates_and_capped() => Ui.Run(() =>
     {
+        // Paths in the form of the operating system the test runs on: the folder is taken with Path.GetDirectoryName.
+        var folder = Path.Combine(Path.GetTempPath(), "data");
+        string Run(int i) => Path.Combine(folder, $"run{i}.xrk");
         var settings = new AppSettings();
         for (var i = 0; i < AppSettings.MaxRecentFiles + 3; i++)
         {
-            settings.AddRecent($"/data/run{i}.xrk");
+            settings.AddRecent(Run(i));
         }
 
-        settings.AddRecent("/data/run5.xrk");
+        settings.AddRecent(Run(5));
 
         Assert.Equal(AppSettings.MaxRecentFiles, settings.RecentFiles.Count);
-        Assert.Equal("/data/run5.xrk", settings.RecentFiles[0]);
-        Assert.Single(settings.RecentFiles, p => p == "/data/run5.xrk");
-        Assert.Equal("/data", settings.LastFolder);
-    }
+        Assert.Equal(Run(5), settings.RecentFiles[0]);
+        Assert.Single(settings.RecentFiles, p => p == Run(5));
+        Assert.Equal(folder, settings.LastFolder);
+    });
 
-    [AvaloniaFact]
-    public async Task Charts_show_an_empty_state_until_there_is_data_and_again_when_there_is_none()
+    [Fact]
+    public Task Charts_show_an_empty_state_until_there_is_data_and_again_when_there_is_none() => Ui.Run(async () =>
     {
         var viewModel = new MainWindowViewModel(BuiltinOnly);
         viewModel.TimeDistance.Debounce = TimeSpan.Zero;
@@ -447,7 +449,7 @@ public class AppShellTests
         Assert.Equal(AnalysisTabViewModel.NoSessionHint, window.FindControl<TextBlock>("StatusText")!.Text);
         Assert.Null(chart.RenderImage());
         var empty = window.CaptureRenderedFrame();
-        empty!.Save(Path.Combine(RenderSmokeTests.RenderDir, "main_window_empty.png"), new PngBitmapEncoderOptions());
+        RenderSmokeTests.SaveRender(empty!, "main_window_empty.png");
 
         viewModel.SessionA.Apply(Sample.Value, SessionParityTests.SamplePath());
         await viewModel.TimeDistance.RunNowAsync();
@@ -464,5 +466,5 @@ public class AppShellTests
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
         Assert.False(surface.Control.IsVisible);
         Assert.Equal("Select laps to overlay", chart.EmptyText);
-    }
+    });
 }

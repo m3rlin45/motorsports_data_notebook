@@ -76,7 +76,7 @@ public class SessionParityTests
     [MemberData(nameof(ChannelNames))]
     public void Channel_matches_python(string name)
     {
-        ParityAssert.ChannelMatches(Fixture["channels"]![name]!, Raw.Value[name]);
+        ParityAssert.ChannelMatches(Fixture["channels"]![name]!, Raw.Value[name], ParityAssert.ValueTolerance(name));
     }
 
     [Fact]
@@ -122,7 +122,7 @@ public class SessionParityTests
     [Fact]
     public void Lap_pipeline_matches_the_spike_fixture()
     {
-        var fixture = InfernoAnalyzer.App.Fixture.Load(Path.Combine(AppContext.BaseDirectory, "fixtures", "laps.json"));
+        var fixture = InfernoAnalyzer.App.Fixture.Load(Path.Combine(AppContext.BaseDirectory, "Fixtures", "laps.json"));
         var session = SessionLoader.PostProcess(Raw.Value, BuiltinOnly, SessionLoader.DefaultLapTypes);
         var profile = BuiltinOnly.GetProfileForLog(session.Metadata, session.FileName)!;
         var names = new Dictionary<string, string>
@@ -170,18 +170,30 @@ public class SessionParityTests
 /// </summary>
 internal static class ParityAssert
 {
+    /// <summary>
+    /// How far a channel's values may be from the fixture, which was written on Linux. Zero for every
+    /// channel but GPS Altitude: the parser derives it from ECEF coordinates through the C runtime's
+    /// trigonometry, as a difference of Earth-radius-sized terms, so a last-bit difference between C
+    /// runtimes shows up around 1e-9 m (one ulp at 6.4e6 m is 9e-10 m). Seen on Windows (MSVC):
+    /// 1.4e-9 m. Latitude and longitude come out of the same conversion bit for bit.
+    /// </summary>
+    public static double ValueTolerance(string channelName) => channelName == "GPS Altitude" ? 1e-8 : 0;
+
     /// <summary>Units, decimals, interpolation flag, and the timecode and value summaries of one channel.</summary>
-    public static void ChannelMatches(JsonNode expected, Channel channel)
+    public static void ChannelMatches(JsonNode expected, Channel channel, double valueTolerance = 0)
     {
         Assert.Equal(expected["units"]!.GetValue<string>(), channel.Units);
         Assert.Equal(expected["dec_pts"]!.GetValue<int>(), channel.DecPts);
         Assert.Equal(expected["interpolate"]!.GetValue<bool>(), channel.Interpolate);
         SummaryMatches(expected["timecodes"]!, channel.Timecodes.Select(t => (double)t).ToArray());
-        SummaryMatches(expected["values"]!, channel.Values);
+        SummaryMatches(expected["values"]!, channel.Values, valueTolerance);
     }
 
-    /// <summary>Length, first, last, min and max exactly; the sum to 1e-9 relative (numpy sums pairwise, LINQ left to right).</summary>
-    public static void SummaryMatches(JsonNode expected, double[] values)
+    /// <summary>
+    /// Length, first, last, min and max exactly (or within <paramref name="tolerance"/> when one is given);
+    /// the sum to 1e-9 relative (numpy sums pairwise, LINQ left to right).
+    /// </summary>
+    public static void SummaryMatches(JsonNode expected, double[] values, double tolerance = 0)
     {
         Assert.Equal(expected["length"]!.GetValue<int>(), values.Length);
         if (values.Length == 0)
@@ -189,10 +201,10 @@ internal static class ParityAssert
             return;
         }
 
-        Assert.Equal(expected["first"]!.GetValue<double>(), values[0]);
-        Assert.Equal(expected["last"]!.GetValue<double>(), values[^1]);
-        Assert.Equal(expected["min"]!.GetValue<double>(), values.Min());
-        Assert.Equal(expected["max"]!.GetValue<double>(), values.Max());
+        Assert.Equal(expected["first"]!.GetValue<double>(), values[0], tolerance);
+        Assert.Equal(expected["last"]!.GetValue<double>(), values[^1], tolerance);
+        Assert.Equal(expected["min"]!.GetValue<double>(), values.Min(), tolerance);
+        Assert.Equal(expected["max"]!.GetValue<double>(), values.Max(), tolerance);
         var sum = expected["sum"]!.GetValue<double>();
         Assert.Equal(sum, values.Sum(), Math.Max(1e-9, Math.Abs(sum) * 1e-9));
     }
@@ -359,7 +371,7 @@ public class IbtParityTests
         Assert.Equal(expectedNames, raw.ChannelNames);
         foreach (var name in expectedNames)
         {
-            ParityAssert.ChannelMatches(Fixture["channels"]![name]!, raw[name]);
+            ParityAssert.ChannelMatches(Fixture["channels"]![name]!, raw[name], ParityAssert.ValueTolerance(name));
         }
     }
 
