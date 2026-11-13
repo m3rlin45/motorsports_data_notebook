@@ -23,6 +23,9 @@ jobs:
       # broke CI). The set must come from the SDK's feature band (10.0.4xx), so
       # bump it deliberately alongside SDK updates. --skip-manifest-update is not
       # an option: the SDK's bundled Android manifest references unpublished packs.
+      # The repository's global.json keeps `dotnet` on the 10.0 SDK: the runner
+      # image also carries newer SDKs, and a newer one cannot install this set
+      # (its own manifests conflict with the set's).
       - name: Install Android workload
         run: dotnet workload install android --version 10.0.402.1
 
@@ -126,6 +129,9 @@ jobs:
       # broke CI). The set must come from the SDK's feature band (10.0.4xx), so
       # bump it deliberately alongside SDK updates. --skip-manifest-update is not
       # an option: the SDK's bundled Android manifest references unpublished packs.
+      # The repository's global.json keeps `dotnet` on the 10.0 SDK: the runner
+      # image also carries newer SDKs, and a newer one cannot install this set
+      # (its own manifests conflict with the set's).
       - name: Install Android workload
         run: dotnet workload install android --version 10.0.402.1
 
