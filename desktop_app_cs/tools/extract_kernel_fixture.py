@@ -68,7 +68,128 @@ def corners_fixture(log, profile) -> dict:
     return {"channels": {"lat": lat_name, "lon": lon_name}, "laps": laps}
 
 
-MODULES = {"corners": corners_fixture}
+def _none_safe(d: dict) -> dict:
+    return {k: (None if (isinstance(v, float) and np.isnan(v)) else v) for k, v in d.items()}
+
+
+def zones_fixture(log, profile) -> dict:
+    """Zone detection, segments, segment stats and G utilization over laps 14 and 12."""
+    import dataclasses
+
+    from motorsports_data_notebook import corners as C
+    from motorsports_data_notebook import zones as Z
+
+    names = profile.channel_names
+    throttle, brake, speed = names["throttle"], names["brake"], names["gps_speed"]
+    lat, lon, lateral = names["gps_latitude"], names["gps_longitude"], names["lateral_g"]
+    inline = names.get("inline_g", "")
+    has_inline = inline in log.channels
+
+    laps_out = {}
+    arrays = {}
+    for num in LAPS:
+        lap_row = log.laps.to_pandas().set_index("num").loc[num]
+        wanted = list(
+            dict.fromkeys(
+                ["distance_m", brake, throttle, speed, "speed_kmh", lateral]
+                + ([inline] if has_inline else [])
+            )
+        )
+        aligned = (
+            log.filter_by_lap(num)
+            .select_channels(wanted)
+            .resample_to_channel("distance_m")
+            .channels
+        )
+        col = (
+            lambda n: aligned[n].column(n).to_numpy(zero_copy_only=False).astype(np.float64)
+        )  # noqa: E731
+        arrays[num] = {
+            "distance": col("distance_m"),
+            "brake": col(brake),
+            "throttle": col(throttle),
+            "speed_ms": col(speed),
+            "speed_kmh": col("speed_kmh"),
+            "lateral_g": col(lateral),
+            "inline_g": col(inline) if has_inline else None,
+            "lap_time_s": float(lap_row["lap_time"].total_seconds()),
+        }
+        braking, accel = Z.identify_zones_single_lap(
+            arrays[num]["distance"],
+            arrays[num]["brake"],
+            arrays[num]["throttle"],
+            arrays[num]["speed_ms"],
+        )
+        laps_out[str(num)] = {
+            "lap_time_s": arrays[num]["lap_time_s"],
+            "inputs": {k: v.tolist() for k, v in arrays[num].items() if isinstance(v, np.ndarray)},
+            "braking_zones": braking,
+            "accel_zones": accel,
+        }
+
+    order = [arrays[n] for n in LAPS]
+    braking_avg, accel_avg = Z.detect_zones_from_arrays(
+        [a["distance"] for a in order],
+        [a["brake"] for a in order],
+        [a["throttle"] for a in order],
+        [a["speed_ms"] for a in order],
+    )
+    ref_lap = log.filter_by_lap(LAPS[0])
+    corners = C.identify_corners(
+        ref_lap.channels[lat].column(lat).to_numpy(), ref_lap.channels[lon].column(lon).to_numpy()
+    )
+    track_length = float(order[0]["distance"].max())
+    segments = Z.create_track_segments(corners, braking_avg, accel_avg, track_length)
+    stats = Z.compute_segment_stats_from_arrays(
+        [a["distance"] for a in order],
+        [a["speed_kmh"] for a in order],
+        [a["brake"] for a in order],
+        [a["throttle"] for a in order],
+        LAPS,
+        [a["lap_time_s"] for a in order],
+        segments,
+    )
+    g_util = Z.compute_g_utilization(
+        [a["distance"] for a in order],
+        [a["speed_kmh"] for a in order],
+        [a["lateral_g"] for a in order],
+        [a["inline_g"] for a in order] if has_inline else None,
+        LAPS,
+        segments,
+        corners,
+    )
+    g_util_derived = Z.compute_g_utilization(
+        [a["distance"] for a in order],
+        [a["speed_kmh"] for a in order],
+        [a["lateral_g"] for a in order],
+        None,
+        LAPS,
+        segments,
+        corners,
+    )
+    return {
+        "channels": {
+            "throttle": throttle,
+            "brake": brake,
+            "speed": speed,
+            "lateral_g": lateral,
+            "inline_g": inline if has_inline else None,
+        },
+        "laps": laps_out,
+        "braking_zones": braking_avg,
+        "accel_zones": accel_avg,
+        "track_length": track_length,
+        "corners": [dataclasses.asdict(c) for c in corners],
+        "segments": [dataclasses.asdict(s) for s in segments],
+        "segment_stats": [_none_safe(r) for r in stats.to_dict(orient="records")],
+        "g_utilization": [_none_safe(r) for r in g_util.to_dict(orient="records")],
+        "g_utilization_derived_inline": [
+            _none_safe(r) for r in g_util_derived.to_dict(orient="records")
+        ],
+    }
+
+
+MODULES = {"corners": corners_fixture, "zones": zones_fixture}
 
 
 def main(argv: list[str] | None = None) -> int:
