@@ -33,6 +33,7 @@ public partial class ShortcutsWindow : Window
         Row("Drag, wheel", "Pan and zoom the x-axis; over an axis, that axis");
         Row("Home, double-click", "Back to the whole lap");
         Row("F9", "Distance or time on the x-axis");
+        Row($"{cmd}+F", "Search channels (Enter ticks the first match)");
     }
 
     private void Section(string title)
