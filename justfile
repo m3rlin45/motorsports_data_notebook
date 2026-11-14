@@ -120,6 +120,74 @@ tire-web-serve:
     @echo "Open http://localhost:8080/tire_pressure_calculator/web/"
     python3 -m http.server 8080
 
+# C# desktop analyzer (desktop_app_cs/) — see desktop_app_cs/PLAN.md
+cs-build:
+    cd desktop_app_cs && dotnet build InfernoAnalyzer.slnx
+
+cs-test:
+    cd desktop_app_cs && dotnet test Tests/InfernoAnalyzer.Tests.csproj
+
+# The same tests compiled with NativeAOT and run as a native executable, the mode the app ships in
+# (linux-x64; requires clang, zlib1g-dev and `just cs-native`). CI does this on Windows and Linux.
+cs-test-aot *ARGS:
+    cd desktop_app_cs && dotnet publish Tests/InfernoAnalyzer.Tests.csproj -c Release -r linux-x64 \
+        && Tests/bin/Release/net10.0/linux-x64/publish/InfernoAnalyzer.Tests -noColor {{ARGS}}
+
+cs-format:
+    cd desktop_app_cs && dotnet format InfernoAnalyzer.slnx
+
+# Run the app (optional: a session file to load as Session A, or a fixture JSON for the Time/Distance demo)
+cs-run FILE="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    file="{{FILE}}"
+    if [ -n "$file" ]; then file="$(realpath "$file")"; fi
+    cd desktop_app_cs && dotnet run --project App/InfernoAnalyzer.App.csproj -- ${file:+"$file"}
+
+# Regenerate App/fixtures/laps.json from the sample session (two fastest laps, speed timebase)
+cs-fixture *ARGS:
+    uv run python desktop_app_cs/tools/extract_fixture.py \
+        "workspace_template/data/CMD_Inferno 86_Fuji GP Sh_Generic testing_a_2248.xrz" {{ARGS}}
+
+# Build the libxrk/libibt FFI libraries for this machine (needs cargo); add RIDS="--rids linux-x64 win-x64" for cross builds
+cs-native *ARGS:
+    python3 desktop_app_cs/tools/build_native.py {{ARGS}}
+
+# Python-parity fixture for the C# session loader (Tests/Fixtures/session_86.json; Rust backend, as the C# port binds).
+# The oracle is libxrk's Python package built from the same pinned commit as the FFI library, not the installed wheel.
+# For an iRacing sample pass the .ibt and --out desktop_app_cs/Tests/Fixtures/session_ibt.json: the installed libibt wheel
+# is the release the FFI library is pinned to.
+cs-session-fixture *ARGS:
+    LIBXRK_BACKEND=rust uv run --with "$(python3 desktop_app_cs/tools/build_native.py --source-dir libxrk)" \
+        python desktop_app_cs/tools/extract_session_fixture.py {{ARGS}}
+
+# Python-parity fixture for one C# analysis kernel, e.g. `just cs-kernel-fixture corners` (Tests/Fixtures/<module>_86.json)
+cs-kernel-fixture MODULE:
+    LIBXRK_BACKEND=rust uv run python desktop_app_cs/tools/extract_kernel_fixture.py --module {{MODULE}}
+
+# Python-parity fixture for the C# profiles loader (Tests/Fixtures/profiles.json)
+cs-profiles-fixture:
+    uv run python desktop_app_cs/tools/extract_profiles_fixture.py
+
+# High-density stress fixture: every top lap on the 500 Hz shock-pot timebase (~0.8 M points/channel)
+cs-fixture-dense:
+    uv run python desktop_app_cs/tools/extract_fixture.py \
+        "workspace_template/data/CMD_Inferno 86_Fuji GP Sh_Generic testing_a_2248.xrz" \
+        --top 20 --timebase LF_Shock_Pot --out desktop_app_cs/App/fixtures/laps_dense.json
+
+# Windows exe cross-compiled from Linux for a quick look: trimmed single-file, not AOT, parser DLLs
+# beside it. The release build is CI's NativeAOT one (cross-OS NativeAOT is not supported).
+cs-publish-win:
+    cd desktop_app_cs && dotnet publish App/InfernoAnalyzer.App.csproj -c Release -r win-x64 --self-contained \
+        -p:PublishAot=false -p:PublishTrimmed=true -p:TrimMode=full \
+        -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+
+# Linux NativeAOT binary, one file: the parsers linked in, the graphics libraries embedded and unpacked
+# to a cache folder at start-up (requires clang, zlib1g-dev and `just cs-native`)
+cs-publish-linux:
+    cd desktop_app_cs && dotnet publish App/InfernoAnalyzer.App.csproj -c Release -r linux-x64 --self-contained \
+        -p:InfernoSelfExtract=true
+
 # Wheel building
 build-wheel:
     #!/usr/bin/env bash

@@ -1,0 +1,39 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:InfernoAnalyzer.App.ViewModels"
+             xmlns:views="using:InfernoAnalyzer.App.Views"
+             xmlns:controls="using:InfernoAnalyzer.App.Controls"
+             x:Class="InfernoAnalyzer.App.Views.TireGripView"
+             x:DataType="vm:TireGripViewModel">
+  <DockPanel>
+    <Border DockPanel.Dock="Top" Classes="toolbar">
+      <DockPanel>
+        <ToggleButton DockPanel.Dock="Right" Content="Statistics" IsChecked="{Binding ShowStats}" Margin="8,0,0,0"
+                      ToolTip.Tip="Show the grip tables beside the chart" />
+        <Button DockPanel.Dock="Right" Content="Channels…"
+                Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).EditProfileCommand}"
+                ToolTip.Tip="Acceleration and TPMS channel names for this vehicle" />
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="12" Margin="0,0,16,0">
+          <RadioButton Content="Pressure" GroupName="tiremetric" IsChecked="{Binding IsPressure}" />
+          <RadioButton Content="Temperature" GroupName="tiremetric" IsChecked="{Binding IsTemperature}" />
+        </StackPanel>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="0,0,16,0">
+          <TextBlock Classes="label" Text="Percentile" />
+          <TextBox Classes="number" Text="{Binding Percentile.Text}"
+                   ToolTip.Tip="Percentile of total G taken in each pressure or temperature bucket (99.9 = near the peak, ignoring spikes)" />
+        </StackPanel>
+        <TextBlock Classes="title" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                   Text="{Binding Spec.Title, FallbackValue='Tire grip', TargetNullValue='Tire grip'}" />
+      </DockPanel>
+    </Border>
+    <Grid ColumnDefinitions="*,Auto,Auto">
+      <Border Grid.Column="0" Classes="card flush">
+        <controls:ChartHost x:Name="Chart" Spec="{Binding Spec}" EmptyText="{Binding EmptyMessage}" />
+      </Border>
+      <GridSplitter Grid.Column="1" Width="8" IsVisible="{Binding ShowStats}" />
+      <Border Grid.Column="2" Classes="card" Width="480" MinWidth="160" IsVisible="{Binding ShowStats}">
+        <views:StatsPaneView Tables="{Binding Stats}" />
+      </Border>
+    </Grid>
+  </DockPanel>
+</UserControl>
