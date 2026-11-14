@@ -1,0 +1,26 @@
+<Project>
+
+  <!--
+    Inherit the project version from the root pyproject.toml so the C# analyzer
+    always ships with the same version number as the Python package and the
+    tire pressure calculator. Same trick as tire_pressure_calculator/.
+  -->
+  <PropertyGroup>
+    <_PyprojectPath>$(MSBuildThisFileDirectory)../pyproject.toml</_PyprojectPath>
+    <_PyprojectText>$([System.IO.File]::ReadAllText('$(_PyprojectPath)'))</_PyprojectText>
+    <Version>$([System.Text.RegularExpressions.Regex]::Match($(_PyprojectText), 'version\s*=\s*"([0-9]+\.[0-9]+\.[0-9]+)"').Groups[1].Value)</Version>
+    <AssemblyVersion>$(Version).0</AssemblyVersion>
+    <FileVersion>$(Version).0</FileVersion>
+  </PropertyGroup>
+
+  <!-- Shared compiler settings and pinned package versions. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <AvaloniaVersion>12.1.4</AvaloniaVersion>
+    <ScottPlotVersion>5.1.59</ScottPlotVersion>
+  </PropertyGroup>
+
+</Project>

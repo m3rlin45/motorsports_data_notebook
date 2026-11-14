@@ -1,0 +1,6 @@
+bin/
+obj/
+*.user
+.vs/
+# Stress fixture (tens of MB); regenerate with `just cs-fixture-dense`
+App/fixtures/laps_dense.json
