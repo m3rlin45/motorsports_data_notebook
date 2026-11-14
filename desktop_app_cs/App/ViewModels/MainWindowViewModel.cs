@@ -313,6 +313,50 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     public void ResetConfigSection() => SelectedConfigSection?.Config.Reset();
 
+    /// <summary>
+    /// Save a vehicle profile for the session the profile window is editing
+    /// (A, or B when selected): every tab's channel names merged, the
+    /// Suspension tab's motion ratios and the Roll Gradient tab's track
+    /// widths, under the logger ID and vehicle name, as the Python app does.
+    /// </summary>
+    [RelayCommand]
+    public void SaveProfile()
+    {
+        var session = ProfileSession == SessionSlot.B && SessionB.Log is not null ? SessionSlot.B : SessionSlot.A;
+        var slot = session == SessionSlot.B ? SessionB : SessionA;
+        if (slot.LoggerId is null)
+        {
+            ActiveTab.SetStatus("No logger ID — load a session first", StatusKind.Hint);
+            return;
+        }
+
+        if (ConfigSections.Select(s => s.Config.FirstError(session)).FirstOrDefault(e => e is not null) is { } error)
+        {
+            ActiveTab.SetStatus($"Profile not saved: {error}", StatusKind.Error);
+            return;
+        }
+
+        // Tabs share some keys (the shock pots appear on Suspension and Roll Gradient); the
+        // first tab to define a key owns it, so the Suspension entries win for the shocks.
+        var names = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var section in ConfigSections)
+        {
+            foreach (var (key, value) in section.Config.GetChannelNames(session))
+            {
+                names.TryAdd(key, value);
+            }
+        }
+
+        var ratios = Suspension.SuspensionConfig.GetMotionRatios(session)!;
+        var existing = slot.Profile;
+        // Keep the loaded calibration only while the entered ratios still derive from it.
+        var calibration = existing?.ShockCalibration is { } cal && cal.PotWheelRatios() == ratios ? cal : null;
+        var profile = new VehicleProfile(slot.SessionLabel, names, ratios, calibration, RollGradient.RollConfig.GetTrackWidths(session));
+        Profiles.SaveProfileForLogger(slot.LoggerId, profile, slot.VehicleName);
+        var ident = $"logger {slot.LoggerId}" + (slot.VehicleName is null ? string.Empty : $" / {slot.VehicleName}");
+        ActiveTab.SetStatus($"Profile saved for {ident}", StatusKind.Done);
+    }
+
     private void OnSessionLoaded(SessionViewModel session)
     {
         if (session.FilePath is { } path && File.Exists(path))
