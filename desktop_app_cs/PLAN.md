@@ -127,6 +127,8 @@ just cs-run path.json    # ... with another fixture, e.g. App/fixtures/laps_dens
 just cs-fixture          # regenerate App/fixtures/laps.json (laps 14 & 12 + neighbours, 25 Hz)
 just cs-fixture-dense    # 13 top laps on the 500 Hz shock-pot timebase (git-ignored)
 just cs-profiles-fixture # regenerate Tests/Fixtures/profiles.json from the Python profiles module
+just cs-session-fixture  # regenerate Tests/Fixtures/session_86.json (Rust backend)
+just cs-native           # build the libxrk/libibt FFI libraries into native/runtimes/<rid>/native/
 just cs-publish-win      # trimmed single-file win-x64 exe (cross-compiled)
 just cs-publish-linux    # linux-x64 NativeAOT binary
 ```
@@ -202,5 +204,60 @@ from metadata / Race Studio file name). Parity: `tools/extract_profiles_fixture.
 dumps Python's resolution of every builtin key plus lookup and vehicle-name
 cases to `Tests/Fixtures/profiles.json`; `ProfilesParityTests` replays them.
 
-**Data layer (next).** `libxrk-ffi` / `libibt-ffi` crates, `Core/Io`.
+**Data layer (done 2026-10-23; libxrk-ffi merged 2026-11-11, libibt-ffi released in libibt 0.2.0 on 2026-11-11).**
+
+- `crates/libxrk-ffi` (lib `xrk_ffi`) and `crates/libibt-ffi` (lib `ibt_ffi`)
+  in the parser repositories: a session is parsed once into one Arrow
+  `RecordBatch` per channel plus the laps batch behind an opaque handle;
+  `*_channel_stream` / `*_laps_stream` export through the Arrow C Data
+  Interface (`ArrowArrayStream`), `*_metadata_json` gives the Python
+  `LogFile.metadata` dict as JSON (same keys, same order, nested values
+  included: for iRacing the parsed session info and the entries derived from
+  it), every entry point is `catch_unwind`-safe, opening reports errors
+  through an owned string and the stream exports through the shared status
+  codes (0 ok, 1 index, 2 null, 3 panic; `NativeStatus` in C#). Rust
+  round-trip tests drive the ABI as a foreign caller on each repo's sample.
+  Both build as cdylib + staticlib for linux-x64 and (cross-compiled with
+  mingw) win-x64. `tools/build_native.py` pins both by commit: `libxrk` at
+  master 33f311f4 (the commit that landed `libxrk-ffi`; no release carries it
+  yet), `libibt` at 1c880537, its v0.2.0 tag, which is also the version the
+  Python project depends on.
+- `Core/Io`: `NativeLoader` (resolves `runtimes/<rid>/native/` or the exe
+  dir), source-generated `LibraryImport` bindings (`XrkNative`, `IbtNative`),
+  `NativeSessionReader` (Arrow C stream → `Channel`/`Lap`, metadata JSON
+  flattened to strings), `XrkReader` / `IbtReader`, `LogFile` with the Python
+  `select_channels` / `filter_by_time_range` / `filter_by_lap` /
+  `resample_to_timecodes` / `resample_to_channel` semantics (numpy.interp for
+  `interpolate == "True"` channels, forward-fill otherwise, interpolated
+  float32 channels rounded back to single precision as Python's Arrow cast
+  does), and `SessionLoader` = `load_session` (speed channel from the profile
+  by logger ID plus vehicle, `speed_kmh`, per-lap `distance_m`, lap-type
+  filter, `clean_laps`). Values are widened to `double[]` on import (one copy; the
+  zero-copy slice idea is deferred until a kernel needs it). libibt's array
+  variables: a time-subsample array (`SteeringWheelTorque_ST`, 360 Hz) is an
+  ordinary channel at its own rate; a vector-valued one (per-car `CarIdx*`,
+  a FixedSizeList per tick) has no scalar series and is left out.
+- Parity: `tools/extract_session_fixture.py` dumps per-channel summaries,
+  raw laps, the metadata (every key, scalars as text, nested values as JSON)
+  and the `load_session` outcome for the Fuji 86 sample (Rust backend) and
+  for libibt's `test.ibt`; `SessionParityTests` checks 102 channels, laps,
+  metadata, derived channels, and replays the lap pipeline against the
+  spike's `laps.json` to its rounding; `IbtParityTests` checks the same for
+  the 274 iRacing channels. The IBT tests need `INFERNO_IBT_SAMPLE` (the
+  70 MB sample is not in this repo); CI points it at the copy in the libibt
+  source that `build_native.py` fetches. The IBT fixture is dumped with the
+  libibt wheel the project installs (0.2.0, the release the FFI library is
+  built from). The AIM fixture is dumped with libxrk's Python package built from the same
+  pinned commit (`just cs-session-fixture` does this), not the 0.13.0 wheel
+  the project installs: master has since fixed unit codes, added the
+  `GPS_ITOW` / `GPS_Week` channels and a `session` lap column, and orders
+  channels by index. Channel order and each channel's first/last/min/max
+  match exactly; sums to 1e-9 relative (numpy sums pairwise).
+- Build: `just cs-native` (host) or `--rids linux-x64 win-x64`; CI installs
+  Rust and builds the libraries before the C# test job. The App does not
+  reference `Core` yet (Phase 3 wires it in), so the publish jobs are unchanged.
+
+Phase 1 is complete. Left for the next libxrk release (0.14.0): re-pin
+libxrk to its tag and drop the source build from `cs-session-fixture`, as
+libibt already is.
 
