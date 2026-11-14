@@ -23,6 +23,7 @@ from collections import Counter
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -41,6 +42,7 @@ from .kinematics import (
     validate_session,
 )
 from .layouts import LayoutDetection, apply_layout_correction, detect_layout
+from .overrides import FileOverride, OverrideKey, apply_override, load_overrides, override_for
 from .stints import assign_stint_ids
 
 if TYPE_CHECKING:
@@ -79,7 +81,21 @@ FAMILY_KEYS: dict[str, dict[str, str]] = {
     "surface": {
         f"tire_temp_{c}_{i}": f"surf_temp_{c}_ch{i}_c" for c in CORNERS for i in range(1, 9)
     },
-    "controls": {"throttle": "throttle_pct", "brake": "brake_bar", "steering": "steer_deg"},
+    # ``throttle_deg`` is the ECU's throttle angle where a car logs one (the
+    # KK-F's ``TA``, on every one of its files; its percentage channel exists
+    # on some only and is a different signal).
+    "controls": {
+        "throttle": "throttle_pct",
+        "throttle_angle": "throttle_deg",
+        "brake": "brake_bar",
+        "steering": "steer_deg",
+    },
+    # Wheel speeds stay in the logger's km/h (GPS speed is m/s).
+    "drivetrain": {
+        "rpm": "engine_rpm",
+        "gear": "gear",
+        **{f"wheel_speed_{c}": f"wheel_speed_{c}_kmh" for c in CORNERS},
+    },
 }
 # Position must keep the file's double precision: float32 quantises latitude
 # to ~0.5 m and longitude to ~1.5 m at 36°N / 139°E, which destroys the
@@ -431,6 +447,44 @@ class RawTimebase:
     t_ms: np.ndarray  # int64, on the session clock
 
 
+def session_channel_names(log: Any, vehicle: str | None = None) -> tuple[dict[str, str], str, str]:
+    """``(channel_names, profile_name, logger_id)`` for a loaded session.
+
+    The profile is resolved by logger ID plus vehicle name
+    (:func:`~motorsports_data_notebook.profiles.get_profile_for_log`): the
+    KK-SII, the KK-F and the KK-F-V2 share one SW4 logger and differ in
+    their channel names, so the logger ID alone picks the wrong car's names
+    (#254). Keys the profile leaves out fall back to the defaults; without a
+    logger ID or a matching profile the defaults are used and the profile
+    name is ``"default"``.
+
+    ``vehicle`` replaces the file's own vehicle name. It is given for a
+    recording that ``session_overrides.yaml`` corrects: the dash config
+    (and so the channel names) was the right car's, only the vehicle name
+    was left on the previous one.
+    """
+    from ..profiles import (
+        DEFAULT_CHANNEL_NAMES,
+        get_logger_id,
+        get_profile_for_log,
+        get_profile_for_logger,
+    )
+
+    logger_id = get_logger_id(log) or ""
+    if not logger_id:
+        profile = None
+    elif vehicle:
+        profile = get_profile_for_logger(logger_id, vehicle)
+    else:
+        profile = get_profile_for_log(log)
+    channel_names = dict(DEFAULT_CHANNEL_NAMES)
+    profile_name = "default"
+    if profile is not None:
+        channel_names.update(profile.channel_names)
+        profile_name = profile.name
+    return channel_names, profile_name, logger_id
+
+
 def _log_parts(log: Any) -> list[tuple[Any, int]]:
     """``[(log, offset_ms)]``: a merged session's files with the offsets
     that put their raw timecodes on the merged clock; a single file at 0."""
@@ -596,6 +650,7 @@ def extract_session(
     *,
     fallback_date_str: str | None = None,
     extractor_version: str | None = None,
+    overrides: Mapping[OverrideKey, FileOverride] | None = None,
     _preloaded_logs: list | None = None,
     _offsets_ms: list[int] | None = None,
     _preloaded_detections: list[LayoutDetection] | None = None,
@@ -621,16 +676,16 @@ def extract_session(
     filename/``Venue`` only break ties, and laps are re-split when the
     logger's beacon sat on the wrong start/finish line.
 
+    ``overrides`` (:func:`~.overrides.load_overrides`) corrects the car of
+    a recording whose vehicle name was left on the previous car: the row's
+    ``car``, the session id and the vehicle profile follow the corrected
+    car, and ``car_declared`` keeps what the file says.
+
     On failure returns an ExtractResult with ``status="error"`` and empty
     data tables — callers still record the attempt in the manifest so we
     don't retry forever.
     """
     from .._util import MergedLogFile
-    from ..profiles import (
-        DEFAULT_CHANNEL_NAMES,
-        get_logger_id,
-        get_profile_for_logger,
-    )
     from . import EXTRACTOR_VERSION
 
     if isinstance(paths, Path):
@@ -644,7 +699,10 @@ def extract_session(
     primary_mtime_ns = stats[0][1]
     total_file_size = sum(s for _, _, s in stats)
     # Use filename date if parent is YYYY-MM-DD
-    cand = parse_filename(primary_path)
+    parsed = parse_filename(primary_path)
+    override = override_for(overrides, primary_path)
+    cand = apply_override(parsed, overrides)
+    car_declared = parsed.car
     date_str = f"{cand.date.year:04d}-{cand.date.month:02d}-{cand.date.day:02d}"
     if fallback_date_str is None:
         fallback_date_str = date_str
@@ -664,6 +722,7 @@ def extract_session(
         cand=cand,
         extractor_version=ev,
         xrk_paths=[str(p) for p in paths],
+        car_declared=car_declared,
     )
 
     try:
@@ -727,10 +786,13 @@ def extract_session(
             else det.track_resolution
         ),
     )
+    vehicle_meta = _vehicle_meta(logs[0])
+    car_declared = _car_name(car_declared, vehicle_meta)
     cand = replace(
         cand,
         track_canonical=det.track_canonical,
-        car=_car_name(cand.car, _vehicle_meta(logs[0])),
+        # A corrected car is taken as written in the overrides file.
+        car=cand.car if override is not None else _car_name(cand.car, vehicle_meta),
     )
 
     if len(logs) == 1:
@@ -762,16 +824,14 @@ def extract_session(
         extractor_version=ev,
         xrk_paths=[str(p) for p in paths],
         layout=det,
+        car_declared=car_declared,
     )
 
-    # Resolve profile + channel names.
-    logger_id = get_logger_id(log) or ""
-    profile = get_profile_for_logger(logger_id) if logger_id else None
-    channel_names = dict(DEFAULT_CHANNEL_NAMES)
-    profile_name = "default"
-    if profile is not None:
-        channel_names.update(profile.channel_names)
-        profile_name = profile.name
+    # Resolve profile + channel names (logger ID plus vehicle name; the
+    # corrected car's when the file's own vehicle name is overridden).
+    channel_names, profile_name, logger_id = session_channel_names(
+        log, vehicle=cand.car if override is not None else None
+    )
 
     # The channels to keep, per family, in this profile's AIM names.
     wanted = _wanted_channels(channel_names)
@@ -889,6 +949,7 @@ def extract_session(
         xrk_paths=[str(p) for p in paths],
         layout=det,
         comment=session_comment(logs),
+        car_declared=car_declared,
     )
 
     return ExtractResult(
@@ -982,6 +1043,7 @@ def _build_empty_session_row(
     extractor_version: str,
     xrk_paths: list[str] | None = None,
     layout: LayoutDetection | None = None,
+    car_declared: str | None = None,
 ) -> pa.Table:
     return _build_session_row(
         session_id=session_id,
@@ -1006,6 +1068,7 @@ def _build_empty_session_row(
         error_msg=None,
         xrk_paths=xrk_paths,
         layout=layout,
+        car_declared=car_declared,
     )
 
 
@@ -1032,6 +1095,7 @@ def _build_session_row(
     xrk_paths: list[str] | None = None,
     layout: LayoutDetection | None = None,
     comment: str | None = None,
+    car_declared: str | None = None,
 ) -> pa.Table:
     paths_list = xrk_paths if xrk_paths is not None else [str(path)]
     lay = layout
@@ -1053,6 +1117,12 @@ def _build_session_row(
             "session_start_utc": pa.array([session_start_utc], type=pa.timestamp("us", tz="UTC")),
             "driver": [cand.driver],
             "car": [cand.car],
+            # What the file itself says (name token / ``Vehicle`` metadata).
+            # It differs from ``car`` only for a recording corrected in
+            # session_overrides.yaml (see overrides.py).
+            "car_declared": pa.array(
+                [car_declared if car_declared is not None else cand.car], type=pa.string()
+            ),
             "track": [cand.track_raw],
             "track_canonical": [cand.track_canonical],
             # GPS layout reconciliation (see layouts.py). ``track_canonical``
@@ -1327,7 +1397,11 @@ def _split_on_layout(
     return out
 
 
-def _extract_group(paths: list[Path], dataset_root: Path) -> dict[str, str]:
+def _extract_group(
+    paths: list[Path],
+    dataset_root: Path,
+    overrides: Mapping[OverrideKey, FileOverride] | None = None,
+) -> dict[str, str]:
     """Extract one file group (split on wall-clock gaps and layout, one
     session per subgroup) and upsert the results; ``{path: status}``."""
     from .dataset import upsert_session
@@ -1365,6 +1439,7 @@ def _extract_group(paths: list[Path], dataset_root: Path) -> dict[str, str]:
     for sub_paths, sub_logs, sub_offsets, sub_dets in subgroups:
         result = extract_session(
             sub_paths,
+            overrides=overrides,
             _preloaded_logs=sub_logs,
             _offsets_ms=sub_offsets,
             _preloaded_detections=sub_dets,
@@ -1386,7 +1461,10 @@ def _extract_group(paths: list[Path], dataset_root: Path) -> dict[str, str]:
                 time.perf_counter() - t0,
             )
 
-        upsert_session(dataset_root, result, all_xrk_paths=sub_paths)
+        car_overrides = {
+            str(p): ov.car for p in sub_paths if (ov := override_for(overrides, p)) is not None
+        }
+        upsert_session(dataset_root, result, all_xrk_paths=sub_paths, car_overrides=car_overrides)
         for p in sub_paths:
             status_by_path[str(p)] = result.status
     return status_by_path
@@ -1427,7 +1505,10 @@ def run_extract(
     existing = load_manifest(dataset_root)
     counts = {"scanned": 0, "skipped": 0, "extracted": 0, "errors": 0}
 
-    candidates = scan_aim_tree(aim_root, since=since, only_car=only_car)
+    # Corrections to the car a recording names (session_overrides.yaml):
+    # applied at discovery, so grouping, ids and profiles follow them.
+    overrides = load_overrides(dataset_root)
+    candidates = scan_aim_tree(aim_root, since=since, only_car=only_car, overrides=overrides)
     # A recording the scan now lists under another spelling (the lowercase
     # .xrk that appeared next to the .xrz an earlier run extracted) supersedes
     # the manifest row of the old spelling; left in place, both spellings
@@ -1464,11 +1545,15 @@ def run_extract(
         all_clean = True
         for cand, mtime_ns, size in zip(group, mtimes, sizes):
             prior = existing.get(str(cand.path))
+            override = override_for(overrides, cand.path)
             if (
                 prior is None
                 or prior.get("xrk_mtime_ns") != mtime_ns
                 or prior.get("file_size") != size
                 or prior.get("extractor_version") != EXTRACTOR_VERSION
+                # A correction added, changed or withdrawn since the file
+                # was extracted re-extracts it without --force.
+                or prior.get("car_override") != (override.car if override else None)
                 or (prior.get("status") == "error" and retry_errors)
             ):
                 all_clean = False
@@ -1478,7 +1563,7 @@ def run_extract(
             continue
 
         paths = [c.path for c in group]
-        status_by_path = _extract_group(paths, dataset_root)
+        status_by_path = _extract_group(paths, dataset_root, overrides)
         for p in paths:
             if status_by_path.get(str(p), "error") == "error":
                 counts["errors"] += 1

@@ -102,7 +102,28 @@ from __future__ import annotations
 # before; the column makes the mark filterable in ``just tire-query``
 # (``WHERE discard``), where the window string in the file metadata was
 # not. Nothing else changes. Schema 9 (an added column).
-EXTRACTOR_VERSION = "0.22.0"
+# 0.23.0: the vehicle profile is resolved by logger ID plus vehicle name
+# (``profiles.get_profile_for_log``), and the KK-F's two pre-SW4 loggers
+# (6521016, 6520348) are mapped (#254). The KK-F's 44 sessions were extracted
+# with the KK-SII's channel names or with the defaults, so its throttle,
+# brake and steering were stored on one of them; they are now stored
+# wherever the file logs them. New channels, verbatim at their native rate
+# like every other: ``throttle_deg`` (the ECU's throttle angle, the KK-F's
+# only throttle signal before 2026-08-23) in ``controls``, and a
+# ``drivetrain`` family with ``engine_rpm``, ``gear`` and
+# ``wheel_speed_{fl,fr,rl,rr}_kmh`` for the cars that log them. Sensor
+# verdicts and the laps table's dynamics are unchanged; ``on_track_s`` (the
+# span of a lap's samples) grows on 960 of 3,555 laps because a newly stored
+# channel has a sample nearer the lap's edge: by under 75 ms on all but two
+# of them, and by 2.7 s on two KK-F laps of 2026-08-11.
+# ``data/tire_dataset/session_overrides.yaml`` (overrides.py) corrects the
+# car of a recording whose vehicle name was left on the previous car: the
+# row's ``car``, the session id, the file grouping and the profile follow
+# the corrected car, the new session column ``car_declared`` keeps what the
+# file says, and the manifest row records ``car_override`` so that editing
+# the file re-extracts the recording. Two sessions (three files) are
+# corrected. Schema 9 (added columns).
+EXTRACTOR_VERSION = "0.23.0"
 
 from .extract import extract_session, run_extract  # noqa: E402
 from .session_notes import run_enrich_notes  # noqa: E402

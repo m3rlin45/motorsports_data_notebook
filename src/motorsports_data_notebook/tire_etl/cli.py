@@ -236,7 +236,7 @@ def _cmd_query(args: argparse.Namespace) -> int:
     # Register session/laps/timeseries as DuckDB views; the native-rate
     # timeseries (one row per raw sample, a channel null outside its own
     # timebase) also gets one view per sensor family with that family's
-    # columns only: gps, accel, gyro, tpms, surface, controls.
+    # columns only: gps, accel, gyro, tpms, surface, controls, drivetrain.
     con = duckdb.connect(":memory:")
     root = args.dataset_root
     con.execute(f"CREATE VIEW sessions AS SELECT * FROM read_parquet('{root}/sessions/*.parquet')")
