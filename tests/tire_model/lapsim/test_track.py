@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from motorsports_data_notebook.tire_model.lapsim import geometry as geo
@@ -261,6 +262,61 @@ class TestBuild:
         s_true = np.arange(5.0, LENGTH_M - 5.0, 7.0)
         x, y, _ = stadium(s_true)
         assert trk.project_lap(model, x, y, s_prev=s_true + 10.0) == pytest.approx(s_true, abs=1.5)
+
+
+class TestWetBasis:
+    @pytest.fixture()
+    def root(self, tmp_path, monkeypatch):
+        geo._INDEX_CACHE.clear()
+        sessions = {}
+        for d in range(3):
+            sessions[f"2026-01-1{d}_dry"] = {
+                "car": "car",
+                "date": f"2026-01-1{d}",
+                "kwargs": {"n_laps": 4, "seed": d, "noise_m": 0.02},
+            }
+            sessions[f"2026-02-1{d}_wet"] = {
+                "car": "car",
+                "date": f"2026-02-1{d}",
+                "kwargs": {"n_laps": 12, "seed": 10 + d, "noise_m": 0.02, "pace": 1.1},
+            }
+        write_dataset(tmp_path, sessions)
+
+        def _conditions(_root, frame, _laps):
+            ids = frame["session_id"].astype(str)
+            return pd.Series(
+                ["wet" if i.endswith("_wet") else "dry" for i in ids], index=ids, name="condition"
+            )
+
+        monkeypatch.setattr(geo, "session_conditions", _conditions)
+        return tmp_path
+
+    def test_a_layout_has_a_track_per_basis(self, root):
+        dry = trk.build_track_model(root, LAYOUT_ID, inertial=False, n_boot=0)
+        wet = trk.build_track_model(root, LAYOUT_ID, basis="wet", inertial=False, n_boot=0)
+        assert dry.model.meta["basis"] == "dry" and wet.model.meta["basis"] == "wet"
+        assert {lap.session_id[-3:] for lap in dry.laps} == {"dry"}
+        assert {lap.session_id[-3:] for lap in wet.laps} == {"wet"}
+        assert len(wet.laps) == 36
+        # the same road at a slower pace
+        assert wet.model.length_m == pytest.approx(dry.model.length_m, rel=2e-3)
+        assert np.median(wet.speed_median / dry.speed_median) == pytest.approx(1 / 1.1, rel=0.01)
+        assert trk.model_summary(wet.model)["basis"] == "wet"
+
+    def test_gate_builds_and_compares_the_wet_track(self, root, tmp_path):
+        from motorsports_data_notebook.tire_model.lapsim import gates
+
+        report = gates.check_track_truth(root, tracks_dir=tmp_path / "tracks", layouts=(LAYOUT_ID,))
+        item = {i.name: i for i in report.items}["Wet tracks"]
+        assert item.passed is True
+        assert "1 of 1 layouts" in item.measured
+        saved = trk.TrackModel.load(tmp_path / "tracks" / f"{LAYOUT_ID}__wet.json")
+        assert saved.meta["basis"] == "wet"
+        assert saved.meta["built_from"]["n_days"] == 3
+
+    def test_unknown_basis(self, root):
+        with pytest.raises(KeyError):
+            trk.build_track_model(root, LAYOUT_ID, basis="damp")
 
 
 class TestInertial:

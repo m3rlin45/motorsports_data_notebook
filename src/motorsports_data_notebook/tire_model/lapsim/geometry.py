@@ -118,6 +118,10 @@ REFERENCE_PACE_RANK = 3  # the third-fastest session best
 #: A session whose Doppler course and position heading still scatter by more
 #: than this once the lag is removed is not a sound receiver for a build.
 LAG_SCATTER_MAX_DEG = 0.5
+#: A session labelled wet whose best is slower than this multiple of the
+#: car's dry reference is not a wet session driven for time (the measured
+#: wet references are 1.07–1.15 × the dry ones).
+WET_MAX_PACE = 1.3
 EXCLUDED_LAYOUTS = ("minami",)
 INDEX_VERSION = 7
 
@@ -895,7 +899,7 @@ def classify_laps(index: pd.DataFrame) -> pd.DataFrame:
 
     Needs per lap ``session_id, car, layout_id, lap_type, lap_time_s,
     matched, one_segment, n_implausible, max_gap_s, has_discard,
-    min_speed_ms, length_m, spike_g, lag_scatter_deg``. Adds:
+    min_speed_ms, length_m, spike_g, lag_scatter_deg, condition``. Adds:
 
     - ``clean`` and ``clean_reason`` (the first test the lap fails, in the
       order of #202's definition: ``not_full``, ``layout`` (an excluded
@@ -915,6 +919,20 @@ def classify_laps(index: pd.DataFrame) -> pd.DataFrame:
     dry; a session that was wet is slow and falls to the pace rule, and
     the weather model's label (unknown on many sessions, and "wet" on
     sessions that had dried) would only remove laps driven at pace.
+
+    The line driven in the wet is not the dry one (1–3 m away, apexes 4–9 %
+    tighter), so wet days are a basis of their own with their own meaning
+    of fast:
+
+    - ``wet_reference_pace_s``: the car's third-fastest session best at the
+      layout among sessions labelled wet whose best is off the dry pace
+      (and within :data:`WET_MAX_PACE` of it: slower than that is not a
+      wet session driven for time);
+    - ``in_build_wet`` and ``wet_build_reason`` (``not_clean``,
+      ``flagged``, ``receiver``, ``not_wet`` (not labelled wet, at dry
+      pace, or not driven for time), ``slow_session`` (over 1.05 × the wet
+      reference),
+      ``slow_lap``).
     """
     df = index.copy()
     reason = pd.Series("", index=df.index, dtype=object)
@@ -964,6 +982,36 @@ def classify_laps(index: pd.DataFrame) -> pd.DataFrame:
     _out(~(df["lap_time_s"] <= BUILD_LAP_PACE * df["session_best_s"]), "slow_lap")
     df["build_reason"] = build
     df["in_build"] = build == ""
+
+    # The wet basis: sessions labelled wet that are off the dry pace, judged
+    # against each other with the same two pace rules.
+    off_dry = ~(df["session_best_s"] <= BUILD_SESSION_PACE * df["reference_pace_s"])
+    racing = df["session_best_s"] <= WET_MAX_PACE * df["reference_pace_s"]
+    wet_session = (df["condition"] == "wet") & off_dry & racing
+    per_wet = (
+        df[df["clean"] & wet_session]
+        .groupby(["car", "layout_id", "session_id"], as_index=False)["session_best_s"]
+        .first()
+    )
+    wet_ref = per_wet.groupby(["car", "layout_id"])["session_best_s"].apply(
+        lambda s: _reference_pace(s.to_numpy(dtype=float))
+    )
+    df["wet_reference_pace_s"] = wet_ref.reindex(keys).to_numpy() if len(wet_ref) else np.nan
+    wet = pd.Series("", index=df.index, dtype=object)
+
+    def _out_wet(mask: pd.Series, why: str) -> None:
+        wet.loc[mask.fillna(False).astype(bool) & (wet == "")] = why
+
+    _out_wet(~df["clean"], "not_clean")
+    _out_wet(df["flagged"], "flagged")
+    _out_wet(~(df["lag_scatter_deg"] <= LAG_SCATTER_MAX_DEG), "receiver")
+    _out_wet(~wet_session, "not_wet")
+    _out_wet(
+        ~(df["session_best_s"] <= BUILD_SESSION_PACE * df["wet_reference_pace_s"]), "slow_session"
+    )
+    _out_wet(~(df["lap_time_s"] <= BUILD_LAP_PACE * df["session_best_s"]), "slow_lap")
+    df["wet_build_reason"] = wet
+    df["in_build_wet"] = wet == ""
     return df
 
 
