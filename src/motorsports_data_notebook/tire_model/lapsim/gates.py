@@ -517,6 +517,13 @@ MIN_CAR_LAPS = 10
 #: A car's own accelerometer profile is a median over its laps; under this
 #: many it is too rough to gate the Doppler profile against.
 INERTIAL_MIN_LAPS = 30
+DEM_GRADE_RMS_MAX = 0.01
+DEM_RELIEF_MAX_M = 3.0
+#: A bridge in the bare-earth model: it leaves the logged altitude by more
+#: than this against the difference's median over the base length.
+DEM_NOTCH_M = 2.0
+DEM_NOTCH_BASE_M = 300.0
+DEM_NOTCH_WIDEN_M = 30.0
 
 
 def _corner_bins(corner: dict, ds: float, n: int) -> np.ndarray:
@@ -574,15 +581,20 @@ def check_track_truth(
     cache_dir: Path | None = None,
     tracks_dir: Path | None = None,
     layouts: tuple[str, ...] = TRACK_LAYOUTS,
+    dem: object | None = None,
 ) -> GateReport:
     """Gate B2: the profile is right in scale, apex curvature and gentle
-    curvature, against sensors it was not built from. The checks against
-    the operators' drawings and the elevation model are not in yet."""
+    curvature, against sensors it was not built from. ``dem`` (an object
+    with ``elevation(lat, lon) -> (height, layer)``, see :mod:`.dem`) adds
+    the altitude check against the ground elevation model. The check
+    against the operators' drawings is not in yet."""
     from ...tire_etl.kinematics import G_MS2
     from . import track as trk
 
     rep = GateReport("B2", "the track profile (`lapsim check-track-truth`)")
     assembly, inertial, apex, low, side, grade_rows, fills, by_year = [], [], [], [], [], [], [], []
+    dem_rows: list[dict] = []
+    notches: list[dict] = []
     for layout in layouts:
         build = trk.build_track_model(root, layout, cache_dir=cache_dir, measure_convergence=True)
         model, proj = build.model, build.proj
@@ -753,6 +765,53 @@ def check_track_truth(
                     }
                 )
 
+        # Altitude against the ground elevation model, along the track's own line.
+        if dem is not None:
+            lat, lon = geo.local_lat_lon(model.x_m, model.y_m, model.gate["lat"], model.gate["lon"])
+            ground, layer = dem.elevation(lat, lon)  # type: ignore[attr-defined]
+            if np.isfinite(ground).mean() > 0.9:
+                ground = trk._periodic_mean(
+                    trk._fill_nan_periodic(ground), int(round(trk.ALT_SMOOTH_M / 2.0 / ds))
+                )
+                half = max(int(round(trk.GRADE_WINDOW_M / 2.0 / ds)), 1)
+                g_dem = (np.roll(ground, -half) - np.roll(ground, half)) / (2 * half * ds)
+                # A bridge: the bare-earth model steps away from the logged
+                # altitude and back within a few tens of metres.
+                diff = ground - model.alt_m
+                reach = int(round(DEM_NOTCH_BASE_M / 2.0 / ds))
+                ring = np.concatenate([diff[-reach:], diff, diff[:reach]])
+                base = np.array([np.median(ring[i : i + 2 * reach + 1]) for i in range(n)])
+                zones = trk.find_zones(np.abs(diff - base) > DEM_NOTCH_M, ds, DEM_NOTCH_WIDEN_M)
+                masked = np.zeros(n, dtype=bool)
+                for a, b in zones:
+                    idx = np.arange(a, b + 1) if a <= b else np.arange(a, b + 1 + n) % n
+                    masked[idx] = True
+                    notches.append(
+                        {
+                            "layout": layout,
+                            "s_from_m": a * ds,
+                            "s_to_m": b * ds,
+                            "dem_minus_logged_m": float(
+                                (diff - base)[idx][np.argmax(np.abs((diff - base)[idx]))]
+                            ),
+                        }
+                    )
+                keep_alt = ~masked
+                dem_rows.append(
+                    {
+                        "layout": layout,
+                        "dem": ", ".join(sorted({str(v) for v in layer if v})),
+                        "grade_rms": _rms((model.grade - g_dem)[keep_alt]),
+                        "relief_logged_m": float(np.ptp(model.alt_m[keep_alt])),
+                        "relief_dem_m": float(np.ptp(ground[keep_alt])),
+                        "grade_max_logged": float(np.max(model.grade)),
+                        "grade_max_dem": float(np.max(g_dem[keep_alt])),
+                        "grade_min_logged": float(np.min(model.grade)),
+                        "grade_min_dem": float(np.min(g_dem[keep_alt])),
+                        "notches": len(zones),
+                    }
+                )
+
         # Motegi was resurfaced for 2026: the profile per year before pooling.
         years = np.array([d[:4] for d in days])
         if layout == "motegi_full" and len(np.unique(years)) > 1:
@@ -800,23 +859,28 @@ def check_track_truth(
         )
     )
     ine = pd.DataFrame(inertial)
-    ok_in = (ine["rms_g"] <= INERTIAL_RMS_MAX_G) & (
-        ine["worst_20m_g"].abs() <= trk.FILL_THRESHOLD_G
-    )
-    ok_in |= ine["gated"] == "no"
-    whole = ine[ine["car"] == "all"]
-    rep.items.append(
-        GateItem(
-            "Against the inertial profile",
-            bool(ok_in.all()),
-            f"per layout rms {whole['rms_g'].min():.3f}–{whole['rms_g'].max():.3f} g; "
-            f"{int((~ok_in).sum())} of {int((ine['gated'] == 'yes').sum())} gated rows outside",
-            f"rms ≤ {INERTIAL_RMS_MAX_G} g per layout, and per car on its own laps where it "
-            f"has {INERTIAL_MIN_LAPS} IMU-sourced laps; no {trk.FILL_STRETCH_M:g} m over "
-            f"{trk.FILL_THRESHOLD_G} g outside a fill",
-            md_table(ine, floats="{:.3g}"),
+    if ine.empty:
+        rep.items.append(
+            GateItem("Against the inertial profile", None, "no IMU-sourced laps", "see #204")
         )
-    )
+    else:
+        ok_in = (ine["rms_g"] <= INERTIAL_RMS_MAX_G) & (
+            ine["worst_20m_g"].abs() <= trk.FILL_THRESHOLD_G
+        )
+        ok_in |= ine["gated"] == "no"
+        whole = ine[ine["car"] == "all"]
+        rep.items.append(
+            GateItem(
+                "Against the inertial profile",
+                bool(ok_in.all()),
+                f"per layout rms {whole['rms_g'].min():.3f}–{whole['rms_g'].max():.3f} g; "
+                f"{int((~ok_in).sum())} of {int((ine['gated'] == 'yes').sum())} gated rows outside",
+                f"rms ≤ {INERTIAL_RMS_MAX_G} g per layout, and per car on its own laps where it "
+                f"has {INERTIAL_MIN_LAPS} IMU-sourced laps; no {trk.FILL_STRETCH_M:g} m over "
+                f"{trk.FILL_THRESHOLD_G} g outside a fill",
+                md_table(ine, floats="{:.3g}"),
+            )
+        )
     fl = pd.DataFrame(fills)
     rep.items.append(
         GateItem(
@@ -854,7 +918,11 @@ def check_track_truth(
     rep.items.append(
         GateItem(
             "Apex κ against the accelerometer",
-            bool((by_lay["accel_mean"].abs() <= APEX_INERTIAL_MEAN_MAX).all()),
+            (
+                None
+                if by_lay["accel_mean"].isna().all()
+                else bool((by_lay["accel_mean"].dropna().abs() <= APEX_INERTIAL_MEAN_MAX).all())
+            ),
             "mean log ratio per layout "
             + ", ".join(f"{k} {v:+.3f}" for k, v in by_lay["accel_mean"].items()),
             f"mean within ± {APEX_INERTIAL_MEAN_MAX}",
@@ -916,6 +984,30 @@ def check_track_truth(
                 md_table(yr, floats="{:.3g}"),
             )
         )
-    for name in ("Corner angles against the operators' drawings", "Altitude against the GSI DEM"):
-        rep.items.append(GateItem(name, None, "not measured yet", "see #204"))
+    if dem_rows:
+        dm = pd.DataFrame(dem_rows)
+        relief_gap = (dm["relief_logged_m"] - dm["relief_dem_m"]).abs()
+        rep.items.append(
+            GateItem(
+                "Altitude against the GSI DEM",
+                bool(
+                    (dm["grade_rms"] <= DEM_GRADE_RMS_MAX).all()
+                    and (relief_gap <= DEM_RELIEF_MAX_M).all()
+                ),
+                f"grade {100 * dm['grade_rms'].min():.2f}–{100 * dm['grade_rms'].max():.2f} % rms; "
+                f"relief within {relief_gap.max():.1f} m; {len(notches)} bridge notches masked",
+                f"grade over {trk.GRADE_WINDOW_M:g} m within {DEM_GRADE_RMS_MAX:.0%} rms; relief "
+                f"within {DEM_RELIEF_MAX_M:g} m",
+                md_table(dm, floats="{:.3g}")
+                + "\n\nStretches masked (the bare-earth model against the logged altitude):\n\n"
+                + md_table(pd.DataFrame(notches), floats="{:.4g}"),
+            )
+        )
+    else:
+        rep.items.append(GateItem("Altitude against the GSI DEM", None, "not measured", "see #204"))
+    rep.items.append(
+        GateItem(
+            "Corner angles against the operators' drawings", None, "not measured yet", "see #204"
+        )
+    )
     return rep

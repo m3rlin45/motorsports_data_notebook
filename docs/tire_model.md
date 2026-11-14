@@ -1723,6 +1723,7 @@ Suzuka 164 / 11, Motegi 122 / 5, Sodegaura 344 / 15):
 | Apexes not flattened | loss to the window: mean ≤ 0.03, any corner ≤ 0.06 | mean 0.005–0.008, worst corner 0.029 | pass |
 | Apex κ against the accelerometer | mean log ratio within ± 0.05 | −0.004 to −0.013; Motegi −0.030 | pass |
 | Grade between cars | ≤ 1 % rms | 0.18–0.63 % | pass |
+| Altitude against the GSI elevation model | grade over 50 m within 1 % rms; relief within 3 m | grade 0.16–0.36 % rms; relief within 1.0 m | pass |
 | Peak retention | reported | profile apex over the laps' own: median 0.93–0.96 per layout, lowest corner 0.88 | |
 | Share of lateral heat under 0.004 /m | reported | Tsukuba 0.091, Sodegaura 0.104, Motegi 0.111, Fuji 0.139, Suzuka 0.229; day-split floor 0.0003–0.011 | |
 | Right against left at the laps' own speed | reported against 0.02 | 15 of 16 car × layout rows within 0.013; KK-F-V2 at Tsukuba 0.027 (23 laps, one day) | |
@@ -1732,8 +1733,23 @@ Lengths of the median line: Tsukuba 2,078.2 m, Fuji 4,506.1, Suzuka
 0.002 /m turning one way by 10° or more with an apex over 0.004 /m): 8,
 10, 16, 11, 8.
 
-Not measured yet: the corner angles against the operators' drawings, and
-altitude against the GSI elevation model. Motegi's profile per year was
+**Altitude against the ground survey** (`dem.py`). The GSI 5 m laser
+model (`dem5a` text tiles, zoom 15) is sampled along each track's own
+line, smoothed and differenced exactly as the logged altitude is. Relief,
+logged against surveyed: Tsukuba 5.3 / 5.0 m, Sodegaura 13.9 / 13.9,
+Motegi 31.2 / 30.4 (the operator publishes 30.4), Fuji 36.7 / 37.1, Suzuka
+39.4 / 40.3. Steepest grades at Fuji: +8.1 and −9.5 % logged, +8.3 and
+−9.4 % surveyed. The model is bare earth, so a bridge deck reads the
+ground under it: a stretch where the survey leaves the logged altitude by
+more than 2 m against its own 300 m median is masked and listed. That
+finds four at Suzuka (s ≈ 320–390 m, 1,950–2,040 m, 4,840–4,940 m, the
+crossover, at −6.2 m, and 5,270–5,350 m) and none elsewhere. The 16 tiles
+are cached in `workspace/lapsim/gsi/` and nothing derived from them is
+committed; `--dem-offline` and `--no-dem` run the gate without the
+network.
+
+Not measured yet: the corner angles against the operators' drawings.
+Motegi's profile per year was
 asked for (resurfaced for 2026): every Motegi build lap is from 2025, so
 there is nothing to compare. Vertical curvature and the pit-exit join
 (asked by #206's review) are not built.
