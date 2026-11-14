@@ -37,6 +37,10 @@ def main(argv: list[str] | None = None) -> int:
         "check-track-truth",
         help="Gate B2: build every layout's track and check it against the inertial sensors.",
     )
+    sub.add_parser(
+        "check-track-holdout",
+        help="Gate B3: the ladder of holdouts, day against day up to car against car.",
+    )
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     root = args.dataset_root or default_dataset_root()
@@ -49,6 +53,12 @@ def main(argv: list[str] | None = None) -> int:
     elif args.cmd == "check-track-truth":
         report = gates.check_track_truth(
             root, cache_dir=workspace / "cache", tracks_dir=workspace / "tracks"
+        )
+    elif args.cmd == "check-track-holdout":
+        from . import holdout
+
+        report = holdout.check_track_holdout(
+            root, cache_dir=workspace / "cache", folds_dir=workspace / "tracks" / "folds"
         )
     else:  # pragma: no cover - argparse rejects unknown commands
         parser.error(f"unknown command {args.cmd}")
