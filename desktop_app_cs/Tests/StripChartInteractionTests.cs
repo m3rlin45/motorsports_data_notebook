@@ -1,6 +1,5 @@
 using Avalonia.Controls;
 using Avalonia.Headless;
-using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using InfernoAnalyzer.App;
 using InfernoAnalyzer.Charting;
@@ -15,7 +14,7 @@ namespace InfernoAnalyzer.Tests;
 public class StripChartInteractionTests
 {
     private static string FixturePath =>
-        Path.Combine(AppContext.BaseDirectory, "fixtures", "laps.json");
+        Path.Combine(AppContext.BaseDirectory, "Fixtures", "laps.json");
 
     private static StripChartSpec Spec(string? viewKey, XAxisMode axis = XAxisMode.Distance) =>
         StripChartBuilder.Build(Fixture.Load(FixturePath), axis, viewKey);
@@ -33,8 +32,8 @@ public class StripChartInteractionTests
     private static (double Min, double Max) XRangeOf(ScottPlotStripChart chart, int panel = 0) =>
         (chart.Plots[panel].Axes.Bottom.Range.Min, chart.Plots[panel].Axes.Bottom.Range.Max);
 
-    [AvaloniaFact]
-    public void Redrawing_the_same_view_keeps_the_zoom_and_a_new_view_resets_it()
+    [Fact]
+    public Task Redrawing_the_same_view_keeps_the_zoom_and_a_new_view_resets_it() => Ui.Run(() =>
     {
         var (_, chart) = Show(Spec("session-1"));
         var full = XRangeOf(chart);
@@ -70,10 +69,10 @@ public class StripChartInteractionTests
         chart.ZoomAboutCursor(0.25);
         chart.Render(Spec(null));
         Assert.Equal(full, XRangeOf(chart));
-    }
+    });
 
-    [AvaloniaFact]
-    public void Reset_view_returns_to_the_initial_view()
+    [Fact]
+    public Task Reset_view_returns_to_the_initial_view() => Ui.Run(() =>
     {
         var (_, chart) = Show(Spec("s"));
         var full = XRangeOf(chart);
@@ -83,10 +82,10 @@ public class StripChartInteractionTests
         chart.ResetView();
 
         Assert.Equal(full, XRangeOf(chart));
-    }
+    });
 
-    [AvaloniaFact]
-    public void A_pinned_cursor_ignores_the_pointer_and_steps_by_sample()
+    [Fact]
+    public Task A_pinned_cursor_ignores_the_pointer_and_steps_by_sample() => Ui.Run(() =>
     {
         var (window, chart) = Show(Spec("s"));
         var moves = new List<double?>();
@@ -115,10 +114,10 @@ public class StripChartInteractionTests
         window.MouseMove(new Avalonia.Point(900, 300));
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
         Assert.NotNull(chart.Cursor);
-    }
+    });
 
-    [AvaloniaFact]
-    public void Stepping_past_the_view_scrolls_it_to_keep_the_cursor_visible()
+    [Fact]
+    public Task Stepping_past_the_view_scrolls_it_to_keep_the_cursor_visible() => Ui.Run(() =>
     {
         var (_, chart) = Show(Spec("s"));
         chart.PinCursor(2000);
@@ -131,10 +130,10 @@ public class StripChartInteractionTests
         Assert.True(after.Min > before.Min);
         Assert.InRange(chart.Cursor!.Value, after.Min, after.Max);
         Assert.Equal(before.Max - before.Min, after.Max - after.Min, 6); // scrolled, not zoomed
-    }
+    });
 
-    [AvaloniaFact]
-    public void A_click_pins_the_cursor_and_the_keys_drive_it()
+    [Fact]
+    public Task A_click_pins_the_cursor_and_the_keys_drive_it() => Ui.Run(() =>
     {
         var (window, chart) = Show(Spec("s"));
 
@@ -156,10 +155,10 @@ public class StripChartInteractionTests
 
         window.KeyPressQwerty(PhysicalKey.Escape, RawInputModifiers.None);
         Assert.False(chart.IsCursorPinned);
-    }
+    });
 
-    [AvaloniaFact]
-    public void Readouts_name_the_lap_and_carry_units()
+    [Fact]
+    public Task Readouts_name_the_lap_and_carry_units() => Ui.Run(() =>
     {
         var (_, chart) = Show(Spec("s"));
 
@@ -176,5 +175,5 @@ public class StripChartInteractionTests
 
         chart.SetCursor(null);
         Assert.Empty(chart.Overlays[0].Readouts);
-    }
+    });
 }
