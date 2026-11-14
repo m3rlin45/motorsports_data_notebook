@@ -1,30 +1,65 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:controls="using:InfernoAnalyzer.App.Controls"
+        xmlns:vm="using:InfernoAnalyzer.App.ViewModels"
+        xmlns:views="using:InfernoAnalyzer.App.Views"
         x:Class="InfernoAnalyzer.App.MainWindow"
-        Title="Inferno Analyzer — strip chart spike"
+        x:DataType="vm:MainWindowViewModel"
+        Title="{Binding WindowTitle}"
         Icon="/Assets/inferno.ico"
-        Width="1280" Height="860"
+        Width="1280" Height="800" MinWidth="960" MinHeight="600"
         WindowStartupLocation="CenterScreen"
-        Background="{DynamicResource AppPageBrush}">
-  <DockPanel Margin="8">
-    <Border DockPanel.Dock="Top" Classes="toolbar">
+        Background="{DynamicResource AppPageBrush}"
+        DragDrop.AllowDrop="True">
+  <DockPanel>
+    <!--
+      The menu is a NativeMenu (built in code-behind): the global menu bar on macOS, this bar on Windows
+      and Linux. On Windows the row doubles as the title bar (see MainWindow.ApplyTitleBar): icon and menu
+      on the left, the title in the middle, the system's caption buttons over the reserved space on the right.
+    -->
+    <Grid x:Name="TitleRow" DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,*,Auto">
+      <Image x:Name="TitleIcon" Grid.Column="0" Source="/Assets/inferno.png" Width="16" Height="16" Margin="12,0,4,0" IsVisible="False" IsHitTestVisible="False" />
+      <NativeMenuBar x:Name="MenuBar" Grid.Column="1" VerticalAlignment="Center" />
+      <TextBlock x:Name="TitleText" Grid.Column="2" Classes="subtle" Text="{Binding WindowTitle}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                 TextTrimming="CharacterEllipsis" IsVisible="False" IsHitTestVisible="False" />
+      <Border x:Name="CaptionButtonSpace" Grid.Column="3" Width="0" />
+    </Grid>
+
+    <!-- Status bar: always in sight, whatever is collapsed. -->
+    <Border DockPanel.Dock="Bottom" Background="{DynamicResource AppCardBrush}" BorderBrush="{DynamicResource AppCardStrokeBrush}" BorderThickness="0,1,0,0" Padding="12,4" MinHeight="28">
       <DockPanel>
-        <Button x:Name="FitButton" DockPanel.Dock="Right" ToolTip.Tip="Fit the lap in view (Home, or double-click the chart)">
-          <StackPanel Orientation="Horizontal" Spacing="6">
-            <Path Classes="icon" Data="{StaticResource IconFit}" />
-            <TextBlock Text="Fit" VerticalAlignment="Center" />
-          </StackPanel>
-        </Button>
-        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="12" Margin="0,0,16,0" ToolTip.Tip="What the laps are plotted against">
-          <RadioButton x:Name="DistanceRadio" x:FieldModifier="public" Content="Distance" GroupName="xaxis" IsChecked="True" />
-          <RadioButton x:Name="TimeRadio" x:FieldModifier="public" Content="Time" GroupName="xaxis" />
-        </StackPanel>
-        <TextBlock x:Name="FixtureLabel" x:FieldModifier="public" Classes="title" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+        <ProgressBar DockPanel.Dock="Right" IsIndeterminate="True" IsVisible="{Binding IsBusy}" Width="120" Height="4" MinHeight="4" VerticalAlignment="Center" Margin="12,0,0,0"
+                     AutomationProperties.Name="Working" />
+        <Path DockPanel.Dock="Left" Classes="icon" Data="{StaticResource IconError}" Stroke="{DynamicResource AppErrorBrush}" IsVisible="{Binding ActiveTab.IsError}" Margin="0,0,8,0" />
+        <TextBlock x:Name="StatusText" Text="{Binding ActiveTab.Status}" Classes.error="{Binding ActiveTab.IsError}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
       </DockPanel>
     </Border>
-    <Border Classes="card flush">
-      <controls:ChartHost x:Name="Chart" />
-    </Border>
+
+    <Grid x:Name="Body" ColumnDefinitions="Auto,Auto,*" Margin="8,4,8,8">
+      <!-- Sessions down the side: the lap lists get the window's height instead of a strip above the charts. -->
+      <Grid x:Name="Sidebar" Grid.Column="0" Width="288" MinWidth="220" MaxWidth="480" RowDefinitions="Auto,8,Auto" IsVisible="{Binding !IsSidebarCollapsed}">
+        <views:SessionPanelView x:Name="SessionAPanel" Grid.Row="0" DataContext="{Binding SessionA}" />
+        <views:SessionPanelView x:Name="SessionBPanel" Grid.Row="2" DataContext="{Binding SessionB}" />
+      </Grid>
+      <GridSplitter Grid.Column="1" Width="8" IsVisible="{Binding !IsSidebarCollapsed}" />
+      <!-- While files are dragged over the window: where they will land. -->
+      <Border x:Name="DropHint" Grid.Column="0" Grid.ColumnSpan="3" ZIndex="10" IsVisible="False" IsHitTestVisible="False"
+              Background="{DynamicResource AppCardBrush}" Opacity="0.92" CornerRadius="{StaticResource AppCardCornerRadius}"
+              BorderBrush="{DynamicResource SystemControlHighlightAccentBrush}" BorderThickness="2">
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
+          <Path Classes="icon" Data="{StaticResource IconOpen}" HorizontalAlignment="Center" />
+          <TextBlock x:Name="DropHintText" Classes="title" HorizontalAlignment="Center" />
+        </StackPanel>
+      </Border>
+      <TabControl x:Name="TabArea" Grid.Column="2" ItemsSource="{Binding Tabs}" SelectedItem="{Binding ActiveTab}" Padding="0,8,0,0">
+        <TabControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:AnalysisTabViewModel">
+            <TextBlock Text="{Binding Header}" />
+          </DataTemplate>
+        </TabControl.ItemTemplate>
+        <TabControl.ContentTemplate>
+          <views:TabViewLocator />
+        </TabControl.ContentTemplate>
+      </TabControl>
+    </Grid>
   </DockPanel>
 </Window>
