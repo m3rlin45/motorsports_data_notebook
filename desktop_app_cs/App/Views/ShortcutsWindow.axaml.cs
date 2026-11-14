@@ -37,6 +37,11 @@ public partial class ShortcutsWindow : Window
         Row("Home, double-click", "Back to the whole lap");
         Row("F9", "Distance or time on the x-axis");
         Row($"{cmd}+F", "Search channels (Enter ticks the first match)");
+        Section("Sectors");
+        Row($"{cmd}+S", "Save the track");
+        Row($"{cmd}+Z", "Undo the last gate edit");
+        Row("Left / Right", "Nudge the selected gate (Shift: ten samples)");
+        Row("Delete", "Delete the selected gate");
     }
 
     private void Section(string title)
