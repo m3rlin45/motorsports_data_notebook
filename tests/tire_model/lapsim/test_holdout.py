@@ -178,6 +178,24 @@ class TestLadder:
         donor = trk.TrackModel.load(tmp_path / "folds" / f"{LAYOUT_ID}__without_KK-F__rung4.json")
         assert donor.meta["built_from"]["cars"] == ["KK-SII"]
 
+    def test_per_lap_metric_is_near_zero_on_one_track(self, tmp_path):
+        root = _two_car_dataset(tmp_path)
+        build = trk.build_track_model(root, LAYOUT_ID, inertial=False, n_boot=0)
+        lm = ho.per_lap_metric(build).set_index("car")
+        assert set(lm.index) == {"KK-F", "KK-SII"}
+        assert (lm["days"] == 4).all() and (lm["laps"] == 36).all()
+        # a lap is noisier than a profile, so the ratio sits a little above
+        # zero; it is the same against either profile
+        assert lm["own_other_days"].abs().max() < 0.03
+        assert lm["difference"].abs().max() < 0.005
+
+    def test_lap_metric_reads_a_curvature_scale(self):
+        kappa, speed, ds = _oval()
+        laps = np.vstack([kappa, 1.1 * kappa])
+        got = ho._lap_metric(laps, np.vstack([speed, speed]), kappa, ds)
+        assert got[0] == pytest.approx(0.0, abs=1e-12)
+        assert got[1] == pytest.approx(math.log(1.1), abs=1e-9)
+
     def test_strict_comparison_agrees_with_the_shared_projection(self, tmp_path):
         root = _two_car_dataset(tmp_path)
         build = trk.build_track_model(root, LAYOUT_ID, inertial=False, n_boot=0)

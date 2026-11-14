@@ -67,6 +67,7 @@ VOTE_DONOR_LAPS = 30
 ONE_TRACK_MAX = 0.02
 STOP_ABOVE = 0.05
 PACE_BAND = (1.04, 1.12)
+LAP_METRIC_SMOOTH_S = 0.5
 
 
 def production_shares(root: Path) -> dict[str, ShareParams]:
@@ -348,6 +349,72 @@ def extra_laps_against_build(
     return out
 
 
+def _lap_metric(
+    k_laps: np.ndarray, v_laps: np.ndarray, k_prof: np.ndarray, ds: float
+) -> np.ndarray:
+    """Per lap, ``log(Σ|V²κ_lap| / Σ|V²κ_profile|)`` at the lap's own speed,
+    both lateral accelerations smoothed over :data:`LAP_METRIC_SMOOTH_S`
+    of the lap's median speed first (unsmoothed, ``|·|`` turns the lap's
+    own noise on the straights into heat and biases the ratio low by
+    0.01–0.06)."""
+    out = np.full(len(k_laps), np.nan)
+    for i, (kl, vl) in enumerate(zip(k_laps, v_laps)):
+        ok = np.isfinite(kl) & np.isfinite(vl)
+        if ok.mean() < 0.9:
+            continue
+        v = np.where(ok, vl, 0.0)
+        half = max(int(round(LAP_METRIC_SMOOTH_S * float(np.median(vl[ok])) / 2.0 / ds)), 1)
+        a_lap = trk._periodic_mean(np.where(ok, v * v * kl, 0.0), half)
+        a_prof = trk._periodic_mean(np.where(ok, v * v * k_prof, 0.0), half)
+        den = float(np.sum(np.abs(a_prof[ok])))
+        if den > 0:
+            out[i] = math.log(float(np.sum(np.abs(a_lap[ok]))) / den)
+    return out
+
+
+def per_lap_metric(build: trk.TrackBuild) -> pd.DataFrame:
+    """The first revision's lap-against-profile metric, as distance from
+    the same-car floor: for each car, its laps against the profile of its
+    *own other days* (``own``) and against the profile of *every other
+    car* (``others``), medians over its laps, and their difference. A
+    bias the two profiles share shows in both; the difference is the car's
+    line against the other cars'."""
+    from .gates import lap_curvature
+
+    proj, ds = build.proj, build.model.ds_m
+    cars = np.array([lap.car for lap in build.laps])
+    days = np.array([lap.date for lap in build.laps])
+    k_laps = lap_curvature(proj.course, ds, trk.KAPPA_WINDOW_M)
+    v_laps = proj.speed[:, :-1]
+    rows: list[dict] = []
+    for car in np.unique(cars):
+        cell = cars == car
+        cell_days = np.unique(days[cell])
+        if cell.sum() < MIN_CELL_LAPS or len(cell_days) < 2 or (~cell).sum() < MIN_SUBSET_LAPS:
+            continue
+        own = np.full(len(cars), np.nan)
+        for day in cell_days:  # each day against the car's other days
+            held, rest = cell & (days == day), cell & (days != day)
+            if rest.sum() < MIN_SUBSET_LAPS:
+                continue
+            own[held] = _lap_metric(k_laps[held], v_laps[held], _kappa(proj, rest, ds), ds)
+        others = _lap_metric(k_laps[cell], v_laps[cell], _kappa(proj, ~cell, ds), ds)
+        if not np.isfinite(own[cell]).any():
+            continue
+        rows.append(
+            {
+                "layout": build.model.layout_key,
+                "car": car,
+                "laps": int(np.isfinite(others).sum()),
+                "days": len(cell_days),
+                "own_other_days": float(np.nanmedian(own[cell])),
+                "every_other_car": float(np.nanmedian(others)),
+                "difference": float(np.nanmedian(others) - np.nanmedian(own[cell])),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 def check_track_holdout(
     root: Path,
     *,
@@ -362,6 +429,7 @@ def check_track_holdout(
     shares = production_shares(root)
     index = geo.clean_lap_index(root, cache_dir=cache_dir)
     ladders, verdicts, beside, strict_rows = [], [], [], []
+    lap_metrics: list[pd.DataFrame] = []
     for layout in layouts:
         build = trk.build_track_model(root, layout, cache_dir=cache_dir, inertial=False, n_boot=0)
         lad = ladder(build, shares, n_repeat=n_repeat)
@@ -369,6 +437,7 @@ def check_track_holdout(
             continue
         ladders.append(lad)
         verdicts.append({"layout": layout, **layout_verdict(lad)})
+        lap_metrics.append(per_lap_metric(build))
 
         # The voting comparisons again, each side on its own reference line.
         cars = np.array([lap.car for lap in build.laps])
@@ -514,6 +583,20 @@ def check_track_holdout(
                 f"largest change of dq_max {float((st['dq_max_strict'] - st['dq_max']).abs().max()):.4f}",
                 "reported: the voting comparisons rebuilt from scratch",
                 md_table(st, floats="{:.3g}"),
+            )
+        )
+    lm = pd.concat(lap_metrics, ignore_index=True) if lap_metrics else pd.DataFrame()
+    if len(lm):
+        rep.items.append(
+            GateItem(
+                "Per-lap metric",
+                None,
+                f"laps against their own car's other days: {lm['own_other_days'].min():+.3f} to "
+                f"{lm['own_other_days'].max():+.3f}; against every other car, less that: "
+                f"{lm['difference'].min():+.3f} to {lm['difference'].max():+.3f}",
+                "reported: log ratio of lap-mean |V²κ|, lap against profile, both smoothed "
+                f"over {LAP_METRIC_SMOOTH_S} s",
+                md_table(lm, floats="{:.3g}"),
             )
         )
     if beside:

@@ -1574,7 +1574,8 @@ extractor and the dataset are untouched.
   them with bests of 69.8–72.8 s against 69.4 s for its second-fastest dry
   session. It is also the design review's own finding 10, that a rule may
   not depend on a label unknown on 152 sessions. Without the veto the
-  build gains 30 laps and 3 days (1,257 laps in 208 sessions before), and
+  build gains 30 laps and 3 days (measured on the dataset through
+  2026-11-13: 1,257 laps in 208 sessions with it, 1,287 in 215 without), and
   the Inferno 86 has five sessions on four days at Tsukuba where it had
   three on three. The KK-SII's first Fuji day (2026-02-25) stays out on
   pace alone (bests of 133–140 s against 117 s the next day).
@@ -1592,20 +1593,20 @@ measurement:
    instead of to a logger: 5 sessions with clean laps are over 0.5° and
    are left out (65 laps), two of 6520348's six KK-F sessions among them.
 
-Gate B1 on the dataset through 2026-11-13 (3,600 laps, 310 sessions;
-2,727 clean laps in 279 sessions; 1,287 build laps in 215 sessions on 72
+Gate B1 on the dataset through 2026-11-14 (3,631 laps, 313 sessions;
+2,750 clean laps in 282 sessions; 1,296 build laps in 218 sessions on 73
 days):
 
 | Check | Threshold | Measured | |
 |---|---|---|---|
 | Doppler course closes | closure ≤ 0.002 turns on ≥ 99 % of build laps | 100 %; P10–P90 ±0.0002; one clean lap outside (0.0023, not a build lap) | pass |
-| Lag removed | scatter ≤ 0.5° after the shift | 0.18–0.33° median per logger (as logged 0.65–1.8°), 0.50° on logger 6520348's KK-F sessions (2.8°); 5 of 279 sessions over, left out | reported |
+| Lag removed | scatter ≤ 0.5° after the shift | 0.18–0.33° median per logger (as logged 0.65–1.8°), 0.50° on logger 6520348's KK-F sessions (2.8°); 5 of 282 sessions over, left out | reported |
 | Path length = ∫V dt | within 0.3 % on every build lap | 96.7 % of laps; median +0.06 %, range −0.27 to +0.44 % | **fail**, cause below |
-| Lap length = session row | within 0.5 % | 281 of 281 sessions | pass |
+| Lap length = session row | within 0.5 % | 284 of 284 sessions | pass |
 | Lap length spread | P90 − P10 ≤ 1 % per layout | 0.45–0.97 % | pass |
 | Layout is the declared one | median within 2 % of the official length | Fuji −1.11 %, Motegi −0.99 %, Sodegaura −1.95 %, Suzuka −0.77 %, Tsukuba +1.75 % | pass |
 | No unflagged clean lap over 3 g | position and Doppler | 0 laps | pass |
-| Flagged laps | ≤ 2 % overall, cells over 5 % explained | 11 of 2,727 (0.40 %) | pass |
+| Flagged laps | ≤ 2 % overall, cells over 5 % explained | 11 of 2,750 (0.40 %) | pass |
 | Laps map to crossing intervals | every full lap, or a cause | 32 without one: 30 hold a stop or the start of the recording, 1 fragment, 1 session that never crosses the gate twice | pass |
 | Gyro scale | P10–P90 ≤ 1 % per car and logger | 0.28–0.87 % | pass |
 
@@ -1644,11 +1645,11 @@ three days feeds the profile and has no vote in B3):
 |---|---|
 | Fuji GP | Inferno 86 111 / 23 / 10, KK-F 57 / 6 / 2, KK-SII 25 / 4 / 1, SFJ 23 / 6 / 2 |
 | Motegi | EK9 103 / 19 / 4, Inferno 86 15 / 3 / 2, SFJ 11 / 6 / 1 |
-| Sodegaura | Inferno 86 346 / 51 / 15, RX8 13 / 7 / 2 |
+| Sodegaura | Inferno 86 355 / 54 / 16, RX8 13 / 7 / 2 |
 | Suzuka | KK-SII 106 / 25 / 7, KK-F 41 / 7 / 2, SFJ 17 / 6 / 2 |
 | Tsukuba 2000 | KK-SII 193 / 28 / 12, KK-F 166 / 16 / 8, Inferno 86 37 / 5 / 4, KK-F-V2 23 / 3 / 1 |
 
-Of the clean laps left out: 938 are slower than 1.02 × their session's
+Of the clean laps left out: 952 are slower than 1.02 × their session's
 best, 426 are from sessions off the car's reference pace (the wet ones
 among them), 65 from the five sessions over the receiver bound and 11 are
 flagged.
@@ -1720,23 +1721,23 @@ because the first form measured something else:
    to the track's 10 m bandwidth before its peak is taken.
 
 Gate B2 on the five layouts (Tsukuba 419 laps / 24 days, Fuji 216 / 15,
-Suzuka 164 / 11, Motegi 129 / 6, Sodegaura 359 / 16):
+Suzuka 164 / 11, Motegi 129 / 6, Sodegaura 368 / 17):
 
 | Check | Threshold | Measured | |
 |---|---|---|---|
 | Profile closes | ∮κ ds within 0.002 turns of n; line within 5 m | closure ≤ 0.0001 turns; line gap 1.0–2.5 m; n = +1, Suzuka 0 | pass |
 | Re-referencing converged | one more moves V²κ ≤ 0.01 g rms | 0.0003–0.0013 g | pass |
-| Against the inertial profile | rms ≤ 0.06 g; no 20 m over 0.25 g | per layout 0.027 (Sodegaura), 0.039, 0.042, 0.050, 0.055 g (Motegi); per car 0.028–0.059 g on 7 cells | pass |
-| Apexes not flattened | loss to the window: mean ≤ 0.03, any corner ≤ 0.06 | mean 0.005–0.008, worst corner 0.029 | pass |
-| Apex κ against the accelerometer | mean log ratio within ± 0.05 | −0.004 to −0.011; Motegi −0.025 | pass |
+| Against the inertial profile | rms ≤ 0.06 g; no 20 m over 0.25 g | per layout 0.027 (Sodegaura), 0.039, 0.042, 0.050, 0.055 g (Motegi); per car 0.027–0.059 g on 7 cells | pass |
+| Apexes not flattened | loss to the window: mean ≤ 0.03, any corner ≤ 0.06 | mean 0.006–0.008, worst corner 0.029 | pass |
+| Apex κ against the accelerometer | mean log ratio within ± 0.05 | −0.002 to −0.011; Motegi −0.025 | pass |
 | Grade between cars | ≤ 1 % rms | 0.18–0.63 % | pass |
 | Altitude against the GSI elevation model | grade over 50 m within 1 % rms; relief within 3 m | grade 0.17–0.36 % rms; relief within 1.0 m | pass |
 | Peak retention | reported | profile apex over the laps' own: median 0.93–0.96 per layout, lowest corner 0.88 | |
-| Share of lateral heat under 0.004 /m | reported | Tsukuba 0.093, Sodegaura 0.104, Motegi 0.109, Fuji 0.139, Suzuka 0.229; day-split floor 0.0004–0.010 | |
+| Share of lateral heat under 0.004 /m | reported | Tsukuba 0.093, Sodegaura 0.105, Motegi 0.109, Fuji 0.139, Suzuka 0.229; day-split floor 0.0004–0.010 | |
 | Right against left at the laps' own speed | reported against 0.02 | 15 of 16 car × layout rows within 0.013; KK-F-V2 at Tsukuba 0.026 (23 laps, one day) | |
 
 Lengths of the median line: Tsukuba 2,078.1 m, Fuji 4,506.1, Suzuka
-5,755.3, Motegi 4,751.4, Sodegaura 2,387.2. Corners found (stretches over
+5,755.3, Motegi 4,751.4, Sodegaura 2,387.1. Corners found (stretches over
 0.002 /m turning one way by 10° or more with an apex over 0.004 /m): 8,
 10, 16, 11, 8.
 
@@ -1778,7 +1779,7 @@ Motegi build lap is from 2025, so there is nothing to compare.
   |---|---|---|---|
   | Tsukuba | 215 m (200–273) | 16 s (7–172) | 60 |
   | Motegi | 240 m (212–646) | 29 s (10–57) | 29 |
-  | Sodegaura | 341 m (138–647) | 44 s (18–92) | 57 |
+  | Sodegaura | 328 m (136–635) | 40 s (17–90) | 60 |
   | Suzuka | 641 m (494–802) | 26 s (9–76) | 34 |
   | Fuji | 752 m (369–872) | 44 s (17–93) | 48 |
 
@@ -1877,7 +1878,7 @@ Largest per-tyre |Δq|, by layout:
 | Tsukuba | 0.005 | 0.008 | 0.004–0.007 | **0.016–0.017** | **0.008–0.010** (FJ, Inferno 86) | one track; bias carried to E1 |
 | Fuji | 0.005 | 0.006 | 0.003 | 0.011–0.012 | **0.006–0.007** (FJ, Inferno 86); 0.007 (SFJ) | one track; bias carried to E1 |
 | Suzuka | 0.005 | 0.003 | 0.003 | 0.004–0.005 | 0.004–0.005 (FJ, SFJ) | no vote |
-| Sodegaura | 0.011 | 0.005 | 0.002 | | 0.008–0.013 (Inferno 86, RX8) | no vote |
+| Sodegaura | 0.011 | 0.006 | 0.002 | | 0.008–0.013 (Inferno 86, RX8) | no vote |
 | Motegi | 0.009 | 0.012 | 0.009 | | 0.023–0.028 (EK9, Inferno 86, SFJ) | no vote |
 
 Bold figures vote. **Gate: pass.** No layout is above the 0.05 stop
@@ -1919,8 +1920,15 @@ Beside the ladder (not gated):
   Sodegaura): 0.006–0.010, at or near the day-to-day floor.
 - The donor tracks of the voting comparisons and the held-out groups'
   speed traces are saved in `workspace/lapsim/tracks/folds/` for C3 and D1.
-- Not done: the per-lap metric of the first revision (both sides smoothed
-  over 0.5 s) as distance from the same-car floor.
+- *The per-lap metric of the first revision*, both sides smoothed over
+  0.5 s: the log ratio of lap-mean |V²κ|, a lap against a profile at the
+  lap's own speed. Against the profile of the car's own other days it
+  reads +0.005 to +0.018 on twelve cells (a lap is noisier than a
+  profile; the RX8's 13 laps read −0.013). Against every other car's
+  profile, less that floor: KK-F at Tsukuba +0.018 and KK-SII there
+  −0.015, EK9 at Motegi −0.018, Inferno 86 at Motegi +0.037 on 15 laps,
+  and within ±0.009 on the other nine. It tells the same story as the
+  ladder and shows no bias the profiles share.
 
 ## 3. Test methodology
 
