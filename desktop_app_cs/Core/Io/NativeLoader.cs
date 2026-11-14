@@ -6,7 +6,9 @@ namespace InfernoAnalyzer.Core.Io;
 /// Finds the parser FFI libraries. They are copied to
 /// <c>runtimes/&lt;rid&gt;/native/</c> under the application directory at
 /// build time and sit next to the executable after a RID-specific publish;
-/// the default probing only knows about the latter.
+/// the default probing only knows about the latter. A single-file (JIT)
+/// publish carries them inside the executable, and the runtime unpacks them
+/// to a folder of its own at start-up, which is searched as well.
 /// </summary>
 internal static class NativeLoader
 {
@@ -69,6 +71,16 @@ internal static class NativeLoader
         var baseDir = AppContext.BaseDirectory;
         yield return Path.Combine(baseDir, "runtimes", RuntimeIdentifier, "native");
         yield return baseDir;
+
+        // A single-file executable's bundled native libraries are unpacked elsewhere; the runtime lists where.
+        if (AppContext.GetData("NATIVE_DLL_SEARCH_DIRECTORIES") is string unpacked)
+        {
+            foreach (var dir in unpacked.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+            {
+                yield return Path.Combine(dir, "runtimes", RuntimeIdentifier, "native");
+                yield return dir;
+            }
+        }
     }
 
     private static nint Resolve(string libraryName, System.Reflection.Assembly assembly, DllImportSearchPath? searchPath)
