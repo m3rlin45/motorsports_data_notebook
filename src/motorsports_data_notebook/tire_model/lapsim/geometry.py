@@ -159,6 +159,15 @@ def local_xy(lat: np.ndarray, lon: np.ndarray, ref_lat: float, ref_lon: float) -
     return np.column_stack([x, y])
 
 
+def local_lat_lon(
+    x: np.ndarray, y: np.ndarray, ref_lat: float, ref_lon: float
+) -> tuple[np.ndarray, np.ndarray]:
+    """The inverse of :func:`local_xy`: latitude and longitude of points
+    ``x`` east and ``y`` north of the reference."""
+    unit = local_xy(np.array([ref_lat + 1.0]), np.array([ref_lon + 1.0]), ref_lat, ref_lon)
+    return ref_lat + np.asarray(y, float) / unit[0, 1], ref_lon + np.asarray(x, float) / unit[0, 0]
+
+
 def wrap_angle(a: np.ndarray | float) -> np.ndarray:
     """``a`` wrapped into ``[−π, π)``."""
     return np.asarray((np.asarray(a, float) + math.pi) % (2.0 * math.pi) - math.pi)
@@ -1121,6 +1130,7 @@ __all__ = [
     "load_laps",
     "load_session_geometry",
     "load_sessions",
+    "local_lat_lon",
     "local_xy",
     "match_laps",
     "session_conditions",
