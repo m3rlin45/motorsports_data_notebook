@@ -16,7 +16,7 @@ namespace InfernoAnalyzer.App;
 /// the user the session they have open. A frozen UI thread is reported
 /// here as well (<see cref="HangWatch"/>).
 /// </summary>
-public static class CrashLog
+public static partial class CrashLog
 {
     /// <summary>Where unhandled exceptions are logged.</summary>
     public static string LogPath => Path.Combine(Path.GetDirectoryName(SettingsStore.DefaultPath())!, "analyzer_crash.log");
@@ -24,7 +24,16 @@ public static class CrashLog
     /// <summary>Hook the process-wide handlers. Call once, before the app starts.</summary>
     public static void Install()
     {
-        AppDomain.CurrentDomain.UnhandledException += (_, e) => Write(e.ExceptionObject as Exception, "Unhandled exception");
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+        {
+            var exception = e.ExceptionObject as Exception;
+            Write(exception, "Unhandled exception");
+            if (e.IsTerminating)
+            {
+                // Off the UI thread there is no carrying on: say why the window is about to vanish.
+                ShowFatal($"Inferno Analyzer has to close.\n\n{exception?.GetBaseException().Message}\n\nDetails were written to:\n{LogPath}");
+            }
+        };
         TaskScheduler.UnobservedTaskException += (_, e) =>
         {
             Write(e.Exception, "Unobserved task exception");
@@ -39,7 +48,7 @@ public static class CrashLog
         {
             Write(e.Exception, "Unhandled exception on the UI thread");
             e.Handled = true;
-            Show(e.Exception);
+            Show(e.Exception.Message);
         };
     }
 
@@ -48,16 +57,19 @@ public static class CrashLog
         WriteText(context, exception?.ToString() ?? "(no exception object)");
 
     /// <summary>Append an entry headed <paramref name="context"/> to the log; never throws.</summary>
-    public static void WriteText(string context, string text)
+    public static void WriteText(string context, string text) => WriteText(context, text, LogPath);
+
+    /// <summary>Append an entry headed <paramref name="context"/> to the log file at <paramref name="path"/>; never throws.</summary>
+    internal static void WriteText(string context, string text, string path)
     {
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(LogPath)!);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             var entry = new StringBuilder()
                 .AppendLine($"=== {DateTime.Now:yyyy-MM-dd HH:mm:ss} {context} (version {typeof(CrashLog).Assembly.GetName().Version}) ===")
                 .AppendLine(text.TrimEnd())
                 .AppendLine();
-            File.AppendAllText(LogPath, entry.ToString());
+            File.AppendAllText(path, entry.ToString());
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -65,7 +77,24 @@ public static class CrashLog
         }
     }
 
-    private static void Show(Exception exception)
+    /// <summary>A message box that needs nothing of Avalonia (the render thread may be the one that died). Windows only; elsewhere the log is the report.</summary>
+    private static void ShowFatal(string text)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            _ = MessageBoxW(0, text, "Inferno Analyzer", 0x10 | 0x2000 | 0x10000); // MB_ICONERROR | MB_TASKMODAL | MB_SETFOREGROUND
+        }
+        else
+        {
+            Console.Error.WriteLine(text);
+        }
+    }
+
+    [System.Runtime.InteropServices.LibraryImport("user32", StringMarshalling = System.Runtime.InteropServices.StringMarshalling.Utf16)]
+    private static partial int MessageBoxW(nint owner, string text, string caption, uint type);
+
+    /// <summary>Tell the user something failed and where the details are; the app carries on. UI thread only.</summary>
+    internal static void Show(string message)
     {
         if (Avalonia.Application.Current?.ApplicationLifetime is not Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime { MainWindow: { IsVisible: true } owner })
         {
@@ -87,7 +116,7 @@ public static class CrashLog
                 MaxWidth = 480,
                 Children =
                 {
-                    new TextBlock { Text = exception.Message, TextWrapping = TextWrapping.Wrap, FontWeight = FontWeight.SemiBold },
+                    new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap, FontWeight = FontWeight.SemiBold },
                     new TextBlock { Text = $"The app will keep running. Details were written to:\n{LogPath}", TextWrapping = TextWrapping.Wrap },
                     close,
                 },
