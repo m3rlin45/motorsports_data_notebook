@@ -10,6 +10,8 @@ internal static class Program
         CrashLog.Install();
         try
         {
+            // The assemblies that import the graphics libraries: SkiaSharp, HarfBuzzSharp and, for ANGLE, Avalonia.Win32.
+            NativeBundle.Load(typeof(SkiaSharp.SKObject).Assembly, typeof(HarfBuzzSharp.Blob).Assembly, typeof(Win32PlatformOptions).Assembly);
             BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
         }
         catch (Exception e)

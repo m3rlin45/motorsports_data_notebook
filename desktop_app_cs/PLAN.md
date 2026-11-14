@@ -38,7 +38,7 @@ calculator proved the Avalonia tooling).
 | .NET | 10 LTS (10.0.1xx SDK) | .NET 11 (STS) ships 2026-11-10; ignore it |
 | Avalonia | 12.1.4 | Tire calculator stays on 11.3.x; do not block on migrating it |
 | ScottPlot.Avalonia | 5.1.59 | First release with Avalonia 12 support; slow cadence (~3/yr) |
-| Avalonia.Headless.XUnit | 12.1.4 | Built on **xunit v3**, so this solution uses `xunit.v3` (the tire calculator uses v2) |
+| xunit.v3 (AOT flavour) | 4.0.3 | `xunit.v3.aot.mtp-off`: tests found by a source generator, so the suite also runs NativeAOT-compiled (the tire calculator uses v2). Avalonia.Headless.XUnit is reflection-based and is not used; UI tests call Avalonia.Headless through `Tests/Ui.cs` |
 | Apache.Arrow | 23.0.0 | C Data Interface for the libxrk FFI (Phase 1) |
 | DuckDB.NET | 1.5.5 | Arrow result streaming; optional, Phase 3+ |
 | libxrk / libibt | v0.13.0 / v0.0.5 | Pure-Rust core crates with an `arrow` feature + PyO3 wrappers; **no C-ABI crate yet** |
@@ -111,8 +111,9 @@ hover (top of stack). Fetch read-only with `gh` into the scratchpad.
    `tools/extract_kernel_fixture.py --module X` and an xunit parity test.
 3. **Views** — Time/Distance tab, then Suspension, Roll Gradient, Driver;
    split-times table; track store + editor.
-4. **Packaging** — Linux NativeAOT, Windows trimmed single-file, release
-   workflow, README; retire the CustomTkinter app at parity.
+4. **Packaging** — NativeAOT on Windows and Linux with the parsers linked
+   in (the Windows build on a Windows CI runner), release workflow, README;
+   retire the CustomTkinter app at parity.
 
 Dropped from the original brainstorm for v1: JupyterLite-in-WebView, CSnakes,
 Roslyn UDFs, DuckDB SQL (all remain possible later).
@@ -129,8 +130,9 @@ just cs-fixture-dense    # 13 top laps on the 500 Hz shock-pot timebase (git-ign
 just cs-profiles-fixture # regenerate Tests/Fixtures/profiles.json from the Python profiles module
 just cs-session-fixture  # regenerate Tests/Fixtures/session_86.json (Rust backend)
 just cs-native           # build the libxrk/libibt FFI libraries into native/runtimes/<rid>/native/
-just cs-publish-win      # trimmed single-file win-x64 exe (cross-compiled)
-just cs-publish-linux    # linux-x64 NativeAOT binary
+just cs-test-aot         # the tests compiled with NativeAOT and run natively (linux-x64)
+just cs-publish-win      # trimmed single-file win-x64 exe (cross-compiled, for a quick look; CI builds the NativeAOT one)
+just cs-publish-linux    # linux-x64 NativeAOT binary, parsers linked in
 ```
 
 ## Status
@@ -298,6 +300,7 @@ to a surface from `ChartSurfaces` and keeps it on the app's theme.
 | Tire Grip tab | done 2026-10-29, reworked 2026-11-13 | `LineGridSpec` + `ScottPlotLineGrid` (bucket-percentile lines with markers, hover showing the bucket's metric, G and count); pressure/temperature switch and validated percentile entry, both remembered between runs; A/B overlay; stats tables (per-corner means and the comparison/detail tables) |
 | Save Profile | done 2026-10-29 | the vehicle profile window's Save button: merges every tab's channel names (first tab owns a shared key, so Suspension's shock entries win over Roll Gradient's — Python lets the last panel win), the Suspension motion ratios and the Roll Gradient track widths into a `VehicleProfile` saved under logger ID + vehicle for the session the active config edits; the loaded shock calibration is kept only while the entered ratios still derive from it |
 | Packaging check | 2026-10-29 | Linux NativeAOT publish: no trimming warnings, 25 MB, parser libraries under `runtimes/linux-x64/native/`, runs with the sample. Windows trimmed single-file publish: 42 MB exe; the parser DLLs must be `ExcludeFromSingleFile` (the bundler swallowed them and extracted them flat where `NativeLoader` could not find them — "Dll was not found" on load); verified on Windows loading a KK-F `.xrk` with a Japanese file name. CI now fails the publish jobs if the libraries are missing from the output |
+| NativeAOT packaging + AOT-compiled tests | 2026-11-14 | The parsers are linked into a NativeAOT publish as static libraries (`tools/build_native.py` keeps the host build's `.a`/`.lib` under `native/static/<rid>/`; `Directory.Build.targets` adds `DirectPInvoke` + `NativeLibrary` and drops `runtimes/` from the publish). Avalonia's graphics stack exists as shared libraries only (SkiaSharp, HarfBuzzSharp and, on Windows, ANGLE), and an operating system loads a shared library from a file: with `-p:InfernoSelfExtract=true` they are embedded in the executable and `App/NativeBundle.cs` unpacks them at start-up to a per-user cache folder named after their hashes (checked against the hashes on every start), loads them and answers the importing assemblies' lookups with them, so the publish is one file. Linking them in statically instead would need static builds of Skia, HarfBuzz and ANGLE (a third-party prebuilt package exists; building them ourselves is a Chromium-style build per library) and is left for later. The test project publishes the same way and CI runs it as a native executable on Windows and Linux before publishing the app, then checks the publish contents (`tools/check_publish.py`) and, on Windows, that the app starts on the sample session. Linux: one 42 MB executable, 322 tests pass AOT-compiled. Found by running the tests this way: saving a captured frame could crash in the PNG encoder (Avalonia.Skia encodes from a pixmap that does not keep its bitmap alive; optimised code let the finaliser free it), fixed in the tests with `SaveRender`; the app's own Save Image holds the bitmap in a `using`. View-model tests now run on the headless UI thread like the UI tests, which removes a race between a debounced run and the test thread (an intermittent index-out-of-range in CI) |
 | Track store + sector kernel | done 2026-10-29 | `Core/Tracks`: `TrackDefinition` (anchor + gate chords in lap order), `TrackYaml`, `TrackStore` (embedded `builtin_tracks.yaml` if present + user `tracks.yaml` beside `profiles.yaml`, nearest-anchor lookup), `SectorTimes` (gate crossings by segment intersection in a local frame, interpolated in time; split table with best sectors, theoretical best and best lap; `GateAcrossPath` for the editor). Verified on a synthetic square lap and on Fuji lap 14 with gates placed at known samples |
 | Sectors tab (split-times table + track editor) | done 2026-10-29, reworked 2026-11-13 | `SectorsViewModel` (track picker, "New track" anchored at the first GPS fix and named from the Venue metadata (the track display name for iRacing), nearest-track auto-select on load, gates kept in lap order, rename and gate names as edits of their own, undo, dirty/save with a prompt before unsaved edits are lost); `SplitTableControl` custom-drawn (lap rows, sector + lap-time columns right-aligned in tabular figures, best purple and bold / second-best green and semibold, theoretical-best row, row click or Up/Down highlights, copy as TSV); `TrackEditorControl` custom-drawn (reference lap fitted to the control, click the line to add a gate, click to select, drag or arrow keys to move along the line, Delete removes). Both take their colours and font from the theme and expose an automation peer |
 | Phase 3 remaining | next | Time/Distance delta-time against sector gates? (not planned); otherwise Phase 4 packaging polish and retiring the Python app |

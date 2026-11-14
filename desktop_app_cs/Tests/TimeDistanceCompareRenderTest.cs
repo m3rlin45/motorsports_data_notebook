@@ -1,6 +1,5 @@
 using Avalonia.Controls;
 using Avalonia.Headless;
-using Avalonia.Headless.XUnit;
 using Avalonia.Media.Imaging;
 using InfernoAnalyzer.App.ViewModels;
 using InfernoAnalyzer.App.Views;
@@ -14,8 +13,8 @@ public class TimeDistanceCompareRenderTest
 {
     private static readonly ProfileStore BuiltinOnly = new("/nonexistent/profiles.yaml");
 
-    [AvaloniaFact]
-    public async Task Two_sessions_render_in_one_strip_chart()
+    [Fact]
+    public Task Two_sessions_render_in_one_strip_chart() => Ui.Run(async () =>
     {
         var sample = SessionLoader.Load(SessionParityTests.SamplePath(), BuiltinOnly);
         var window = new MainWindowViewModel(BuiltinOnly);
@@ -35,6 +34,6 @@ public class TimeDistanceCompareRenderTest
         window.TimeDistance.Cursors.SetCursor(2000);
         var frame = top.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save(Path.Combine(RenderSmokeTests.RenderDir, "strip_chart_compare.png"), new PngBitmapEncoderOptions());
-    }
+        RenderSmokeTests.SaveRender(frame!, "strip_chart_compare.png");
+    });
 }
