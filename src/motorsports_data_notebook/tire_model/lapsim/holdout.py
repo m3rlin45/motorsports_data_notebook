@@ -23,7 +23,7 @@ with the car:
 All of it is computed on one projection, the layout's build laps on the
 build's reference line, by taking the per-bin median course of subsets of
 laps; the reference line is a coordinate system and one more
-re-projection moves V²κ by 0.0005–0.0055 g (gate B2). The voting
+re-projection moves V²κ by 0.0003–0.0013 g (gate B2). The voting
 comparisons of rungs 4 and 5 are also rebuilt from scratch, each side on
 its own reference line (``dq_max_strict``), and those donor tracks are
 saved for C3 and D1.
@@ -421,8 +421,31 @@ def check_track_holdout(
         beside += extra_laps_against_build(
             root, build, slow, shares, f"laps at {PACE_BAND[0]}–{PACE_BAND[1]} × session best"
         )
-        wet = here[(here["build_reason"] == "wet") & (ratio <= geo.BUILD_LAP_PACE)]
-        beside += extra_laps_against_build(root, build, wet, shares, "fast laps of wet sessions")
+        # Build laps of sessions the wetness model labels wet against the
+        # same car's other build laps (the build does not use the label).
+        label = index.drop_duplicates("session_id").set_index("session_id")["condition"]
+        is_wet = np.array([label.get(lap.session_id) == "wet" for lap in build.laps])
+        for car in np.unique(cars):
+            a, b = is_wet & (cars == car), ~is_wet & (cars == car)
+            if a.sum() < MIN_CELL_LAPS or b.sum() < MIN_CELL_LAPS:
+                continue
+            res = compare_profiles(
+                _kappa(build.proj, a, build.model.ds_m),
+                _kappa(build.proj, b, build.model.ds_m),
+                _speed(build.proj, a),
+                build.model.ds_m,
+                share_for(car, shares),
+            )
+            beside.append(
+                {
+                    "layout": layout,
+                    "what": "build laps of sessions labelled wet",
+                    "car": car,
+                    "laps": int(a.sum()),
+                    "days": len({lap.date for lap, m in zip(build.laps, a) if m}),
+                    **res,
+                }
+            )
 
     if not ladders:
         rep.items.append(GateItem("Ladder", None, "no layout with enough laps", ""))
