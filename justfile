@@ -130,7 +130,7 @@ cs-test:
 cs-format:
     cd desktop_app_cs && dotnet format InfernoAnalyzer.slnx
 
-# Run the spike window (optional: path to a fixture JSON)
+# Run the app (optional: a session file to load as Session A, or a fixture JSON for the Time/Distance demo)
 cs-run FILE="":
     #!/usr/bin/env bash
     set -euo pipefail

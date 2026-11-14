@@ -122,8 +122,8 @@ Roslyn UDFs, DuckDB SQL (all remain possible later).
 ```bash
 just cs-build            # dotnet build
 just cs-test             # unit + headless render tests (PNGs in Tests/bin/.../renders/)
-just cs-run              # launch the spike window (WSLg / X11 / Windows)
-just cs-run path.json    # ... with another fixture, e.g. App/fixtures/laps_dense.json
+just cs-run              # launch the app (WSLg / X11 / Windows)
+just cs-run FILE         # ... loading a session (.xrk/.xrz/.ibt) as Session A, or a fixture JSON as the Time/Distance demo
 just cs-fixture          # regenerate App/fixtures/laps.json (laps 14 & 12 + neighbours, 25 Hz)
 just cs-fixture-dense    # 13 top laps on the 500 Hz shock-pot timebase (git-ignored)
 just cs-profiles-fixture # regenerate Tests/Fixtures/profiles.json from the Python profiles module
@@ -254,8 +254,8 @@ cases to `Tests/Fixtures/profiles.json`; `ProfilesParityTests` replays them.
   channels by index. Channel order and each channel's first/last/min/max
   match exactly; sums to 1e-9 relative (numpy sums pairwise).
 - Build: `just cs-native` (host) or `--rids linux-x64 win-x64`; CI installs
-  Rust and builds the libraries before the C# test job. The App does not
-  reference `Core` yet (Phase 3 wires it in), so the publish jobs are unchanged.
+  Rust and builds the libraries before the C# test and publish jobs; the
+  publish jobs fail if the parser libraries are missing from their output.
 
 Phase 1 is complete. Left for the next libxrk release (0.14.0): re-pin
 libxrk to its tag and drop the source build from `cs-session-fixture`, as
@@ -280,7 +280,20 @@ summaries where large) from the Fuji 86 sample, laps 14 and 12.
 
 Phase 2 kernels are complete; what remains of the Python analysis surface
 (`report.py`, `session_runner.py`, the tire model and ETL) is out of the
-desktop app's scope. Next: Phase 3 views.
+desktop app's scope.
+
+### Phase 3 — in progress
+
+The App is MVVM on CommunityToolkit.Mvvm (source-generated, AOT-safe) with
+compiled bindings; views are thin: a `ChartHost` binds the view model's spec
+to a surface from `ChartSurfaces` and keeps it on the app's theme.
+
+| Piece | State | Notes |
+|---|---|---|
+| App shell | done 2026-10-29, reworked 2026-11-13 | `SessionViewModel` (open / close, profile resolution by logger + vehicle, lap list with gap to best, Best / Top 103 % / All / None, one lap selection per `LapScope`: top 103 % for the statistical tabs, the best two for the trace overlay), `AnalysisTabViewModel<TParameters, TResult>` (300 ms debounce, one run at a time, a superseded run is cancelled and never displayed, stale-when-hidden, status with a kind, an empty state instead of a stale chart), `MainWindowViewModel` (two slots, tab routing, open/recent/swap, settings), `MainWindow` (menu, session sidebar, status bar with busy indicator, key bindings, window-wide file drop), `cs-run file.xrz [file2.xrz]` loads Session A (and B), `cs-run file.json` shows a fixture |
+| Time/Distance tab | done 2026-10-29, reworked 2026-11-13 | `LapSeriesBuilder` extracts the chosen channels per selected lap (with neighbours) from the `LogFile`; channel picker (speed/throttle/brake preselected from the profile, the ticked set remembered per vehicle and kept across loads, panels reorderable); fastest lap is the delta reference. The lap list is the legend (`StripChartSpec.Legend` off): each lap keeps one `LapStyle` (hue, dashed past eight) on every tab. The view keeps its zoom while the same session is redrawn (`StripChartSpec.ViewKey`); the cursor can be pinned and stepped from the keyboard; read-outs wrap into columns when there are more laps than fit a panel |
+| Suspension tab | next | `HistogramGridSpec` + ScottPlot bars, config (channels, motion ratios, A/B sync), stats |
+| Roll Gradient, Driver, Tire Grip tabs | | |
 
 Lesson from corners: match numpy's operation order exactly (`x * (π/180)`,
 not `x * π / 180`; pairwise sums) before loosening a tolerance.
