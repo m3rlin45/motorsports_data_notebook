@@ -74,12 +74,15 @@ def synthetic_session(
     gyro_offset_dps: float = 0.0,
     noise_m: float = 0.0,
     slew: tuple[int, float] | None = None,
+    accel_delay_s: float | None = None,
     seed: int = 0,
 ) -> tuple[pd.DataFrame, dict]:
     """One recording: ``START_S_M`` before the gate, ``n_laps`` full laps and
     100 m of an in-lap. ``mirror`` drives it anticlockwise. ``slew`` is
     ``(lap_num, metres)``: a position excursion of that size, 0.6 s long, in
-    the middle of the lap's second straight. Returns the per-sample frame
+    the middle of the lap's second straight. ``accel_delay_s`` adds an
+    accelerometer (``lat_g``, ``long_g``) that reports the true ground-frame
+    accelerations that much late. Returns the per-sample frame
     (GPS and gyro columns on one 25 Hz clock) and the truth."""
     fine = 0.001
     total_m = n_laps * LENGTH_M + 100.0 - START_S_M
@@ -133,6 +136,12 @@ def synthetic_session(
             "yaw_rate_dps": gyro_scale * true_yaw + gyro_offset_dps,
         }
     )
+    if accel_delay_s is not None:
+        s_acc = np.interp(np.maximum(t - accel_delay_s, 0.0), t_fine, s_fine)
+        v_acc = speed_at(s_acc)
+        h_acc = stadium(s_acc)[2]
+        frame["lat_g"] = sign * v_acc * np.gradient(h_acc, t) / 9.80665
+        frame["long_g"] = np.gradient(v_acc, t) / 9.80665
     crossings = np.interp(np.arange(n_laps + 1) * LENGTH_M, s_fine, t_fine)
     truth = {
         "t": t,
@@ -187,6 +196,7 @@ def write_dataset(root: Path, sessions: dict[str, dict]) -> None:
                 "lap_length_m": LENGTH_M,
                 "lap_source": "logger",
                 "accel_source": "imu",
+                "kin_imu_lat_slope": 1.0,
                 "gyro_source": "imu",
                 "status": "ok",
             }

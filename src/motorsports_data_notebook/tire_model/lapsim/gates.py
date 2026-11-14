@@ -7,6 +7,7 @@ an item that is reported and not gated. :func:`check_geometry` is gate B1.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -484,7 +485,437 @@ def write_report(report: GateReport, out_dir: Path) -> Path:
     """Write the report as ``<out_dir>/<gate>_<slug>.md``; returns the path."""
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    slug = {"B1": "geometry"}.get(report.gate, "report")
+    slug = {"B1": "geometry", "B2": "track_truth"}.get(report.gate, "report")
     path = out_dir / f"{report.gate}_{slug}.md"
     path.write_text(report.to_markdown())
     return path
+
+
+# ------------------------------------------------------------------ gate B2
+
+#: Whole turns of a lap: +1 clockwise, 0 for Suzuka's figure of eight.
+LAYOUT_TURNS = {
+    "tsukuba_2000": 1,
+    "fuji_gp": 1,
+    "motegi_full": 1,
+    "sodegaura": 1,
+    "suzuka_full": 0,
+}
+TRACK_LAYOUTS = tuple(LAYOUT_TURNS)
+PROFILE_CLOSURE_MAX = 0.002
+LINE_GAP_MAX_M = 5.0
+REPROJECT_MAX_G = 0.01
+INERTIAL_RMS_MAX_G = 0.06
+APEX_SMOOTH_MEAN_MAX = 0.03
+APEX_SMOOTH_ANY_MAX = 0.06
+APEX_INERTIAL_MEAN_MAX = 0.05
+LOW_KAPPA = 0.004
+SIDE_MIN_KAPPA = 0.0015
+SIDE_MAX = 0.02
+GRADE_BETWEEN_CARS_MAX = 0.01
+MIN_CAR_LAPS = 10
+#: A car's own accelerometer profile is a median over its laps; under this
+#: many it is too rough to gate the Doppler profile against.
+INERTIAL_MIN_LAPS = 30
+
+
+def _corner_bins(corner: dict, ds: float, n: int) -> np.ndarray:
+    a, b = int(round(corner["s_in"] / ds)) % n, int(round(corner["s_out"] / ds)) % n
+    return np.arange(a, b) if a < b else np.arange(a, b + n) % n
+
+
+def corner_apexes(kappa: np.ndarray, corners: list[dict], ds: float) -> np.ndarray:
+    """The largest curvature in each corner's own direction (1/m, ≥ 0);
+    ``kappa`` is one profile or laps × bins."""
+    k = np.atleast_2d(kappa)
+    n = k.shape[1]
+    out = np.full((k.shape[0], len(corners)), np.nan)
+    for j, c in enumerate(corners):
+        with np.errstate(invalid="ignore"):
+            piece = c["sign"] * k[:, _corner_bins(c, ds, n)]
+            ok = np.isfinite(piece).mean(axis=1) > 0.9
+            out[ok, j] = np.nanmax(piece[ok], axis=1)
+    return out[0] if np.ndim(kappa) == 1 else out
+
+
+def lap_curvature(course: np.ndarray, ds: float, window_m: float) -> np.ndarray:
+    """``dψ/ds`` of every lap (laps × bins, bins 0..n) over ``window_m``,
+    at the first n bins; NaN within half a window of the lap's ends."""
+    half = window_m / 2.0 / ds
+    lo, frac = int(math.floor(half)), half - math.floor(half)
+    n = course.shape[1] - 1
+    idx = np.arange(n)
+
+    def _at(shift: int) -> np.ndarray:
+        j = idx + shift
+        ok = (j >= 0) & (j <= n)
+        out = np.full((course.shape[0], n), np.nan)
+        out[:, ok] = course[:, j[ok]]
+        return out
+
+    ahead = (1 - frac) * _at(lo) + frac * _at(lo + 1)
+    behind = (1 - frac) * _at(-lo) + frac * _at(-lo - 1)
+    return np.asarray((ahead - behind) / window_m)
+
+
+def _low_share(kappa: np.ndarray, speed: np.ndarray) -> float:
+    w = speed * speed * np.abs(kappa)
+    return float(np.sum(w[np.abs(kappa) < LOW_KAPPA]) / np.sum(w))
+
+
+def _rms(v: np.ndarray) -> float:
+    v = v[np.isfinite(v)]
+    return float(np.sqrt(np.mean(v * v))) if v.size else float("nan")
+
+
+def check_track_truth(
+    root: Path,
+    *,
+    cache_dir: Path | None = None,
+    tracks_dir: Path | None = None,
+    layouts: tuple[str, ...] = TRACK_LAYOUTS,
+) -> GateReport:
+    """Gate B2: the profile is right in scale, apex curvature and gentle
+    curvature, against sensors it was not built from. The checks against
+    the operators' drawings and the elevation model are not in yet."""
+    from ...tire_etl.kinematics import G_MS2
+    from . import track as trk
+
+    rep = GateReport("B2", "the track profile (`lapsim check-track-truth`)")
+    assembly, inertial, apex, low, side, grade_rows, fills, by_year = [], [], [], [], [], [], [], []
+    for layout in layouts:
+        build = trk.build_track_model(root, layout, cache_dir=cache_dir, measure_convergence=True)
+        model, proj = build.model, build.proj
+        if tracks_dir is not None:
+            model.save(Path(tracks_dir) / f"{layout}.json")
+        ds, n = model.ds_m, model.n
+        cars = np.array([lap.car for lap in build.laps])
+        days = np.array([lap.date for lap in build.laps])
+        speed = build.speed_median
+        made = model.meta["built_from"]
+        assembly.append(
+            {
+                "layout": layout,
+                "laps": made["n_laps"],
+                "sessions": made["n_sessions"],
+                "days": made["n_days"],
+                "length_m": model.length_m,
+                "turns": model.turns,
+                "closure_turns": build.closure_turns,
+                "line_gap_m": build.line_gap_m,
+                "reproject_g": build.reproject_rms_g,
+                "corners": len(model.corners),
+            }
+        )
+        for f in model.fills:
+            fills.append({"layout": layout, **f})
+
+        # Against the inertial profile: every car's laps, then car by car.
+        in_fill = np.zeros(n, dtype=bool)
+        for f in model.fills:
+            a, b = int(round(f["s_from"] / ds)), int(round(f["s_to"] / ds))
+            in_fill[(np.arange(a, b + 1) if a <= b else np.arange(a, b + 1 + n) % n)] = True
+        groups: list[tuple[str, np.ndarray]] = [("all", np.ones(len(cars), dtype=bool))]
+        groups += [(c, cars == c) for c in np.unique(cars)]
+        k_in_all = None
+        for name, rows in groups:
+            k_in, count = trk.inertial_kappa(build, rows)
+            if name == "all":
+                k_in_all = k_in
+            n_imu = int(np.isfinite(proj.lat_g[rows]).any(axis=1).sum())
+            if n_imu < trk.MIN_BIN_LAPS or not np.isfinite(k_in).any():
+                continue
+            with np.errstate(invalid="ignore"):
+                v = trk._fill_nan_periodic(np.nanmedian(proj.speed[rows][:, :-1], axis=0))
+            # A car is compared on its own line: its laps' Doppler profile
+            # against its laps' accelerometer. Against the pooled track the
+            # difference would also hold the car's line, which is B3's.
+            own = model.kappa_heat
+            if name != "all":
+                own = trk._kappa_from_course(proj.course[rows], ds)[0]
+            d = v * v * (own - k_in) / G_MS2
+            stretch = trk.lateral_difference_g(own, k_in, v, ds, trk.FILL_STRETCH_M)
+            stretch = np.where(in_fill | ~np.isfinite(k_in), 0.0, stretch)
+            worst = int(np.argmax(np.abs(stretch)))
+            inertial.append(
+                {
+                    "layout": layout,
+                    "car": name,
+                    "imu_laps": n_imu,
+                    "gated": "yes" if n_imu >= INERTIAL_MIN_LAPS else "no",
+                    "rms_g": _rms(d),
+                    "worst_20m_g": float(stretch[worst]),
+                    "at_s_m": worst * ds,
+                }
+            )
+
+        # Apexes: against the unsmoothed course, the accelerometer and the laps' own.
+        # What the 10 m window takes off an apex. A boxcar of width w lowers
+        # a peak by an amount that goes with w², so the profile over twice
+        # the window loses four times as much and a third of the difference
+        # between the two is the loss of the first. (The peak of the course
+        # differenced over one bin is no reference: the largest of a
+        # corner's noisy bins reads 2–5 % high.)
+        wide = trk.curvature(build.psi, ds, model.turns, 2.0 * trk.KAPPA_WINDOW_M)
+        a_track = corner_apexes(build.kappa_doppler, model.corners, ds)
+        a_wide = corner_apexes(wide, model.corners, ds)
+        a_in = np.full(len(model.corners), np.nan)
+        if k_in_all is not None:
+            # the accelerometer profile at the track's own bandwidth
+            smooth = trk._periodic_mean(
+                trk._fill_nan_periodic(k_in_all), int(round(trk.KAPPA_WINDOW_M / 2.0 / ds))
+            )
+            a_in = corner_apexes(smooth, model.corners, ds)
+        k_laps = lap_curvature(proj.course, ds, trk.KAPPA_WINDOW_M)
+        with np.errstate(invalid="ignore"):
+            a_laps = np.nanmedian(corner_apexes(k_laps, model.corners, ds), axis=0)
+        for j, c in enumerate(model.corners):
+            apex.append(
+                {
+                    "layout": layout,
+                    "s_apex_m": c["s_apex"],
+                    "sign": c["sign"],
+                    "turn_deg": c["turn_angle"],
+                    "radius_m": 1.0 / a_track[j],
+                    "apex_loss": math.log(a_track[j] / a_wide[j]) / 3.0,
+                    "dlog_vs_accelerometer": (
+                        math.log(a_track[j] / a_in[j]) if a_in[j] > 0 else float("nan")
+                    ),
+                    "peak_retention": a_track[j] / a_laps[j],
+                }
+            )
+
+        # Gentle curvature and its day-split floor.
+        uniq = np.unique(days)
+        halves = [np.isin(days, uniq[i::2]) for i in (0, 1)]
+        shares = [
+            _low_share(trk._kappa_from_course(proj.course[h], ds)[0], speed)
+            for h in halves
+            if h.sum() >= trk.MIN_BIN_LAPS
+        ]
+        low.append(
+            {
+                "layout": layout,
+                "share_below_0.004": _low_share(model.kappa_heat, speed),
+                "day_split_floor": abs(shares[0] - shares[1]) if len(shares) == 2 else np.nan,
+            }
+        )
+
+        # Right against left, per car, at the laps' own speed.
+        v_laps = proj.speed[:, :-1]
+        keep = np.abs(model.kappa_heat) >= SIDE_MIN_KAPPA
+        for car in np.unique(cars):
+            rows = cars == car
+            if rows.sum() < MIN_CAR_LAPS:
+                continue
+            vals = []
+            for kl, vl in zip(k_laps[rows], v_laps[rows]):
+                ok = keep & np.isfinite(kl) & np.isfinite(vl)
+                if ok.mean() < 0.3:
+                    continue
+                w = vl[ok] ** 2
+                kt, ko = model.kappa_heat[ok], kl[ok]
+                right = np.sum(w * np.maximum(kt, 0)) / np.sum(w * np.maximum(ko, 0))
+                left = np.sum(w * np.maximum(-kt, 0)) / np.sum(w * np.maximum(-ko, 0))
+                vals.append(math.log(right) - math.log(left))
+            if vals:
+                side.append(
+                    {
+                        "layout": layout,
+                        "car": car,
+                        "laps": len(vals),
+                        "right_minus_left": float(np.median(vals)),
+                    }
+                )
+
+        # Grade between cars.
+        grades = {}
+        for car in np.unique(cars):
+            rows = np.flatnonzero(cars == car)
+            if rows.size < MIN_CAR_LAPS:
+                continue
+            sub = trk.Projection(
+                grid=proj.grid,
+                **{
+                    k: getattr(proj, k)[rows]
+                    for k in ("course", "speed", "offset", "alt", "time", "lat_g")
+                },
+            )
+            grades[car] = trk._altitude(sub, [build.laps[i] for i in rows], ds)[1]
+        names = sorted(grades)
+        for i, a in enumerate(names):
+            for b in names[i + 1 :]:
+                grade_rows.append(
+                    {
+                        "layout": layout,
+                        "cars": f"{a} / {b}",
+                        "grade_rms": _rms(grades[a] - grades[b]),
+                    }
+                )
+
+        # Motegi was resurfaced for 2026: the profile per year before pooling.
+        years = np.array([d[:4] for d in days])
+        if layout == "motegi_full" and len(np.unique(years)) > 1:
+            per = {
+                y: trk._kappa_from_course(proj.course[years == y], ds)[0]
+                for y in np.unique(years)
+                if (years == y).sum() >= trk.MIN_BIN_LAPS
+            }
+            ys = sorted(per)
+            for i, a in enumerate(ys):
+                for b in ys[i + 1 :]:
+                    by_year.append(
+                        {
+                            "layout": layout,
+                            "years": f"{a} / {b}",
+                            "laps": f"{int((years == a).sum())} / {int((years == b).sum())}",
+                            "v2_dkappa_rms_g": _rms(speed * speed * (per[a] - per[b]) / G_MS2),
+                        }
+                    )
+
+    asm = pd.DataFrame(assembly)
+    closes = (
+        (asm["closure_turns"].abs() <= PROFILE_CLOSURE_MAX)
+        & (asm["line_gap_m"] <= LINE_GAP_MAX_M)
+        & (asm["turns"] == asm["layout"].map(LAYOUT_TURNS))
+    )
+    rep.items.append(
+        GateItem(
+            "Profile closes",
+            bool(closes.all()),
+            f"closure up to {asm['closure_turns'].abs().max():.5f} turns, line gap "
+            f"{asm['line_gap_m'].min():.1f}–{asm['line_gap_m'].max():.1f} m",
+            f"∮κ ds within {PROFILE_CLOSURE_MAX} turns of n; line closes within "
+            f"{LINE_GAP_MAX_M:g} m; n as expected",
+            md_table(asm, floats="{:.5g}"),
+        )
+    )
+    rep.items.append(
+        GateItem(
+            "Re-referencing converged",
+            bool((asm["reproject_g"] <= REPROJECT_MAX_G).all()),
+            f"one more re-projection moves V²κ by {asm['reproject_g'].min():.4f}–"
+            f"{asm['reproject_g'].max():.4f} g rms",
+            f"≤ {REPROJECT_MAX_G} g rms",
+        )
+    )
+    ine = pd.DataFrame(inertial)
+    ok_in = (ine["rms_g"] <= INERTIAL_RMS_MAX_G) & (
+        ine["worst_20m_g"].abs() <= trk.FILL_THRESHOLD_G
+    )
+    ok_in |= ine["gated"] == "no"
+    whole = ine[ine["car"] == "all"]
+    rep.items.append(
+        GateItem(
+            "Against the inertial profile",
+            bool(ok_in.all()),
+            f"per layout rms {whole['rms_g'].min():.3f}–{whole['rms_g'].max():.3f} g; "
+            f"{int((~ok_in).sum())} of {int((ine['gated'] == 'yes').sum())} gated rows outside",
+            f"rms ≤ {INERTIAL_RMS_MAX_G} g per layout, and per car on its own laps where it "
+            f"has {INERTIAL_MIN_LAPS} IMU-sourced laps; no {trk.FILL_STRETCH_M:g} m over "
+            f"{trk.FILL_THRESHOLD_G} g outside a fill",
+            md_table(ine, floats="{:.3g}"),
+        )
+    )
+    fl = pd.DataFrame(fills)
+    rep.items.append(
+        GateItem(
+            "Fills",
+            None,
+            f"{len(fl)} stretches replaced from the accelerometer profile",
+            "reported",
+            md_table(fl, floats="{:.4g}") if len(fl) else "",
+        )
+    )
+    apx = pd.DataFrame(apex)
+    by_lay = apx.groupby("layout").agg(
+        corners=("s_apex_m", "size"),
+        smooth_mean_abs=("apex_loss", lambda s: s.abs().mean()),
+        smooth_worst=("apex_loss", lambda s: s.abs().max()),
+        accel_mean=("dlog_vs_accelerometer", "mean"),
+        retention_min=("peak_retention", "min"),
+        retention_median=("peak_retention", "median"),
+    )
+    rep.items.append(
+        GateItem(
+            "Apexes not flattened",
+            bool(
+                (by_lay["smooth_mean_abs"] <= APEX_SMOOTH_MEAN_MAX).all()
+                and (by_lay["smooth_worst"] <= APEX_SMOOTH_ANY_MAX).all()
+            ),
+            f"mean |Δlog κ| {by_lay['smooth_mean_abs'].min():.3f}–"
+            f"{by_lay['smooth_mean_abs'].max():.3f}, worst corner "
+            f"{by_lay['smooth_worst'].max():.3f}",
+            f"apex κ lost to the 10 m window: mean ≤ {APEX_SMOOTH_MEAN_MAX}, any corner "
+            f"≤ {APEX_SMOOTH_ANY_MAX}",
+            md_table(by_lay.reset_index(), floats="{:.3g}"),
+        )
+    )
+    rep.items.append(
+        GateItem(
+            "Apex κ against the accelerometer",
+            bool((by_lay["accel_mean"].abs() <= APEX_INERTIAL_MEAN_MAX).all()),
+            "mean log ratio per layout "
+            + ", ".join(f"{k} {v:+.3f}" for k, v in by_lay["accel_mean"].items()),
+            f"mean within ± {APEX_INERTIAL_MEAN_MAX}",
+            md_table(apx, floats="{:.3g}"),
+        )
+    )
+    rep.items.append(
+        GateItem(
+            "Peak retention",
+            None,
+            f"profile apex over the laps' own, median per layout "
+            f"{by_lay['retention_median'].min():.3f}–{by_lay['retention_median'].max():.3f}, "
+            f"lowest corner {by_lay['retention_min'].min():.3f}",
+            "reported (for the car model, #205)",
+        )
+    )
+    rep.items.append(
+        GateItem(
+            "Share of lateral heat under 0.004 /m",
+            None,
+            ", ".join(f"{r['layout']} {r['share_below_0.004']:.3f}" for r in low),
+            "reported, with the day-split floor",
+            md_table(pd.DataFrame(low), floats="{:.3g}"),
+        )
+    )
+    sd = pd.DataFrame(side)
+    rep.items.append(
+        GateItem(
+            "Right against left at the laps' own speed",
+            None,
+            f"{int((sd['right_minus_left'].abs() > SIDE_MAX).sum())} of {len(sd)} layout × car "
+            f"rows over {SIDE_MAX}; largest {sd['right_minus_left'].abs().max():.3f}",
+            f"reported against {SIDE_MAX} (asked by #206)",
+            md_table(sd, floats="{:.3g}"),
+        )
+    )
+    gr = pd.DataFrame(grade_rows)
+    rep.items.append(
+        GateItem(
+            "Grade between cars",
+            bool((gr["grade_rms"] <= GRADE_BETWEEN_CARS_MAX).all()) if len(gr) else None,
+            (
+                f"{100 * gr['grade_rms'].min():.2f}–{100 * gr['grade_rms'].max():.2f} % rms"
+                if len(gr)
+                else "no layout with two cars"
+            ),
+            f"≤ {GRADE_BETWEEN_CARS_MAX:.0%} rms",
+            md_table(gr, floats="{:.3g}"),
+        )
+    )
+    if by_year:
+        yr = pd.DataFrame(by_year)
+        rep.items.append(
+            GateItem(
+                "Motegi by year",
+                None,
+                ", ".join(f"{r.years}: {r.v2_dkappa_rms_g:.3f} g" for r in yr.itertuples()),
+                "reported (resurfaced for 2026)",
+                md_table(yr, floats="{:.3g}"),
+            )
+        )
+    for name in ("Corner angles against the operators' drawings", "Altitude against the GSI DEM"):
+        rep.items.append(GateItem(name, None, "not measured yet", "see #204"))
+    return rep
