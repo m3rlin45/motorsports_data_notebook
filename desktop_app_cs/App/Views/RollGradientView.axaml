@@ -1,0 +1,35 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:InfernoAnalyzer.App.ViewModels"
+             xmlns:views="using:InfernoAnalyzer.App.Views"
+             xmlns:controls="using:InfernoAnalyzer.App.Controls"
+             x:Class="InfernoAnalyzer.App.Views.RollGradientView"
+             x:DataType="vm:RollGradientViewModel">
+  <DockPanel>
+    <Border DockPanel.Dock="Top" Classes="toolbar">
+      <DockPanel>
+        <ToggleButton DockPanel.Dock="Right" Content="Statistics" IsChecked="{Binding ShowStats}" Margin="8,0,0,0"
+                      ToolTip.Tip="Show the roll gradient table beside the chart" />
+        <Button DockPanel.Dock="Right" Content="Channels…"
+                Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).EditProfileCommand}"
+                ToolTip.Tip="Shock, lateral G and GPS channel names and the track widths for this vehicle" />
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="0,0,16,0">
+          <TextBlock Classes="label" Text="Min |G| for fit" />
+          <TextBox Classes="number" Text="{Binding MinLateralG.Text}"
+                   ToolTip.Tip="Samples below this lateral acceleration are left out of the fits" />
+        </StackPanel>
+        <TextBlock Classes="title" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                   Text="{Binding Spec.Title, FallbackValue='Roll gradient', TargetNullValue='Roll gradient'}" />
+      </DockPanel>
+    </Border>
+    <Grid ColumnDefinitions="*,Auto,Auto">
+      <Border Grid.Column="0" Classes="card flush">
+        <controls:ChartHost x:Name="Chart" Spec="{Binding Spec}" EmptyText="{Binding EmptyMessage}" />
+      </Border>
+      <GridSplitter Grid.Column="1" Width="8" IsVisible="{Binding ShowStats}" />
+      <Border Grid.Column="2" Classes="card" Width="480" MinWidth="160" IsVisible="{Binding ShowStats}">
+        <views:StatsPaneView Tables="{Binding Stats}" />
+      </Border>
+    </Grid>
+  </DockPanel>
+</UserControl>
