@@ -1,0 +1,60 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:InfernoAnalyzer.App.ViewModels"
+             xmlns:controls="using:InfernoAnalyzer.App.Controls"
+             x:Class="InfernoAnalyzer.App.Views.TimeDistanceView"
+             x:DataType="vm:TimeDistanceViewModel">
+  <DockPanel>
+    <Border DockPanel.Dock="Top" Classes="toolbar">
+      <DockPanel>
+        <Button x:Name="FitButton" DockPanel.Dock="Right" ToolTip.Tip="Fit the lap in view (Home, or double-click the chart)">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <Path Classes="icon" Data="{StaticResource IconFit}" />
+            <TextBlock Text="Fit" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="12" Margin="0,0,16,0" ToolTip.Tip="What the laps are plotted against (F9)">
+          <RadioButton x:Name="DistanceRadio" Content="Distance" GroupName="xaxis" IsChecked="{Binding IsDistance}" />
+          <RadioButton x:Name="TimeRadio" Content="Time" GroupName="xaxis" IsChecked="{Binding IsTime}" />
+        </StackPanel>
+        <TextBlock Classes="title" Text="Lap overlay" VerticalAlignment="Center" />
+      </DockPanel>
+    </Border>
+    <Grid ColumnDefinitions="216,8,*">
+      <Border Grid.Column="0" Classes="card">
+        <DockPanel>
+          <!-- What is plotted, in panel order, always in sight: untick to remove, drag to reorder. -->
+          <TextBlock DockPanel.Dock="Top" Classes="section" Text="Shown" Margin="0,0,0,4" IsVisible="{Binding HasShownChannels}" />
+          <ListBox x:Name="ShownList" DockPanel.Dock="Top" Classes="rows" ItemsSource="{Binding ShownChannels}" MaxHeight="220" Margin="0,0,0,12"
+                   IsVisible="{Binding HasShownChannels}" AutomationProperties.Name="Shown channels"
+                   ToolTip.Tip="Panels top to bottom. Drag to reorder; untick to remove.">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:ChannelChoiceViewModel">
+                <!-- The name is a TextBlock, not Content: a channel called speed_kmh must keep its underscore. -->
+                <CheckBox IsChecked="{Binding IsSelected}" IsTabStop="False" AutomationProperties.Name="{Binding Name}">
+                  <TextBlock Text="{Binding Name}" />
+                </CheckBox>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+
+          <TextBlock DockPanel.Dock="Top" Classes="section" Text="Channels" Margin="0,0,0,4" IsVisible="{Binding HasChannels}" />
+          <TextBlock DockPanel.Dock="Top" Classes="subtle" Text="Channels appear here once a session is open." TextWrapping="Wrap" IsVisible="{Binding !HasChannels}" />
+          <ListBox x:Name="ChannelList" Classes="rows" ItemsSource="{Binding Channels}" IsVisible="{Binding HasChannels}"
+                   AutomationProperties.Name="Channels">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:ChannelChoiceViewModel">
+                <CheckBox IsChecked="{Binding IsSelected}" IsTabStop="False" AutomationProperties.Name="{Binding Name}">
+                  <TextBlock Text="{Binding Name}" />
+                </CheckBox>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </DockPanel>
+      </Border>
+      <Border Grid.Column="2" Classes="card flush">
+        <controls:ChartHost x:Name="Chart" Spec="{Binding Spec}" CursorGroup="{Binding Cursors}" EmptyText="{Binding EmptyMessage}" />
+      </Border>
+    </Grid>
+  </DockPanel>
+</UserControl>

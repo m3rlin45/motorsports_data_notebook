@@ -5,8 +5,19 @@ namespace InfernoAnalyzer.App;
 internal static class Program
 {
     [STAThread]
-    public static void Main(string[] args) =>
-        BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+    public static void Main(string[] args)
+    {
+        CrashLog.Install();
+        try
+        {
+            BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+        }
+        catch (Exception e)
+        {
+            CrashLog.Write(e, "Fatal exception");
+            throw;
+        }
+    }
 
     /// <summary>Also used by the Avalonia designer.</summary>
     public static AppBuilder BuildAvaloniaApp()
