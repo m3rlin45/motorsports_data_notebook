@@ -632,6 +632,8 @@ class TrackBuild:
     proj: Projection  # on the final reference line; bins 0..n (the last is the first again)
     psi: np.ndarray  # the closed median course at bins 0..n
     kappa_doppler: np.ndarray  # κ before any fill from the inertial profile
+    ref_x: np.ndarray  # the reference line the laps are binned on (n + 1 vertices)
+    ref_y: np.ndarray
     closure_turns: float  # what the median course missed a whole turn by
     line_gap_m: float  # closing gap of the integrated line before it is spread
     reproject_rms_g: float | None = None  # how far one more re-projection moves V²κ
@@ -834,6 +836,8 @@ def build_from_laps(
         proj=proj,
         psi=psi,
         kappa_doppler=kappa_doppler,
+        ref_x=xr,
+        ref_y=yr,
         closure_turns=closure,
         line_gap_m=gap,
         reproject_rms_g=reproject_rms,

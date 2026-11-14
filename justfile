@@ -112,7 +112,7 @@ tire-predict-holdout *ARGS:
     uv run python -m motorsports_data_notebook.tire_model.cli holdout {{ARGS}}
 
 # Lap simulation gates (#202): `just tire-lapsim check-geometry` (B1),
-# `check-track-truth` (B2). Reports, caches and track JSON go to
+# `check-track-truth` (B2), `check-track-holdout` (B3). Reports, caches and track JSON go to
 # workspace/lapsim/; run under `ulimit -v 10000000`
 tire-lapsim *ARGS:
     uv run python -m motorsports_data_notebook.tire_model.lapsim.cli {{ARGS}}

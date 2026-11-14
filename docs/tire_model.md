@@ -1738,6 +1738,79 @@ asked for (resurfaced for 2026): every Motegi build lap is from 2025, so
 there is nothing to compare. Vertical curvature and the pit-exit join
 (asked by #206's review) are not built.
 
+#### B3. One track for every car (`holdout.py`, gate `check-track-holdout`, 2026-11-15)
+
+The statistic is profile against profile: the curvature from one group of
+laps against the curvature from another, both driven with the held-out
+group's median speed trace through production's `share_heat_rate` (lateral
+g from V²κ, longitudinal g from the speed trace, the held-out car's fitted
+force shares), giving the log ratio of lap-mean heat per tyre, Δq. A gate
+reads the largest of the four in magnitude. Cars without fitted shares are
+read through a stand-in (SFJ through the FJ's, EK9 and RX8 through the
+Inferno 86's): the statistic needs a lens, not that car's heat model.
+
+The ladder puts a difference between cars beside the differences that
+have nothing to do with the car: (1) random halves of a car's laps within
+each day, (2) random halves of its days, (3) its early days against its
+late days, (4) KK-F against KK-SII, (5) each class against every other car
+at the layout. A comparison between cars votes when the held-out group has
+three days and the donor laps three days and thirty laps.
+
+Everything is computed on one projection (subsets of the build laps on
+the build's reference line). The voting comparisons were also rebuilt with
+each side on its own reference line: the statistic moved by at most 0.003.
+
+Largest per-tyre |Δq|, by layout:
+
+| Layout | Laps in a day (P90) | Days (P90) | Early / late days | KK-F / KK-SII | Class against the rest | Verdict |
+|---|---|---|---|---|---|---|
+| Tsukuba | 0.006 | 0.006 | 0.006–0.007 | **0.017** | **0.009–0.011** (FJ, Inferno 86) | one track; bias carried to E1 |
+| Fuji | 0.005 | 0.006 | 0.003 | 0.011–0.012 | **0.006–0.007** (FJ, Inferno 86); 0.007 (SFJ) | one track; bias carried to E1 |
+| Suzuka | 0.005 | 0.003 | 0.003 | 0.004–0.005 | 0.004–0.005 (FJ, SFJ) | no vote |
+| Sodegaura | 0.010 | 0.006 | 0.001 | | 0.008–0.013 (Inferno 86, RX8) | no vote |
+| Motegi | 0.009 | | | | 0.020–0.025 (EK9, Inferno 86, SFJ) | no vote |
+
+Bold figures vote. **Gate: pass.** No layout is above the 0.05 stop
+bound; the two layouts that can vote are under the 0.02 bound for one
+shared track. Read plainly:
+
+- **The day-to-day floor is about 0.006.** The same car on different days
+  differs by that much in per-tyre heat through the track profile alone.
+- **At Fuji the cars agree at the floor** (0.006 and 0.007 against 0.006),
+  on the two voting comparisons there (the FJ class and the Inferno 86,
+  each against every other car).
+- **At Tsukuba the cars differ by two to three times the floor, and the
+  two formula cars differ from each other (0.017) more than the formula
+  cars differ from the Inferno 86 (0.011).** That is the review's
+  expectation: the same-class and other-class effects there are the same
+  size and cannot be told from era, and the Inferno 86 has only 43 laps
+  on three days there. The
+  bias, up to 0.017, is carried into E1's 0.03 budget. With each side on
+  its own reference line the KK-F / KK-SII figure is 0.014–0.015.
+- **Three layouts cannot vote.** Suzuka's non-voting comparisons sit at
+  its floor. Sodegaura's are at twice the floor on an RX8 with 13 laps.
+  Motegi's read 0.020–0.025, above the 0.02 bound, with donors of 26 laps
+  or held-out groups of 11–15: #207's review measured that a track from
+  ten laps on two days shifts per-tyre heat by 2.6 %, so this is the size
+  thin data gives and it is not evidence about Motegi either way.
+
+Beside the ladder (not gated):
+
+- *The line moves with pace.* A car's laps at 1.04–1.12 × its session best
+  against its own build laps: 0.003–0.018 (largest: KK-F at Tsukuba 0.018,
+  Inferno 86 there 0.013, Sodegaura 0.009), with less lateral heat in both
+  right and left turns in six of the seven cells (−0.005 to −0.017). This
+  goes to D2.
+- *Wet sessions.* The fast laps of sessions the wetness model labels wet
+  against the same car's build laps: 0.004–0.015. At Tsukuba the Inferno
+  86's 52 such laps differ from its 43 build laps by 0.015, the same size
+  as the differences between cars there.
+- The donor tracks of the voting comparisons and the held-out groups'
+  speed traces are saved in `workspace/lapsim/tracks/folds/` for C3 and D1.
+- Not done: the per-lap metric of the first revision (both sides smoothed
+  over 0.5 s) as distance from the same-car floor, and damp against dry
+  sessions within the build.
+
 ## 3. Test methodology
 
 ### 3.1 Two distinct validations
