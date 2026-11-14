@@ -1,0 +1,52 @@
+<Project>
+
+  <!--
+    A NativeAOT publish links the libxrk/libibt FFI libraries in as static
+    libraries (built for the host by tools/build_native.py into
+    native/static/<rid>/) and calls them directly, so no parser library is
+    looked up at run time and none is published. Applies to every project
+    published with PublishAot (the app and the tests) once the static
+    libraries for its runtime exist; otherwise the shared libraries under
+    runtimes/ are used (see Core/Io/NativeLoader.cs).
+  -->
+  <PropertyGroup Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' != ''">
+    <_InfernoStaticDir>$(MSBuildThisFileDirectory)native/static/$(RuntimeIdentifier)/</_InfernoStaticDir>
+    <_InfernoStaticPrefix Condition="!$(RuntimeIdentifier.StartsWith('win-'))">lib</_InfernoStaticPrefix>
+    <_InfernoStaticExtension>.a</_InfernoStaticExtension>
+    <_InfernoStaticExtension Condition="$(RuntimeIdentifier.StartsWith('win-'))">.lib</_InfernoStaticExtension>
+    <_InfernoXrkStatic>$(_InfernoStaticDir)$(_InfernoStaticPrefix)xrk_ffi$(_InfernoStaticExtension)</_InfernoXrkStatic>
+    <_InfernoIbtStatic>$(_InfernoStaticDir)$(_InfernoStaticPrefix)ibt_ffi$(_InfernoStaticExtension)</_InfernoIbtStatic>
+    <InfernoStaticNative Condition="'$(InfernoStaticNative)' == '' and Exists('$(_InfernoXrkStatic)') and Exists('$(_InfernoIbtStatic)')">true</InfernoStaticNative>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(InfernoStaticNative)' == 'true'">
+    <DirectPInvoke Include="xrk_ffi" />
+    <DirectPInvoke Include="ibt_ffi" />
+    <NativeLibrary Include="$(_InfernoXrkStatic)" />
+    <NativeLibrary Include="$(_InfernoIbtStatic)" />
+  </ItemGroup>
+
+  <!--
+    What the Rust standard library needs from Windows: rustc's native-static-libs for the MSVC
+    target, plus synchronization.lib for WaitOnAddress/WakeByAddress* (std's mutex and condvar),
+    which rustc resolves by itself when it does the final link but a foreign linker has to be given.
+  -->
+  <ItemGroup Condition="'$(InfernoStaticNative)' == 'true' and $(RuntimeIdentifier.StartsWith('win-'))">
+    <LinkerArg Include="kernel32.lib;ntdll.lib;userenv.lib;ws2_32.lib;dbghelp.lib;bcrypt.lib;advapi32.lib;synchronization.lib" />
+  </ItemGroup>
+
+  <!-- A static publish asked for by name must not quietly fall back to the shared libraries. -->
+  <Target Name="InfernoRequireStaticNative" BeforeTargets="LinkNative" Condition="'$(InfernoRequireStaticNative)' == 'true'">
+    <Error Condition="'$(InfernoStaticNative)' != 'true'"
+           Text="No static parser libraries for $(RuntimeIdentifier) under $(_InfernoStaticDir): run tools/build_native.py on this machine first." />
+  </Target>
+
+  <!-- The shared parser libraries are not needed by a static publish: keep them out of it. -->
+  <Target Name="InfernoDropSharedNative" AfterTargets="ComputeResolvedFilesToPublishList" Condition="'$(InfernoStaticNative)' == 'true'">
+    <ItemGroup>
+      <_InfernoSharedNative Include="@(ResolvedFileToPublish)" Condition="$([System.String]::Copy('%(ResolvedFileToPublish.RelativePath)').Replace('\', '/').StartsWith('runtimes/'))" />
+      <ResolvedFileToPublish Remove="@(_InfernoSharedNative)" />
+    </ItemGroup>
+  </Target>
+
+</Project>

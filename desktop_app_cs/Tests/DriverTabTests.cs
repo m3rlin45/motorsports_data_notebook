@@ -1,6 +1,5 @@
 using Avalonia.Controls;
 using Avalonia.Headless;
-using Avalonia.Headless.XUnit;
 using Avalonia.Media.Imaging;
 using InfernoAnalyzer.App.ViewModels;
 using InfernoAnalyzer.App.Views;
@@ -32,7 +31,7 @@ public class DriverTabTests
     }
 
     [Fact]
-    public async Task Driver_tab_builds_summary_detail_and_map_with_the_auto_throttle_threshold()
+    public Task Driver_tab_builds_summary_detail_and_map_with_the_auto_throttle_threshold() => Ui.Run(async () =>
     {
         var window = await LoadedWindow();
         var tab = window.Driver;
@@ -65,10 +64,10 @@ public class DriverTabTests
 
         Assert.Equal(2, tab.Stats.Count);
         Assert.Equal(tab.Corners.Count, tab.Stats[0].Rows.Count);
-    }
+    });
 
     [Fact]
-    public void Box_statistics_follow_numpy_and_matplotlib_conventions()
+    public Task Box_statistics_follow_numpy_and_matplotlib_conventions() => Ui.Run(() =>
     {
         var box = BoxSpec.From(1, new double[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 100 }, "#000000", "tip");
 
@@ -80,10 +79,10 @@ public class DriverTabTests
         Assert.Equal(new double[] { 100 }, box.Fliers);
         Assert.Equal(14.5, box.Mean);
         Assert.Contains("Median 5.50", DriverChartBuilder.BoxStatsText(new double[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 100 }, "Turn 1 (L)", "%"));
-    }
+    });
 
-    [AvaloniaFact]
-    public async Task Driver_views_render()
+    [Fact]
+    public Task Driver_views_render() => Ui.Run(async () =>
     {
         var viewModel = await LoadedWindow();
         var view = new DriverView { DataContext = viewModel.Driver };
@@ -101,12 +100,12 @@ public class DriverTabTests
             Avalonia.Threading.Dispatcher.UIThread.RunJobs();
             var frame = window.CaptureRenderedFrame();
             Assert.NotNull(frame);
-            frame!.Save(Path.Combine(RenderSmokeTests.RenderDir, $"driver_{name}.png"), new PngBitmapEncoderOptions());
+            RenderSmokeTests.SaveRender(frame!, $"driver_{name}.png");
         }
-    }
+    });
 
     [Fact]
-    public async Task Session_b_without_laps_is_not_compared()
+    public Task Session_b_without_laps_is_not_compared() => Ui.Run(async () =>
     {
         var window = await LoadedWindow();
         window.SessionB.Apply(Sample.Value, SessionParityTests.SamplePath());
@@ -117,10 +116,10 @@ public class DriverTabTests
         Assert.StartsWith("Done - ", window.Driver.Status);
         Assert.StartsWith("Driver Consistency:", window.Driver.SummarySpec!.Title);
         Assert.Empty(window.Driver.SummarySpec.Legend);
-    }
+    });
 
     [Fact]
-    public async Task Opening_a_corner_shows_its_detail_even_when_it_is_already_selected()
+    public Task Opening_a_corner_shows_its_detail_even_when_it_is_already_selected() => Ui.Run(async () =>
     {
         var window = await LoadedWindow();
         var tab = window.Driver;
@@ -149,10 +148,10 @@ public class DriverTabTests
         // Every map apex names its corner, so a click on it can open that corner.
         var ids = tab.MapSpec!.Points.Where(p => p.Id >= 0).Select(p => p.Id).ToList();
         Assert.Equal(Enumerable.Range(0, tab.Corners.Count), ids.OrderBy(i => i));
-    }
+    });
 
-    [AvaloniaFact]
-    public async Task Clicking_a_corner_in_the_summary_or_on_the_map_opens_it()
+    [Fact]
+    public Task Clicking_a_corner_in_the_summary_or_on_the_map_opens_it() => Ui.Run(async () =>
     {
         var viewModel = await LoadedWindow();
         var tab = viewModel.Driver;
@@ -173,10 +172,10 @@ public class DriverTabTests
         var apex = tab.MapSpec!.Points.First(p => p.Id == 4);
         Assert.Equal(4, map.PointNear(new global::ScottPlot.Coordinates(apex.X, apex.Y)));
         Assert.Equal(-1, map.PointNear(new global::ScottPlot.Coordinates(apex.X + 5000, apex.Y)));
-    }
+    });
 
     [Fact]
-    public void Each_tab_shows_its_own_lap_selection_and_changes_reach_only_the_tabs_that_use_it()
+    public Task Each_tab_shows_its_own_lap_selection_and_changes_reach_only_the_tabs_that_use_it() => Ui.Run(() =>
     {
         var window = new MainWindowViewModel(BuiltinOnly);
         window.SessionA.Apply(Sample.Value, SessionParityTests.SamplePath());
@@ -203,5 +202,5 @@ public class DriverTabTests
         Assert.All(window.SessionA.Laps, l => Assert.Null(l.Style));
         window.Driver.ViewMode = DriverViewMode.Detail;
         Assert.NotNull(window.SessionA.Laps.First(l => l.Num == 12).Style);
-    }
+    });
 }
