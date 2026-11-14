@@ -1,0 +1,53 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:InfernoAnalyzer.App.ViewModels"
+        xmlns:views="using:InfernoAnalyzer.App.Views"
+        x:Class="InfernoAnalyzer.App.Views.ProfileWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="Vehicle profile" Width="640" Height="460" MinWidth="560" MinHeight="380" ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner" Background="{DynamicResource AppPageBrush}">
+  <!--
+    Channel names, motion ratios, track widths and thresholds are set once per
+    vehicle, so they live here rather than taking a third of the main window.
+    The window is not modal: the charts behind it update as the values change.
+  -->
+  <DockPanel Margin="16">
+    <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,12">
+      <TextBlock Classes="title" Text="Channel names and vehicle constants" />
+      <TextBlock Classes="subtle" Text="{Binding ProfileTarget}" TextWrapping="Wrap" />
+    </StackPanel>
+
+    <StackPanel x:Name="Buttons" DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,12,0,0">
+      <Button x:Name="CloseButton" Content="Close" IsCancel="True" MinWidth="88" />
+    </StackPanel>
+
+    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="16" Margin="0,0,0,12" IsVisible="{Binding SessionB.HasSession}">
+      <RadioButton Content="Session A" GroupName="profilesession" IsChecked="{Binding IsProfileSessionA}" />
+      <RadioButton Content="Session B" GroupName="profilesession" IsChecked="{Binding IsProfileSessionB}" />
+      <CheckBox Content="Keep B in sync with A" IsChecked="{Binding SyncProfileWithA}"
+                ToolTip.Tip="Session B uses Session A's values (the same car in both sessions)" />
+    </StackPanel>
+
+    <Grid ColumnDefinitions="152,12,*">
+      <ListBox Grid.Column="0" Classes="rows" ItemsSource="{Binding ConfigSections}" SelectedItem="{Binding SelectedConfigSection}" AutomationProperties.Name="Pages">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:ConfigSection">
+            <TextBlock Text="{Binding Header}" VerticalAlignment="Center" Margin="4,2" />
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+      <Border Grid.Column="2" Classes="card">
+        <DockPanel>
+          <Button DockPanel.Dock="Bottom" Classes="quiet" Content="Reset this page to defaults" Command="{Binding ResetConfigSectionCommand}" HorizontalAlignment="Left" Margin="-8,8,0,0" />
+          <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <ContentControl Content="{Binding SelectedConfigSection.Config}">
+              <ContentControl.ContentTemplate>
+                <views:ConfigViewLocator />
+              </ContentControl.ContentTemplate>
+            </ContentControl>
+          </ScrollViewer>
+        </DockPanel>
+      </Border>
+    </Grid>
+  </DockPanel>
+</Window>
