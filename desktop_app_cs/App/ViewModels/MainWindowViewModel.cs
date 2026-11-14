@@ -39,7 +39,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         TimeDistance = new TimeDistanceViewModel(SessionA, SessionB, Settings);
         Suspension = new SuspensionViewModel(SessionA, SessionB);
         RollGradient = new RollGradientViewModel(SessionA, SessionB, Suspension.SuspensionConfig);
-        Tabs = new ObservableCollection<AnalysisTabViewModel> { TimeDistance, Suspension, RollGradient };
+        Driver = new DriverViewModel(SessionA, SessionB);
+        Tabs = new ObservableCollection<AnalysisTabViewModel> { TimeDistance, Suspension, Driver, RollGradient };
         ConfigSections = Tabs.Where(t => t.Config is ChannelConfigViewModel).Select(t => new ConfigSection(t.Header, (ChannelConfigViewModel)t.Config!)).ToList();
         _selectedConfigSection = ConfigSections.FirstOrDefault();
 
@@ -92,6 +93,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     /// <summary>The Roll Gradient tab.</summary>
     public RollGradientViewModel RollGradient { get; }
+
+    /// <summary>The Driver Consistency tab.</summary>
+    public DriverViewModel Driver { get; }
 
     /// <summary>Analysis tabs in display order.</summary>
     public ObservableCollection<AnalysisTabViewModel> Tabs { get; }
