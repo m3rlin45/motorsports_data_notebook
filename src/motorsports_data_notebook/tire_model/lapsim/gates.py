@@ -643,6 +643,7 @@ def check_track_truth(
     dem_rows: list[dict] = []
     notches: list[dict] = []
     wet_rows: list[dict] = []
+    pit_rows: list[dict] = []
     index = geo.clean_lap_index(root, cache_dir=cache_dir)
     try:
         from . import holdout
@@ -653,6 +654,10 @@ def check_track_truth(
     for layout in layouts:
         build = trk.build_track_model(root, layout, cache_dir=cache_dir, measure_convergence=True)
         model, proj = build.model, build.proj
+        from . import pit as pitmod
+
+        model.meta["pit"] = pitmod.pit_exit(root, build)
+        pit_rows.append({"layout": layout, **model.meta["pit"]})
         if tracks_dir is not None:
             model.save(Path(tracks_dir) / f"{layout}.json")
         ds, n = model.ds_m, model.n
@@ -863,6 +868,19 @@ def check_track_truth(
                         "grade_max_dem": float(np.max(g_dem[keep_alt])),
                         "grade_min_logged": float(np.min(model.grade)),
                         "grade_min_dem": float(np.min(g_dem[keep_alt])),
+                        "vertical_g_min": float(
+                            np.min((speed**2 * model.kappa_v / G_MS2)[keep_alt])
+                        ),
+                        "vertical_g_max": float(
+                            np.max((speed**2 * model.kappa_v / G_MS2)[keep_alt])
+                        ),
+                        "vertical_g_rms_vs_dem": _rms(
+                            (
+                                speed**2
+                                * (model.kappa_v - trk.vertical_curvature(g_dem, ds))
+                                / G_MS2
+                            )[keep_alt]
+                        ),
                         "notches": len(zones),
                     }
                 )
@@ -1081,6 +1099,22 @@ def check_track_truth(
         )
     else:
         rep.items.append(GateItem("Altitude against the GSI DEM", None, "not measured", "see #204"))
+    pt = pd.DataFrame(pit_rows)
+    if "s_join_m" in pt.columns:
+        rep.items.append(
+            GateItem(
+                "Pit exit",
+                None,
+                ", ".join(
+                    f"{lay} {s_join:.0f} m after {roll:.0f} s"
+                    for lay, s_join, roll in zip(pt["layout"], pt["s_join_m"], pt["rolling_s"])
+                    if np.isfinite(s_join)
+                ),
+                "reported (for the out-lap, #206): where an out-lap joins the driven line, "
+                "and how long it had been rolling",
+                md_table(pt, floats="{:.4g}"),
+            )
+        )
     if wet_rows:
         wt = pd.DataFrame(wet_rows)
         built = wt[wt["built"] == "yes"]

@@ -549,6 +549,9 @@ class TrackModel:
     fills: list[dict] = field(default_factory=list)
     gate: dict = field(default_factory=dict)
     meta: dict = field(default_factory=dict)
+    #: Vertical curvature d(grade)/ds (1/m): positive in a compression,
+    #: negative over a crest. The normal load goes with 1 + V²·kappa_v / g.
+    kappa_v: np.ndarray = field(default_factory=lambda: np.zeros(0))
 
     @property
     def n(self) -> int:
@@ -584,6 +587,7 @@ class TrackModel:
             "y_m": _list(self.y_m, 3),
             "alt_m": _list(self.alt_m, 3),
             "grade": _list(self.grade, 5),
+            "kappa_v_1_per_m": _list(self.kappa_v, 7),
             "n_laps": [int(v) for v in self.n_laps],
             "kappa_se": _list(self.kappa_se, 7),
             "corners": self.corners,
@@ -612,6 +616,7 @@ class TrackModel:
             fills=list(data.get("fills", [])),
             gate=dict(data.get("sf_gate", {})),
             meta=dict(data.get("meta", {})),
+            kappa_v=_arr("kappa_v_1_per_m") if "kappa_v_1_per_m" in data else np.zeros(0),
         )
 
     def save(self, path: Path) -> Path:
@@ -716,6 +721,14 @@ def _altitude(
     return profile, grade
 
 
+def vertical_curvature(grade: np.ndarray, ds: float) -> np.ndarray:
+    """``d(grade)/ds`` of a closed profile over :data:`GRADE_WINDOW_M`
+    (the grade is itself a difference over that window, so this is the
+    altitude's second difference over twice it)."""
+    half = max(int(round(GRADE_WINDOW_M / 2.0 / ds)), 1)
+    return np.asarray((np.roll(grade, -half) - np.roll(grade, half)) / (2 * half * ds))
+
+
 def _kappa_from_course(course: np.ndarray, ds: float) -> tuple[np.ndarray, np.ndarray, int, float]:
     psi, turns = median_course(course)
     psi, closure = close_course(psi, turns)
@@ -818,6 +831,7 @@ def build_from_laps(
         ),
         corners=corner_table(kappa, ds),
         fills=fills,
+        kappa_v=vertical_curvature(grade, ds),
         gate={"lat": gate.lat, "lon": gate.lon},
         meta={
             "venue_id": venue.venue_id,
@@ -1049,4 +1063,5 @@ __all__ = [
     "project_laps",
     "project_onto",
     "resample_line",
+    "vertical_curvature",
 ]
