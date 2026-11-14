@@ -149,4 +149,141 @@ public static class Numerics
 
     /// <summary><c>numpy.sign</c>.</summary>
     public static int Sign(double v) => v > 0 ? 1 : v < 0 ? -1 : 0;
+
+    /// <summary><c>numpy.argmin</c>: index of the first minimum.</summary>
+    public static int ArgMin(ReadOnlySpan<double> values)
+    {
+        var best = 0;
+        for (var i = 1; i < values.Length; i++)
+        {
+            if (values[i] < values[best])
+            {
+                best = i;
+            }
+        }
+
+        return best;
+    }
+
+    /// <summary><c>numpy.max</c> (NaN for an empty span).</summary>
+    public static double Max(ReadOnlySpan<double> values)
+    {
+        if (values.Length == 0)
+        {
+            return double.NaN;
+        }
+
+        var best = values[0];
+        for (var i = 1; i < values.Length; i++)
+        {
+            best = Math.Max(best, values[i]);
+        }
+
+        return best;
+    }
+
+    /// <summary><c>numpy.min</c> (NaN for an empty span).</summary>
+    public static double Min(ReadOnlySpan<double> values)
+    {
+        if (values.Length == 0)
+        {
+            return double.NaN;
+        }
+
+        var best = values[0];
+        for (var i = 1; i < values.Length; i++)
+        {
+            best = Math.Min(best, values[i]);
+        }
+
+        return best;
+    }
+
+    /// <summary><c>numpy.searchsorted(a, v)</c> (side="left"): first index with a[i] ≥ v.</summary>
+    public static int SearchSortedLeft(ReadOnlySpan<double> sorted, double value)
+    {
+        int lo = 0, hi = sorted.Length;
+        while (lo < hi)
+        {
+            var mid = (lo + hi) >> 1;
+            if (sorted[mid] < value)
+            {
+                lo = mid + 1;
+            }
+            else
+            {
+                hi = mid;
+            }
+        }
+
+        return lo;
+    }
+
+    /// <summary><c>numpy.searchsorted(a, v, side="right")</c>: first index with a[i] &gt; v.</summary>
+    public static int SearchSortedRight(ReadOnlySpan<double> sorted, double value)
+    {
+        int lo = 0, hi = sorted.Length;
+        while (lo < hi)
+        {
+            var mid = (lo + hi) >> 1;
+            if (sorted[mid] <= value)
+            {
+                lo = mid + 1;
+            }
+            else
+            {
+                hi = mid;
+            }
+        }
+
+        return lo;
+    }
+
+    /// <summary>
+    /// <c>numpy.convolve(a, kernel, mode="same")</c>: the central
+    /// <c>len(a)</c> samples of the full convolution, zero-padded.
+    /// </summary>
+    public static double[] ConvolveSame(ReadOnlySpan<double> a, ReadOnlySpan<double> kernel)
+    {
+        var n = a.Length;
+        var m = kernel.Length;
+        var result = new double[n];
+        if (n == 0 || m == 0)
+        {
+            return result;
+        }
+
+        // full[k] = Σ a[i] kernel[k - i]; "same" takes full[(m-1)/2 .. (m-1)/2 + n).
+        var offset = (m - 1) / 2;
+        for (var i = 0; i < n; i++)
+        {
+            var k = i + offset;
+            var sum = 0.0;
+            var jLo = Math.Max(0, k - n + 1);
+            var jHi = Math.Min(m - 1, k);
+            for (var j = jLo; j <= jHi; j++)
+            {
+                sum += a[k - j] * kernel[j];
+            }
+
+            result[i] = sum;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// <c>infer_channel_scale</c>: 1.0 for 0–1 data, 100.0 for 0–100 data
+    /// (max |x| above 1.5).
+    /// </summary>
+    public static double InferChannelScale(ReadOnlySpan<double> values)
+    {
+        var maxAbs = 0.0;
+        foreach (var v in values)
+        {
+            maxAbs = Math.Max(maxAbs, Math.Abs(v));
+        }
+
+        return maxAbs <= 1.5 ? 1.0 : 100.0;
+    }
 }
