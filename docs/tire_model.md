@@ -1509,6 +1509,332 @@ KK-SII RR appears to have had **a single bad sensor that ran across 5
 consecutive Fuji sessions on 2026-02-25/26**, and KK-SII RL had a similar
 recurring failure across **2 Tsukuba sessions on 2026-03-22**.
 
+### 2.12 Lap simulation: the track model (issues #202, #204)
+
+Exploration code in `tire_model/lapsim/`; nothing here is read by the
+production model. Reports and caches go to `workspace/lapsim/` (not
+committed), so the gate numbers are recorded here. Commands:
+`just tire-lapsim <command>`, under `ulimit -v 10000000`.
+
+#### B1. Lap geometry on one clock (`geometry.py`, gate `check-geometry`, 2026-11-15)
+
+What a track is built from is computed per session at query time; the
+extractor and the dataset are untouched.
+
+- **Course over ground from the stored GPS yaw rate.** `gps_yaw_rate_dps`
+  is libxrk's one-sample difference of the Doppler course `atan2(vE, vN)`
+  over the raw timecode step, so `Σ yaw·Δt` gives the course back exactly.
+  An irregular step (35–120 ms) is summed as logged, since the stored rate
+  was divided by that same step. The sum is cut only at a non-finite rate, a
+  non-positive step or a gap over 0.12 s; each piece's constant is set from
+  the heading of the position chords, which makes the course absolute.
+- **Lag.** The receiver's velocity solution trails its position solution.
+  `course − chord heading = −τ·ω`, and the slope on the yaw rate is the
+  session's `τ`. Speed, course and `gps_lat_g` are handed out at `t + τ`, on
+  the position clock; segments C–F take V from this loader.
+- **A local frame on the WGS84 ellipsoid.** The extractor's `_local_xy`
+  uses one sphere radius: at 36° N that reads north-south distances 0.21 %
+  long and east-west ones 0.23 % short. A curvature profile cannot carry
+  an anisotropy, so `geometry.local_xy` uses the ellipsoid's two radii of
+  curvature. The origin is the layout's start/finish gate, so every session
+  of a venue shares the frame. `_local_xy` and `position_kinematics` are
+  left as they are (they are the reference the IMU verdicts were scored
+  against; the 0.2 % is far inside those bands).
+- **Laps keep `lap_num`.** The gate crossing only places `s = 0`: a lap is
+  the crossing interval that coincides with the dataset lap of that number
+  (common time ≥ 98 % of the longer of the two).
+- **Extrapolated crossings.** The logger closes a file on its own beacon,
+  3–5 m before the registered gate point, so the last lap of a file has no
+  fix beyond the line and no crossing. Where a recording stops within 10 m
+  before the line (or starts within 10 m after it), the crossing is put at
+  `t + distance / speed`. This was the unexplained "one lap in each of 77
+  sessions": 102 full laps at a normal lap time, in 87 sessions, had no
+  interval; 100 now match and 76 of them are clean. Such a lap's trace
+  stops at the last fix.
+- **Position slews are flagged, not repaired**: a lap where
+  `|V²κ_position − gps_lat_g|` exceeds 1.5 g (both over 0.5 s, on the
+  position clock, κ from the extractor's `position_kinematics`).
+- **Gyro scale** per lap: the gyro's integrated yaw regressed on the
+  course with a free zero offset (`∫ω dt = a·course + b·t + c`). A lap's
+  own closure would read the zero offset as scale.
+- **Clean lap** as defined on #202; the session best is the fastest lap
+  that passes every test but the pace one. **Build lap**: clean, not
+  flagged, from a session whose course and position heading agree within
+  0.5° once the lag is removed, with a session best within 1.05 × the
+  car's third-fastest session best at the layout, and a lap time within
+  1.02 × the session best. `geometry.clean_lap_index(root)` returns every
+  lap with both verdicts and their reasons.
+- **The build does not use the wet label** (decided by the owner,
+  2026-11-15: "the track geometry doesn't change in the wet"). #205's
+  review had added a veto on sessions the wetness model labels wet. The
+  road is the same wet or dry; a session that really was wet is slow and
+  falls to the pace rule; and the label, which comes from the hourly
+  weather and not from the laps, was also removing sessions that had
+  dried: 11 of the Inferno 86's 14 Tsukuba sessions carried it, three of
+  them with bests of 69.8–72.8 s against 69.4 s for its second-fastest dry
+  session. It is also the design review's own finding 10, that a rule may
+  not depend on a label unknown on 152 sessions. Without the veto the
+  build gains 30 laps and 3 days (1,257 laps in 208 sessions before), and
+  the Inferno 86 has five sessions on four days at Tsukuba where it had
+  three on three. The KK-SII's first Fuji day (2026-02-25) stays out on
+  pace alone (bests of 133–140 s against 117 s the next day).
+
+Two more things differ from the issue as written, both forced by
+measurement:
+
+1. **The closure statistic.** A lap's raw course change is not a whole
+   number of turns: the car crosses the line at an angle that differs by a
+   degree or two from lap to lap (Tsukuba: sd 0.5 % of a turn). Referred
+   to the position heading within 0.5 s of each crossing, the closure is
+   ±0.0002 turns (P10–P90), which is what the review measured.
+2. **The receiver rule.** The issue left open whether logger 6520348's
+   sessions enter a build. The scatter bound is applied to every session
+   instead of to a logger: 5 sessions with clean laps are over 0.5° and
+   are left out (65 laps), two of 6520348's six KK-F sessions among them.
+
+Gate B1 on the dataset through 2026-11-13 (3,600 laps, 310 sessions;
+2,727 clean laps in 279 sessions; 1,287 build laps in 215 sessions on 72
+days):
+
+| Check | Threshold | Measured | |
+|---|---|---|---|
+| Doppler course closes | closure ≤ 0.002 turns on ≥ 99 % of build laps | 100 %; P10–P90 ±0.0002; one clean lap outside (0.0023, not a build lap) | pass |
+| Lag removed | scatter ≤ 0.5° after the shift | 0.18–0.33° median per logger (as logged 0.65–1.8°), 0.50° on logger 6520348's KK-F sessions (2.8°); 5 of 279 sessions over, left out | reported |
+| Path length = ∫V dt | within 0.3 % on every build lap | 96.7 % of laps; median +0.06 %, range −0.27 to +0.44 % | **fail**, cause below |
+| Lap length = session row | within 0.5 % | 281 of 281 sessions | pass |
+| Lap length spread | P90 − P10 ≤ 1 % per layout | 0.45–0.97 % | pass |
+| Layout is the declared one | median within 2 % of the official length | Fuji −1.11 %, Motegi −0.99 %, Sodegaura −1.95 %, Suzuka −0.77 %, Tsukuba +1.75 % | pass |
+| No unflagged clean lap over 3 g | position and Doppler | 0 laps | pass |
+| Flagged laps | ≤ 2 % overall, cells over 5 % explained | 11 of 2,727 (0.40 %) | pass |
+| Laps map to crossing intervals | every full lap, or a cause | 32 without one: 30 hold a stop or the start of the recording, 1 fragment, 1 session that never crosses the gate twice | pass |
+| Gyro scale | P10–P90 ≤ 1 % per car and logger | 0.28–0.87 % | pass |
+
+Lag by logger (median, ms): SW4 8401203 65–79 (KK-F, KK-F-V2, KK-SII);
+6701209 78 and 6519522 144 (the Inferno 86's two loggers); 15074 101 (EK9)
+and 114 (RX8); 6603435 105 (SFJ); 6521016 126 (KK-F); 6520348 177 (KK-F,
+167–223) and 438 (718 Cayman, one session, scatter 1.8°).
+
+Gyro scale (median): EK9 0.996, RX8 0.998, Inferno 86 1.025 on logger
+6519522 (to 2025-05-24) and 0.873 on 6701209 (from 2025-06-09), SFJ 0.857,
+KK-F 1.025–1.031 by logger, KK-F-V2 1.024, KK-SII 1.028.
+
+**The failed check.** At Motegi the XY path of a build lap is 0.20–0.28 %
+longer than ∫V dt (39 of the 43 laps outside the bound are there). 6.0 m
+of the 11.9 m sit in two 250 m stretches, at s ≈ 1,750–2,000 m and
+4,000–4,250 m: the two underpasses, where the position solution wanders
+the same way every lap. The rest is spread over the lap, under 1 m in any
+250 m, as it is elsewhere: the layout medians are −0.04 to +0.03 % at Fuji,
+0.02–0.04 % at Suzuka, 0.05–0.09 % at Sodegaura and −0.01 to +0.15 % at
+Tsukuba, where the Inferno 86 reads +0.15 % and the formula cars +0.06 %
+or less. The cause of that remainder was not pinned down; noise in the
+fixes lengthens a path and is the likely one. The Doppler course and speed
+are not what is wrong at Motegi, so the consequence is for B2:
+arc length under the underpasses must not come from the XY path, and the
+profile there is checked against the inertial sensors.
+
+**Flagged laps.** The three flagged laps at Motegi all have their spike at
+s ≈ 4,140–4,175 m (the second underpass), which is why two cells of 18
+laps read 5.6 %; the one at Suzuka is at the crossover (s ≈ 2,490 m). The
+others are single events on the KK-SII (7 laps, up to 12 g).
+
+**Build population** (laps / sessions / days; a cell with fewer than
+three days feeds the profile and has no vote in B3):
+
+| Layout | Cars |
+|---|---|
+| Fuji GP | Inferno 86 111 / 23 / 10, KK-F 57 / 6 / 2, KK-SII 25 / 4 / 1, SFJ 23 / 6 / 2 |
+| Motegi | EK9 103 / 19 / 4, Inferno 86 15 / 3 / 2, SFJ 11 / 6 / 1 |
+| Sodegaura | Inferno 86 346 / 51 / 15, RX8 13 / 7 / 2 |
+| Suzuka | KK-SII 106 / 25 / 7, KK-F 41 / 7 / 2, SFJ 17 / 6 / 2 |
+| Tsukuba 2000 | KK-SII 193 / 28 / 12, KK-F 166 / 16 / 8, Inferno 86 37 / 5 / 4, KK-F-V2 23 / 3 / 1 |
+
+Of the clean laps left out: 938 are slower than 1.02 × their session's
+best, 426 are from sessions off the car's reference pace (the wet ones
+among them), 65 from the five sessions over the receiver bound and 11 are
+flagged.
+
+#### B2. The track profile (`track.py`, gate `check-track-truth`, 2026-11-15)
+
+`build_track_model(root, layout_key, cars=None, exclude_session_ids=())`
+builds a layout's track from its build laps; `TrackModel` holds
+`kappa_heat` (1/m, positive in a right turn), the line, altitude, grade,
+the per-bin lap count and κ standard error (bootstrap over days), the
+corner table and the fills, on a closed grid of about 2 m, and round-trips
+through JSON (`workspace/lapsim/tracks/<layout>.json`).
+
+- **Projection within a window.** A lap's sample is matched only to the
+  piece of the reference line within 80 m of where the lap's own distance
+  puts it, so the two branches of Suzuka's crossover are never confused.
+- **The seam is open in the first pass.** The first reference is the
+  fastest build lap, and a lap ends where it crossed the line a lap later:
+  at Suzuka that was 9.7 m to the side of where it started (the straight
+  is wide; 27 % of session-best laps there finish over a metre further
+  right than they began, and 25 % further left). Smoothing the laps'
+  offsets across that step left a kink at the start line that did not
+  converge (closing gap 9.5 m, a further re-projection moved V²κ by
+  0.03 g). The first re-referencing therefore treats the reference as an
+  open line and joins its two ends on the median line; a second one is
+  done on the closed line. A lap's bins before its own first sample are
+  read from its other end, one lap on.
+- **κ from the per-bin median of the Doppler course**, as the difference
+  over 10 m; the line is the integral of the course and nothing is
+  differentiated from it.
+- **The accelerometer trails GPS position**, by 122–126 ms on the SW4
+  (KK-SII, KK-F, KK-F-V2; 117–146 ms across sessions), 49 and 61 ms on the
+  Inferno 86's two loggers and 30–34 ms on the EK9, RX8 and SFJ (medians
+  over sessions;
+  `track.accel_delay`, the shift that best correlates the accelerometer
+  with the Doppler lateral g on the position clock). Uncorrected, the
+  track and the accelerometer disagree by ±0.3 g through Suzuka's S-curves
+  and chicane with the sign of the transition, and the comparison fails
+  (0.072 g rms at Tsukuba, 0.081 at Suzuka). The inertial profile is put
+  on the position clock before it is compared. The extractor's audit
+  slopes were fitted without this shift; #255 and #205's frame record
+  should take it up.
+- **Fixed-place errors.** Where the 20 m mean of `V²(κ − κ_inertial)`
+  exceeds 0.25 g the stretch is replaced from the accelerometer profile,
+  scaled so the course change across it stays the Doppler one
+  (`fill_from_inertial`). **No stretch reaches the threshold on the
+  current dataset**: the largest is −0.21 g at Motegi's second underpass
+  (s ≈ 4,150 m; −0.43 g on the Inferno 86's 15 laps alone), then −0.17 g in
+  Suzuka's S-curves. The mechanism is in place and tested; the profiles
+  carry no fill.
+
+Three statistics are computed differently from the issue's wording, each
+because the first form measured something else:
+
+1. *Per car against the inertial profile*: a car's own Doppler profile
+   (the median course of its laps) against its own accelerometer, gated
+   where it has 30 IMU-sourced laps. Against the pooled track the
+   difference also holds the car's line, which is B3's subject, and a
+   median of 11–23 laps of accelerometer is too rough to gate on (0.05 to
+   0.10 g rms on those cells).
+2. *Apexes not flattened*: the peak of the course differenced over one
+   bin is no reference, since the largest of a corner's noisy bins reads
+   2–5 % high (the first form gave a mean of 0.023–0.042 against the 0.03
+   bound, every corner negative). The loss is estimated from the profile
+   over twice the window: a boxcar lowers a peak by an amount that goes
+   with its width squared, so a third of the difference between the two
+   profiles is what the 10 m window costs.
+3. *Apex against the accelerometer*: the accelerometer profile is brought
+   to the track's 10 m bandwidth before its peak is taken.
+
+Gate B2 on the five layouts (Tsukuba 419 laps / 24 days, Fuji 216 / 15,
+Suzuka 164 / 11, Motegi 129 / 6, Sodegaura 359 / 16):
+
+| Check | Threshold | Measured | |
+|---|---|---|---|
+| Profile closes | ∮κ ds within 0.002 turns of n; line within 5 m | closure ≤ 0.0001 turns; line gap 1.0–2.5 m; n = +1, Suzuka 0 | pass |
+| Re-referencing converged | one more moves V²κ ≤ 0.01 g rms | 0.0003–0.0013 g | pass |
+| Against the inertial profile | rms ≤ 0.06 g; no 20 m over 0.25 g | per layout 0.027 (Sodegaura), 0.039, 0.042, 0.050, 0.055 g (Motegi); per car 0.028–0.059 g on 7 cells | pass |
+| Apexes not flattened | loss to the window: mean ≤ 0.03, any corner ≤ 0.06 | mean 0.005–0.008, worst corner 0.029 | pass |
+| Apex κ against the accelerometer | mean log ratio within ± 0.05 | −0.004 to −0.011; Motegi −0.025 | pass |
+| Grade between cars | ≤ 1 % rms | 0.18–0.63 % | pass |
+| Altitude against the GSI elevation model | grade over 50 m within 1 % rms; relief within 3 m | grade 0.17–0.36 % rms; relief within 1.0 m | pass |
+| Peak retention | reported | profile apex over the laps' own: median 0.93–0.96 per layout, lowest corner 0.88 | |
+| Share of lateral heat under 0.004 /m | reported | Tsukuba 0.093, Sodegaura 0.104, Motegi 0.109, Fuji 0.139, Suzuka 0.229; day-split floor 0.0004–0.010 | |
+| Right against left at the laps' own speed | reported against 0.02 | 15 of 16 car × layout rows within 0.013; KK-F-V2 at Tsukuba 0.026 (23 laps, one day) | |
+
+Lengths of the median line: Tsukuba 2,078.1 m, Fuji 4,506.1, Suzuka
+5,755.3, Motegi 4,751.4, Sodegaura 2,387.2. Corners found (stretches over
+0.002 /m turning one way by 10° or more with an apex over 0.004 /m): 8,
+10, 16, 11, 8.
+
+**Altitude against the ground survey** (`dem.py`). The GSI 5 m laser
+model (`dem5a` text tiles, zoom 15) is sampled along each track's own
+line, smoothed and differenced exactly as the logged altitude is. Relief,
+logged against surveyed: Tsukuba 5.2 / 5.0 m, Sodegaura 13.9 / 13.9,
+Motegi 31.1 / 30.4 (the operator publishes 30.4), Fuji 36.7 / 37.1, Suzuka
+39.4 / 40.3. Steepest grades at Fuji: +8.1 and −9.5 % logged, +8.3 and
+−9.4 % surveyed. The model is bare earth, so a bridge deck reads the
+ground under it: a stretch where the survey leaves the logged altitude by
+more than 2 m against its own 300 m median is masked and listed. That
+finds four at Suzuka (s ≈ 320–390 m, 1,950–2,040 m, 4,840–4,940 m, the
+crossover, at −6.2 m, and 5,270–5,350 m) and none elsewhere. The 16 tiles
+are cached in `workspace/lapsim/gsi/` and nothing derived from them is
+committed; `--dem-offline` and `--no-dem` run the gate without the
+network.
+
+Not measured yet: the corner angles against the operators' drawings.
+Motegi's profile per year was
+asked for (resurfaced for 2026): every Motegi build lap is from 2025, so
+there is nothing to compare. Vertical curvature and the pit-exit join
+(asked by #206's review) are not built.
+
+#### B3. One track for every car (`holdout.py`, gate `check-track-holdout`, 2026-11-15)
+
+The statistic is profile against profile: the curvature from one group of
+laps against the curvature from another, both driven with the held-out
+group's median speed trace through production's `share_heat_rate` (lateral
+g from V²κ, longitudinal g from the speed trace, the held-out car's fitted
+force shares), giving the log ratio of lap-mean heat per tyre, Δq. A gate
+reads the largest of the four in magnitude. Cars without fitted shares are
+read through a stand-in (SFJ through the FJ's, EK9 and RX8 through the
+Inferno 86's): the statistic needs a lens, not that car's heat model.
+
+The ladder puts a difference between cars beside the differences that
+have nothing to do with the car: (1) random halves of a car's laps within
+each day, (2) random halves of its days, (3) its early days against its
+late days, (4) KK-F against KK-SII, (5) each class against every other car
+at the layout. A comparison between cars votes when the held-out group has
+three days and the donor laps three days and thirty laps.
+
+Everything is computed on one projection (subsets of the build laps on
+the build's reference line). The voting comparisons were also rebuilt with
+each side on its own reference line: the statistic moved by at most 0.003.
+
+Largest per-tyre |Δq|, by layout:
+
+| Layout | Laps in a day (P90) | Days (P90) | Early / late days | KK-F / KK-SII | Class against the rest | Verdict |
+|---|---|---|---|---|---|---|
+| Tsukuba | 0.005 | 0.008 | 0.004–0.007 | **0.016–0.017** | **0.008–0.010** (FJ, Inferno 86) | one track; bias carried to E1 |
+| Fuji | 0.005 | 0.006 | 0.003 | 0.011–0.012 | **0.006–0.007** (FJ, Inferno 86); 0.007 (SFJ) | one track; bias carried to E1 |
+| Suzuka | 0.005 | 0.003 | 0.003 | 0.004–0.005 | 0.004–0.005 (FJ, SFJ) | no vote |
+| Sodegaura | 0.011 | 0.005 | 0.002 | | 0.008–0.013 (Inferno 86, RX8) | no vote |
+| Motegi | 0.009 | 0.012 | 0.009 | | 0.023–0.028 (EK9, Inferno 86, SFJ) | no vote |
+
+Bold figures vote. **Gate: pass.** No layout is above the 0.05 stop
+bound; the two layouts that can vote are under the 0.02 bound for one
+shared track. Read plainly:
+
+- **The day-to-day floor is 0.003–0.012 by layout**, 0.006 and 0.008 at
+  the two that vote. The same car on different days differs by that much
+  in per-tyre heat through the track profile alone.
+- **At Fuji the cars agree at the floor** (0.006 and 0.007 against 0.006),
+  on the two voting comparisons there (the FJ class and the Inferno 86,
+  each against every other car).
+- **At Tsukuba the two formula cars differ from each other by twice the
+  floor (0.017 against 0.008), and from the Inferno 86 by about the floor
+  (0.008–0.010).** A same-class difference larger than the other-class one
+  is not a car effect in any simple sense; the review expected the two to
+  be the same size and inseparable from era. The Inferno 86 has 37 laps on
+  four days there. The bias, up to 0.017, is carried into E1's 0.03 budget.
+  With each side on its own reference line the KK-F / KK-SII figure is
+  0.013–0.014.
+- **Three layouts cannot vote.** Suzuka's non-voting comparisons sit at
+  its floor. Sodegaura's are at twice the floor on an RX8 with 13 laps.
+  Motegi's read 0.023–0.028, above the 0.02 bound, with donors of 26 laps
+  or held-out groups of 11–15: #207's review measured that a track from
+  ten laps on two days shifts per-tyre heat by 2.6 %, so this is the size
+  thin data gives and it is not evidence about Motegi either way.
+
+Beside the ladder (not gated):
+
+- *The line moves with pace.* A car's laps at 1.04–1.12 × its session best
+  against its own build laps: 0.003–0.018 (largest: KK-F at Tsukuba 0.018,
+  then 0.007–0.009 on four cells), with less lateral heat in both right
+  and left turns in six of the seven cells (−0.005 to −0.017). This goes
+  to D2.
+- *Sessions labelled wet.* The build does not use the label, so this is
+  measured inside the build: a car's build laps from sessions the wetness
+  model labels wet against its other build laps. Three cells have twelve
+  laps on each side (KK-SII at Tsukuba, EK9 at Motegi, Inferno 86 at
+  Sodegaura): 0.006–0.010, at or near the day-to-day floor.
+- The donor tracks of the voting comparisons and the held-out groups'
+  speed traces are saved in `workspace/lapsim/tracks/folds/` for C3 and D1.
+- Not done: the per-lap metric of the first revision (both sides smoothed
+  over 0.5 s) as distance from the same-car floor.
+
 ## 3. Test methodology
 
 ### 3.1 Two distinct validations
