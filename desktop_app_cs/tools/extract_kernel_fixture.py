@@ -388,9 +388,69 @@ def driver_analysis_fixture(log, profile) -> dict:
     }
 
 
+def tire_grip_fixture(log, profile) -> dict:
+    """Tire grip per lap and multi-lap, pressure and temperature modes; inputs from the C# loader."""
+    from motorsports_data_notebook import tire_grip as T
+
+    keys = [
+        "lateral_g",
+        "inline_g",
+        "tpms_press_fl",
+        "tpms_press_fr",
+        "tpms_press_rl",
+        "tpms_press_rr",
+        "tpms_temp_fl",
+        "tpms_temp_fr",
+        "tpms_temp_rl",
+        "tpms_temp_rr",
+    ]
+    names = {k: profile.channel_names[k] for k in keys}
+
+    def corner(c: T.CornerTireGripData) -> dict:
+        return {
+            "corner_name": c.corner_name,
+            "total_g": summary(c.total_g),
+            "tire_metric": summary(c.tire_metric),
+            "mean_g": c.mean_g,
+            "mean_metric": c.mean_metric,
+            "std_g": c.std_g,
+            "std_metric": c.std_metric,
+            "bucket_centers": c.bucket_centers.tolist(),
+            "bucket_values": c.bucket_values.tolist(),
+            "bucket_counts": c.bucket_counts.tolist(),
+        }
+
+    def result(r: T.TireGripResult) -> dict:
+        out = {
+            k: corner(getattr(r, k))
+            for k in ("front_left", "front_right", "rear_left", "rear_right")
+        }
+        out.update(metric_mode=r.metric_mode, metric_unit=r.metric_unit, accel_unit=r.accel_unit)
+        return out
+
+    out = {"channels": names, "modes": {}}
+    for mode in ("pressure", "temperature"):
+        out["modes"][mode] = {
+            "single_lap": {
+                str(n): result(T.analyze_tire_grip(log.filter_by_lap(n), names, mode)) for n in LAPS
+            },
+            "multi_lap": result(T.analyze_tire_grip_multi_lap(log, LAPS, names, mode)),
+        }
+    rng = np.random.default_rng(3)
+    g = np.abs(rng.normal(1.0, 0.3, 400))
+    p = rng.uniform(28, 34, 400)
+    out["synthetic"] = {
+        "total_g": g.tolist(),
+        "metric": p.tolist(),
+        "corner": corner(T._compute_corner(g, p, "FL")),
+    }
+    return out
+
+
 MODULES = {
     "corners": corners_fixture,
     "driver_analysis": driver_analysis_fixture,
+    "tire_grip": tire_grip_fixture,
     "zones": zones_fixture,
     "suspension": suspension_fixture,
     "roll_gradient": roll_gradient_fixture,
