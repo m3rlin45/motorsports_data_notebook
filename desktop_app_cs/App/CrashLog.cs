@@ -13,7 +13,8 @@ namespace InfernoAnalyzer.App;
 /// the process without a trace. Unhandled exceptions are appended to a log
 /// beside the settings file, and those on the UI thread are also shown, after
 /// which the app carries on: a failed analysis or a bad file should not cost
-/// the user the session they have open.
+/// the user the session they have open. A frozen UI thread is reported
+/// here as well (<see cref="HangWatch"/>).
 /// </summary>
 public static class CrashLog
 {
@@ -43,14 +44,18 @@ public static class CrashLog
     }
 
     /// <summary>Append <paramref name="exception"/> to the log; never throws.</summary>
-    public static void Write(Exception? exception, string context)
+    public static void Write(Exception? exception, string context) =>
+        WriteText(context, exception?.ToString() ?? "(no exception object)");
+
+    /// <summary>Append an entry headed <paramref name="context"/> to the log; never throws.</summary>
+    public static void WriteText(string context, string text)
     {
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(LogPath)!);
             var entry = new StringBuilder()
                 .AppendLine($"=== {DateTime.Now:yyyy-MM-dd HH:mm:ss} {context} (version {typeof(CrashLog).Assembly.GetName().Version}) ===")
-                .AppendLine(exception?.ToString() ?? "(no exception object)")
+                .AppendLine(text.TrimEnd())
                 .AppendLine();
             File.AppendAllText(LogPath, entry.ToString());
         }

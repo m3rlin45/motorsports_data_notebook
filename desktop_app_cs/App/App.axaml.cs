@@ -18,6 +18,7 @@ public partial class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             CrashLog.InstallForUiThread();
+            HangWatch.Start();
             var viewModel = new MainWindowViewModel(settings: new SettingsStore(SettingsStore.DefaultPath()));
             desktop.MainWindow = new MainWindow(viewModel);
             OpenStartupFiles(viewModel, desktop.Args);
