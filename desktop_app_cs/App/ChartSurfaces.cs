@@ -25,6 +25,8 @@ public static class ChartSurfaces
         StripChartSpec => CreateStripChart(),
         HistogramGridSpec => CreateHistogramGrid(),
         ScatterGridSpec => CreateScatterGrid(),
+        BoxPlotSpec => CreateBoxPlot(),
+        TrackMapSpec => CreateTrackMap(),
         _ => throw new NotSupportedException($"No chart surface renders {spec.GetType().Name}"),
     };
 
@@ -36,6 +38,12 @@ public static class ChartSurfaces
 
     /// <summary>Create a surface able to render <see cref="ScatterGridSpec"/>.</summary>
     public static IChartSurface CreateScatterGrid() => Themed(new ScottPlotScatterGrid());
+
+    /// <summary>Create a surface able to render <see cref="BoxPlotSpec"/>.</summary>
+    public static IChartSurface CreateBoxPlot() => Themed(new ScottPlotBoxPlot());
+
+    /// <summary>Create a surface able to render <see cref="TrackMapSpec"/>.</summary>
+    public static IChartSurface CreateTrackMap() => Themed(new ScottPlotTrackMap());
 
     /// <summary>The chart theme matching the app's current variant.</summary>
     public static ChartTheme CurrentTheme => ThemeFor(Application.Current?.ActualThemeVariant);
