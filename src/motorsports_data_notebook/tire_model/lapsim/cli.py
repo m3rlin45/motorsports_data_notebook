@@ -33,6 +33,10 @@ def main(argv: list[str] | None = None) -> int:
         "check-geometry",
         help="Gate B1: lap geometry on one clock, the clean laps and the build population.",
     )
+    sub.add_parser(
+        "check-track-truth",
+        help="Gate B2: build every layout's track and check it against the inertial sensors.",
+    )
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     root = args.dataset_root or default_dataset_root()
@@ -42,6 +46,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "check-geometry":
         report = gates.check_geometry(root, cache_dir=workspace / "cache")
+    elif args.cmd == "check-track-truth":
+        report = gates.check_track_truth(
+            root, cache_dir=workspace / "cache", tracks_dir=workspace / "tracks"
+        )
     else:  # pragma: no cover - argparse rejects unknown commands
         parser.error(f"unknown command {args.cmd}")
     path = gates.write_report(report, workspace / "reports")
