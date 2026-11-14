@@ -1,0 +1,99 @@
+{
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|4f45f77ee58d770fd580c28b0274cf08f5c917ae",
+  "_model": "claude-sonnet-5-5",
+  "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
+  "_extracted_at": "2026-11-13T23:41:09.687536+00:00",
+  "_notes_files": [],
+  "_sessions": [
+    "2026-11-13_121245_KK-F-V2_tsukuba-2000_a0392-0394",
+    "2026-11-13_135415_KK-F-V2_tsukuba-2000_a0400",
+    "2026-11-13_153807_KK-F-V2_tsukuba-2000_a0403"
+  ],
+  "input": "DATE: 2026-11-13 (times are local to the track)\n\nRUN NOTES: none for this day.\n\nLOGGED SESSIONS:\n1. session_id=2026-11-13_121245_KK-F-V2_tsukuba-2000_a0392-0394 start=12:12 car=\"KK-F-V2\" track=tsukuba_2000 laps=18 type=\"Car 一般テスト\" comment=\"\"\n2. session_id=2026-11-13_135415_KK-F-V2_tsukuba-2000_a0400 start=13:54 car=\"KK-F-V2\" track=tsukuba_2000 laps=21 type=\"Car 一般テスト\" comment=\"\"\n3. session_id=2026-11-13_153807_KK-F-V2_tsukuba-2000_a0403 start=15:38 car=\"KK-F-V2\" track=tsukuba_2000 laps=6 type=\"Car 一般テスト\" comment=\"engine trouble, front springs with red rubber\"\n",
+  "data": {
+    "sessions": [
+      {
+        "session_id": "2026-11-13_121245_KK-F-V2_tsukuba-2000_a0392-0394",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "2026-11-13_135415_KK-F-V2_tsukuba-2000_a0400",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [],
+        "incidents": [],
+        "notes": ""
+      },
+      {
+        "session_id": "2026-11-13_153807_KK-F-V2_tsukuba-2000_a0403",
+        "note_file": null,
+        "note_session_index": null,
+        "match_confidence": 0.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [
+          "front springs with red rubber"
+        ],
+        "incidents": [
+          "engine trouble"
+        ],
+        "notes": ""
+      }
+    ]
+  }
+}
