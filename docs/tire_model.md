@@ -1646,6 +1646,98 @@ left (66.3, 69.4 and 73.5 s, the last labelled damp) are on three days.
 The label comes from the hourly weather, not from the lap times, so it
 also removes sessions that had dried.
 
+#### B2. The track profile (`track.py`, gate `check-track-truth`, 2026-11-15)
+
+`build_track_model(root, layout_key, cars=None, exclude_session_ids=())`
+builds a layout's track from its build laps; `TrackModel` holds
+`kappa_heat` (1/m, positive in a right turn), the line, altitude, grade,
+the per-bin lap count and κ standard error (bootstrap over days), the
+corner table and the fills, on a closed grid of about 2 m, and round-trips
+through JSON (`workspace/lapsim/tracks/<layout>.json`).
+
+- **Projection within a window.** A lap's sample is matched only to the
+  piece of the reference line within 80 m of where the lap's own distance
+  puts it, so the two branches of Suzuka's crossover are never confused.
+- **The seam is open in the first pass.** The first reference is the
+  fastest build lap, and a lap ends where it crossed the line a lap later:
+  at Suzuka that was 9.7 m to the side of where it started (the straight
+  is wide; 27 % of session-best laps there finish over a metre further
+  right than they began, and 25 % further left). Smoothing the laps'
+  offsets across that step left a kink at the start line that did not
+  converge (closing gap 9.5 m, a further re-projection moved V²κ by
+  0.03 g). The first re-referencing therefore treats the reference as an
+  open line and joins its two ends on the median line; a second one is
+  done on the closed line. A lap's bins before its own first sample are
+  read from its other end, one lap on.
+- **κ from the per-bin median of the Doppler course**, as the difference
+  over 10 m; the line is the integral of the course and nothing is
+  differentiated from it.
+- **The accelerometer trails GPS position**, by 122–126 ms on the SW4
+  (KK-SII, KK-F, KK-F-V2; 117–146 ms across sessions), 49 and 61 ms on the
+  Inferno 86's two loggers and 30–34 ms on the EK9, RX8 and SFJ (medians
+  over sessions;
+  `track.accel_delay`, the shift that best correlates the accelerometer
+  with the Doppler lateral g on the position clock). Uncorrected, the
+  track and the accelerometer disagree by ±0.3 g through Suzuka's S-curves
+  and chicane with the sign of the transition, and the comparison fails
+  (0.072 g rms at Tsukuba, 0.081 at Suzuka). The inertial profile is put
+  on the position clock before it is compared. The extractor's audit
+  slopes were fitted without this shift; #255 and #205's frame record
+  should take it up.
+- **Fixed-place errors.** Where the 20 m mean of `V²(κ − κ_inertial)`
+  exceeds 0.25 g the stretch is replaced from the accelerometer profile,
+  scaled so the course change across it stays the Doppler one
+  (`fill_from_inertial`). **No stretch reaches the threshold on the
+  current dataset**: the largest is −0.22 g at Motegi's second underpass
+  (s ≈ 4,150 m; −0.43 g on the Inferno 86's 15 laps alone), then −0.17 g in
+  Suzuka's S-curves. The mechanism is in place and tested; the profiles
+  carry no fill.
+
+Three statistics are computed differently from the issue's wording, each
+because the first form measured something else:
+
+1. *Per car against the inertial profile*: a car's own Doppler profile
+   (the median course of its laps) against its own accelerometer, gated
+   where it has 30 IMU-sourced laps. Against the pooled track the
+   difference also holds the car's line, which is B3's subject, and a
+   median of 11–23 laps of accelerometer is too rough to gate on (0.05 to
+   0.10 g rms on those cells).
+2. *Apexes not flattened*: the peak of the course differenced over one
+   bin is no reference, since the largest of a corner's noisy bins reads
+   2–5 % high (the first form gave a mean of 0.023–0.042 against the 0.03
+   bound, every corner negative). The loss is estimated from the profile
+   over twice the window: a boxcar lowers a peak by an amount that goes
+   with its width squared, so a third of the difference between the two
+   profiles is what the 10 m window costs.
+3. *Apex against the accelerometer*: the accelerometer profile is brought
+   to the track's 10 m bandwidth before its peak is taken.
+
+Gate B2 on the five layouts (Tsukuba 411 laps / 23 days, Fuji 216 / 15,
+Suzuka 164 / 11, Motegi 122 / 5, Sodegaura 344 / 15):
+
+| Check | Threshold | Measured | |
+|---|---|---|---|
+| Profile closes | ∮κ ds within 0.002 turns of n; line within 5 m | closure ≤ 0.0002 turns; line gap 0.7–2.5 m; n = +1, Suzuka 0 | pass |
+| Re-referencing converged | one more moves V²κ ≤ 0.01 g rms | 0.0005–0.0055 g | pass |
+| Against the inertial profile | rms ≤ 0.06 g; no 20 m over 0.25 g | per layout 0.027 (Sodegaura), 0.039, 0.042, 0.050, 0.054 g (Motegi); per car 0.028–0.060 g on 7 cells | pass |
+| Apexes not flattened | loss to the window: mean ≤ 0.03, any corner ≤ 0.06 | mean 0.005–0.008, worst corner 0.029 | pass |
+| Apex κ against the accelerometer | mean log ratio within ± 0.05 | −0.004 to −0.013; Motegi −0.030 | pass |
+| Grade between cars | ≤ 1 % rms | 0.18–0.63 % | pass |
+| Peak retention | reported | profile apex over the laps' own: median 0.93–0.96 per layout, lowest corner 0.88 | |
+| Share of lateral heat under 0.004 /m | reported | Tsukuba 0.091, Sodegaura 0.104, Motegi 0.111, Fuji 0.139, Suzuka 0.229; day-split floor 0.0003–0.011 | |
+| Right against left at the laps' own speed | reported against 0.02 | 15 of 16 car × layout rows within 0.013; KK-F-V2 at Tsukuba 0.027 (23 laps, one day) | |
+
+Lengths of the median line: Tsukuba 2,078.2 m, Fuji 4,506.1, Suzuka
+5,755.3, Motegi 4,751.8, Sodegaura 2,387.3. Corners found (stretches over
+0.002 /m turning one way by 10° or more with an apex over 0.004 /m): 8,
+10, 16, 11, 8.
+
+Not measured yet: the corner angles against the operators' drawings, and
+altitude against the GSI elevation model. Motegi's profile per year was
+asked for (resurfaced for 2026): every Motegi build lap is from 2025, so
+there is nothing to compare. Vertical curvature and the pit-exit join
+(asked by #206's review) are not built.
+
 ## 3. Test methodology
 
 ### 3.1 Two distinct validations

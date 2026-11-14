@@ -121,3 +121,48 @@ class TestCli:
         assert (tmp_path / "ws" / "reports" / "B1_geometry.md").exists()
         assert (tmp_path / "ws" / "cache" / "lap_index.parquet").exists()
         assert "# B1: " in capsys.readouterr().out
+
+
+class TestCheckTrackTruth:
+    @pytest.fixture()
+    def inertial_root(self, tmp_path):
+        geo._INDEX_CACHE.clear()
+        sessions = {
+            f"2026-01-1{i}_s{i}": {
+                "car": "car",
+                "date": f"2026-01-1{i}",
+                "kwargs": {"n_laps": 12, "seed": i, "noise_m": 0.02, "accel_delay_s": 0.05},
+            }
+            for i in range(3)
+        }
+        write_dataset(tmp_path / "data", sessions)
+        return tmp_path / "data"
+
+    def test_gate_on_a_sound_track(self, inertial_root, tmp_path):
+        report = gates.check_track_truth(
+            inertial_root, tracks_dir=tmp_path / "tracks", layouts=(LAYOUT_ID,)
+        )
+        items = {i.name: i for i in report.items}
+        assert items["Profile closes"].passed is True
+        assert items["Re-referencing converged"].passed is True
+        assert items["Against the inertial profile"].passed is True
+        assert items["Apexes not flattened"].passed is True
+        assert items["Apex κ against the accelerometer"].passed is True
+        assert items["Fills"].measured.startswith("0 stretches")
+        assert items["Grade between cars"].passed is None  # one car
+        assert report.passed
+        assert (tmp_path / "tracks" / f"{LAYOUT_ID}.json").exists()
+        assert gates.write_report(report, tmp_path / "reports").name == "B2_track_truth.md"
+
+    def test_corner_apexes_and_lap_curvature(self):
+        ds = 2.0
+        s = np.arange(0.0, 402.0, ds)
+        course = np.vstack([0.02 * np.clip(s - 100.0, 0.0, 100.0), np.full(s.size, np.nan)])
+        k = gates.lap_curvature(course, ds, 10.0)
+        assert k.shape == (2, s.size - 1)
+        assert k[0, 75] == pytest.approx(0.02) and k[0, 20] == pytest.approx(0.0)
+        assert np.isnan(k[0, :3]).all() and np.isnan(k[1]).all()
+        corners = [{"s_in": 100.0, "s_out": 200.0, "sign": 1}]
+        apex = gates.corner_apexes(k, corners, ds)
+        assert apex[0, 0] == pytest.approx(0.02) and np.isnan(apex[1, 0])
+        assert gates.corner_apexes(k[0], corners, ds)[0] == pytest.approx(0.02)
