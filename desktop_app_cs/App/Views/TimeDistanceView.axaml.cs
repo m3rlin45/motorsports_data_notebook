@@ -8,8 +8,8 @@ namespace InfernoAnalyzer.App.Views;
 /// <summary>
 /// The Time/Distance tab: the channel picker beside the strip chart. The
 /// code here is the keyboard and pointer handling that has no binding form:
-/// Space on the channel lists, and dragging a shown channel to another panel
-/// position.
+/// the search box's Enter and Esc, Space on the channel lists, and dragging a
+/// shown channel to another panel position.
 /// </summary>
 public partial class TimeDistanceView : UserControl
 {
@@ -21,12 +21,53 @@ public partial class TimeDistanceView : UserControl
     {
         InitializeComponent();
         FitButton.Click += (_, _) => Chart.ResetView();
+        SearchBox.KeyDown += OnSearchKeyDown;
         ChannelList.KeyDown += OnListKeyDown;
         ShownList.KeyDown += OnListKeyDown;
         ShownList.AddHandler(PointerPressedEvent, OnShownPointerPressed, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         ShownList.AddHandler(PointerMovedEvent, OnShownPointerMoved, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         ShownList.AddHandler(PointerReleasedEvent, (_, _) => _dragIndex = -1, Avalonia.Interactivity.RoutingStrategies.Tunnel);
-        DataContextChanged += (_, _) => _viewModel = DataContext as TimeDistanceViewModel;
+        DataContextChanged += (_, _) => Bind(DataContext as TimeDistanceViewModel);
+    }
+
+    private void Bind(TimeDistanceViewModel? vm)
+    {
+        if (_viewModel is not null)
+        {
+            _viewModel.SearchRequested -= FocusSearch;
+        }
+
+        _viewModel = vm;
+        if (vm is not null)
+        {
+            vm.SearchRequested += FocusSearch;
+        }
+    }
+
+    private void FocusSearch()
+    {
+        SearchBox.Focus();
+        SearchBox.SelectAll();
+    }
+
+    private void OnSearchKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (_viewModel is null)
+        {
+            return;
+        }
+
+        if (e.Key == Key.Enter)
+        {
+            _viewModel.ToggleFirstMatch();
+            SearchBox.SelectAll(); // ready for the next search
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape && _viewModel.HasChannelFilter)
+        {
+            _viewModel.ClearChannelFilter();
+            e.Handled = true;
+        }
     }
 
     /// <summary>Space ticks or unticks the highlighted channel.</summary>
