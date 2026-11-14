@@ -319,4 +319,27 @@ public sealed record TrackMapPointSpec(double X, double Y, string Color, double 
 /// <summary>A standalone track map with coloured segments and marked points (equal units).</summary>
 public sealed record TrackMapSpec(string Title, IReadOnlyList<TrackMapPathSpec> Paths, IReadOnlyList<TrackMapPointSpec> Points) : ChartSpec;
 
+/// <summary>A line with markers through (X, Y), each point carrying a sample count for the hover label.</summary>
+public sealed record LineSeriesSpec(string Label, double[] X, double[] Y, long[] Counts, string Color);
+
+/// <summary>One panel of a line grid.</summary>
+public sealed record LinePanelSpec(string Title, IReadOnlyList<LineSeriesSpec> Series, string Annotation = "");
+
+/// <summary>A grid of line panels sharing axis labels (the tire-grip view).</summary>
+/// <param name="Title">Figure title.</param>
+/// <param name="Panels">Panels in row-major order.</param>
+/// <param name="Columns">Panels per row.</param>
+/// <param name="XLabel">X axis label (bottom row).</param>
+/// <param name="YLabel">Y axis label (left column).</param>
+/// <param name="HoverFormat">
+/// Composite format of the hover label: {0} the panel (and series) name,
+/// {1} the point's x, {2} its y, {3} its sample count.
+/// </param>
+public sealed record LineGridSpec(
+    string Title,
+    IReadOnlyList<LinePanelSpec> Panels,
+    int Columns,
+    string XLabel,
+    string YLabel,
+    string HoverFormat = "{0}\n{1:0.##}, {2:0.##}\nn = {3}") : ChartSpec;
 
