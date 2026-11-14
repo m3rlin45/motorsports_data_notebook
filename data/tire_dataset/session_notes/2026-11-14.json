@@ -1,0 +1,109 @@
+{
+  "_cache_key": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c|claude-sonnet-5-5|be64fb5b79f0020d3e2ef4f51e5c879a8664d489",
+  "_model": "claude-sonnet-5-5",
+  "_prompt_sha1": "7ae15efe21e6849cc1e5f1624b32472c3fa4fb7c",
+  "_extracted_at": "2026-11-14T22:29:59.102557+00:00",
+  "_notes_files": [
+    {
+      "file": "/mnt/c/Users/m3rli/OneDrive/Documents/Car Running Notes/2026-11-14 Sodegaura.txt",
+      "sha1": "97f3b8c3b5572974326a0dde77f4813db502dd8c"
+    }
+  ],
+  "_sessions": [
+    "2026-11-14_135954_Inferno-86_sodegaura_a6520",
+    "2026-11-14_142358_Inferno-86_sodegaura_a6524",
+    "2026-11-14_150009_Inferno-86_sodegaura_a6527"
+  ],
+  "input": "DATE: 2026-11-14 (times are local to the track)\n\nRUN NOTES FILE \"2026-11-14 Sodegaura.txt\":\nMissed the first session\n\n14:00\nRE-71 RS\n\nBlue rubbers on all springs\n\nF26\nR22\n\nSomewhat understeery in high speed\n\nPart way through pitted in and added Yellow rubbers to rear springs\n\n\nBetter balance\n\n\n15:00 \n\nSame tires, same springs, same rubbers\n\nF28\nR23\n\nBalance was good early stint, great mid stint, went crazy over late stint, rear tires went off, although the pressures weren't crazy. They're pretty worn though.\n\nFelt like I was losing power in the late stint, but that might be the rear tires.\n\n\nAnalysis: we need way more front rebound, somewhat more front bump, FR is still broken\n\"\n\nLOGGED SESSIONS:\n1. session_id=2026-11-14_135954_Inferno-86_sodegaura_a6520 start=13:59 car=\"Inferno 86\" track=sodegaura laps=11 type=\"一般テスト\" comment=\"Blue rubbers front and rear / Re71rs / F26 / R22 / Understeer in fast corners\"\n2. session_id=2026-11-14_142358_Inferno-86_sodegaura_a6524 start=14:23 car=\"Inferno 86\" track=sodegaura laps=4 type=\"一般テスト\" comment=\"Rear blue and yellow rubbers / Front blue only / F 26 / R 22 / Better balance than all blue / Re71rs\"\n3. session_id=2026-11-14_150009_Inferno-86_sodegaura_a6527 start=15:00 car=\"Inferno 86\" track=sodegaura laps=16 type=\"一般テスト\" comment=\"RE-71RS / Front / Blue rubbers / 28 on dampers /  / Rear / blue and yellow rubbers / 23 on dampers\"\n",
+  "data": {
+    "sessions": [
+      {
+        "session_id": "2026-11-14_135954_Inferno-86_sodegaura_a6520",
+        "note_file": "2026-11-14 Sodegaura.txt",
+        "note_session_index": 1,
+        "match_confidence": 0.95,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": "RE-71RS",
+          "fr": "RE-71RS",
+          "rl": "RE-71RS",
+          "rr": "RE-71RS"
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [
+          "Blue rubbers on all springs (front and rear)",
+          "Dampers F26 / R22"
+        ],
+        "incidents": [],
+        "notes": "Somewhat understeery in high speed corners."
+      },
+      {
+        "session_id": "2026-11-14_142358_Inferno-86_sodegaura_a6524",
+        "note_file": "2026-11-14 Sodegaura.txt",
+        "note_session_index": 1,
+        "match_confidence": 0.8,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": "RE-71RS",
+          "fr": "RE-71RS",
+          "rl": "RE-71RS",
+          "rr": "RE-71RS"
+        },
+        "new_tires": null,
+        "session_kind": null,
+        "setup_changes": [
+          "Pitted in part way through the run and added yellow rubbers to the rear springs (rear blue and yellow rubbers, front blue only)",
+          "Dampers F26 / R22"
+        ],
+        "incidents": [],
+        "notes": "Better balance than all blue."
+      },
+      {
+        "session_id": "2026-11-14_150009_Inferno-86_sodegaura_a6527",
+        "note_file": "2026-11-14 Sodegaura.txt",
+        "note_session_index": 2,
+        "match_confidence": 1.0,
+        "weather_text": null,
+        "ambient_temp_c": null,
+        "track_condition": "unknown",
+        "cold_pressure_bar": {
+          "fl": null,
+          "fr": null,
+          "rl": null,
+          "rr": null
+        },
+        "tire_compound": {
+          "fl": "RE-71RS",
+          "fr": "RE-71RS",
+          "rl": "RE-71RS",
+          "rr": "RE-71RS"
+        },
+        "new_tires": false,
+        "session_kind": null,
+        "setup_changes": [
+          "Same springs and rubbers as previous run: front blue rubbers, rear blue and yellow rubbers",
+          "Dampers F28 / R23"
+        ],
+        "incidents": [],
+        "notes": "Balance was good early stint, great mid stint, went crazy over late stint as the rear tires went off, although pressures weren't crazy; tires are pretty worn. Felt like losing power in the late stint, possibly the rear tires. Analysis: need way more front rebound, somewhat more front bump; FR still broken."
+      }
+    ]
+  }
+}
