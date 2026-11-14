@@ -27,6 +27,7 @@ public static class ChartSurfaces
         ScatterGridSpec => CreateScatterGrid(),
         BoxPlotSpec => CreateBoxPlot(),
         TrackMapSpec => CreateTrackMap(),
+        LineGridSpec => CreateLineGrid(),
         _ => throw new NotSupportedException($"No chart surface renders {spec.GetType().Name}"),
     };
 
@@ -44,6 +45,9 @@ public static class ChartSurfaces
 
     /// <summary>Create a surface able to render <see cref="TrackMapSpec"/>.</summary>
     public static IChartSurface CreateTrackMap() => Themed(new ScottPlotTrackMap());
+
+    /// <summary>Create a surface able to render <see cref="LineGridSpec"/>.</summary>
+    public static IChartSurface CreateLineGrid() => Themed(new ScottPlotLineGrid());
 
     /// <summary>The chart theme matching the app's current variant.</summary>
     public static ChartTheme CurrentTheme => ThemeFor(Application.Current?.ActualThemeVariant);
