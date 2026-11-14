@@ -177,6 +177,46 @@ public static class Numerics
         return (slope, yMean - slope * xMean);
     }
 
+    /// <summary><c>numpy.linspace(start, stop, num)</c>: <c>start + i·step</c> with the last value exactly <paramref name="stop"/>.</summary>
+    public static double[] Linspace(double start, double stop, int num)
+    {
+        var result = new double[Math.Max(num, 0)];
+        if (num <= 0)
+        {
+            return result;
+        }
+
+        var step = num > 1 ? (stop - start) / (num - 1) : 0;
+        for (var i = 0; i < num; i++)
+        {
+            result[i] = start + i * step;
+        }
+
+        result[num - 1] = stop;
+        return result;
+    }
+
+    /// <summary><c>numpy.percentile(values, q)</c> with the default linear interpolation.</summary>
+    public static double Percentile(ReadOnlySpan<double> values, double q)
+    {
+        if (values.Length == 0)
+        {
+            return double.NaN;
+        }
+
+        var sorted = values.ToArray();
+        Array.Sort(sorted);
+        var index = q / 100.0 * (sorted.Length - 1);
+        var lo = (int)Math.Floor(index);
+        var hi = Math.Min(lo + 1, sorted.Length - 1);
+        var t = index - lo;
+        // numpy's _lerp: interpolate from whichever end is nearer, for monotonicity.
+        var a = sorted[lo];
+        var b = sorted[hi];
+        var diff = b - a;
+        return t >= 0.5 ? b - diff * (1 - t) : a + diff * t;
+    }
+
     /// <summary><c>numpy.cumsum</c>.</summary>
     public static double[] CumulativeSum(ReadOnlySpan<double> values)
     {
