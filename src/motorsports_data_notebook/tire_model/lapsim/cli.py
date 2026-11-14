@@ -33,9 +33,20 @@ def main(argv: list[str] | None = None) -> int:
         "check-geometry",
         help="Gate B1: lap geometry on one clock, the clean laps and the build population.",
     )
-    sub.add_parser(
+    p_truth = sub.add_parser(
         "check-track-truth",
-        help="Gate B2: build every layout's track and check it against the inertial sensors.",
+        help="Gate B2: build every layout's track and check it against the inertial sensors "
+        "and the GSI elevation model.",
+    )
+    p_truth.add_argument(
+        "--no-dem",
+        action="store_true",
+        help="Skip the altitude check (it fetches elevation tiles on first use).",
+    )
+    p_truth.add_argument(
+        "--dem-offline",
+        action="store_true",
+        help="Use only the elevation tiles already in workspace/lapsim/gsi/.",
     )
     sub.add_parser(
         "check-track-holdout",
@@ -51,8 +62,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "check-geometry":
         report = gates.check_geometry(root, cache_dir=workspace / "cache")
     elif args.cmd == "check-track-truth":
+        ground = None
+        if not args.no_dem:
+            from .dem import GsiDem
+
+            ground = GsiDem(workspace / "gsi", fetch=not args.dem_offline)
         report = gates.check_track_truth(
-            root, cache_dir=workspace / "cache", tracks_dir=workspace / "tracks"
+            root, cache_dir=workspace / "cache", tracks_dir=workspace / "tracks", dem=ground
         )
     elif args.cmd == "check-track-holdout":
         from . import holdout

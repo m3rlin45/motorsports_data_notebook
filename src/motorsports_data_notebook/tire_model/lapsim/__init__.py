@@ -10,6 +10,8 @@ Segment B (#204), the track model:
 - :mod:`.track`: the curvature profile of a layout from the median of its
   build laps' Doppler course, and the inertial profile it is checked
   against (B2).
+- :mod:`.dem`: ground elevation from the GSI tiles, for B2's altitude
+  check only.
 - :mod:`.holdout`: the ladder of holdouts, day against day up to car
   against car, through production's heat chain (B3).
 - :mod:`.gates`: the gate reports; :mod:`.cli` runs them.
