@@ -394,6 +394,8 @@ IMU on 15 with lateral slope 0.92–0.98 (the ~30° yaw rotation), nine on
 the GPS channels. KK-F (42): the 18 `default`-profile sessions read
 lateral at 0.43–0.55× and use the GPS channels; under the KK-SII profile
 the IMU passes on 16, is absent from the file on 7 and twisted on one.
+(Since extractor 0.23.0 those sessions carry the profiles
+`KK-F (data logger)` and `KK-F`; the verdicts did not change, §1.0f.)
 KK-SII (72): the IMU is correctly oriented only on 2026-02-25/26 (5
 sessions); from 2026-03-18 through 2026-10-04 its axes are **swapped**
 (lateral follows the longitudinal reference at corr 0.97, 44 sessions),
@@ -639,6 +641,159 @@ The model refitted at each step, FL/FR/RL/RR:
   session's most common single source (34 sessions instead of 37). Per
   car: FJ 0.75/0.74/0.75/0.76, Inferno 86 0.91/0.98/0.90/0.98. The slopes
   under 0.9 remain lap-sim segment E's question (#207).
+
+### 1.0f Profiles by vehicle, the KK-F's controls, drivetrain channels, car corrections (extractor 0.23.0, 2026-11-14)
+
+**Decisions.**
+
+1. The extractor resolves the vehicle profile by logger ID **plus vehicle
+   name** (`extract.session_channel_names` →
+   `profiles.get_profile_for_log`), as every other consumer does. It used
+   the logger ID alone, which on the SW4 wheel shared by the KK-SII, the
+   KK-F and the KK-F-V2 is always the KK-SII's profile.
+2. The KK-F's two pre-SW4 loggers are mapped: 6521016 (device name
+   "Inferno KK-F", 2026-05-31 to 2026-06-15) and 6520348 (the "Inferno
+   Solo2DL", 2026-06-21 to 2026-07-04) to a new profile `kk_f_dl`. 6520348
+   also recorded the 718 Cayman, so it is mapped `by_vehicle` only: another
+   car on it gets no profile instead of the KK-F's.
+3. New stored channels, verbatim at their native rate like every other:
+   `throttle_deg` in `controls` (the ECU's throttle angle), and a
+   `drivetrain` family with `engine_rpm`, `gear` and
+   `wheel_speed_{fl,fr,rl,rr}_kmh`. New profile keys `throttle_angle`,
+   `rpm`, `gear`, `wheel_speed_*`.
+4. The car a recording names can be corrected in
+   `data/tire_dataset/session_overrides.yaml` (`tire_etl/overrides.py`),
+   keyed by file. The extractor applies it before grouping, so the session
+   id, the profile and `sessions.car` follow the corrected car;
+   `sessions.car_declared` keeps what the file says, and the manifest row
+   carries `car_override` so that editing the file re-extracts the
+   recording without `--force`.
+
+**Why** (#254). Of the KK-F's 44 sessions, 25 were extracted with the
+KK-SII's channel names and 19 with the defaults, so its throttle, brake
+and steering were stored on one session — and that one by accident (below).
+The car model of the lap simulation (#205) selects straight-line samples by
+full throttle and braking zones by brake pressure, and needs the gear to
+read the full-throttle acceleration.
+
+**What the KK-F logs**, surveyed over all 62 of its raw files (57 as the
+KK-F, five as the KK-F-V2; `MYST` ECU stream on all three loggers):
+
+| Signal | Channel | Where | Notes |
+|---|---|---|---|
+| Throttle angle | `TA` (deg) | every file | 5.0° closed, 84.0° open, the same on the three loggers; 50 Hz on the data loggers, 10 Hz on the SW4 |
+| Throttle percentage | `Throttle_PCT` | SW4 from 2026-08-23 | logged on change; not a linear function of `TA` (residual 7–10 % rms on two files), so both are stored |
+| Brake pressure | `P_Brake` (data loggers), `P_Brake_Actual` (SW4) | every file | positive; logged on change with a 2 s heartbeat. Mean GPS longitudinal g while it reads over 10: −0.38 to −0.99 on the 47 sessions. No negative sample; 74 `-inf` samples in all (three per data-logger file, one on the SW4), stored as logged |
+| ECU brake count | `Pbrake` / `Pbrake_Value` | every file | the same signal negated, at a regular 10 Hz. Not stored |
+| RPM | `ENGRPM` | every file | |
+| Gear | `GP` | every file | 0–7, and 100 on about 0.3 % of samples. The SW4's own `Gear` disagrees with it and is not stored |
+| Wheel speed | `SPD_FL` (km/h) | every file | one pickup, front left. 1.00–1.07 × GPS speed on part of each file, spikes to 3,238 km/h on the rest (15–84 % of the samples above 36 km/h on five files) |
+| Steering | `Steering` (data loggers, from 2026-06-15), `steering` (SW4) | 39 of 47 sessions | dropouts to −1,600° on the data loggers; a floor of −101.9° from 2026-08-23 to 09-25 and within 0–0.5° from 2026-09-26 on the SW4 |
+
+Two things a consumer has to know, both answers to #254's open questions:
+
+- **The brake scale differs between the loggers.** `P_Brake` on the data
+  loggers is the ECU count itself (its peak equals the peak of `Pbrake`
+  negated on all 24 files; daily peaks 48–63). `P_Brake_Actual` on the SW4
+  is 0.625 × that count (the ratio of the two peaks is 0.625 on 36 of 38
+  files, and 0.58 and 0.61 on the two where the change-logged channel
+  missed the peak; daily peaks 22–39). For the same pedal the data loggers
+  read 1.6 × the SW4. Both are stored as logged in `brake_bar`; comparing brake
+  pressure across 2026-07/08 needs the factor.
+- **Brake pressure and throttle percentage are not on a regular clock.**
+  A value holds until the next sample. The laps table's `brake_mean` /
+  `throttle_mean` are plain sample means and so weight the moments these
+  channels change; they are descriptive columns that nothing in the model
+  reads. They ignore non-finite samples since this version.
+
+The broken steering and wheel-speed channels are stored too: cleaning
+happens when a consumer loads the data, not in the extractor.
+
+**RPM, gear and wheel speeds on the other cars.** Inferno 86: `RPM`,
+`Gear` and four `WheelSpd*` on all 122 sessions. KK-SII and SFJ: `RPM`
+only (79 and 28 sessions). EK9 and RX8: none. The 718 Cayman's one session
+has no profile; its `RPM` is all zeros and its `WHEEL_SP_*` channels are
+not stored.
+
+**Car corrections.** The SW4 wheel moves between the cars: the dash config
+is loaded for the car, and the vehicle name is changed by hand. Twice the
+name was left on the previous car. The channel set is the config, and the
+config is the car's wiring (the KK-SII has analog `F_BRK` / `R_BRK` /
+`Throttle` / `RPM` / `Steering` and no ECU stream; the KK-F has the ECU
+stream and none of those), so a file with real signals on one car's
+channels recorded that car:
+
+| Recording | Named | Recorded | Evidence |
+|---|---|---|---|
+| 2026-08-23 `a_0252`, Tsukuba, 19 laps | KK-SII | KK-F | the KK-F's ECU stream, none of the KK-SII's analog channels; no KK-SII session that day; the day's next file has the same channel set and is named KK-F |
+| 2026-10-02 `a_0350` + `a_0351`, Suzuka, 9 laps | KK-F | KK-SII | the KK-SII's analog channels with real signals, no ECU stream; the accelerometer has the KK-SII's exchanged axes (`imu_swapped`); first session of the KK-SII's Suzuka weekend |
+
+Before the correction, resolving by vehicle name took the controls away
+from the second one (it had been the "one KK-F session with throttle
+stored") and did not give them to the first. After it, the KK-F has 44
+sessions and the KK-SII 79, as before, with two swapped.
+
+**What changed in the dataset** (re-extract of all 411 files; the 309
+sessions that existed keep every session-row value, including every
+`kin_*` number and both sensor verdicts, apart from `profile_name`,
+`car` / `session_id` on the two corrected ones, and the new
+`car_declared`):
+
+| | Before | After |
+|---|---|---|
+| KK-F sessions with throttle stored | 1 of 44 (`throttle_pct`) | 44 of 44 (`throttle_deg`), 23 of 25 SW4 sessions also `throttle_pct` |
+| KK-F sessions with brake pressure stored | 1 of 44 | 44 of 44 |
+| KK-F sessions with steering stored | 1 of 44 | 36 of 44 |
+| KK-SII sessions with throttle and brake stored | 78 of 79 | 79 of 79 |
+| Sessions with RPM / gear / wheel speeds | 0 | 277 / 169 / 169 of 310 |
+| Timeseries rows, files | 78.6 M, 307 | 97.8 M, 310 (drivetrain 15.8 M) |
+| Timeseries directory | 574 MB | 634 MB |
+
+Laps table: the KK-F's `brake_mean` / `brake_max` are now filled on its
+593 laps and `throttle_mean` on 338; no dynamics column changes on any car.
+`on_track_s` is the span of a lap's samples, so it grows where a newly
+stored channel has a sample nearer the lap's edge: on 960 of 3,555 laps,
+by under 75 ms on all but two (2.7 s on two KK-F laps of 2026-08-11 whose
+other channels start late).
+
+The 19 KK-F sessions on the data loggers keep their `gps_channel` verdict
+under the right profile: the accelerometer channels have the same names in
+both, and the logger's own accelerometer reads lateral at 0.25–0.62 × the
+GPS value on them.
+
+**Effect on the model.** The control and drivetrain channels are not
+inputs, and the tyre model pools the three KK cars as one (`FJ`), so
+neither the profiles nor the car corrections should move it. Refitted on
+the re-extracted dataset without the new day, it does not: FJ
+speed-pressure κ 2.1829e-7 against 2.1829e-7, 5-fold calculator holdout
+0.043/0.040/0.049/0.038 bar (FL/FR/RL/RR) against 0.042/0.040/0.049/0.038
+on the committed dataset (the folds are drawn in session-id order, and two
+ids changed).
+
+**The new day** (2026-11-13, Tsukuba, the KK-F-V2's first: 3 sessions, 45
+laps, 5 files; no run notes, one file comment) is what moves the refit:
+
+| FL/FR/RL/RR, hot-pressure MAE in bar | Committed (through 2026-10-25) | This refit (through 2026-11-13) |
+|---|---|---|
+| Calculator holdout, pooled | 0.042/0.040/0.049/0.038 | 0.041/0.041/0.050/0.038 |
+| FJ | 0.035/0.032/0.050/0.034 | 0.034/0.033/0.051/0.034 |
+| Inferno 86 | 0.058/0.061/0.046/0.046 | 0.058/0.061/0.046/0.046 |
+| dry | 0.040/0.046/0.040/0.037 | 0.041/0.045/0.040/0.038 |
+| wet | 0.037/0.029/0.046/0.041 | 0.037/0.029/0.046/0.041 |
+| damp (50–58 points) | 0.086/0.039/0.132/0.025 | 0.061/0.055/0.149/0.026 |
+| Oracle holdout, pooled | 0.044/0.041/0.049/0.041 | 0.043/0.042/0.050/0.041 |
+| Notes validation (12 sessions) | 0.101/0.085/0.060/0.069 | 0.101/0.085/0.060/0.069 |
+| Pace check slope / bias | 0.87/0.95/0.85/0.94, +0.004 to +0.005 (34 sessions) | 0.88/0.95/0.86/0.94, +0.003 to +0.005 (35 sessions) |
+
+- One constant moves by more than 3.5 %: **the FJ speed-pressure κ,
+  2.18e-7 → 5.88e-7**, on three sessions out of 178. It is the third time
+  this constant has moved by a factor of two or more on a small change of
+  the data (§1.0e); here the car is the KK-F with more power. The rest of
+  the FJ's constants move by under 3.5 % (`g_transfer` 2.40 → 2.49, K
+  +0.5 to +2.8 %, τ under 1 %); the Inferno 86's by under 0.1 %.
+- The pooled accuracy is where it was. The damp bucket, which the thin
+  FJ damp data carries, moves with κ: front-left better by 0.025 bar,
+  front-right and rear-left worse by 0.016 and 0.017.
 
 ## 2. Modeling approach
 
