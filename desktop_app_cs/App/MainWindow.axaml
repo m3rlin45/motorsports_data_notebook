@@ -1,0 +1,30 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:InfernoAnalyzer.App.Controls"
+        x:Class="InfernoAnalyzer.App.MainWindow"
+        Title="Inferno Analyzer — strip chart spike"
+        Icon="/Assets/inferno.ico"
+        Width="1280" Height="860"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource AppPageBrush}">
+  <DockPanel Margin="8">
+    <Border DockPanel.Dock="Top" Classes="toolbar">
+      <DockPanel>
+        <Button x:Name="FitButton" DockPanel.Dock="Right" ToolTip.Tip="Fit the lap in view (Home, or double-click the chart)">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <Path Classes="icon" Data="{StaticResource IconFit}" />
+            <TextBlock Text="Fit" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="12" Margin="0,0,16,0" ToolTip.Tip="What the laps are plotted against">
+          <RadioButton x:Name="DistanceRadio" x:FieldModifier="public" Content="Distance" GroupName="xaxis" IsChecked="True" />
+          <RadioButton x:Name="TimeRadio" x:FieldModifier="public" Content="Time" GroupName="xaxis" />
+        </StackPanel>
+        <TextBlock x:Name="FixtureLabel" x:FieldModifier="public" Classes="title" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+      </DockPanel>
+    </Border>
+    <Border Classes="card flush">
+      <controls:ChartHost x:Name="Chart" />
+    </Border>
+  </DockPanel>
+</Window>
