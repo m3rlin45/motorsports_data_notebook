@@ -895,7 +895,7 @@ def classify_laps(index: pd.DataFrame) -> pd.DataFrame:
 
     Needs per lap ``session_id, car, layout_id, lap_type, lap_time_s,
     matched, one_segment, n_implausible, max_gap_s, has_discard,
-    min_speed_ms, length_m, spike_g, lag_scatter_deg, condition``. Adds:
+    min_speed_ms, length_m, spike_g, lag_scatter_deg``. Adds:
 
     - ``clean`` and ``clean_reason`` (the first test the lap fails, in the
       order of #202's definition: ``not_full``, ``layout`` (an excluded
@@ -906,11 +906,15 @@ def classify_laps(index: pd.DataFrame) -> pd.DataFrame:
       test but the pace one;
     - ``flagged``: the position-slew flag (:data:`SPIKE_FLAG_G`);
     - ``reference_pace_s``: the car's third-fastest session best at the
-      layout among sessions not labelled wet;
+      layout;
     - ``in_build`` and ``build_reason`` (``not_clean``, ``flagged``,
       ``receiver`` (the session's lag scatter is over
-      :data:`LAG_SCATTER_MAX_DEG`), ``wet``, ``slow_session``,
-      ``slow_lap``).
+      :data:`LAG_SCATTER_MAX_DEG`), ``slow_session``, ``slow_lap``).
+
+    The build does not look at ``condition``. The road is the same wet or
+    dry; a session that was wet is slow and falls to the pace rule, and
+    the weather model's label (unknown on many sessions, and "wet" on
+    sessions that had dried) would only remove laps driven at pace.
     """
     df = index.copy()
     reason = pd.Series("", index=df.index, dtype=object)
@@ -937,9 +941,8 @@ def classify_laps(index: pd.DataFrame) -> pd.DataFrame:
     df["clean"] = reason == ""
     df["flagged"] = df["spike_g"] > SPIKE_FLAG_G
 
-    wet = df["condition"] == "wet"
     per_session = (
-        df[df["clean"] & ~wet]
+        df[df["clean"]]
         .groupby(["car", "layout_id", "session_id"], as_index=False)["session_best_s"]
         .first()
     )
@@ -957,7 +960,6 @@ def classify_laps(index: pd.DataFrame) -> pd.DataFrame:
     _out(~df["clean"], "not_clean")
     _out(df["flagged"], "flagged")
     _out(~(df["lag_scatter_deg"] <= LAG_SCATTER_MAX_DEG), "receiver")
-    _out(wet, "wet")
     _out(~(df["session_best_s"] <= BUILD_SESSION_PACE * df["reference_pace_s"]), "slow_session")
     _out(~(df["lap_time_s"] <= BUILD_LAP_PACE * df["session_best_s"]), "slow_lap")
     df["build_reason"] = build

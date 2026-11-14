@@ -365,18 +365,19 @@ class TestClassifyLaps:
         assert out["reference_pace_s"].tolist() == [60.0, 75.0, 100.0]
         assert out["in_build"].all()
 
-    def test_wet_sessions_neither_build_nor_set_the_reference(self):
+    def test_condition_label_plays_no_part(self):
+        # a session labelled wet but driven at pace builds and sets the
+        # reference like any other; one that was really wet is slow
         parts = [
             _index_rows("s0", "car", [60.0]),
             _index_rows("s1", "car", [61.0], condition="wet"),
-            _index_rows("s2", "car", [62.0], condition="wet"),
-            _index_rows("s3", "car", [70.0], condition="damp"),
-            _index_rows("s4", "car", [72.0], condition="unknown"),
+            _index_rows("s2", "car", [62.0], condition="unknown"),
+            _index_rows("s3", "car", [70.0], condition="wet"),
+            _index_rows("s4", "car", [64.0], condition="damp"),
         ]
         out = geo.classify_laps(pd.concat(parts, ignore_index=True))
-        # dry-side bests 60, 70, 72: the third-fastest is 72
-        assert (out["reference_pace_s"] == 72.0).all()
-        assert out["build_reason"].tolist() == ["", "wet", "wet", "", ""]
+        assert (out["reference_pace_s"] == 62.0).all()
+        assert out["build_reason"].tolist() == ["", "", "", "slow_session", ""]
 
     def test_unsound_receiver_is_left_out(self):
         df = _index_rows("a", "car", [60.0, 60.2], lag_scatter_deg=0.8)
