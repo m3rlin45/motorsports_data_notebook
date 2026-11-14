@@ -379,6 +379,43 @@ class TestClassifyLaps:
         assert (out["reference_pace_s"] == 62.0).all()
         assert out["build_reason"].tolist() == ["", "", "", "slow_session", ""]
 
+    def test_wet_days_are_their_own_basis(self):
+        parts = [
+            _index_rows("d0", "car", [60.0, 60.5]),
+            _index_rows("d1", "car", [61.0], condition="wet"),  # labelled wet, at dry pace
+            _index_rows("d2", "car", [61.5]),
+            _index_rows("w4", "car", [95.0], condition="wet"),  # not driven for time
+            _index_rows("w0", "car", [66.0, 67.0, 68.0], condition="wet"),
+            _index_rows("w1", "car", [67.0], condition="wet"),
+            _index_rows("w2", "car", [68.0], condition="wet"),
+            _index_rows("w3", "car", [75.0], condition="wet"),  # slow even for the wet
+            _index_rows("s0", "car", [70.0]),  # slow, not labelled wet
+        ]
+        out = geo.classify_laps(pd.concat(parts, ignore_index=True))
+        by = out.groupby("session_id")["wet_build_reason"].apply(list)
+        # wet reference: the third-fastest wet session, 68 s; 1.05 × is 71.4
+        assert out.loc[out["session_id"] == "w0", "wet_reference_pace_s"].iloc[0] == 68.0
+        assert by["w0"] == ["", "", "slow_lap"]
+        assert by["w1"] == [""] and by["w2"] == [""]
+        assert by["w3"] == ["slow_session"]
+        assert by["d0"] == ["not_wet", "not_wet"] and by["d1"] == ["not_wet"]
+        assert by["s0"] == ["not_wet"] and by["w4"] == ["not_wet"]
+        # the two bases never share a lap
+        assert not (out["in_build"] & out["in_build_wet"]).any()
+        assert out["in_build"].sum() == 4 and out["in_build_wet"].sum() == 4
+
+    def test_wet_basis_is_per_car(self):
+        parts = [
+            _index_rows("a0", "fast", [60.0]),
+            _index_rows("a1", "fast", [66.0], condition="wet"),
+            _index_rows("b0", "slow", [80.0]),
+            _index_rows("b1", "slow", [90.0], condition="wet"),
+        ]
+        out = geo.classify_laps(pd.concat(parts, ignore_index=True))
+        assert out["wet_reference_pace_s"].tolist()[1] == 66.0
+        assert out["wet_reference_pace_s"].tolist()[3] == 90.0
+        assert out["in_build_wet"].tolist() == [False, True, False, True]
+
     def test_unsound_receiver_is_left_out(self):
         df = _index_rows("a", "car", [60.0, 60.2], lag_scatter_deg=0.8)
         out = geo.classify_laps(df)

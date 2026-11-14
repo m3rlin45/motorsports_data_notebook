@@ -1761,6 +1761,67 @@ asked for (resurfaced for 2026): every Motegi build lap is from 2025, so
 there is nothing to compare. Vertical curvature and the pit-exit join
 (asked by #206's review) are not built.
 
+#### B2a. A wet and a dry version of each track (2026-11-15)
+
+Decided by the owner: the road does not change in the wet, but wet days
+are a separate basis, with their own meaning of fast; where a layout has
+the wet laps it keeps a wet track beside the dry one, every car pooled as
+in the dry one.
+
+**Wet basis** (`geometry.classify_laps`, columns `in_build_wet`,
+`wet_build_reason`, `wet_reference_pace_s`): a session is wet when the
+wetness model labels it wet *and* its best is off the car's dry pace (over
+1.05 × the dry reference, and within 1.3 × of it: slower than that is not
+a wet session driven for time). Among those the same two pace rules apply
+on their own scale: a session best within 1.05 × the car's third-fastest
+wet session best at the layout, and a lap within 1.02 × its session's
+best. The two bases never share a lap. `build_track_model(..., basis="wet")`
+builds from it; the track's `meta.basis` says which it is, and the wet one
+is saved as `<layout>__wet.json`.
+
+**Why it is worth a second track.** A car's fast wet laps against its own
+dry build laps, on the dry build's reference line:
+
+| Layout | Car | Wet laps (sessions / days) | Wet / dry reference lap | Line against the dry line, rms / max | Apex κ, mean | Corners tighter / wider by 2 % | Heat at equal speed |
+|---|---|---|---|---|---|---|---|
+| Tsukuba | Inferno 86 | 41 (8 / 4) | 76.0 / 69.8 s | 1.5 / 3.3 m | +4 % | 4 / 2 of 8 | 0.019 |
+| Tsukuba | KK-F | 33 (8 / 4) | 65.0 / 59.5 s | 1.0 / 2.5 m | +4 % | 5 / 2 of 8 | 0.015 |
+| Tsukuba | KK-SII | 17 (4 / 1) | 67.3 / 60.4 s | 2.7 / 4.9 m | +9 % | 7 / 0 of 8 | 0.007 |
+| Fuji | KK-SII | 14 (5 / 1) | 133.7 / 117.6 s | 1.7 / 4.3 m | +7 % | 7 / 3 of 11 | 0.011 |
+| Sodegaura | Inferno 86 | 23 (5 / 2) | 88.9 / 77.1 s | 1.9 / 4.1 m | +9 % | 8 / 0 of 8 | 0.009 |
+
+The wet line lies 1–3 m from the dry one and its apexes are 4–9 % tighter
+on average; at equal speed that is 0.007–0.019 in per-tyre heat, the size
+of the difference between cars at Tsukuba and one to three times the
+day-to-day floor. Fast wet laps therefore do not belong in the dry track
+(the pace rule keeps them out) and are a track of their own.
+
+**What exists today.** A wet track is built from 30 wet-basis laps on 3
+days:
+
+| Layout | Wet laps | Sessions | Days | Cars | Wet track |
+|---|---|---|---|---|---|
+| Tsukuba | 91 | 20 | 9 | Inferno 86, KK-F, KK-SII | built |
+| Sodegaura | 23 | 5 | 2 | Inferno 86 | not yet |
+| Fuji | 20 | 6 | 2 | KK-F, KK-SII | not yet |
+| Motegi | 1 | 1 | 1 | EK9 | not yet |
+| Suzuka | 0 | | | | not yet |
+
+Tsukuba's wet track closes like a dry one (0.0001 turns, line gap 1.0 m)
+and has the same length (2,078 m). Pooled over the three cars it lies
+0.7 m rms (1.5 m at most) from the dry track with apexes 2 % tighter on
+average (−4 to +9 % by corner), 0.020 in per-tyre heat at the dry speed
+trace. The pooled figures are smaller than the per-car ones above because
+the cars' wet lines differ from each other as well. The gate checks that a
+wet track closes; the comparison with the dry track is reported.
+
+Known limit of the dry reference pace: it is the third-fastest session
+whatever its label, so a car with only two dry sessions at a layout and
+several wet ones would take a wet session as its dry reference. No cell
+is in that state today (the reference is within 2.4 % of the fastest
+session everywhere except the RX8 at Sodegaura, 7 %, and the Inferno 86
+at Tsukuba, 5.3 %).
+
 #### B3. One track for every car (`holdout.py`, gate `check-track-holdout`, 2026-11-15)
 
 The statistic is profile against profile: the curvature from one group of

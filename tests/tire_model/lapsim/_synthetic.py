@@ -75,6 +75,7 @@ def synthetic_session(
     noise_m: float = 0.0,
     slew: tuple[int, float] | None = None,
     accel_delay_s: float | None = None,
+    pace: float = 1.0,
     seed: int = 0,
 ) -> tuple[pd.DataFrame, dict]:
     """One recording: ``START_S_M`` before the gate, ``n_laps`` full laps and
@@ -82,7 +83,8 @@ def synthetic_session(
     ``(lap_num, metres)``: a position excursion of that size, 0.6 s long, in
     the middle of the lap's second straight. ``accel_delay_s`` adds an
     accelerometer (``lat_g``, ``long_g``) that reports the true ground-frame
-    accelerations that much late. Returns the per-sample frame
+    accelerations that much late. ``pace`` multiplies the lap time (1.1: a
+    wet session). Returns the per-sample frame
     (GPS and gyro columns on one 25 Hz clock) and the truth."""
     fine = 0.001
     total_m = n_laps * LENGTH_M + 100.0 - START_S_M
@@ -92,7 +94,7 @@ def synthetic_session(
     k = 4 * math.pi / LENGTH_M
     pos = START_S_M
     for i in range(1, steps):
-        pos += (28.0 + 8.0 * math.cos(k * pos)) * fine
+        pos += (28.0 + 8.0 * math.cos(k * pos)) / pace * fine
         s_fine[i] = pos
     s_fine = s_fine[s_fine <= n_laps * LENGTH_M + 100.0]
     t_fine = np.arange(s_fine.size) * fine
@@ -101,7 +103,7 @@ def synthetic_session(
     s_late = np.interp(np.maximum(t - lag_s, 0.0), t_fine, s_fine)
     x, y, h = stadium(s)
     _, _, h_late = stadium(s_late)
-    v_late = speed_at(s_late)
+    v_late = speed_at(s_late) / pace
     sign = -1.0 if mirror else 1.0
     x, h, h_late = sign * x, sign * h, sign * h_late
     rng = np.random.default_rng(seed)
@@ -138,7 +140,7 @@ def synthetic_session(
     )
     if accel_delay_s is not None:
         s_acc = np.interp(np.maximum(t - accel_delay_s, 0.0), t_fine, s_fine)
-        v_acc = speed_at(s_acc)
+        v_acc = speed_at(s_acc) / pace
         h_acc = stadium(s_acc)[2]
         frame["lat_g"] = sign * v_acc * np.gradient(h_acc, t) / 9.80665
         frame["long_g"] = np.gradient(v_acc, t) / 9.80665
@@ -147,7 +149,7 @@ def synthetic_session(
         "t": t,
         "s": s,
         "heading": h,
-        "speed": speed_at(s),
+        "speed": speed_at(s) / pace,
         "crossings": crossings,
         "lag_s": lag_s,
         "n_laps": n_laps,
