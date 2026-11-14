@@ -39,8 +39,17 @@
           </ListBox>
 
           <TextBlock DockPanel.Dock="Top" Classes="section" Text="Channels" Margin="0,0,0,4" IsVisible="{Binding HasChannels}" />
+          <Grid DockPanel.Dock="Top" Margin="0,0,0,4" IsVisible="{Binding HasChannels}">
+            <TextBox x:Name="SearchBox" Text="{Binding ChannelFilter}" PlaceholderText="Search channels" Padding="8,2,28,2"
+                     ToolTip.Tip="Type to filter; Enter ticks the first match, Esc clears" AutomationProperties.Name="Search channels" />
+            <Button x:Name="ClearFilterButton" Classes="icon" Command="{Binding ClearChannelFilterCommand}" IsVisible="{Binding HasChannelFilter}"
+                    HorizontalAlignment="Right" VerticalAlignment="Center" Padding="4" MinHeight="0" Margin="0,0,2,0"
+                    ToolTip.Tip="Clear search (Esc)" AutomationProperties.Name="Clear search">
+              <Path Classes="icon" Data="{StaticResource IconClose}" />
+            </Button>
+          </Grid>
           <TextBlock DockPanel.Dock="Top" Classes="subtle" Text="Channels appear here once a session is open." TextWrapping="Wrap" IsVisible="{Binding !HasChannels}" />
-          <ListBox x:Name="ChannelList" Classes="rows" ItemsSource="{Binding Channels}" IsVisible="{Binding HasChannels}"
+          <ListBox x:Name="ChannelList" Classes="rows" ItemsSource="{Binding FilteredChannels}" IsVisible="{Binding HasChannels}"
                    AutomationProperties.Name="Channels">
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="vm:ChannelChoiceViewModel">
