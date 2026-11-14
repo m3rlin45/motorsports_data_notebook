@@ -29,6 +29,7 @@ public partial class MainWindow : Window
     private ProfileWindow? _profileWindow;
     private NativeMenu? _recentMenu;
     private NativeMenu? _viewMenu;
+    private bool _closeConfirmed;
     private bool _titleBarHooked;
 
     /// <summary>Room kept clear at the right of the title row for the minimize, maximize and close buttons.</summary>
@@ -112,7 +113,30 @@ public partial class MainWindow : Window
         ViewModel.SaveSettings();
     }
 
-    private void OnClosing(object? sender, WindowClosingEventArgs e) => SaveWindowState();
+    private async void OnClosing(object? sender, WindowClosingEventArgs e)
+    {
+        if (!_closeConfirmed && ViewModel.Sectors.IsDirty)
+        {
+            // Ask before unsaved gates are lost; the close resumes once the user has answered.
+            e.Cancel = true;
+            var choice = await UnsavedChangesDialog.AskAsync(this, ViewModel.Sectors.TrackName);
+            if (choice == UnsavedChoice.Cancel)
+            {
+                return;
+            }
+
+            if (choice == UnsavedChoice.Save)
+            {
+                ViewModel.Sectors.SaveTrack();
+            }
+
+            _closeConfirmed = true;
+            Close();
+            return;
+        }
+
+        SaveWindowState();
+    }
 
     /// <summary>
     /// Mica on Windows 11: the page behind the cards takes the desktop tint.
