@@ -39,7 +39,7 @@ public static class CrashLog
         {
             Write(e.Exception, "Unhandled exception on the UI thread");
             e.Handled = true;
-            Show(e.Exception);
+            Show(e.Exception.Message);
         };
     }
 
@@ -65,7 +65,8 @@ public static class CrashLog
         }
     }
 
-    private static void Show(Exception exception)
+    /// <summary>Tell the user something failed and where the details are; the app carries on. UI thread only.</summary>
+    internal static void Show(string message)
     {
         if (Avalonia.Application.Current?.ApplicationLifetime is not Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime { MainWindow: { IsVisible: true } owner })
         {
@@ -87,7 +88,7 @@ public static class CrashLog
                 MaxWidth = 480,
                 Children =
                 {
-                    new TextBlock { Text = exception.Message, TextWrapping = TextWrapping.Wrap, FontWeight = FontWeight.SemiBold },
+                    new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap, FontWeight = FontWeight.SemiBold },
                     new TextBlock { Text = $"The app will keep running. Details were written to:\n{LogPath}", TextWrapping = TextWrapping.Wrap },
                     close,
                 },
