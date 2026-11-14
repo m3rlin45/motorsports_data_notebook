@@ -164,4 +164,52 @@ public sealed record StripChartSpec(
 /// </param>
 public readonly record struct ChartPoint(double X, double Y, int SubplotIndex, int ItemId = -1);
 
+/// <summary>A shaded vertical band between two x values (e.g. a velocity range).</summary>
+public sealed record BandSpec(double Start, double End, string Color, double Alpha = 0.2, string? Label = null);
+
+/// <summary>One bar series: bars centred on <see cref="Centers"/> with heights <see cref="Values"/>.</summary>
+/// <param name="Label">Legend label (empty: no legend entry).</param>
+/// <param name="Centers">Bar centres in x units.</param>
+/// <param name="Values">Bar heights in y units.</param>
+/// <param name="Color">CSS hex colour for every bar, or null to use <see cref="BarColors"/>.</param>
+/// <param name="BarColors">Per-bar colours when the series is not single-coloured.</param>
+public sealed record BarSeriesSpec(
+    string Label,
+    double[] Centers,
+    double[] Values,
+    string? Color = null,
+    string[]? BarColors = null);
+
+/// <summary>One panel of a histogram grid.</summary>
+/// <param name="Title">Panel title, e.g. "Front Left (FL)".</param>
+/// <param name="Series">Bar series; several are drawn side by side within each bin.</param>
+/// <param name="BinWidth">Bin width in x units (bars are drawn narrower).</param>
+/// <param name="Annotation">Text in the panel's top-right corner, or empty.</param>
+public sealed record HistogramPanelSpec(string Title, IReadOnlyList<BarSeriesSpec> Series, double BinWidth, string Annotation = "");
+
+/// <summary>
+/// A grid of bar histograms sharing x limits and background bands; the
+/// suspension velocity view (2×2 corners, one or two sessions per panel).
+/// </summary>
+/// <param name="Title">Figure title.</param>
+/// <param name="Panels">Panels in row-major order.</param>
+/// <param name="Columns">Panels per row.</param>
+/// <param name="XLimits">Shared x range.</param>
+/// <param name="XLabel">X axis label (bottom row).</param>
+/// <param name="YLabel">Y axis label (left column).</param>
+/// <param name="Bands">Shaded ranges drawn behind every panel.</param>
+/// <param name="HoverFormat">
+/// Composite format of the hover label: {0} the panel (and series) name,
+/// {1} the bar's x, {2} its height.
+/// </param>
+public sealed record HistogramGridSpec(
+    string Title,
+    IReadOnlyList<HistogramPanelSpec> Panels,
+    int Columns,
+    XRange XLimits,
+    string XLabel,
+    string YLabel,
+    IReadOnlyList<BandSpec> Bands,
+    string HoverFormat = "{0}\n{1:0.##}: {2:0.##}") : ChartSpec;
+
 
