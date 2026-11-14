@@ -1,0 +1,183 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!--
+    The app's design tokens and shared styles. Views never write a colour, a
+    font size or a padding of their own: they pick a class from here, so a
+    visual change is made once and holds in both themes.
+
+    Surfaces follow the Windows 11 layering: a grey page, lighter cards on
+    it, the white (or near-black) plot inside the card. The chart theme is
+    built from the same brushes (ChartSurfaces.ThemeFor).
+  -->
+  <Styles.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="AppPageBrush" Color="#F3F3F3" />
+          <SolidColorBrush x:Key="AppCardBrush" Color="#FBFBFB" />
+          <SolidColorBrush x:Key="AppCardStrokeBrush" Color="#E5E5E5" />
+          <SolidColorBrush x:Key="AppChartDataBrush" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="AppChartGridBrush" Color="#E5E5E5" />
+          <SolidColorBrush x:Key="AppTextBrush" Color="#1A1A1A" />
+          <SolidColorBrush x:Key="AppSubtleTextBrush" Color="#5C5C5C" />
+          <SolidColorBrush x:Key="AppErrorBrush" Color="#C42B1C" />
+          <SolidColorBrush x:Key="AppBestBrush" Color="#7A2BD6" />
+          <SolidColorBrush x:Key="AppSecondBestBrush" Color="#107C41" />
+          <SolidColorBrush x:Key="AppGateBrush" Color="#B45309" />
+          <SolidColorBrush x:Key="AppTrackBrush" Color="#8A8A8A" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+          <SolidColorBrush x:Key="AppPageBrush" Color="#202020" />
+          <SolidColorBrush x:Key="AppCardBrush" Color="#2B2B2B" />
+          <SolidColorBrush x:Key="AppCardStrokeBrush" Color="#1D1D1D" />
+          <SolidColorBrush x:Key="AppChartDataBrush" Color="#1E1E1E" />
+          <SolidColorBrush x:Key="AppChartGridBrush" Color="#333333" />
+          <SolidColorBrush x:Key="AppTextBrush" Color="#E8E8E8" />
+          <SolidColorBrush x:Key="AppSubtleTextBrush" Color="#A6A6A6" />
+          <SolidColorBrush x:Key="AppErrorBrush" Color="#FF99A4" />
+          <SolidColorBrush x:Key="AppBestBrush" Color="#C08BFF" />
+          <SolidColorBrush x:Key="AppSecondBestBrush" Color="#4CD98A" />
+          <SolidColorBrush x:Key="AppGateBrush" Color="#F59E0B" />
+          <SolidColorBrush x:Key="AppTrackBrush" Color="#8A8A8A" />
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+
+      <!-- Type ramp: 12 body, 12 semibold section labels, 14 semibold titles. Nothing else. -->
+      <x:Double x:Key="ControlContentThemeFontSize">12</x:Double>
+      <x:Double x:Key="AppBodyFontSize">12</x:Double>
+      <x:Double x:Key="AppTitleFontSize">14</x:Double>
+      <x:Double x:Key="TabItemHeaderFontSize">14</x:Double>
+      <!-- Radii: 8 for cards, 4 for the controls inside them. -->
+      <CornerRadius x:Key="ControlCornerRadius">4</CornerRadius>
+      <CornerRadius x:Key="AppCardCornerRadius">8</CornerRadius>
+
+      <!-- Icons: 16 x 16 line drawings, stroked in the text colour (see Path.icon). -->
+      <StreamGeometry x:Key="IconOpen">M2,4.5 H6 L7.5,6 H14 V12.5 H2 Z</StreamGeometry>
+      <StreamGeometry x:Key="IconClose">M4,4 L12,12 M12,4 L4,12</StreamGeometry>
+      <StreamGeometry x:Key="IconSidebar">M2,3 H14 V13 H2 Z M6,3 V13</StreamGeometry>
+      <StreamGeometry x:Key="IconSearch">M11.5,7 A4.5,4.5 0 1 1 2.5,7 A4.5,4.5 0 1 1 11.5,7 M10.3,10.3 L13.5,13.5</StreamGeometry>
+      <StreamGeometry x:Key="IconSwap">M3,5.5 H13 M10.5,3 L13,5.5 L10.5,8 M13,10.5 H3 M5.5,8 L3,10.5 L5.5,13</StreamGeometry>
+      <StreamGeometry x:Key="IconSave">M3,2.5 H11 L13.5,5 V13.5 H3 Z M5.5,2.5 V6 H10 V2.5 M5.5,13.5 V9.5 H10.5 V13.5</StreamGeometry>
+      <StreamGeometry x:Key="IconDelete">M3,4.5 H13 M6,4.5 V3 H10 V4.5 M4.5,4.5 L5,13.5 H11 L11.5,4.5 M7,7 V11 M9,7 V11</StreamGeometry>
+      <StreamGeometry x:Key="IconUndo">M5.5,3.5 L3,6 L5.5,8.5 M3,6 H9.5 A3.5,3.5 0 0 1 9.5,13 H6</StreamGeometry>
+      <StreamGeometry x:Key="IconFit">M3,6 V3 H6 M10,3 H13 V6 M13,10 V13 H10 M6,13 H3 V10</StreamGeometry>
+      <StreamGeometry x:Key="IconTable">M2.5,3 H13.5 V13 H2.5 Z M2.5,6.5 H13.5 M2.5,10 H13.5 M6.5,3 V13</StreamGeometry>
+      <StreamGeometry x:Key="IconChannels">M3,5 H13 M3,11 H13 M6,3.5 V6.5 M10,9.5 V12.5</StreamGeometry>
+      <StreamGeometry x:Key="IconCopy">M5.5,5.5 H13 V13.5 H5.5 Z M3,10.5 V2.5 H10.5</StreamGeometry>
+      <StreamGeometry x:Key="IconAdd">M8,3 V13 M3,8 H13</StreamGeometry>
+      <StreamGeometry x:Key="IconError">M8,2.5 L14,13 H2 Z M8,6.5 V9.5 M8,11.2 V11.4</StreamGeometry>
+    </ResourceDictionary>
+  </Styles.Resources>
+
+  <!-- Text -->
+  <Style Selector="Window">
+    <Setter Property="FontSize" Value="{StaticResource AppBodyFontSize}" />
+  </Style>
+  <Style Selector="TextBlock.title">
+    <Setter Property="FontSize" Value="{StaticResource AppTitleFontSize}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="TextBlock.section">
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="TextBlock.subtle">
+    <Setter Property="Foreground" Value="{DynamicResource AppSubtleTextBrush}" />
+  </Style>
+  <Style Selector="TextBlock.error">
+    <Setter Property="Foreground" Value="{DynamicResource AppErrorBrush}" />
+  </Style>
+  <!-- Lap times, gaps and statistics: tabular figures so columns of digits line up in the UI font. -->
+  <Style Selector="TextBlock.numeric">
+    <Setter Property="FontFeatures" Value="tnum" />
+  </Style>
+  <Style Selector="TextBlock.label">
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Margin" Value="0,0,8,0" />
+  </Style>
+
+  <!-- Surfaces -->
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="{DynamicResource AppCardBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AppCardStrokeBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{StaticResource AppCardCornerRadius}" />
+    <Setter Property="Padding" Value="12" />
+    <Setter Property="ClipToBounds" Value="True" />
+  </Style>
+  <Style Selector="Border.card.flush">
+    <Setter Property="Padding" Value="0" />
+  </Style>
+  <Style Selector="Border.toolbar">
+    <Setter Property="Background" Value="{DynamicResource AppCardBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AppCardStrokeBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{StaticResource AppCardCornerRadius}" />
+    <Setter Property="Padding" Value="12,8" />
+    <Setter Property="Margin" Value="0,0,0,8" />
+  </Style>
+  <Style Selector="GridSplitter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <!-- Controls -->
+  <Style Selector="TabItem">
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="MinHeight" Value="36" />
+    <Setter Property="Padding" Value="12,0" />
+  </Style>
+  <Style Selector="Button, ToggleButton">
+    <Setter Property="Padding" Value="12,4" />
+    <Setter Property="MinHeight" Value="28" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <!-- Secondary actions (lap presets, reset): no fill until hovered, so the one accent button stands out. -->
+  <Style Selector="Button.quiet">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="8,4" />
+  </Style>
+  <Style Selector="Button.icon, ToggleButton.icon">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="6" />
+    <Setter Property="MinWidth" Value="28" />
+  </Style>
+  <Style Selector="Path.icon">
+    <Setter Property="Width" Value="16" />
+    <Setter Property="Height" Value="16" />
+    <Setter Property="Stretch" Value="None" />
+    <Setter Property="Stroke" Value="{DynamicResource AppTextBrush}" />
+    <Setter Property="StrokeThickness" Value="1.25" />
+    <Setter Property="StrokeLineCap" Value="Round" />
+    <Setter Property="StrokeJoin" Value="Round" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="TextBox">
+    <Setter Property="MinHeight" Value="28" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="ComboBox">
+    <Setter Property="MinHeight" Value="28" />
+  </Style>
+  <Style Selector="AutoCompleteBox">
+    <Setter Property="MinHeight" Value="28" />
+  </Style>
+  <Style Selector="TextBox.number">
+    <Setter Property="Width" Value="72" />
+    <Setter Property="FontFeatures" Value="tnum" />
+  </Style>
+  <Style Selector="CheckBox, RadioButton">
+    <Setter Property="MinHeight" Value="24" />
+    <Setter Property="Padding" Value="6,0,0,0" />
+  </Style>
+  <!-- Lap and channel lists: 24 px rows, the selection highlight off (the checkbox is the state). -->
+  <Style Selector="ListBox.rows">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+  <Style Selector="ListBox.rows ListBoxItem">
+    <Setter Property="Padding" Value="4,0" />
+    <Setter Property="MinHeight" Value="24" />
+    <Setter Property="CornerRadius" Value="4" />
+  </Style>
+</Styles>
