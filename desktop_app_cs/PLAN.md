@@ -108,7 +108,7 @@ hover (top of stack). Fetch read-only with `gh` into the scratchpad.
 1. **Data layer** — `libxrk-ffi`/`libibt-ffi` crates; `Core/Io` P/Invoke +
    Arrow import; `Core/Profiles` YAML loader.
 2. **Kernels** — one module at a time, each with a fixture dumped by
-   `tools/extract_fixture.py --module X` and an xunit parity test.
+   `tools/extract_kernel_fixture.py --module X` and an xunit parity test.
 3. **Views** — Time/Distance tab, then Suspension, Roll Gradient, Driver;
    split-times table; track store + editor.
 4. **Packaging** — Linux NativeAOT, Windows trimmed single-file, release
@@ -260,4 +260,21 @@ cases to `Tests/Fixtures/profiles.json`; `ProfilesParityTests` replays them.
 Phase 1 is complete. Left for the next libxrk release (0.14.0): re-pin
 libxrk to its tag and drop the source build from `cs-session-fixture`, as
 libibt already is.
+
+### Phase 2 — in progress
+
+Kernels live in `Core/Analysis/`, one file per Python module, driven by
+`tools/extract_kernel_fixture.py --module X` (`just cs-kernel-fixture X`),
+which dumps the Python inputs verbatim and the outputs (full where small,
+summaries where large) from the Fuji 86 sample, laps 14 and 12.
+
+| Module | State | Notes |
+|---|---|---|
+| `Numerics` | done | numpy/pandas primitives: pairwise `Sum`/`Mean` (bit-identical to numpy), `Gradient`, centred `RollingMeanCentered` with pandas' even-window offset, `CumulativeSum`, `ArgMax` |
+| `corners` | done 2026-10-29 | `GpsToLocalXy`, `ComputeCurvature`, `IdentifyCorners(FromCurvature)`; corner lists identical to Python on both laps, curvature arrays to 1e-7 relative (pandas' rolling mean uses a compensated running sum, so the last bits differ) |
+| `zones` | next | |
+| `suspension`, `roll_gradient`, `driver_analysis`, `tire_grip` | | |
+
+Lesson from corners: match numpy's operation order exactly (`x * (π/180)`,
+not `x * π / 180`; pairwise sums) before loosening a tolerance.
 
