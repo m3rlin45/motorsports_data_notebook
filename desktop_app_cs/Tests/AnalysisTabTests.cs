@@ -49,7 +49,7 @@ public class AnalysisTabTests
     }
 
     [Fact]
-    public async Task A_result_overtaken_by_a_newer_request_is_never_displayed()
+    public Task A_result_overtaken_by_a_newer_request_is_never_displayed() => Ui.Run(async () =>
     {
         var tab = new GatedTab();
         var completions = 0;
@@ -75,10 +75,10 @@ public class AnalysisTabTests
         Assert.Equal(StatusKind.Done, tab.StatusKind);
         Assert.Null(tab.EmptyMessage);
         Assert.False(tab.IsAnalyzing);
-    }
+    });
 
     [Fact]
-    public async Task Nothing_to_analyse_clears_the_display_and_says_why()
+    public Task Nothing_to_analyse_clears_the_display_and_says_why() => Ui.Run(async () =>
     {
         var tab = new GatedTab();
         tab.Release.Release();
@@ -99,10 +99,10 @@ public class AnalysisTabTests
         tab.HintText = null;
         await tab.RunNowAsync();
         Assert.Equal(AnalysisTabViewModel.NoSessionHint, tab.Status);
-    }
+    });
 
     [Fact]
-    public async Task A_failed_analysis_is_an_error_status_and_clears_the_display()
+    public Task A_failed_analysis_is_an_error_status_and_clears_the_display() => Ui.Run(async () =>
     {
         var tab = new GatedTab { Fail = true };
         tab.Release.Release();
@@ -115,5 +115,5 @@ public class AnalysisTabTests
         Assert.True(tab.IsError);
         Assert.Equal("Error: no corners", tab.EmptyMessage);
         Assert.False(tab.IsAnalyzing);
-    }
+    });
 }
