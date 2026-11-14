@@ -237,6 +237,23 @@ GitHub Actions workflows:
 
 - **master** — Main branch, target for PRs
 - Development branches are feature-specific
+- **pr-screenshots** — Orphan branch holding the images shown in PR descriptions (see PR Screenshots). Never merged; do not delete or force-push it
+
+## PR Screenshots
+
+A PR that introduces a major user-visible feature shows a screenshot of the feature in use. The images are not committed in the feature diff: they live on the orphan branch `pr-screenshots` (no shared history with `master`), and the PR description links to them.
+
+1. **Capture at the feature's commit**, not the tip of the stack, so the image shows what that diff delivers (`sl goto` the commit, run the app or its render tests, keep the image outside the repo).
+2. **Publish** with `scripts/pr_screenshots.py`, which adds the files under `PREFIX/` in one commit on `pr-screenshots` through the GitHub API (the working copy is not touched; the branch is created as a root commit on first use) and prints a Markdown image line per file:
+   ```bash
+   uv run python scripts/pr_screenshots.py --prefix desktop_app_cs \
+     "Suspension tab: wheel-velocity histograms per corner=/path/to/suspension.png"
+   ```
+   Each argument is `FILE` or `CAPTION=FILE`; use one prefix per app or area.
+3. **Paste the printed lines into the commit message**, above the trailers, under a `Screenshot:` line. `sl pr submit` rebuilds the PR description from the commit message on every submit, so an image added only to the PR body is lost on the next submit.
+4. **Check the PR shows it.** Once PRs are linked as a GitHub stack (`gh stack link`), GitHub rejects Sapling's description update ("Cannot change the base branch because the pull request is part of a stack"), so after re-submitting such a stack copy the changed commit message into the PR yourself: `gh pr edit <num> -R OWNER/REPO --body-file <file>`.
+
+The links are pinned to the publishing commit (`raw.githubusercontent.com/OWNER/REPO/<commit>/PREFIX/file.png`), so re-publishing a file under the same name never changes what an older PR shows, and they keep working after the PR's own branch is deleted.
 
 ## Notebook Internationalization
 
