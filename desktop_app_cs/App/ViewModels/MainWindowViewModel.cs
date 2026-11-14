@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using InfernoAnalyzer.App.Settings;
 using InfernoAnalyzer.Core.Profiles;
+using InfernoAnalyzer.Core.Tracks;
 
 namespace InfernoAnalyzer.App.ViewModels;
 
@@ -25,13 +26,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private readonly SettingsStore _settingsStore;
 
     /// <summary>
-    /// Create the window model over <paramref name="profiles"/>. Without
-    /// <paramref name="settings"/> nothing is read from or written to disk
-    /// (tests).
+    /// Create the window model over <paramref name="profiles"/> and
+    /// <paramref name="tracks"/>. Without <paramref name="settings"/> nothing
+    /// is read from or written to disk (tests).
     /// </summary>
-    public MainWindowViewModel(ProfileStore? profiles = null, SettingsStore? settings = null)
+    public MainWindowViewModel(ProfileStore? profiles = null, TrackStore? tracks = null, SettingsStore? settings = null)
     {
         Profiles = profiles ?? new ProfileStore();
+        TrackStore = tracks ?? new TrackStore();
         _settingsStore = settings ?? new SettingsStore();
         var styles = new LapStyleAllocator();
         SessionA = new SessionViewModel("Session A", Profiles, SessionSlot.A, styles);
@@ -41,7 +43,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         RollGradient = new RollGradientViewModel(SessionA, SessionB, Suspension.SuspensionConfig);
         Driver = new DriverViewModel(SessionA, SessionB);
         TireGrip = new TireGripViewModel(SessionA, SessionB);
-        Tabs = new ObservableCollection<AnalysisTabViewModel> { TimeDistance, Suspension, Driver, TireGrip, RollGradient };
+        Sectors = new SectorsViewModel(SessionA, TrackStore);
+        Tabs = new ObservableCollection<AnalysisTabViewModel> { TimeDistance, Sectors, Suspension, Driver, TireGrip, RollGradient };
         ConfigSections = Tabs.Where(t => t.Config is ChannelConfigViewModel).Select(t => new ConfigSection(t.Header, (ChannelConfigViewModel)t.Config!)).ToList();
         _selectedConfigSection = ConfigSections.FirstOrDefault();
 
@@ -77,6 +80,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <summary>Profile store shared by the sessions and tabs.</summary>
     public ProfileStore Profiles { get; }
 
+    /// <summary>Track store for the Sectors tab.</summary>
+    public TrackStore TrackStore { get; }
+
     /// <summary>What is remembered between runs.</summary>
     public AppSettings Settings => _settingsStore.Settings;
 
@@ -100,6 +106,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     /// <summary>The Tire Grip tab.</summary>
     public TireGripViewModel TireGrip { get; }
+
+    /// <summary>The Sectors tab.</summary>
+    public SectorsViewModel Sectors { get; }
 
     /// <summary>Analysis tabs in display order.</summary>
     public ObservableCollection<AnalysisTabViewModel> Tabs { get; }
