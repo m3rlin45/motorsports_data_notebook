@@ -517,6 +517,9 @@ MIN_CAR_LAPS = 10
 #: A car's own accelerometer profile is a median over its laps; under this
 #: many it is too rough to gate the Doppler profile against.
 INERTIAL_MIN_LAPS = 30
+#: A layout gets a wet track from this many wet-basis laps on this many days.
+WET_MIN_LAPS = 30
+WET_MIN_DAYS = 3
 DEM_GRADE_RMS_MAX = 0.01
 DEM_RELIEF_MAX_M = 3.0
 #: A bridge in the bare-earth model: it leaves the logged altitude by more
@@ -575,6 +578,50 @@ def _rms(v: np.ndarray) -> float:
     return float(np.sqrt(np.mean(v * v))) if v.size else float("nan")
 
 
+def wet_against_dry(wet, dry, shares: dict) -> dict:  # type: ignore[no-untyped-def]
+    """A layout's wet track beside its dry one (two ``TrackBuild``): how
+    the wet one closes, how far its line lies from the dry line, how its
+    apexes compare in the dry track's corners, and the heat difference at
+    the dry speed trace (the largest per tyre, through the force shares
+    of the dry build's commonest car where production has them)."""
+    from . import holdout
+    from . import track as trk
+
+    dm, wm = dry.model, wet.model
+    n, ds = dm.n, dm.ds_m
+    frac = np.arange(n) / n
+    at = np.arange(wm.n) / wm.n
+    # one lap of the wet track, stretched onto the dry track's length
+    k_wet = np.interp(frac, at, wm.kappa_heat, period=1.0) * (wm.length_m / dm.length_m)
+    wx = np.interp(frac, at, wm.x_m, period=1.0)
+    wy = np.interp(frac, at, wm.y_m, period=1.0)
+    dx, dy = np.concatenate([dm.x_m, dm.x_m[:1]]), np.concatenate([dm.y_m, dm.y_m[:1]])
+    _, off = trk.project_onto(dx, dy, wx, wy, np.arange(n) * ds, closed=True)
+    dlog = np.log(
+        corner_apexes(k_wet, dm.corners, ds) / corner_apexes(dm.kappa_heat, dm.corners, ds)
+    )
+    out = {
+        "length_m": wm.length_m,
+        "turns": wm.turns,
+        "closure_turns": wet.closure_turns,
+        "line_gap_m": wet.line_gap_m,
+        "line_shift_rms_m": float(np.sqrt(np.mean(off**2))),
+        "line_shift_max_m": float(np.max(np.abs(off))),
+        "apex_kappa_mean": float(np.mean(dlog)) if len(dlog) else float("nan"),
+        "apex_kappa_min": float(np.min(dlog)) if len(dlog) else float("nan"),
+        "apex_kappa_max": float(np.max(dlog)) if len(dlog) else float("nan"),
+        "heat_same_speed": float("nan"),
+    }
+    cars = [lap.car for lap in dry.laps]
+    try:
+        lens = holdout.share_for(max(set(cars), key=cars.count), shares)
+    except KeyError:
+        return out
+    res = holdout.compare_profiles(k_wet, dm.kappa_heat, dry.speed_median, ds, lens)
+    out["heat_same_speed"] = res["dq_max"]
+    return out
+
+
 def check_track_truth(
     root: Path,
     *,
@@ -595,6 +642,14 @@ def check_track_truth(
     assembly, inertial, apex, low, side, grade_rows, fills, by_year = [], [], [], [], [], [], [], []
     dem_rows: list[dict] = []
     notches: list[dict] = []
+    wet_rows: list[dict] = []
+    index = geo.clean_lap_index(root, cache_dir=cache_dir)
+    try:
+        from . import holdout
+
+        force_shares = holdout.production_shares(root)
+    except FileNotFoundError:
+        force_shares = {}
     for layout in layouts:
         build = trk.build_track_model(root, layout, cache_dir=cache_dir, measure_convergence=True)
         model, proj = build.model, build.proj
@@ -812,6 +867,27 @@ def check_track_truth(
                     }
                 )
 
+        # The wet version of the track, where the layout has the laps for one.
+        # Every car's wet laps are pooled, as the dry track pools its cars.
+        wet_laps = index[index["in_build_wet"] & (index["layout_id"] == layout)]
+        if len(wet_laps):
+            row: dict = {
+                "layout": layout,
+                "laps": int(len(wet_laps)),
+                "sessions": int(wet_laps["session_id"].nunique()),
+                "days": int(wet_laps["date"].nunique()),
+                "cars": ", ".join(sorted(str(c) for c in wet_laps["car"].unique())),
+                "built": "no",
+            }
+            if len(wet_laps) >= WET_MIN_LAPS and row["days"] >= WET_MIN_DAYS:
+                wet = trk.build_track_model(
+                    root, layout, cache_dir=cache_dir, basis="wet", inertial=False, n_boot=0
+                )
+                if tracks_dir is not None:
+                    wet.model.save(Path(tracks_dir) / f"{layout}__wet.json")
+                row.update(built="yes", **wet_against_dry(wet, build, force_shares))
+            wet_rows.append(row)
+
         # Motegi was resurfaced for 2026: the profile per year before pooling.
         years = np.array([d[:4] for d in days])
         if layout == "motegi_full" and len(np.unique(years)) > 1:
@@ -1005,6 +1081,40 @@ def check_track_truth(
         )
     else:
         rep.items.append(GateItem("Altitude against the GSI DEM", None, "not measured", "see #204"))
+    if wet_rows:
+        wt = pd.DataFrame(wet_rows)
+        built = wt[wt["built"] == "yes"]
+        wet_ok: bool | None = None
+        summary = ""
+        if len(built):
+            wet_ok = bool(
+                (
+                    (built["closure_turns"].abs() <= PROFILE_CLOSURE_MAX)
+                    & (built["line_gap_m"] <= LINE_GAP_MAX_M)
+                    & (built["turns"] == built["layout"].map(LAYOUT_TURNS))
+                ).all()
+            )
+            summary = "; against the dry track: " + "; ".join(
+                f"{lay} line {rms:.1f} m rms, apex κ {100 * apx_mean:+.0f} %, heat at equal "
+                f"speed {heat:.3f}"
+                for lay, rms, apx_mean, heat in zip(
+                    built["layout"],
+                    built["line_shift_rms_m"],
+                    built["apex_kappa_mean"],
+                    built["heat_same_speed"],
+                )
+            )
+        rep.items.append(
+            GateItem(
+                "Wet tracks",
+                wet_ok,
+                f"{len(built)} of {len(wt)} layouts with wet laps have enough for a wet track"
+                + summary,
+                f"built from {WET_MIN_LAPS} wet-basis laps on {WET_MIN_DAYS} days, every car "
+                "pooled; a built one closes like a dry one",
+                md_table(wt, floats="{:.3g}"),
+            )
+        )
     rep.items.append(
         GateItem(
             "Corner angles against the operators' drawings", None, "not measured yet", "see #204"

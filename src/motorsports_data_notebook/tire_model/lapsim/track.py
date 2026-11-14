@@ -69,6 +69,8 @@ CORNER_EDGE_KAPPA = 0.002
 CORNER_APEX_KAPPA = 0.004
 CORNER_MIN_ANGLE_DEG = 10.0
 IMU_SOURCES = ("imu", "imu_swapped")
+#: Build populations: basis name -> the lap-index column that selects it.
+BASES = {"dry": "in_build", "wet": "in_build_wet"}
 ACCEL_DELAY_RANGE_S = (-0.1, 0.3)
 #: Fixed-place GPS errors: a stretch this long whose lateral g differs from
 #: the inertial profile by more than the threshold is filled from it.
@@ -855,18 +857,27 @@ def build_track_model(
     inertial: bool = True,
     n_boot: int = 40,
     measure_convergence: bool = False,
+    basis: str = "dry",
 ) -> TrackBuild:
     """Build the track of ``layout_key`` from its build laps: every car's,
-    or only ``cars``', without the sessions in ``exclude_session_ids``."""
+    or only ``cars``', without the sessions in ``exclude_session_ids``.
+
+    ``basis`` chooses the population (:data:`BASES`): ``"dry"``, the laps
+    at the car's pace, or ``"wet"``, the fast laps of wet sessions judged
+    against each other. The road is one; the line driven on it is not, so
+    a layout has a track per basis where it has the laps.
+    """
     index = geo.clean_lap_index(root, cache_dir=cache_dir)
-    rows = index[index["in_build"] & (index["layout_id"] == layout_key)]
+    rows = index[index[BASES[basis]] & (index["layout_id"] == layout_key)]
     if cars is not None:
         rows = rows[rows["car"].isin(list(cars))]
     rows = rows[~rows["session_id"].isin(list(exclude_session_ids))]
     laps = load_layout_laps(root, layout_key, rows, inertial=inertial)
-    return build_from_laps(
+    build = build_from_laps(
         laps, layout_key, ds_m=ds_m, n_boot=n_boot, measure_convergence=measure_convergence
     )
+    build.model.meta["basis"] = basis
+    return build
 
 
 def project_lap(
@@ -1008,6 +1019,7 @@ def model_summary(model: TrackModel) -> dict:
         "length_m": round(model.length_m, 1),
         "n": model.n,
         "turns": model.turns,
+        "basis": model.meta.get("basis", "dry"),
         "corners": len(model.corners),
         "built_from": model.meta.get("built_from"),
     }
