@@ -111,6 +111,11 @@ tire-pace-check *ARGS:
 tire-predict-holdout *ARGS:
     uv run python -m motorsports_data_notebook.tire_model.cli holdout {{ARGS}}
 
+# Lap simulation gates (#202): `just tire-lapsim check-geometry` (B1). Reports
+# and caches go to workspace/lapsim/; run under `ulimit -v 10000000`
+tire-lapsim *ARGS:
+    uv run python -m motorsports_data_notebook.tire_model.lapsim.cli {{ARGS}}
+
 # Run the tire pressure calculator web app tests (parity vs. Python fixture)
 tire-web-test:
     node --test 'tire_pressure_calculator/web/tests/*.test.mjs'
