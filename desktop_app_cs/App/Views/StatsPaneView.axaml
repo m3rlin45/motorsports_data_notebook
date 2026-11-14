@@ -1,0 +1,8 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="InfernoAnalyzer.App.Views.StatsPaneView">
+  <!-- Wide tables (twelve columns of percentages) scroll sideways instead of clipping. -->
+  <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+    <StackPanel x:Name="TablesPanel" Spacing="16" />
+  </ScrollViewer>
+</UserControl>
