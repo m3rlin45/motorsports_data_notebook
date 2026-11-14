@@ -189,7 +189,64 @@ def zones_fixture(log, profile) -> dict:
     }
 
 
-MODULES = {"corners": corners_fixture, "zones": zones_fixture}
+def suspension_fixture(log, profile) -> dict:
+    """Velocity histograms: single lap for each of LAPS and the multi-lap aggregate."""
+    import dataclasses
+
+    from motorsports_data_notebook import suspension as S
+
+    names = {k: profile.channel_names[k] for k in ("shock_fl", "shock_fr", "shock_rl", "shock_rr")}
+
+    def corner(c: S.CornerVelocityData) -> dict:
+        d = dataclasses.asdict(c)
+        d["velocity"] = summary(c.velocity)
+        d["bin_edges"] = c.bin_edges.tolist()
+        d["bin_centers"] = c.bin_centers.tolist()
+        d["histogram"] = c.histogram.tolist()
+        return d
+
+    def result(r: S.VelocityHistogramResult) -> dict:
+        out = {
+            k: corner(getattr(r, k))
+            for k in ("front_left", "front_right", "rear_left", "rear_right")
+        }
+        out["symmetry"] = S.format_symmetry_table(r).to_dict(orient="records")
+        out["comparison"] = S.format_comparison_table(r).to_dict(orient="records")
+        return out
+
+    mr = profile.motion_ratios
+    single = {
+        str(num): result(
+            S.analyze_suspension_velocity(log.filter_by_lap(num), names, motion_ratios=mr)
+        )
+        for num in LAPS
+    }
+    multi = result(S.analyze_suspension_velocity_multi_lap(log, LAPS, names, motion_ratios=mr))
+    # Exact-math checks for the velocity derivation on a short slice of lap 14's FL channel.
+    lap = (
+        log.filter_by_lap(LAPS[0])
+        .select_channels(list(names.values()))
+        .resample_to_channel(names["shock_fl"])
+        .channels
+    )
+    fl = lap[names["shock_fl"]]
+    disp = fl.column(names["shock_fl"]).to_numpy(zero_copy_only=False).astype(np.float64)[:64]
+    tc = fl.column("timecodes").to_numpy()[:64]
+    return {
+        "channels": names,
+        "motion_ratios": dataclasses.asdict(mr),
+        "single_lap": single,
+        "multi_lap": multi,
+        "velocity_slice": {
+            "displacement": disp.tolist(),
+            "timecodes": tc.tolist(),
+            "raw_velocity": S.compute_shock_velocity(disp, tc, smoothing_window=1).tolist(),
+            "smoothed_velocity": S.compute_shock_velocity(disp, tc, smoothing_window=5).tolist(),
+        },
+    }
+
+
+MODULES = {"corners": corners_fixture, "zones": zones_fixture, "suspension": suspension_fixture}
 
 
 def main(argv: list[str] | None = None) -> int:
