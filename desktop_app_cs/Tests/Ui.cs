@@ -1,4 +1,5 @@
 using Avalonia.Headless;
+using InfernoAnalyzer.App;
 
 namespace InfernoAnalyzer.Tests;
 
@@ -13,13 +14,45 @@ internal static class Ui
         new(() => HeadlessUnitTestSession.StartNew(typeof(TestAppBuilder), AvaloniaTestIsolationLevel.PerTest));
 
     /// <summary>Run a synchronous test body on the UI thread.</summary>
-    public static Task Run(Action test) => Session.Value.Dispatch(test, TestContext.Current.CancellationToken);
+    public static Task Run(Action test) => Run(() =>
+    {
+        test();
+        return Task.CompletedTask;
+    });
 
-    /// <summary>Run an asynchronous test body on the UI thread.</summary>
+    /// <summary>
+    /// Run an asynchronous test body on the UI thread. An error Avalonia logs while it runs fails the
+    /// test: Avalonia reports failures inside it (an exception while a frame is drawn, for one) to
+    /// its logger and carries on, which would otherwise pass unnoticed.
+    /// </summary>
     public static Task Run(Func<Task> test) => Session.Value.Dispatch(
         async () =>
         {
-            await test();
+            var errors = new List<string>();
+            void Collect(string error)
+            {
+                lock (errors)
+                {
+                    errors.Add(error);
+                }
+            }
+
+            AvaloniaLog.Reported += Collect;
+            try
+            {
+                await test();
+                Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            }
+            finally
+            {
+                AvaloniaLog.Reported -= Collect;
+            }
+
+            lock (errors)
+            {
+                Assert.True(errors.Count == 0, "Avalonia logged errors:\n" + string.Join("\n", errors));
+            }
+
             return true;
         },
         TestContext.Current.CancellationToken);

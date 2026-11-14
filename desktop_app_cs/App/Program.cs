@@ -24,7 +24,8 @@ internal static class Program
     /// <summary>Also used by the Avalonia designer.</summary>
     public static AppBuilder BuildAvaloniaApp()
     {
-        var builder = AppBuilder.Configure<App>().UsePlatformDetect().LogToTrace();
+        AvaloniaLog.Install();
+        var builder = AppBuilder.Configure<App>().UsePlatformDetect();
         // Windows and macOS have a UI font worth using (Segoe UI, San Francisco); Linux gets the bundled Inter.
         return AppFonts.UsesBundledInter ? builder.WithInterFont() : builder;
     }
