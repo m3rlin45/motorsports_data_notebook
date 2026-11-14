@@ -1756,10 +1756,36 @@ committed; `--dem-offline` and `--no-dem` run the gate without the
 network.
 
 Not measured yet: the corner angles against the operators' drawings.
-Motegi's profile per year was
-asked for (resurfaced for 2026): every Motegi build lap is from 2025, so
-there is nothing to compare. Vertical curvature and the pit-exit join
-(asked by #206's review) are not built.
+Motegi's profile per year was asked for (resurfaced for 2026): every
+Motegi build lap is from 2025, so there is nothing to compare.
+
+**Asked of the track by #206's review, now carried by it:**
+
+- *Vertical curvature* (`TrackModel.kappa_v`, d(grade)/ds over 50 m:
+  positive in a compression, negative over a crest; the normal load goes
+  with 1 + V²κ_v/g). On the median speed trace it runs from −0.03 to
+  −0.10 g over the crests and up to +0.08 to +0.15 g in the compressions
+  (largest: Suzuka +0.15, Tsukuba +0.15, Motegi +0.12). Against the same
+  quantity from the elevation survey it differs by 0.005–0.010 g rms on
+  four layouts; at Suzuka by 0.068 g, around its masked bridges.
+- *Pit exit* (`pit.py`, in each track's `meta.pit`). An out-lap from the
+  pit is laid on the reference line by counting distance back from the
+  line it ends on; the join is where it comes inside the band the build
+  laps occupy (their 1st–99th percentile of offset, plus a metre) and
+  stays there for 150 m. Medians over the latest out-laps:
+
+  | Layout | Joins at s (P10–P90) | Rolling by then (P10–P90) | Out-laps |
+  |---|---|---|---|
+  | Tsukuba | 215 m (200–273) | 16 s (7–172) | 60 |
+  | Motegi | 240 m (212–646) | 29 s (10–57) | 29 |
+  | Sodegaura | 341 m (138–647) | 44 s (18–92) | 57 |
+  | Suzuka | 641 m (494–802) | 26 s (9–76) | 34 |
+  | Fuji | 752 m (369–872) | 44 s (17–93) | 48 |
+
+  #206's review, with its own method, had 200–225 m, 234 m, about 340 m,
+  590 m and 730–760 m. The medians agree except Suzuka (641 against 590);
+  the wide P10–P90 ranges are out-laps that rejoin the driven line late or
+  early, and rolling times that include waiting at the pit exit.
 
 #### B2a. A wet and a dry version of each track (2026-11-15)
 
