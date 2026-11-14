@@ -52,6 +52,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build parser FFI libraries
+        run: python desktop_app_cs/tools/build_native.py --rids win-x64
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -64,6 +70,10 @@ jobs:
           -c Release -r win-x64 --self-contained
           -p:PublishAot=false -p:PublishTrimmed=true -p:TrimMode=full
           -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+
+      - name: Check parser libraries are published
+        shell: bash
+        run: test -f desktop_app_cs/App/bin/Release/net10.0/win-x64/publish/runtimes/win-x64/native/xrk_ffi.dll
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -83,6 +93,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y clang zlib1g-dev
 
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build parser FFI libraries
+        run: python3 desktop_app_cs/tools/build_native.py --rids linux-x64
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -91,6 +107,9 @@ jobs:
       - name: Publish
         working-directory: desktop_app_cs
         run: dotnet publish App/InfernoAnalyzer.App.csproj -c Release -r linux-x64 --self-contained
+
+      - name: Check parser libraries are published
+        run: test -f desktop_app_cs/App/bin/Release/net10.0/linux-x64/publish/runtimes/linux-x64/native/libxrk_ffi.so
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
