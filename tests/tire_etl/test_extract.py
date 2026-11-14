@@ -24,7 +24,9 @@ from motorsports_data_notebook.tire_etl.extract import (
     _extract_session_datetime_utc,
     _pressure_to_bar,
     _timebase_names,
+    _wanted_channels,
     build_session_timeseries,
+    session_channel_names,
 )
 from motorsports_data_notebook.tire_etl.discovery import SessionCandidate
 
@@ -351,3 +353,115 @@ def test_session_id_is_readable_and_sortable() -> None:
     assert _local_wallclock(utc, "tsukuba_2000").strftime("%H%M%S") == "122053"
     assert _local_wallclock(utc, None).strftime("%H%M%S") == "122053"
     assert _local_wallclock(None, "tsukuba_2000") is None
+
+
+class _FakeAimLog:
+    """Only what profile resolution reads: metadata and the file name."""
+
+    def __init__(self, logger_id: int | None, vehicle: str, file_name: str = "") -> None:
+        self.metadata = {"Vehicle": vehicle}
+        if logger_id is not None:
+            self.metadata["Logger ID"] = logger_id
+        self.file_name = file_name
+
+
+class TestSessionChannelNames:
+    """The extractor resolves the profile by logger ID plus vehicle (#254)."""
+
+    def test_shared_sw4_logger_is_split_by_vehicle(self) -> None:
+        names_f, profile_f, logger_f = session_channel_names(_FakeAimLog(8401203, "KK-F"))
+        names_s, profile_s, _ = session_channel_names(_FakeAimLog(8401203, "KK-SII"))
+        assert (profile_f, logger_f) == ("KK-F", "8401203")
+        assert profile_s == "KK-SII"
+        assert names_f["throttle"] == "Throttle_PCT"
+        assert names_f["brake"] == "P_Brake_Actual"
+        assert names_s["throttle"] == "Throttle"
+        assert names_s["brake"] == "F_BRK"
+
+    def test_vehicle_from_the_file_name_when_metadata_is_blank(self) -> None:
+        log = _FakeAimLog(8401203, "", "CMD_KK-F-V2_Tsukuba_Car_一般テスト_a_0392.xrz")
+        assert session_channel_names(log)[1] == "KK-F-V2"
+
+    def test_pre_sw4_kk_f_loggers_are_mapped(self) -> None:
+        for logger_id in (6521016, 6520348):
+            names, profile, _ = session_channel_names(_FakeAimLog(logger_id, "KK-F"))
+            assert profile == "KK-F (data logger)"
+            assert names["brake"] == "P_Brake"
+            assert names["throttle_angle"] == "TA"
+            assert names["steering"] == "Steering"
+            assert names["vertical_g"] == "VerticalAcc"
+
+    def test_lent_logger_has_no_profile_for_another_car(self) -> None:
+        names, profile, logger_id = session_channel_names(_FakeAimLog(6520348, "718 Cayman"))
+        assert (profile, logger_id) == ("default", "6520348")
+        assert names["throttle"] == "PPS"
+
+    def test_no_logger_id_means_defaults(self) -> None:
+        names, profile, logger_id = session_channel_names(_FakeAimLog(None, "KK-F"))
+        assert (profile, logger_id) == ("default", "")
+        assert names["brake"] == "BrakePress"
+
+
+def test_wanted_channels_for_the_kk_f_cover_controls_and_drivetrain() -> None:
+    names, _, _ = session_channel_names(_FakeAimLog(8401203, "KK-F"))
+    wanted = _wanted_channels(names)
+    assert wanted["Throttle_PCT"] == ("controls", "throttle_pct")
+    assert wanted["TA"] == ("controls", "throttle_deg")
+    assert wanted["P_Brake_Actual"] == ("controls", "brake_bar")
+    assert wanted["ENGRPM"] == ("drivetrain", "engine_rpm")
+    assert wanted["GP"] == ("drivetrain", "gear")
+    assert wanted["SPD_FL"] == ("drivetrain", "wheel_speed_fl_kmh")
+    # The ECU's sign-inverted brake count and the SW4's own gear are not stored.
+    assert "Pbrake_Value" not in wanted
+    assert "Gear" not in wanted
+
+
+def test_wanted_channels_for_the_pre_sw4_kk_f_store_the_angle_not_a_percentage() -> None:
+    names, _, _ = session_channel_names(_FakeAimLog(6521016, "KK-F"))
+    wanted = _wanted_channels(names)
+    assert wanted["TA"] == ("controls", "throttle_deg")
+    assert wanted["P_Brake"] == ("controls", "brake_bar")
+    assert not [aim for aim, (_, col) in wanted.items() if col == "throttle_pct" and aim == "TA"]
+
+
+def test_drivetrain_channels_are_stored_on_their_own_timebases() -> None:
+    t_ecu = list(range(0, 20000, 100))  # 10 Hz ECU stream
+    t_gear = list(range(0, 20000, 200))  # 5 Hz
+    log = _FakeLogFile(
+        {
+            "GPS Speed": (list(range(0, 20000, 40)), [30.0] * 500),
+            "RPM": (t_ecu, [5000.5 + i for i in range(len(t_ecu))]),
+            "WheelSpdFL": (t_ecu, [100.0] * len(t_ecu)),
+            "Gear": (t_gear, [3.0] * len(t_gear)),
+            "TA": (t_ecu, [84.0] * len(t_ecu)),
+        },
+        laps=[(1, 1000, 11000), (2, 11000, 19000)],
+    )
+    names = {
+        "gps_speed": "GPS Speed",
+        "rpm": "RPM",
+        "gear": "Gear",
+        "wheel_speed_fl": "WheelSpdFL",
+        "throttle_angle": "TA",
+    }
+    table, summary = build_session_timeseries(
+        log,
+        names,
+        session_id="s",
+        lap_nums=[1, 2],
+        lap_starts_ms=[1000, 11000],
+        lap_ends_ms=[11000, 19000],
+        stint_ids=[1, 1],
+    )
+    by_name = {e["timebase"]: e for e in summary}
+    assert by_name["drivetrain/engine_rpm+wheel_speed_fl_kmh"]["rate_hz"] == pytest.approx(10.0)
+    assert by_name["drivetrain/gear"]["rate_hz"] == pytest.approx(5.0)
+    assert by_name["controls"]["channels"] == ["throttle_deg"]
+    # RPM with a half is not float16-representable and stays float32; the gear is exact in float16.
+    assert table.schema.field("engine_rpm").type == pa.float32()
+    assert table.schema.field("gear").type == pa.float16()
+    assert table.schema.field("wheel_speed_fl_kmh").type == pa.float16()
+    # Columns: keys, then the families in their fixed order, drivetrain last.
+    assert table.schema.names[-4:] == ["throttle_deg", "engine_rpm", "gear", "wheel_speed_fl_kmh"]
+    _, rpm = channel_series(table.filter(pc.equal(table.column("lap_num"), 1)), "engine_rpm")
+    assert rpm[0] == pytest.approx(5010.5)

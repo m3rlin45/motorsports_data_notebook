@@ -163,7 +163,7 @@ TIMESERIES_KEY_COLUMNS = [
     "t_lap_s",
     "discard",
 ]
-FAMILIES = ("gps", "accel", "gyro", "tpms", "surface", "controls")
+FAMILIES = ("gps", "accel", "gyro", "tpms", "surface", "controls", "drivetrain")
 _META_TIMEBASES = b"tire_etl.timebases"
 _META_KINEMATICS = b"tire_etl.kinematics"
 _META_SCHEMA = b"tire_etl.schema"
@@ -182,8 +182,10 @@ def channel_family(name: str) -> str | None:
         return "accel"
     if name in ("yaw_rate_dps", "pitch_rate_dps", "roll_rate_dps"):
         return "gyro"
-    if name in ("throttle_pct", "brake_bar", "steer_deg"):
+    if name in ("throttle_pct", "throttle_deg", "brake_bar", "steer_deg"):
         return "controls"
+    if name in ("engine_rpm", "gear") or name.startswith("wheel_speed_"):
+        return "drivetrain"
     return None
 
 
@@ -420,7 +422,7 @@ def load_group(
     dataset_root: Path, session_id: str, family: str, columns: Iterable[str] | None = None
 ) -> pa.Table | None:
     """The rows of one sensor family (``gps`` / ``accel`` / ``gyro`` /
-    ``tpms`` / ``surface`` / ``controls``) with the key columns and the
+    ``tpms`` / ``surface`` / ``controls`` / ``drivetrain``) with the key columns and the
     family's channels (all of them, or the subset ``columns``); None when
     the session has no file or no such family. Each channel column is
     valid only on its own timebase's rows (:func:`channel_series`)."""
@@ -500,6 +502,7 @@ def upsert_session(
     result: "ExtractResult",
     *,
     all_xrk_paths: list[Path] | None = None,
+    car_overrides: dict[str, str] | None = None,
 ) -> None:
     """Write one session's tables into the dataset, replacing prior rows.
 
@@ -508,7 +511,9 @@ def upsert_session(
     the new rows. When ``all_xrk_paths`` is given (a merged multi-file
     session), one manifest entry is written per constituent file — they all
     point at the same ``session_id`` so any file changing invalidates the
-    whole group's cache on the next run.
+    whole group's cache on the next run. ``car_overrides`` maps the path of
+    each file ``session_overrides.yaml`` corrects to its corrected car; the
+    manifest row records it as ``car_override``.
     """
     if len(result.session_row) != 1:
         raise ValueError("ExtractResult.session_row must have exactly one row")
@@ -579,6 +584,10 @@ def upsert_session(
             "date": date_str,
             "extracted_at": extracted_at,
         }
+        # Present only on a recording session_overrides.yaml corrects: the
+        # extractor re-extracts a file whose correction no longer matches.
+        if car_overrides and str(p) in car_overrides:
+            entry["car_override"] = car_overrides[str(p)]
         _update_manifest(dataset_root, entry)
 
 

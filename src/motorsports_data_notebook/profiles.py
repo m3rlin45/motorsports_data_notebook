@@ -41,6 +41,9 @@ if TYPE_CHECKING:
 # All canonical channel keys with their default values (Toyota 86 ZN6 / AiM MXP defaults)
 DEFAULT_CHANNEL_NAMES: dict[str, str] = {
     "throttle": "PPS",
+    # Throttle (butterfly) angle in degrees from the ECU, where the car logs
+    # it next to — or instead of — a percentage (the KK-F's ``TA``).
+    "throttle_angle": "",
     "brake": "BrakePress",
     "brake_rear": "",
     "gps_speed": "GPS Speed",
@@ -62,6 +65,12 @@ DEFAULT_CHANNEL_NAMES: dict[str, str] = {
     "gps_inline_g": "GPS_InlineAcc",
     "gps_yaw_rate": "GPS_Yaw_Rate",
     "steering": "SteerAngle",
+    "rpm": "RPM",
+    "gear": "Gear",
+    "wheel_speed_fl": "WheelSpdFL",
+    "wheel_speed_fr": "WheelSpdFR",
+    "wheel_speed_rl": "WheelSpdRL",
+    "wheel_speed_rr": "WheelSpdRR",
     "shock_fl": "LF_Shock_Pot",
     "shock_fr": "RF_Shock_Pot",
     "shock_rl": "LR_Shock_Pot",

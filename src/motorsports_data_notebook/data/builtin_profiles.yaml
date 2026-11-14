@@ -46,6 +46,12 @@ profiles:
       gps_inline_g: GPS_InlineAcc
       gps_yaw_rate: GPS_Yaw_Rate
       steering: SteerAngle
+      rpm: RPM
+      gear: Gear
+      wheel_speed_fl: WheelSpdFL
+      wheel_speed_fr: WheelSpdFR
+      wheel_speed_rl: WheelSpdRL
+      wheel_speed_rr: WheelSpdRR
       shock_fl: LF_Shock_Pot
       shock_fr: RF_Shock_Pot
       shock_rl: LR_Shock_Pot
@@ -151,6 +157,7 @@ profiles:
       gps_inline_g: GPS_InlineAcc
       gps_yaw_rate: GPS_Yaw_Rate
       steering: steering
+      rpm: RPM
     motion_ratios:
       front_left: 1.0
       front_right: 1.0
@@ -181,6 +188,7 @@ profiles:
       gps_inline_g: GPS_InlineAcc
       gps_yaw_rate: GPS_Yaw_Rate
       steering: Steering
+      rpm: RPM
       shock_fl: LF_Shock_Pot
       shock_fr: RF_Shock_Pot
       shock_rl: LR_Shock_Pot
@@ -217,8 +225,26 @@ profiles:
     # ECU's Pbrake_Value is sign-inverted and not mapped), no separate rear brake
     # pressure, and the SW4 "steering" channel is uncalibrated (0-0.5 deg).
     # 100 mm stroke sensors on all corners.
+    #
+    # ECU channels, as surveyed over every KK-F file (2026-11-14, #254):
+    # - TA: throttle angle, 5.0 deg closed to 84.0 deg open, in every file.
+    #   Throttle_PCT exists from 2026-08-23 only and is not a linear function
+    #   of TA (residual 7-10 % rms), so both are mapped.
+    # - P_Brake_Actual: logged on change with a 2 s heartbeat, in steps of
+    #   0.625 bar. Its peak is 0.625 x the peak of the ECU count that
+    #   Pbrake_Value carries negated at a regular 10 Hz, on every day.
+    # - GP: the ECU's gear position (0-7, and 100 on about 0.3 % of samples).
+    #   The SW4's own "Gear" channel disagrees with it (374 samples in 6th
+    #   on a Tsukuba file where GP never reads 6) and is not mapped.
+    # - SPD_FL: the one wheel-speed pickup. It reads 1.00-1.07 x GPS speed
+    #   on part of each file and spikes up to 3238 km/h on the rest (15-84 %
+    #   of the samples above 36 km/h on five files probed); mapped so the
+    #   raw channel is kept.
+    # - steering: a floor of -101.9 deg from 2026-08-23 to 2026-09-25, and
+    #   within 0-0.5 deg from 2026-09-26.
     channel_names:
       throttle: Throttle_PCT
+      throttle_angle: TA
       brake: P_Brake_Actual
       gps_speed: GPS Speed
       gps_latitude: GPS Latitude
@@ -236,6 +262,9 @@ profiles:
       gps_inline_g: GPS_InlineAcc
       gps_yaw_rate: GPS_Yaw_Rate
       steering: steering
+      rpm: ENGRPM
+      gear: GP
+      wheel_speed_fl: SPD_FL
       shock_fl: LF_Shock_Pot
       shock_fr: RF_Shock_Pot
       shock_rl: LR_Shock_Pot
@@ -305,6 +334,56 @@ profiles:
       front: 1498
       rear: 1503
 
+  kk_f_dl:
+    name: KK-F (data logger)
+    # The KK-F before it got the SW4 wheel: 2026-05-31 to 2026-07-04, logged by
+    # two stand-alone AiM data loggers with the same MYST ECU stream — 6521016
+    # (device name "Inferno KK-F") and 6520348 (the "Inferno Solo2DL", which
+    # also recorded the 718 Cayman). No TPMS and no stroke sensors. Channel
+    # set surveyed over all 24 files (2026-11-14, #254):
+    # - no throttle percentage: only the ECU's throttle angle TA (5.0 deg
+    #   closed to 84.0 deg open), so `throttle` is left unmapped;
+    # - P_Brake: brake pressure, positive, logged on change with a 2 s
+    #   heartbeat. Its peak equals the peak of the ECU count ("Pbrake",
+    #   negated) on every file, where the SW4 config's P_Brake_Actual is
+    #   0.625 x that count: for the same count this channel reads 1.6 x the
+    #   SW4's. Daily peaks are 48-63 here and 22-39 on the SW4;
+    # - "Steering" (capital S) from 2026-06-15, with dropouts to -1600 deg;
+    # - the logger's own accelerometer reads lateral at 0.43-0.55 x the GPS
+    #   value on these files (docs/tire_model.md 1.0d), so the analysis keys
+    #   point at the GPS-derived accelerations, as on the SW4.
+    channel_names:
+      throttle_angle: TA
+      brake: P_Brake
+      gps_speed: GPS Speed
+      gps_latitude: GPS Latitude
+      gps_longitude: GPS Longitude
+      lateral_g: GPS_LateralAcc
+      inline_g: GPS_InlineAcc
+      imu_lateral_g: LateralAcc
+      imu_inline_g: InlineAcc
+      vertical_g: VerticalAcc
+      yaw_rate: YawRate
+      pitch_rate: PitchRate
+      roll_rate: RollRate
+      gps_altitude: GPS Altitude
+      gps_lateral_g: GPS_LateralAcc
+      gps_inline_g: GPS_InlineAcc
+      gps_yaw_rate: GPS_Yaw_Rate
+      steering: Steering
+      rpm: ENGRPM
+      gear: GP
+      wheel_speed_fl: SPD_FL
+    motion_ratios:
+      front_left: 1.0
+      front_right: 1.0
+      rear_left: 1.0
+      rear_right: 1.0
+    # ASSUMED equal to the KK-S, as for `kk_f`.
+    track_width_mm:
+      front: 1498
+      rear: 1503
+
   kk_f_v2:
     name: KK-F-V2
     # The KK-F from 2026-11-13 on, with a new intake that makes more power. It
@@ -316,6 +395,7 @@ profiles:
     # the car other than the engine changes.
     channel_names:
       throttle: Throttle_PCT
+      throttle_angle: TA
       brake: P_Brake_Actual
       gps_speed: GPS Speed
       gps_latitude: GPS Latitude
@@ -333,6 +413,9 @@ profiles:
       gps_inline_g: GPS_InlineAcc
       gps_yaw_rate: GPS_Yaw_Rate
       steering: steering
+      rpm: ENGRPM
+      gear: GP
+      wheel_speed_fl: SPD_FL
       shock_fl: LF_Shock_Pot
       shock_fr: RF_Shock_Pot
       shock_rl: LR_Shock_Pot
@@ -415,6 +498,8 @@ profiles:
       lateral_g: LatAccel
       inline_g: LongAccel
       steering: SteeringWheelAngle
+      rpm: RPM
+      gear: Gear
       shock_fl: LFshockVel
       shock_fr: RFshockVel
       shock_rl: LRshockVel
@@ -457,6 +542,10 @@ logger_map:
   6701209: toyota_86_zn6    # Inferno 86 — MXP 1.3 (with shock pots + TPMS from Aug 2025)
   15074: honda_ek9           # EK9 — Solo logger
   6603435: super_fj              # Super FJ — MXm logger
+  6521016: kk_f_dl           # KK-F, 2026-05-31 to 2026-06-15 (device "Inferno KK-F")
+  6520348:                   # "Inferno Solo2DL", lent between cars: no default profile
+    by_vehicle:
+      KK-F: kk_f_dl          # KK-F, 2026-06-21 to 2026-07-04
   8401203:                   # SW4 steering-wheel logger shared by the KK-SII, KK-F and KK-F-V2
     default: kk_s2
     by_vehicle:

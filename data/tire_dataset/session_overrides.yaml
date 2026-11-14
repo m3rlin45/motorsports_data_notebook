@@ -1,0 +1,60 @@
+# Corrections to what a recording says about itself — human-curated.
+#
+# A logger file names its car in the Race Studio "Vehicle" metadata and in
+# the file-name token Race Studio derives from it. Both come from a setting
+# the driver changes by hand on the dash. The KK-SII, the KK-F and the
+# KK-F-V2 share one SW4 steering wheel: moving it to the other car means
+# loading that car's dash config AND changing the vehicle name, and the
+# name has been left on the previous car. The file then carries the wrong
+# car, and with it the wrong session id, the wrong vehicle profile (channel
+# names) and the wrong per-car pooling in everything downstream.
+#
+# The extractor (tire_etl/overrides.py) applies this file before anything
+# else reads the car: grouping, session id, vehicle profile and the row's
+# `car` follow the corrected car, and `car_declared` keeps what the file
+# says. Adding, changing or removing an entry re-extracts that file on the
+# next `just tire-etl` (no --force needed).
+#
+# How to tell: the channel set is the dash config, and the config is the
+# car's wiring. The KK-SII has analog sensors (F_BRK, R_BRK, Throttle, RPM,
+# Steering) and no ECU stream; the KK-F / KK-F-V2 have the MYST ECU stream
+# (ENGRPM, TA, GP, P_Brake_Actual, Pbrake_Value) and none of those analog
+# channels. A file with real signals on one car's channels recorded that
+# car. Find candidates with
+#   just tire-query "SELECT session_id, car, profile_name, timebases FROM sessions WHERE car LIKE 'KK-%'"
+# and look for a session of one car with no `controls` timebase next to
+# sessions of the same day that have one.
+#
+# One entry per file (a merged session lists each of its files):
+#   date:   the track-day folder, YYYY-MM-DD
+#   file:   the file name without its extension (covers .xrk and .xrz)
+#   car:    the car really recorded, spelled as its other sessions are
+#   reason: the evidence
+
+files:
+  - date: 2026-08-23
+    file: CMD_KK-SII_Tsukuba_Car_一般テスト_a_0252
+    car: KK-F
+    reason: >-
+      Carries the KK-F's ECU stream (ENGRPM, TA, GP, Throttle_PCT,
+      P_Brake_Actual) and none of the KK-SII's analog channels. It is the
+      first file with the KK-F's SW4 config that has TPMS; the next file of
+      the day (a_0257, 15:18) has the same channel set and is named KK-F.
+      No KK-SII session was recorded that day.
+  - date: 2026-10-02
+    file: CMD_KK-F_Suzuka West_Generic testing_a_0350
+    car: KK-SII
+    reason: >-
+      Carries the KK-SII's analog channels (F_BRK, R_BRK, Throttle, RPM,
+      Steering, Brake_Bias) with real signals and none of the KK-F's ECU
+      stream; its accelerometer has the KK-SII's exchanged axes
+      (`imu_swapped`). First file of the KK-SII's Suzuka race weekend
+      (2026-10-02 to 10-04); the previous recording was the KK-F at Tsukuba
+      on 2026-09-27, and the track selection ("Suzuka West" on the full
+      course) was stale too.
+  - date: 2026-10-02
+    file: CMD_KK-F_Suzuka West_Generic testing_a_0351
+    car: KK-SII
+    reason: >-
+      Restart of a_0350 (one merged session): same channel set, same
+      evidence.

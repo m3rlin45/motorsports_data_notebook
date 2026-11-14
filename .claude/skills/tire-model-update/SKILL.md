@@ -175,6 +175,24 @@ confirming the files' lap times look like one continuous run.
 cd /home/m3rlin45/code/motorsports_data_notebook && just tire-query "SELECT date, car, track_canonical, layout_id, lap_source, n_laps, status, len(xrk_paths) n_files FROM sessions WHERE date >= '<first new date>' ORDER BY date, session_id"
 ```
 
+**Car labels.** The KK-SII, the KK-F and the KK-F-V2 share one SW4 wheel and
+the vehicle name on it is changed by hand; a recording made before the name was
+switched says the wrong car. Its channel set gives it away: the KK-SII logs
+analog `F_BRK` / `Throttle` / `RPM` and no ECU stream, the KK-F / KK-F-V2 log
+the ECU stream (`ENGRPM`, `TA`, `P_Brake_Actual`). After the extract, list the
+new KK sessions and look for one with no `controls` timebase next to sessions
+of the same day that have one:
+
+```bash
+cd /home/m3rlin45/code/motorsports_data_notebook && just tire-query "SELECT session_id, car, car_declared, profile_name, timebases FROM sessions WHERE car LIKE 'KK-%' AND date >= '<first new date>' ORDER BY session_id"
+```
+
+A mislabelled recording goes into `data/tire_dataset/session_overrides.yaml`
+(one entry per file: `date`, `file` without extension, `car`, `reason` with
+the evidence), then `just tire-etl` again — it re-extracts exactly the files
+whose entry changed, under the corrected car's session id and profile. Say
+which sessions were corrected in the summary and the commit message.
+
 ## 2b. Audit the sensor verdicts (schema ≥ 7)
 
 ```bash
@@ -188,8 +206,8 @@ regression numbers behind each verdict and re-scores the *chosen* series
 against the reference (exit 1 when one is outside the gate bands: lateral
 slope 0.9–1.1 and corr ≥ 0.9, longitudinal slope 0.85–1.15 and corr ≥ 0.85 on
 braking samples, yaw slope 0.9–1.1). Expected (docs §1.0d has the numbers):
-Inferno 86, EK9, RX8, SFJ and the KK-F under the KK-SII profile → `imu`; the 18 KK-F `default`-profile sessions → `gps_channel` (lateral
-at 0.4–0.55×); the KK-SII → `imu_swapped` on every session since 2026-03-18 (its dash
+Inferno 86, EK9, RX8, SFJ and the KK-F / KK-F-V2 on the SW4 → `imu`; the KK-F's 19 sessions on its two 2026-05/07 data loggers (profile `KK-F (data logger)`) → `gps_channel` (lateral
+at 0.25–0.62×); the KK-SII → `imu_swapped` on every session since 2026-03-18 (its dash
 logs the two horizontal channels exchanged; `imu_lat` reads `twisted`, the
 `imu_swapped_*` checks pass and the loader exchanges the columns); gyro → `gps_position` on the Inferno
 86 since 2025-06-09 and on the SFJ (0.87× scale). The audit's `win_imu` / `win_gps` /

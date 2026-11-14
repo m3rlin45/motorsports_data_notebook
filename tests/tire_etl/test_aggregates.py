@@ -88,6 +88,22 @@ def test_lap_dynamics_heat_proxy_increases_with_lat_g() -> None:
     assert d_low["throttle_mean"] == 80.0
 
 
+def test_lap_dynamics_brake_and_throttle_ignore_non_finite_samples() -> None:
+    """The KK-F's brake channel on its 2026-05/07 loggers carries -inf samples."""
+    ts = _ts(
+        {
+            "t_lap_s": [0.0, 1.0, 2.0, 3.0],
+            "speed_ms": [30.0] * 4,
+            "brake_bar": [0.0, float("-inf"), 20.0, 10.0],
+            "throttle_pct": [100.0, float("inf"), 50.0, float("nan")],
+        }
+    )
+    d = compute_lap_dynamics(ts)
+    assert d["brake_mean"] == pytest.approx(10.0)
+    assert d["brake_max"] == pytest.approx(20.0)
+    assert d["throttle_mean"] == pytest.approx(75.0)
+
+
 def test_lap_dynamics_moving_time_excludes_standstill() -> None:
     """An out-lap that waits on the grid before rolling: on_track_s spans the
     whole lap, moving_s only the rolling part, speed_kmh_first is the pit speed."""

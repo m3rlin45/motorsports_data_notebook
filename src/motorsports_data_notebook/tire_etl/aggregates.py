@@ -226,8 +226,12 @@ def compute_lap_dynamics(lap_ts: pa.Table, kin: pa.Table | None = None) -> dict[
     t_long, long_g = channel_series(g_src, "long_g")
 
     speed_valid = speed[~np.isnan(speed)]
-    brake_valid = brake[~np.isnan(brake)]
-    thr_valid = throttle[~np.isnan(throttle)]
+    # Finite samples only: the KK-F's brake channel on its 2026-05/07 loggers
+    # carries a few -inf samples, stored as logged. These are plain sample
+    # means: on a channel the logger records on change (the KK-F's brake and
+    # throttle percentage) they weight the moments it changes, not time.
+    brake_valid = brake[np.isfinite(brake)]
+    thr_valid = throttle[np.isfinite(throttle)]
 
     heat_proxy = float("nan")
     heat_proxy_corner: dict[str, float] = {c: float("nan") for c in CORNERS}

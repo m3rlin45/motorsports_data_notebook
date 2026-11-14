@@ -96,7 +96,11 @@ deltas show up in PR diffs.
   `gps_alt_m`, `speed_ms` and the logger's `gps_lat_g`/`gps_long_g`/
   `gps_yaw_rate_dps`; `accel` 50 Hz — the KK-SII dash since 2026-03 logs it as pairs 2 ms
   apart on 50 Hz frames, 100 Hz in bursts — `lat_g`/`long_g`/`vert_g`; `gyro` `yaw_rate_dps`/`pitch_rate_dps`/`roll_rate_dps`; `tpms/<corner>`
-  1.25 Hz; `surface/<corner>_ch1-4` and `_ch5-8` 10 Hz; `controls/...`), named
+  1.25 Hz; `surface/<corner>_ch1-4` and `_ch5-8` 10 Hz; `controls/...` with
+  `throttle_pct`, `throttle_deg` (the ECU's throttle angle, the KK-F's only
+  throttle signal before 2026-08-23), `brake_bar` and `steer_deg`; and, since
+  extractor 0.23.0, `drivetrain/...` with `engine_rpm`, `gear` and
+  `wheel_speed_{fl,fr,rl,rr}_kmh` for the cars that log them), named
   by the `timebase` and `family` columns; every channel column is null outside
   its timebase, and `t_session_s`, `lap_num`, `stint_id`, `sample_idx`,
   `t_lap_s` are per row. Each channel is stored at the narrowest float
@@ -113,9 +117,28 @@ deltas show up in PR diffs.
   The file's schema metadata carries the per-timebase summary (rows, rate
   over the covered time with dropouts over 1 s reported as `gap_s` /
   `n_gaps`, channels) and the sensor verdict. `just tire-query` exposes one DuckDB view per family (`gps`,
-  `accel`, `gyro`, `tpms`, `surface`, `controls`) next to `timeseries`.
+  `accel`, `gyro`, `tpms`, `surface`, `controls`, `drivetrain`) next to `timeseries`.
+  The control and drivetrain channels are as logged, like every other: the
+  KK-F's brake pressure and throttle percentage are recorded on change with a
+  2 s heartbeat (hold the last value between samples), its brake pressure on
+  the two 2026-05/07 data loggers is the ECU count (1.6 × the SW4's bar
+  figure for the same count, with a few `-inf` samples per file), and its
+  wheel-speed and steering channels are faulty for long stretches
+  (`docs/tire_model.md` §1.0f).
   The loaders read this schema only (the file's `tire_etl.schema` metadata
   must say 9); a file from an earlier extractor is refused, not reinterpreted.
+- `session_overrides.yaml` — human-curated corrections to the car a recording
+  names. The KK-SII, the KK-F and the KK-F-V2 share one SW4 steering wheel,
+  and the vehicle name on it has been left on the previous car: the file then
+  says the wrong car in its name and metadata. One entry per file (`date`,
+  `file` without extension, `car`, `reason`); the extractor
+  (`tire_etl/overrides.py`) applies it before grouping, so the session id,
+  the vehicle profile and `sessions.car` follow the corrected car and
+  `sessions.car_declared` keeps what the file says
+  (`WHERE car != car_declared` lists the corrected sessions). Editing the file
+  re-extracts the affected recordings on the next `just tire-etl`. The file's
+  header says how to recognise a mislabelled recording (its channel set is the
+  other car's).
 - `session_notes/YYYY-MM-DD.json` — one `claude -p` (Sonnet) call per track day
   over the day's run-notes `.txt` file(s) from the OneDrive notes folder and
   every logged session's `comment`; the model matches notes blocks to sessions

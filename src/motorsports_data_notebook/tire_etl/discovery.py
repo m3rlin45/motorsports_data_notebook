@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date as _date
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from .tracks import normalize_track_name
+
+if TYPE_CHECKING:
+    from .overrides import FileOverride, OverrideKey
 
 # Filename examples:
 #   CMD_Inferno 86_Tsukuba_Car_Generic testing_a_0192.xrk
@@ -86,6 +91,7 @@ def scan_aim_tree(
     *,
     since: _date | None = None,
     only_car: str | None = None,
+    overrides: Mapping[OverrideKey, FileOverride] | None = None,
 ) -> list[SessionCandidate]:
     """Walk ``aim_root`` and return parsed session candidates.
 
@@ -94,7 +100,14 @@ def scan_aim_tree(
     case-insensitive on the stem: the AIM tree lives on a Windows volume
     where ``cmd_kk-f_..._a_0370.xrk`` and ``CMD_KK-F_..._a_0370.xrz`` are
     the same recording, and extracting both would count the session twice.
+
+    ``overrides`` (:func:`~.overrides.load_overrides`) replaces the car of
+    the recordings it lists before the ``only_car`` filter and before the
+    candidates are grouped, so a corrected file is filtered and merged as
+    the car it really recorded.
     """
+    from .overrides import apply_override
+
     if not aim_root.exists():
         return []
 
@@ -109,7 +122,7 @@ def scan_aim_tree(
             # If xrk already picked this session, skip the xrz.
             if ext == ".xrz" and stem_key(p) in picked_stems:
                 continue
-            cand = parse_filename(p)
+            cand = apply_override(parse_filename(p), overrides)
             if since is not None and cand.date < since:
                 continue
             if only_car is not None and (cand.car or "") != only_car:

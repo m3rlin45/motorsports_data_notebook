@@ -773,6 +773,53 @@ class TestBuiltinKKF:
         assert get_profile_for_log(log).name == "KK-F"
 
 
+class TestBuiltinKKFDataLoggers:
+    """The KK-F before the SW4: two stand-alone loggers, one of them lent between cars (#254)."""
+
+    def test_both_loggers_resolve_for_the_kk_f(self):
+        for logger_id in ("6521016", "6520348"):
+            profile = get_profile_for_logger(logger_id, "KK-F")
+            assert profile is not None
+            assert profile.name == "KK-F (data logger)"
+            assert profile.channel_names["brake"] == "P_Brake"
+            assert profile.channel_names["throttle_angle"] == "TA"
+            assert profile.channel_names["rpm"] == "ENGRPM"
+            assert profile.channel_names["gear"] == "GP"
+
+    def test_dedicated_logger_needs_no_vehicle(self):
+        assert get_profile_for_logger("6521016").name == "KK-F (data logger)"
+
+    def test_lent_logger_has_no_default(self):
+        """6520348 also recorded the 718 Cayman: another car must not get the KK-F's names."""
+        assert get_profile_for_logger("6520348") is None
+        assert get_profile_for_logger("6520348", "718 Cayman") is None
+
+    def test_from_xrk_metadata(self):
+        log = MockLogFile(metadata={"Logger ID": 6520348, "Vehicle": "KK-F"}, file_name="x.xrk")
+        assert get_profile_for_log(log).name == "KK-F (data logger)"
+
+
+class TestDrivetrainChannelKeys:
+    """RPM, gear and wheel speeds per vehicle (#254)."""
+
+    def test_defaults_are_the_toyota_86_names(self):
+        assert DEFAULT_CHANNEL_NAMES["rpm"] == "RPM"
+        assert DEFAULT_CHANNEL_NAMES["gear"] == "Gear"
+        assert DEFAULT_CHANNEL_NAMES["wheel_speed_rr"] == "WheelSpdRR"
+        assert DEFAULT_CHANNEL_NAMES["throttle_angle"] == ""
+
+    def test_kk_f_uses_the_ecu_channels(self):
+        names = get_profile_for_logger("8401203", "KK-F").channel_names
+        assert names["rpm"] == "ENGRPM"
+        assert names["gear"] == "GP"  # the ECU's gear, not the SW4's own "Gear"
+        assert names["wheel_speed_fl"] == "SPD_FL"
+        assert names["throttle_angle"] == "TA"
+
+    def test_kk_sii_and_sfj_log_rpm_only(self):
+        assert get_profile_for_logger("8401203", "KK-SII").channel_names["rpm"] == "RPM"
+        assert get_profile_for_logger("6603435").channel_names["rpm"] == "RPM"
+
+
 class TestBuiltinKKFV2:
     """The KK-F-V2 is the KK-F with a new intake, logged under its own vehicle name."""
 
@@ -822,8 +869,8 @@ class TestBuiltin86PotWheel:
 
     def test_every_builtin_profile_has_calibration(self):
         for key, profile in load_builtin_profiles().items():
-            if key == "iracing" or key == "15074" or key == "6603435":
-                continue  # no shock pots (GPS-only / velocity channels)
+            if key in ("iracing", "15074", "6603435", "6521016", "6520348/KK-F"):
+                continue  # no shock pots (GPS-only / velocity channels / pre-SW4 KK-F)
             assert profile.shock_calibration is not None, key
 
 
