@@ -1,0 +1,85 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:InfernoAnalyzer.App.ViewModels"
+             xmlns:controls="using:InfernoAnalyzer.App.Controls"
+             xmlns:tracks="using:InfernoAnalyzer.Core.Tracks"
+             x:Class="InfernoAnalyzer.App.Views.SectorsView"
+             x:DataType="vm:SectorsViewModel">
+  <UserControl.Styles>
+    <!-- The custom-drawn controls take their colours from the theme like everything else. -->
+    <Style Selector="controls|SplitTableControl">
+      <Setter Property="BestBrush" Value="{DynamicResource AppBestBrush}" />
+      <Setter Property="SecondBestBrush" Value="{DynamicResource AppSecondBestBrush}" />
+      <Setter Property="HighlightBrush" Value="{DynamicResource SystemControlHighlightAccentBrush}" />
+      <Setter Property="RuleBrush" Value="{DynamicResource AppCardStrokeBrush}" />
+    </Style>
+    <Style Selector="controls|TrackEditorControl">
+      <Setter Property="TrackBrush" Value="{DynamicResource AppTrackBrush}" />
+      <Setter Property="GateBrush" Value="{DynamicResource AppGateBrush}" />
+      <Setter Property="SelectedGateBrush" Value="{DynamicResource SystemControlHighlightAccentBrush}" />
+    </Style>
+  </UserControl.Styles>
+  <DockPanel>
+    <Border DockPanel.Dock="Top" Classes="toolbar">
+      <DockPanel>
+        <Button DockPanel.Dock="Right" Classes="accent" Content="Save track" Command="{Binding SaveTrackCommand}" Margin="8,0,0,0"
+                ToolTip.Tip="Save the track's name and gates (Ctrl+S)" />
+        <Button DockPanel.Dock="Right" Classes="icon" Command="{Binding UndoCommand}"
+                ToolTip.Tip="Undo the last gate edit (Ctrl+Z)" AutomationProperties.Name="Undo gate edit">
+          <Path Classes="icon" Data="{StaticResource IconUndo}" />
+        </Button>
+        <Button DockPanel.Dock="Right" Classes="icon" Command="{Binding DeleteGateCommand}"
+                ToolTip.Tip="Delete the selected gate (Delete)" AutomationProperties.Name="Delete gate">
+          <Path Classes="icon" Data="{StaticResource IconDelete}" />
+        </Button>
+        <TextBox DockPanel.Dock="Right" Width="120" Margin="0,0,4,0" PlaceholderText="Gate name" Text="{Binding SelectedGate.Name}" IsEnabled="{Binding HasSelectedGate}"
+                 ToolTip.Tip="Name of the selected gate" AutomationProperties.Name="Gate name" />
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <TextBlock Classes="label" Text="Track" Margin="0" />
+          <ComboBox ItemsSource="{Binding Tracks}" SelectedItem="{Binding SelectedTrack}" MinWidth="180" PlaceholderText="Select a track"
+                    AutomationProperties.Name="Track">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="tracks:TrackDefinition">
+                <TextBlock Text="{Binding Name}" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+          <TextBox Text="{Binding TrackName}" Width="180" PlaceholderText="Track name" IsEnabled="{Binding HasTrack}"
+                   ToolTip.Tip="Rename the track (saved with Save track)" AutomationProperties.Name="Track name" />
+          <Button Command="{Binding NewTrackCommand}" ToolTip.Tip="Start a new track anchored at this session's first GPS fix">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Path Classes="icon" Data="{StaticResource IconAdd}" />
+              <TextBlock Text="New track" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
+      </DockPanel>
+    </Border>
+    <Grid ColumnDefinitions="*,8,Auto">
+      <Border Grid.Column="0" Classes="card flush">
+        <Panel>
+          <controls:TrackEditorControl x:Name="Editor" ViewModel="{Binding}" Margin="4"
+                                       ToolTip.Tip="Click the line to add a gate; drag a gate to move it; arrows nudge, Delete removes" />
+          <TextBlock Classes="title subtle" Text="{Binding EmptyMessage}" IsVisible="{Binding ReferencePath, Converter={x:Static ObjectConverters.IsNull}}"
+                     HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="420" TextAlignment="Center" IsHitTestVisible="False" />
+        </Panel>
+      </Border>
+      <GridSplitter Grid.Column="1" Width="8" />
+      <Border Grid.Column="2" Classes="card" MinWidth="280">
+        <DockPanel>
+          <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4">
+            <Button x:Name="CopyTableButton" DockPanel.Dock="Right" Classes="icon"
+                    ToolTip.Tip="Copy the split times (tab-separated, pastes into a spreadsheet)" AutomationProperties.Name="Copy split times">
+              <Path Classes="icon" Data="{StaticResource IconCopy}" />
+            </Button>
+            <TextBlock Classes="section" Text="Split times" VerticalAlignment="Center" />
+          </DockPanel>
+          <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+            <controls:SplitTableControl x:Name="SplitTable" Table="{Binding Table}" HighlightedLap="{Binding HighlightedLap}"
+                                        HorizontalAlignment="Left" VerticalAlignment="Top" />
+          </ScrollViewer>
+        </DockPanel>
+      </Border>
+    </Grid>
+  </DockPanel>
+</UserControl>
