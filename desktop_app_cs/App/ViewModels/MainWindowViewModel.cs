@@ -6,11 +6,16 @@ using InfernoAnalyzer.Core.Profiles;
 
 namespace InfernoAnalyzer.App.ViewModels;
 
+/// <summary>A tab's channel configuration as a page of the vehicle profile window.</summary>
+/// <param name="Header">The tab's header.</param>
+/// <param name="Config">The tab's config view model.</param>
+public sealed record ConfigSection(string Header, ChannelConfigViewModel Config);
+
 /// <summary>
 /// The window: two session slots, the analysis tabs, and the routing of
 /// session/selection events to the tabs (port of <c>InfernoAnalyzerApp</c>),
-/// plus what the shell around them needs: opening files, recent files and
-/// the settings that persist between runs.
+/// plus what the shell around them needs: opening files, recent files, the
+/// vehicle profile editor and the settings that persist between runs.
 /// </summary>
 public sealed partial class MainWindowViewModel : ObservableObject
 {
@@ -32,7 +37,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
         SessionA = new SessionViewModel("Session A", Profiles, SessionSlot.A, styles);
         SessionB = new SessionViewModel("Session B", Profiles, SessionSlot.B, styles);
         TimeDistance = new TimeDistanceViewModel(SessionA, SessionB, Settings);
-        Tabs = new ObservableCollection<AnalysisTabViewModel> { TimeDistance };
+        Suspension = new SuspensionViewModel(SessionA, SessionB);
+        Tabs = new ObservableCollection<AnalysisTabViewModel> { TimeDistance, Suspension };
+        ConfigSections = Tabs.Where(t => t.Config is ChannelConfigViewModel).Select(t => new ConfigSection(t.Header, (ChannelConfigViewModel)t.Config!)).ToList();
+        _selectedConfigSection = ConfigSections.FirstOrDefault();
 
         foreach (var tab in Tabs)
         {
@@ -77,6 +85,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     /// <summary>The Time/Distance tab.</summary>
     public TimeDistanceViewModel TimeDistance { get; }
+
+    /// <summary>The Suspension tab.</summary>
+    public SuspensionViewModel Suspension { get; }
 
     /// <summary>Analysis tabs in display order.</summary>
     public ObservableCollection<AnalysisTabViewModel> Tabs { get; }
@@ -123,6 +134,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
         newTab.PropertyChanged += OnActiveTabPropertyChanged;
         ShowTabLapSelection(newTab);
         newTab.SetActive(true);
+        if (newTab.Config is ChannelConfigViewModel config)
+        {
+            SelectedConfigSection = ConfigSections.FirstOrDefault(s => ReferenceEquals(s.Config, config)) ?? SelectedConfigSection;
+        }
     }
 
     /// <summary>The lap lists show the selection the tab works on, with colour keys when it draws one trace per lap.</summary>
@@ -202,6 +217,90 @@ public sealed partial class MainWindowViewModel : ObservableObject
         SessionB.Apply(logA, pathA);
     }
 
+    /// <summary>The tabs' channel configurations, as the pages of the vehicle profile window.</summary>
+    public IReadOnlyList<ConfigSection> ConfigSections { get; }
+
+    /// <summary>The page shown in the vehicle profile window; follows the active tab.</summary>
+    [ObservableProperty]
+    private ConfigSection? _selectedConfigSection;
+
+    /// <summary>The session the vehicle profile window edits; every page follows it.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsProfileSessionA))]
+    [NotifyPropertyChangedFor(nameof(IsProfileSessionB))]
+    [NotifyPropertyChangedFor(nameof(ProfileTarget))]
+    private SessionSlot _profileSession = SessionSlot.A;
+
+    partial void OnProfileSessionChanged(SessionSlot value)
+    {
+        foreach (var section in ConfigSections)
+        {
+            section.Config.ActiveSession = value;
+        }
+    }
+
+    /// <summary>Radio binding.</summary>
+    public bool IsProfileSessionA
+    {
+        get => ProfileSession == SessionSlot.A;
+        set
+        {
+            if (value)
+            {
+                ProfileSession = SessionSlot.A;
+            }
+        }
+    }
+
+    /// <summary>Radio binding.</summary>
+    public bool IsProfileSessionB
+    {
+        get => ProfileSession == SessionSlot.B;
+        set
+        {
+            if (value)
+            {
+                ProfileSession = SessionSlot.B;
+            }
+        }
+    }
+
+    /// <summary>Keep every page's Session B entries equal to Session A's.</summary>
+    public bool SyncProfileWithA
+    {
+        get => ConfigSections.All(s => s.Config.SyncWithA);
+        set
+        {
+            foreach (var section in ConfigSections)
+            {
+                section.Config.SyncWithA = value;
+            }
+
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>Which vehicle the profile window is editing, e.g. "Logger 6701209 · Inferno 86 (Profile: Toyota 86 ZN6)".</summary>
+    public string ProfileTarget
+    {
+        get
+        {
+            var slot = ProfileSession == SessionSlot.B && SessionB.HasSession ? SessionB : SessionA;
+            return slot.HasSession ? $"{slot.Details}  ({slot.ProfileName})" : "No session loaded";
+        }
+    }
+
+    /// <summary>Raised when the vehicle profile window should be shown.</summary>
+    public event Action? ProfileEditorRequested;
+
+    /// <summary>Open the vehicle profile window on the active tab's page.</summary>
+    [RelayCommand]
+    public void EditProfile() => ProfileEditorRequested?.Invoke();
+
+    /// <summary>Restore the package defaults on the shown page.</summary>
+    [RelayCommand]
+    public void ResetConfigSection() => SelectedConfigSection?.Config.Reset();
+
     private void OnSessionLoaded(SessionViewModel session)
     {
         if (session.FilePath is { } path && File.Exists(path))
@@ -214,6 +313,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
             }
         }
 
+        if (!SessionB.HasSession && ProfileSession == SessionSlot.B)
+        {
+            ProfileSession = SessionSlot.A;
+        }
+
         foreach (var tab in Tabs)
         {
             tab.OnSessionLoaded();
@@ -221,6 +325,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         SwapSessionsCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(WindowTitle));
+        OnPropertyChanged(nameof(ProfileTarget));
+        OnPropertyChanged(nameof(SyncProfileWithA));
     }
 
     private void OnSelectionChanged(LapScope scope)
