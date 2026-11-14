@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
-using Avalonia.Headless.XUnit;
 using Avalonia.Media.Imaging;
 using InfernoAnalyzer.App.Controls;
 using InfernoAnalyzer.App.ViewModels;
@@ -35,17 +34,17 @@ public class SectorsTabTests
     }
 
     [Fact]
-    public void New_track_is_named_from_the_session_metadata()
+    public Task New_track_is_named_from_the_session_metadata() => Ui.Run(() =>
     {
         Assert.Equal("Fuji GP Sh", SectorsViewModel.TrackNameFor(new Dictionary<string, string> { ["Venue"] = "Fuji GP Sh" }));
         Assert.Equal(
             "Phillip Island Circuit",
             SectorsViewModel.TrackNameFor(new Dictionary<string, string> { ["track_name"] = "phillipisland", ["track_display_name"] = "Phillip Island Circuit" }));
         Assert.Equal("New track", SectorsViewModel.TrackNameFor(new Dictionary<string, string> { ["Venue"] = string.Empty }));
-    }
+    });
 
     [Fact]
-    public async Task Creating_a_track_and_adding_gates_produces_a_split_table_and_saves()
+    public Task Creating_a_track_and_adding_gates_produces_a_split_table_and_saves() => Ui.Run(async () =>
     {
         var (window, path, dir) = await LoadedWindow();
         try
@@ -94,10 +93,10 @@ public class SectorsTabTests
         {
             dir.Delete(recursive: true);
         }
-    }
+    });
 
-    [AvaloniaFact]
-    public async Task Editor_click_adds_a_gate_and_the_view_renders()
+    [Fact]
+    public Task Editor_click_adds_a_gate_and_the_view_renders() => Ui.Run(async () =>
     {
         var (window, _, dir) = await LoadedWindow();
         try
@@ -135,16 +134,16 @@ public class SectorsTabTests
 
             var frame = top.CaptureRenderedFrame();
             Assert.NotNull(frame);
-            frame!.Save(Path.Combine(RenderSmokeTests.RenderDir, "sectors.png"), new PngBitmapEncoderOptions());
+            RenderSmokeTests.SaveRender(frame!, "sectors.png");
         }
         finally
         {
             dir.Delete(recursive: true);
         }
-    }
+    });
 
     [Fact]
-    public async Task Renaming_a_track_keeps_its_unsaved_gates_and_saves_under_the_new_name()
+    public Task Renaming_a_track_keeps_its_unsaved_gates_and_saves_under_the_new_name() => Ui.Run(async () =>
     {
         var (window, path, dir) = await LoadedWindow();
         try
@@ -185,10 +184,10 @@ public class SectorsTabTests
         {
             dir.Delete(recursive: true);
         }
-    }
+    });
 
     [Fact]
-    public async Task Gate_edits_can_be_undone_one_step_at_a_time()
+    public Task Gate_edits_can_be_undone_one_step_at_a_time() => Ui.Run(async () =>
     {
         var (window, _, dir) = await LoadedWindow();
         try
@@ -233,10 +232,10 @@ public class SectorsTabTests
         {
             dir.Delete(recursive: true);
         }
-    }
+    });
 
     [Fact]
-    public async Task Switching_tracks_with_unsaved_edits_asks_first()
+    public Task Switching_tracks_with_unsaved_edits_asks_first() => Ui.Run(async () =>
     {
         var (window, path, dir) = await LoadedWindow();
         try
@@ -287,10 +286,10 @@ public class SectorsTabTests
         {
             dir.Delete(recursive: true);
         }
-    }
+    });
 
-    [AvaloniaFact]
-    public async Task Split_table_copies_as_tsv_and_the_keyboard_moves_the_highlight()
+    [Fact]
+    public Task Split_table_copies_as_tsv_and_the_keyboard_moves_the_highlight() => Ui.Run(async () =>
     {
         var (window, _, dir) = await LoadedWindow();
         try
@@ -335,5 +334,5 @@ public class SectorsTabTests
         {
             dir.Delete(recursive: true);
         }
-    }
+    });
 }

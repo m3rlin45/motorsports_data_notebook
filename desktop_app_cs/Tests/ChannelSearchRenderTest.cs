@@ -1,6 +1,5 @@
 using Avalonia.Controls;
 using Avalonia.Headless;
-using Avalonia.Headless.XUnit;
 using Avalonia.Media.Imaging;
 using InfernoAnalyzer.App.ViewModels;
 using InfernoAnalyzer.App.Views;
@@ -14,8 +13,8 @@ public class ChannelSearchRenderTest
 {
     private static readonly ProfileStore BuiltinOnly = new("/nonexistent/profiles.yaml");
 
-    [AvaloniaFact]
-    public async Task Search_box_filters_and_clears()
+    [Fact]
+    public Task Search_box_filters_and_clears() => Ui.Run(async () =>
     {
         var window = new MainWindowViewModel(BuiltinOnly);
         window.TimeDistance.Debounce = TimeSpan.Zero;
@@ -30,7 +29,7 @@ public class ChannelSearchRenderTest
 
         var frame = top.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save(Path.Combine(RenderSmokeTests.RenderDir, "channel_search.png"), new PngBitmapEncoderOptions());
+        RenderSmokeTests.SaveRender(frame!, "channel_search.png");
 
         var clear = view.FindControl<Button>("ClearFilterButton")!;
         Assert.True(clear.IsVisible);
@@ -39,5 +38,5 @@ public class ChannelSearchRenderTest
         Assert.Equal(string.Empty, window.TimeDistance.ChannelFilter);
         Assert.All(window.TimeDistance.Channels, c => Assert.True(c.IsMatch));
         Assert.False(clear.IsVisible); // hidden while the box is empty
-    }
+    });
 }

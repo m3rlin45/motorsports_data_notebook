@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
-using Avalonia.Headless.XUnit;
 using Avalonia.Media.Imaging;
 using InfernoAnalyzer.App;
 using InfernoAnalyzer.App.ViewModels;
@@ -33,7 +32,7 @@ public class RollGradientTabTests
     }
 
     [Fact]
-    public async Task Roll_gradient_tab_builds_the_map_and_three_panels_from_the_profile()
+    public Task Roll_gradient_tab_builds_the_map_and_three_panels_from_the_profile() => Ui.Run(async () =>
     {
         var window = await LoadedWindow();
         var tab = window.RollGradient;
@@ -51,10 +50,10 @@ public class RollGradientTabTests
         Assert.StartsWith("Roll Gradient  |  front", spec.Title);
         Assert.Single(tab.Stats);
         Assert.Equal(3, tab.Stats[0].Rows.Count);
-    }
+    });
 
     [Fact]
-    public async Task Missing_track_widths_block_the_analysis_with_a_message()
+    public Task Missing_track_widths_block_the_analysis_with_a_message() => Ui.Run(async () =>
     {
         var window = await LoadedWindow();
         var tab = window.RollGradient;
@@ -63,10 +62,10 @@ public class RollGradientTabTests
         await tab.RunNowAsync();
 
         Assert.Equal("Enter the front and rear track widths (mm) under Channels", tab.Status);
-    }
+    });
 
-    [AvaloniaFact]
-    public async Task Hovering_the_track_map_highlights_samples_and_the_view_renders()
+    [Fact]
+    public Task Hovering_the_track_map_highlights_samples_and_the_view_renders() => Ui.Run(async () =>
     {
         var viewModel = await LoadedWindow();
         var view = new RollGradientView { DataContext = viewModel.RollGradient };
@@ -80,7 +79,7 @@ public class RollGradientTabTests
         Assert.True(surface.HighlightedCount > 0);
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save(Path.Combine(RenderSmokeTests.RenderDir, "roll_gradient.png"), new PngBitmapEncoderOptions());
+        RenderSmokeTests.SaveRender(frame!, "roll_gradient.png");
 
         surface.ClearHighlights();
         Assert.Equal(0, surface.HighlightedCount);
@@ -89,10 +88,10 @@ public class RollGradientTabTests
         window.MouseMove(new Point(5, 5));
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
         Assert.Equal(0, surface.HighlightedCount);
-    }
+    });
 
     [Fact]
-    public async Task Session_b_without_laps_is_not_compared_and_min_g_is_validated()
+    public Task Session_b_without_laps_is_not_compared_and_min_g_is_validated() => Ui.Run(async () =>
     {
         var window = await LoadedWindow();
         var tab = window.RollGradient;
@@ -119,5 +118,5 @@ public class RollGradientTabTests
         var state = new Dictionary<string, string>();
         tab.SaveState(state);
         Assert.Equal("0.3", state["min_g"]);
-    }
+    });
 }
