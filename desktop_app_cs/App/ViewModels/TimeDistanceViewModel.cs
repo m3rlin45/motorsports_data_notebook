@@ -32,26 +32,29 @@ public sealed partial class ChannelChoiceViewModel : ObservableObject
 }
 
 /// <summary>
-/// The Time/Distance tab: the selected laps of Session A overlaid as a strip
-/// chart (one panel per chosen channel plus delta time), with the linked
-/// crosshair. Also hosts the demo fixtures (`cs-run path.json`).
+/// The Time/Distance tab: the selected laps of Session A (and of Session B
+/// when one is loaded) overlaid as a strip chart (one panel per chosen
+/// channel plus delta time), with the linked crosshair. Also hosts the demo
+/// fixtures (`cs-run path.json`).
 /// </summary>
 public sealed partial class TimeDistanceViewModel : AnalysisTabViewModel<TimeDistanceViewModel.Parameters, Fixture>
 {
     private readonly SessionViewModel _sessionA;
+    private readonly SessionViewModel? _sessionB;
     private readonly AppSettings? _settings;
     private Fixture? _fixture;
     private string? _viewKey;
     private bool _suppressChannelEvents;
 
     /// <summary>
-    /// Create the tab over <paramref name="sessionA"/>. With
-    /// <paramref name="settings"/> the ticked channels are remembered per
-    /// vehicle.
+    /// Create the tab over <paramref name="sessionA"/> and the optional
+    /// comparison <paramref name="sessionB"/>. With <paramref name="settings"/>
+    /// the ticked channels are remembered per vehicle.
     /// </summary>
-    public TimeDistanceViewModel(SessionViewModel sessionA, AppSettings? settings = null)
+    public TimeDistanceViewModel(SessionViewModel sessionA, SessionViewModel? sessionB = null, AppSettings? settings = null)
     {
         _sessionA = sessionA;
+        _sessionB = sessionB;
         _settings = settings;
         Commands = new[]
         {
@@ -165,7 +168,7 @@ public sealed partial class TimeDistanceViewModel : AnalysisTabViewModel<TimeDis
         Timebase = names["gps_speed"];
 
         // What to plot, most specific first: what this vehicle had ticked last time, what is ticked now
-        // (the next run of the same car), then speed, throttle and brake.
+        // (the next run of the same car, or loading a comparison session), then speed, throttle and brake.
         var available = log?.ChannelNames.ToHashSet(StringComparer.Ordinal) ?? new HashSet<string>();
         var remembered = VehicleKey(_sessionA) is { } key && _settings is not null && _settings.ChannelsByVehicle.TryGetValue(key, out var saved) ? saved : null;
         var wanted = (remembered ?? ShownChannels.Select(c => c.Name)).Where(available.Contains).ToList();
@@ -249,8 +252,37 @@ public sealed partial class TimeDistanceViewModel : AnalysisTabViewModel<TimeDis
         List<int> Laps,
         List<string> Channels,
         string Timebase,
-        Dictionary<int, LapStyle> Styles,
+        LogFile? LogB,
+        List<int> LapsB,
+        Dictionary<string, string> MapB,
+        Dictionary<(string Session, int Lap), LapStyle> Styles,
         string ViewKey);
+
+    /// <summary>
+    /// Session A channel name → Session B channel name through the vehicle
+    /// profiles (the same key on both), so e.g. A's <c>PPS</c> panel shows B's
+    /// <c>Throttle_PCT</c>. Names without a profile key map to themselves.
+    /// </summary>
+    public Dictionary<string, string> ChannelMapToB()
+    {
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        var a = _sessionA.Profile?.ChannelNames;
+        var b = _sessionB?.Profile?.ChannelNames;
+        if (a is null || b is null)
+        {
+            return map;
+        }
+
+        foreach (var (key, nameA) in a)
+        {
+            if (b.TryGetValue(key, out var nameB) && nameB != nameA)
+            {
+                map[nameA] = nameB;
+            }
+        }
+
+        return map;
+    }
 
     /// <inheritdoc />
     protected override Parameters? GetParameters()
@@ -272,8 +304,30 @@ public sealed partial class TimeDistanceViewModel : AnalysisTabViewModel<TimeDis
             return Hint("Select channels to plot");
         }
 
-        var styles = laps.Where(n => _sessionA.StyleOf(n) is not null).ToDictionary(n => n, n => _sessionA.StyleOf(n)!.Value);
-        return new Parameters(_sessionA.Log, laps, channels, Timebase, styles, _sessionA.FilePath ?? string.Empty);
+        var logB = _sessionB?.Log;
+        var lapsB = logB is null ? new List<int>() : _sessionB!.SelectedIn(Scope);
+        var styles = new Dictionary<(string, int), LapStyle>();
+        void Collect(SessionViewModel session, string tag, List<int> nums)
+        {
+            foreach (var num in nums)
+            {
+                if (session.StyleOf(num) is { } style)
+                {
+                    styles[(tag, num)] = style;
+                }
+            }
+        }
+
+        // A lone session's laps carry no session tag; with a comparison they are "A" and "B".
+        var tagA = logB is null || lapsB.Count == 0 ? string.Empty : "A";
+        Collect(_sessionA, tagA, laps);
+        if (_sessionB is not null)
+        {
+            Collect(_sessionB, "B", lapsB);
+        }
+
+        var viewKey = $"{_sessionA.FilePath}|{(lapsB.Count > 0 ? _sessionB?.FilePath : null)}";
+        return new Parameters(_sessionA.Log, laps, channels, Timebase, logB, lapsB, ChannelMapToB(), styles, viewKey);
     }
 
     /// <inheritdoc />
@@ -281,10 +335,21 @@ public sealed partial class TimeDistanceViewModel : AnalysisTabViewModel<TimeDis
     {
         // Fastest selected lap first: it is the delta-time reference.
         var ordered = p.Laps.OrderBy(n => p.Log.Laps.First(l => l.Num == n).LapTimeMs).ToList();
-        var fixture = LapSeriesBuilder.Build(p.Log, ordered, p.Channels, p.Timebase, cancellation);
+        Fixture fixture;
+        if (p.LogB is null || p.LapsB.Count == 0)
+        {
+            fixture = LapSeriesBuilder.Build(p.Log, ordered, p.Channels, p.Timebase, string.Empty, null, cancellation);
+        }
+        else
+        {
+            var a = LapSeriesBuilder.Build(p.Log, ordered, p.Channels, p.Timebase, "A", null, cancellation);
+            var b = LapSeriesBuilder.Build(p.LogB, p.LapsB, p.Channels, p.Timebase, "B", p.MapB, cancellation);
+            fixture = LapSeriesBuilder.Merge(a, b);
+        }
+
         foreach (var lap in fixture.Laps)
         {
-            lap.Style = p.Styles.TryGetValue(lap.Num, out var style) ? style : null;
+            lap.Style = p.Styles.TryGetValue((lap.Session, lap.Num), out var style) ? style : null;
         }
 
         return fixture;
