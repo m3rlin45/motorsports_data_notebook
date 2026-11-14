@@ -171,6 +171,7 @@ def lap_rows(session_id: str, truth: dict) -> pd.DataFrame:
             "lap_time_s": np.asarray(times, dtype=np.float32),
             "lap_type": ["out"] + ["full"] * n + ["in"],
             "on_track_s": np.asarray(times, dtype=np.float32),
+            "outlap_from_pit": [True] + [False] * (n + 1),
         }
     )
 
