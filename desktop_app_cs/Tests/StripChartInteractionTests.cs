@@ -115,6 +115,37 @@ public class StripChartInteractionTests
     });
 
     [Fact]
+    public Task Bringing_a_region_into_view_shades_it_and_keeps_a_pinned_cursor_that_is_inside_it() => Ui.Run(() =>
+    {
+        var fixture = Fixture.Load(FixturePath);
+        var whole = StripChartBuilder.Build(fixture, XAxisMode.Distance, "session-1");
+        var lap = whole.InitialView!.Value;
+        var width = lap.Max - lap.Min;
+        StripChartSpec Focused(string name, double from, double to) => StripChartBuilder.Build(
+            fixture, XAxisMode.Distance, "session-1", new[] { new StripChartBuilder.RegionSpan(name, new XRange(0, 1), new XRange(lap.Min + from * width, lap.Min + to * width)) });
+
+        var (window, chart) = Show(whole);
+        Assert.All(chart.Plots, p => Assert.Empty(p.GetPlottables<ScottPlot.Plottables.HorizontalSpan>()));
+        chart.PinCursor(lap.Min + 0.35 * width);
+
+        // A region around the cursor: every panel shades it, the view goes to it, the cursor stays put.
+        chart.Render(Focused("Turn 3", 0.30, 0.40));
+        window.CaptureRenderedFrame();
+        Assert.All(chart.Plots, p => Assert.Single(p.GetPlottables<ScottPlot.Plottables.HorizontalSpan>()));
+        var view = XRangeOf(chart);
+        Assert.InRange(view.Min, lap.Min + 0.25 * width, lap.Min + 0.30 * width);
+        Assert.InRange(view.Max, lap.Min + 0.40 * width, lap.Min + 0.45 * width);
+        Assert.True(chart.IsCursorPinned);
+        Assert.Equal(lap.Min + 0.35 * width, chart.Cursor!.Value, 6);
+
+        // A region elsewhere: a cursor left behind out of sight would be a readout of nothing on screen.
+        chart.Render(Focused("Turn 7", 0.70, 0.80));
+        window.CaptureRenderedFrame();
+        Assert.False(chart.IsCursorPinned);
+        Assert.Null(chart.Cursor);
+    });
+
+    [Fact]
     public Task Reset_view_returns_to_the_initial_view() => Ui.Run(() =>
     {
         var (_, chart) = Show(Spec("s"));
