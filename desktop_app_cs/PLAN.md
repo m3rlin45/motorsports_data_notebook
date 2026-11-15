@@ -297,10 +297,58 @@ to a surface from `ChartSurfaces` and keeps it on the app's theme.
 | Driver tab | done 2026-10-29, reworked 2026-11-13 | `BoxPlotSpec` + `ScottPlotBoxPlot` (stacked boxes with numpy quartiles, 1.5 IQR whiskers, fliers, mean line, gold opportunity bands, hover stats), `TrackMapSpec` + `ScottPlotTrackMap` (neutral outline, braking and acceleration zones coloured over it, accel width by opportunity, apex labels, gold stars), the detail overlay reuses the strip chart (laps in their lap-list styles, brake/entry/apex/exit markers); config with thresholds per session and the 95th-percentile auto throttle threshold derived on the worker thread; Summary/Detail/Map as one switch, a click on a summary column, a map apex or a list row opens that corner's detail (Esc returns); stats tables |
 | Tire Grip tab | done 2026-10-29, reworked 2026-11-13 | `LineGridSpec` + `ScottPlotLineGrid` (bucket-percentile lines with markers, hover showing the bucket's metric, G and count); pressure/temperature switch and validated percentile entry, both remembered between runs; A/B overlay; stats tables (per-corner means and the comparison/detail tables) |
 | Save Profile | done 2026-10-29 | the vehicle profile window's Save button: merges every tab's channel names (first tab owns a shared key, so Suspension's shock entries win over Roll Gradient's — Python lets the last panel win), the Suspension motion ratios and the Roll Gradient track widths into a `VehicleProfile` saved under logger ID + vehicle for the session the active config edits; the loaded shock calibration is kept only while the entered ratios still derive from it |
+| Packaging check | 2026-10-29 | Linux NativeAOT publish: no trimming warnings, 25 MB, parser libraries under `runtimes/linux-x64/native/`, runs with the sample. Windows trimmed single-file publish: 42 MB exe; the parser DLLs must be `ExcludeFromSingleFile` (the bundler swallowed them and extracted them flat where `NativeLoader` could not find them — "Dll was not found" on load); verified on Windows loading a KK-F `.xrk` with a Japanese file name. CI now fails the publish jobs if the libraries are missing from the output |
 | Track store + sector kernel | done 2026-10-29 | `Core/Tracks`: `TrackDefinition` (anchor + gate chords in lap order), `TrackYaml`, `TrackStore` (embedded `builtin_tracks.yaml` if present + user `tracks.yaml` beside `profiles.yaml`, nearest-anchor lookup), `SectorTimes` (gate crossings by segment intersection in a local frame, interpolated in time; split table with best sectors, theoretical best and best lap; `GateAcrossPath` for the editor). Verified on a synthetic square lap and on Fuji lap 14 with gates placed at known samples |
 | Sectors tab (split-times table + track editor) | done 2026-10-29, reworked 2026-11-13 | `SectorsViewModel` (track picker, "New track" anchored at the first GPS fix and named from the Venue metadata (the track display name for iRacing), nearest-track auto-select on load, gates kept in lap order, rename and gate names as edits of their own, undo, dirty/save with a prompt before unsaved edits are lost); `SplitTableControl` custom-drawn (lap rows, sector + lap-time columns right-aligned in tabular figures, best purple and bold / second-best green and semibold, theoretical-best row, row click or Up/Down highlights, copy as TSV); `TrackEditorControl` custom-drawn (reference lap fitted to the control, click the line to add a gate, click to select, drag or arrow keys to move along the line, Delete removes). Both take their colours and font from the theme and expose an automation peer |
 | Phase 3 remaining | next | Time/Distance delta-time against sector gates? (not planned); otherwise Phase 4 packaging polish and retiring the Python app |
 
 Lesson from corners: match numpy's operation order exactly (`x * (π/180)`,
 not `x * π / 180`; pairwise sums) before loosening a tolerance.
+
+### UI review pass — 2026-11-13
+
+A four-lens review (C#/Avalonia idiom, interaction, visual design, a
+pragmatist's triage) of the Phase 3 app; its findings were folded back into
+the commits that introduced each piece, so the stack reads as built this way.
+What changed, by layer:
+
+- **Charting.** `ChartTheme` carries the surfaces, ink, type ramp and the
+  values of the `ChartColors` tokens; specs name colours by token
+  (`@session-a`, `@lap-3`, `@braking`) so one spec draws correctly in light,
+  dark and high-contrast themes. The lap hues are the dataviz reference
+  palette stepped per surface (every slot ≥ 3:1 on the data area; re-run its
+  validator after any edit). `IChartSurface.ResetView`; `ChartPoint.ItemId`
+  for clickable chart items.
+- **Charting.ScottPlot.** `ScottPlotSurface<TSpec>` / `ScottPlotGridSurface<TSpec>`
+  own the spec guard, theme re-render, events, plot grid and reset;
+  `PlotStyle` is the one chart style (left/bottom frame in the grid colour,
+  no minor ticks, flat label boxes, the UI font via `ScottPlotFonts`,
+  `Font.Automatic` so non-Latin session names draw); `MapStyle` is the one
+  map style. The strip chart's crosshair, markers, read-outs and title tags
+  are an Avalonia overlay (`StripCursorOverlay`), so moving the cursor never
+  re-rasterises the traces. ScottPlot's Avalonia control renders in
+  device-independent pixels with `DisplayScale` fixed at 1, which is what
+  lets the overlay map data to pixels from the axis limits and the fixed
+  padding alone. `DataAreaInput` also removes ScottPlot's double-click
+  benchmark, middle-click autoscale, keyboard pan and context menu.
+- **App.** `Styles/AppStyles.axaml` holds the tokens (page / card / plot
+  surfaces, text, timing colours), the type ramp (12 body, 12 semibold
+  section, 14 semibold title) and the classes views use instead of inline
+  attributes; `FluentTheme` runs in Compact density. Windows and macOS use
+  the system UI font, Linux the bundled Inter (the headless tests pin Inter).
+  Tab views are created once and kept (`TabViewLocator`); a tab contributes
+  its own View-menu commands and shortcuts (`TabCommand`). Settings live in
+  `analyzer_settings.json` beside `profiles.yaml` (window size, sidebar,
+  theme, last tab and folder, recent files, per-tab view state, ticked
+  channels per vehicle). Unhandled exceptions go to `analyzer_crash.log`
+  and, on the UI thread, a dialog. On Windows the window asks for Mica and
+  puts the menu in the title bar (View > Menu in Title Bar turns that off).
+
+Not verified from Linux, check on a Windows run: the Segoe UI rendering,
+Mica, and the menu-in-title-bar layout (drag area, caption-button spacing).
+The app icon (`App/Assets`, drawn by `tools/make_icon.py`) is a placeholder.
+
+Left out on purpose: converting the stacked strip-chart panels to a single
+ScottPlot `Multiplot` (the overlay removed the cost it was meant to address);
+`[ObservableProperty]` on partial properties (cosmetic).
 
