@@ -235,21 +235,20 @@ def clean_laps(laps_table: pa.Table, *, drop_lap_zero: bool = True) -> pa.Table:
 def _post_process_session(log: "LogFile", *, lap_types: tuple[str, ...] = ("full",)) -> "LogFile":
     """Add derived channels and clean laps for any telemetry format.
 
-    Resolves the speed channel name via the profile system, then adds
-    speed_kmh, distance_m, and lap_time columns. Keeps the laps whose
-    ``lap_type`` is in ``lap_types`` when that column is present (default:
-    full laps only). Lap 0 — the out-lap's number on AIM loggers — is kept
-    only when out-laps are requested.
+    Resolves the speed channel name via the profile system (logger ID plus
+    vehicle name, like every other consumer), then adds speed_kmh,
+    distance_m, and lap_time columns. Keeps the laps whose ``lap_type`` is in
+    ``lap_types`` when that column is present (default: full laps only).
+    Lap 0 — the out-lap's number on AIM loggers — is kept only when out-laps
+    are requested.
     """
-    from .profiles import DEFAULT_CHANNEL_NAMES, get_logger_id, get_profile_for_logger
+    from .profiles import DEFAULT_CHANNEL_NAMES, get_profile_for_log
 
     # Resolve speed channel name from profile (or default)
     speed_channel = DEFAULT_CHANNEL_NAMES["gps_speed"]
-    logger_id = get_logger_id(log)
-    if logger_id is not None:
-        profile = get_profile_for_logger(logger_id)
-        if profile is not None:
-            speed_channel = profile.channel_names.get("gps_speed", speed_channel)
+    profile = get_profile_for_log(log)
+    if profile is not None:
+        speed_channel = profile.channel_names.get("gps_speed", speed_channel)
 
     has_speed = speed_channel in log.channels
     if has_speed:
