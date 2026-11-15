@@ -1732,6 +1732,7 @@ Suzuka 164 / 11, Motegi 129 / 6, Sodegaura 368 / 17):
 | Apex κ against the accelerometer | mean log ratio within ± 0.05 | −0.002 to −0.011; Motegi −0.025 | pass |
 | Grade between cars | ≤ 1 % rms | 0.18–0.63 % | pass |
 | Altitude against the GSI elevation model | grade over 50 m within 1 % rms; relief within 3 m | grade 0.17–0.36 % rms; relief within 1.0 m | pass |
+| Against the operators' drawings | left/right order exact; turning between long straights within 5°; no apex under 0.95 × the inside edge | order matches at 4 of 4; turning within 3.3° (Sodegaura); tightest apex 0.98 × | pass |
 | Peak retention | reported | profile apex over the laps' own: median 0.93–0.96 per layout, lowest corner 0.88 | |
 | Share of lateral heat under 0.004 /m | reported | Tsukuba 0.093, Sodegaura 0.105, Motegi 0.109, Fuji 0.139, Suzuka 0.229; day-split floor 0.0004–0.010 | |
 | Right against left at the laps' own speed | reported against 0.02 | 15 of 16 car × layout rows within 0.013; KK-F-V2 at Tsukuba 0.026 (23 laps, one day) | |
@@ -1756,7 +1757,53 @@ are cached in `workspace/lapsim/gsi/` and nothing derived from them is
 committed; `--dem-offline` and `--no-dem` run the gate without the
 network.
 
-Not measured yet: the corner angles against the operators' drawings.
+**Against the operators' drawings** (`drawings.py`, the transcription
+with its sources). Sodegaura's planning drawing gives every element's
+radius, arc length and station; Tsukuba's table gives radius, width and
+cant per section; Suzuka's guide a radius strip (the guide says shape and
+dimensions may differ from reality); Motegi's plan radii as labels. Fuji
+publishes none for the current surface. The transcription corrected one
+figure the design review carried: Sodegaura's tenth element is printed
+R=55 m, not 65; with 55 the drawing's arcs close to 360.0°.
+
+What a driven line can be held to, and what it reads:
+
+- *The order of lefts and rights* (elements turning the same way are one
+  group): the corner table alternates exactly as the drawing does at all
+  four circuits (5 groups at Sodegaura, 7 at Tsukuba, 13 at Suzuka, 9 at
+  Motegi, where the count needs the unlabelled left after the second
+  underpass).
+- *Net turning between long straights*, at Sodegaura, where arc lengths
+  are published. On a long straight the car is aligned with the track
+  whatever line it took, so the heading change from one to the next is
+  the drawing's:
+
+  | Between stations | Drawing | Profile | Difference |
+  |---|---|---|---|
+  | 305–588 m (the 95R) | +57.1° | +54.0° | −3.1° |
+  | 588–1,380 m (70R, 25R, kink, the three lefts) | +30.6° | +27.9° | −2.7° |
+  | 1,380–2,394 m (100R to the last corner) | +179.2° | +181.7° | +2.5° |
+  | 2,394 m through the line to 305 m (the 40R) | +93.1° | +96.4° | +3.3° |
+
+  All within the 5° bound. The size is what geometry gives: a car that
+  crosses a 150 m straight from one side to the other is 3° off the
+  track's axis. A straight has to be 100 m long to count: cut at the 92 m
+  and 94 m straights either side of the 100R kink, the two pieces differ
+  from the drawing by +9.5° and −9.6°, which cancel, because the car is
+  still unwinding from the hairpin there. It is not a corner-by-corner
+  test for the same reason.
+- *No apex tighter than the inside edge*, R − w/2, with 5 % allowed. The
+  tightest case is Tsukuba's first corner: 29.2 m driven against 29.9 m
+  for the 35R at its printed 10.1 m width (0.98). Everywhere else at
+  Tsukuba, Sodegaura and Motegi the driven apex is 1.05 to 2.4 times the
+  inside-edge radius: the driven line is straighter than the centre line,
+  most of all through the fast bends (Tsukuba's Dunlop, printed 35R, is
+  driven at 62 m). Suzuka's guide is not gated, as it disclaims its
+  dimensions; its last corner reads 95 m driven against 107 m (0.89).
+
+Gate result: pass (order exact at 4 of 4; turning within 3.3°; no gated
+apex under 0.98).
+
 Motegi's profile per year was asked for (resurfaced for 2026): every
 Motegi build lap is from 2025, so there is nothing to compare.
 

@@ -521,6 +521,10 @@ INERTIAL_MIN_LAPS = 30
 WET_MIN_LAPS = 30
 WET_MIN_DAYS = 3
 DEM_GRADE_RMS_MAX = 0.01
+#: Net turning between long straights: a car crossing a 150 m straight from
+#: one side to the other is 3° off the track's axis.
+DRAWING_TURN_MAX_DEG = 5.0
+DRAWING_EDGE_MIN = 0.95
 DEM_RELIEF_MAX_M = 3.0
 #: A bridge in the bare-earth model: it leaves the logged altitude by more
 #: than this against the difference's median over the base length.
@@ -578,6 +582,82 @@ def _rms(v: np.ndarray) -> float:
     return float(np.sqrt(np.mean(v * v))) if v.size else float("nan")
 
 
+def against_drawing(model, drawing: dict) -> tuple[dict, str]:  # type: ignore[no-untyped-def]
+    """A track (``TrackModel``) against the operator's transcribed
+    geometry: a summary row and the tables behind it (markdown).
+
+    ``sequence_matches``: the corner table alternates between right and
+    left as the drawing does. ``turn_worst_deg``: the largest difference
+    in net turning between long straights (NaN without arc lengths).
+    ``apex_vs_inside_edge_min``: the smallest ratio of a group's tightest
+    driven radius to the inside-edge radius ``R − w/2`` of its tightest
+    printed element (NaN when the orders differ)."""
+    from . import drawings as dr
+
+    ds, n = model.ds_m, model.n
+    mine = dr.turn_sequence([c["sign"] for c in model.corners])
+    theirs = dr.turn_sequence([e["sign"] for e in drawing["elements"]])
+    row: dict = {
+        "sequence_matches": mine == theirs,
+        "groups_drawing": len(theirs),
+        "groups_profile": len(mine),
+        "disclaimed": bool(drawing.get("dimensions_disclaimed", False)),
+        "turn_pieces": 0,
+        "turn_worst_deg": float("nan"),
+        "apex_vs_inside_edge_min": float("nan"),
+    }
+    parts: list[str] = []
+    pieces = dr.straight_to_straight(drawing)
+    if pieces:
+        scale = model.length_m / drawing["length_m"]
+        rows = []
+        for piece in pieces:
+            a = int(round(piece["station_from_m"] * scale / ds))
+            b = int(round(piece["station_to_m"] * scale / ds))
+            got = float(np.degrees(np.sum(model.kappa_heat[np.arange(a, b) % n]) * ds))
+            rows.append(
+                {
+                    "station_from_m": piece["station_from_m"],
+                    "station_to_m": piece["station_to_m"],
+                    "drawing_deg": piece["turn_deg"],
+                    "profile_deg": got,
+                    "difference_deg": got - piece["turn_deg"],
+                }
+            )
+        frame = pd.DataFrame(rows)
+        row["turn_pieces"] = len(frame)
+        row["turn_worst_deg"] = float(
+            frame["difference_deg"].iloc[frame["difference_deg"].abs().argmax()]
+        )
+        parts.append("Net turning between long straights:\n\n" + md_table(frame, floats="{:.4g}"))
+    if mine == theirs:
+        ours = dr.groups(
+            [{"sign": c["sign"], "r": 1.0 / abs(c["kappa_apex"])} for c in model.corners]
+        )
+        rows = []
+        for got_group, drawn in zip(ours, dr.groups(drawing["elements"])):
+            edge = dr.inside_edge_radius(drawn, drawing["width_m"][1])
+            tight = min(g["r"] for g in got_group)
+            rows.append(
+                {
+                    "direction": "R" if drawn[0]["sign"] > 0 else "L",
+                    "printed_radii_m": ", ".join(
+                        "?" if e["radius_m"] is None else f"{e['radius_m']:g}" for e in drawn
+                    ),
+                    "driven_tightest_m": tight,
+                    "inside_edge_m": edge if edge is not None else float("nan"),
+                    "ratio": tight / edge if edge else float("nan"),
+                }
+            )
+        frame = pd.DataFrame(rows)
+        if frame["ratio"].notna().any():
+            row["apex_vs_inside_edge_min"] = float(frame["ratio"].min())
+        parts.append(
+            "Tightest driven apex per group of corners:\n\n" + md_table(frame, floats="{:.3g}")
+        )
+    return row, "\n\n".join(parts)
+
+
 def wet_against_dry(wet, dry, shares: dict) -> dict:  # type: ignore[no-untyped-def]
     """A layout's wet track beside its dry one (two ``TrackBuild``): how
     the wet one closes, how far its line lies from the dry line, how its
@@ -629,12 +709,14 @@ def check_track_truth(
     tracks_dir: Path | None = None,
     layouts: tuple[str, ...] = TRACK_LAYOUTS,
     dem: object | None = None,
+    drawings: dict[str, dict] | None = None,
 ) -> GateReport:
     """Gate B2: the profile is right in scale, apex curvature and gentle
     curvature, against sensors it was not built from. ``dem`` (an object
     with ``elevation(lat, lon) -> (height, layer)``, see :mod:`.dem`) adds
-    the altitude check against the ground elevation model. The check
-    against the operators' drawings is not in yet."""
+    the altitude check against the ground elevation model; ``drawings``
+    (layout -> the operator's transcribed geometry, see :mod:`.drawings`)
+    adds the check against the published corners."""
     from ...tire_etl.kinematics import G_MS2
     from . import track as trk
 
@@ -644,6 +726,8 @@ def check_track_truth(
     notches: list[dict] = []
     wet_rows: list[dict] = []
     pit_rows: list[dict] = []
+    draw_rows: list[dict] = []
+    draw_detail: list[str] = []
     index = geo.clean_lap_index(root, cache_dir=cache_dir)
     try:
         from . import holdout
@@ -884,6 +968,12 @@ def check_track_truth(
                         "notches": len(zones),
                     }
                 )
+
+        # Against the operator's drawing.
+        if drawings and layout in drawings:
+            row_d, text = against_drawing(model, drawings[layout])
+            draw_rows.append({"layout": layout, **row_d})
+            draw_detail.append(f"**{layout}** ({drawings[layout]['source']})\n\n{text}")
 
         # The wet version of the track, where the layout has the laps for one.
         # Every car's wet laps are pooled, as the dry track pools its cars.
@@ -1149,9 +1239,31 @@ def check_track_truth(
                 md_table(wt, floats="{:.3g}"),
             )
         )
-    rep.items.append(
-        GateItem(
-            "Corner angles against the operators' drawings", None, "not measured yet", "see #204"
+    if draw_rows:
+        dw = pd.DataFrame(draw_rows)
+        gated = dw[~dw["disclaimed"]]
+        ok = (
+            dw["sequence_matches"].all()
+            and (dw["turn_worst_deg"].fillna(0.0).abs() <= DRAWING_TURN_MAX_DEG).all()
+            and (gated["apex_vs_inside_edge_min"].fillna(np.inf) >= DRAWING_EDGE_MIN).all()
         )
-    )
+        rep.items.append(
+            GateItem(
+                "Against the operators' drawings",
+                bool(ok),
+                f"left/right order matches at {int(dw['sequence_matches'].sum())} of {len(dw)} "
+                f"layouts; turning between long straights within "
+                f"{dw['turn_worst_deg'].abs().max():.1f}°; tightest driven apex at "
+                f"{gated['apex_vs_inside_edge_min'].min():.2f} × the inside-edge radius or wider",
+                f"the order of lefts and rights exact; net turning between long straights "
+                f"within {DRAWING_TURN_MAX_DEG:g}° where arc lengths are published; no apex "
+                f"tighter than {DRAWING_EDGE_MIN} × the inside edge, R − w/2 (not gated where "
+                "the operator disclaims its dimensions)",
+                md_table(dw, floats="{:.3g}") + "\n\n" + "\n\n".join(draw_detail),
+            )
+        )
+    else:
+        rep.items.append(
+            GateItem("Against the operators' drawings", None, "not measured", "see #204")
+        )
     return rep
