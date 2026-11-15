@@ -152,6 +152,31 @@ public static class Numerics
         return counts;
     }
 
+    /// <summary><c>numpy.digitize(x, bins)</c> for increasing bins: the number of bin edges ≤ x (searchsorted right).</summary>
+    public static int Digitize(ReadOnlySpan<double> bins, double x) => SearchSortedRight(bins, x);
+
+    /// <summary>
+    /// Least-squares line <c>y = slope·x + intercept</c> (<c>numpy.polyfit(x, y, 1)</c>)
+    /// through centred normal equations with numpy's pairwise sums.
+    /// </summary>
+    public static (double Slope, double Intercept) FitLine(ReadOnlySpan<double> x, ReadOnlySpan<double> y)
+    {
+        var xMean = Mean(x);
+        var yMean = Mean(y);
+        var n = x.Length;
+        var xy = new double[n];
+        var xx = new double[n];
+        for (var i = 0; i < n; i++)
+        {
+            var dx = x[i] - xMean;
+            xy[i] = dx * (y[i] - yMean);
+            xx[i] = dx * dx;
+        }
+
+        var slope = Sum(xy) / Sum(xx);
+        return (slope, yMean - slope * xMean);
+    }
+
     /// <summary><c>numpy.cumsum</c>.</summary>
     public static double[] CumulativeSum(ReadOnlySpan<double> values)
     {
