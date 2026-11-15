@@ -89,8 +89,17 @@ public sealed class ScottPlotStripChart : ScottPlotSurface<StripChartSpec>
             var range = _panels[0].AvaPlot.Plot.Axes.Bottom.Range;
             keep = new XRange(range.Min, range.Max);
         }
-        else
+        else if (!(previous is not null
+            && _pinned
+            && _cursor is { } at
+            && previous.XAxis == spec.XAxis
+            && spec.DataKey is not null
+            && spec.DataKey == previous.DataKey
+            && spec.InitialView is { } next
+            && at >= next.Min
+            && at <= next.Max))
         {
+            // Unless it is the same data brought to a stretch that still holds the pinned cursor.
             _cursor = null;
             _pinned = false;
         }
@@ -120,6 +129,15 @@ public sealed class ScottPlotStripChart : ScottPlotSurface<StripChartSpec>
             plot.Axes.Bottom.TickLabelStyle.IsVisible = isBottom;
             plot.Legend.IsVisible = isTop && spec.Legend;
             plot.Legend.Alignment = Alignment.UpperRight;
+
+            // Bands first: behind the traces.
+            foreach (var band in spec.Bands)
+            {
+                var span = plot.Add.HorizontalSpan(band.From, band.To);
+                span.FillColor = ColorOf(band.Color).WithAlpha(Theme.HighContrast ? 0.3 : 0.14);
+                span.LineWidth = 0;
+                span.EnableAutoscale = false; // shading, not data: the axes fit the traces
+            }
 
             foreach (var trace in subplot.Traces)
             {

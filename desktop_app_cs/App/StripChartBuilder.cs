@@ -25,7 +25,12 @@ public static class StripChartBuilder
     /// <paramref name="viewKey"/> names what is on show (the session file),
     /// so re-building for the same thing keeps the user's zoom.
     /// </summary>
-    public static StripChartSpec Build(Fixture fixture, XAxisMode xAxis, string? viewKey = null)
+    /// <remarks>
+    /// With <paramref name="focus"/> (track regions as they lie on the reference lap) those
+    /// stretches are shaded and the initial view is the span from the first to the last of them
+    /// instead of the whole lap. The traces are never cut: the laps are all there to pan to.
+    /// </remarks>
+    public static StripChartSpec Build(Fixture fixture, XAxisMode xAxis, string? viewKey = null, IReadOnlyList<RegionSpan>? focus = null)
     {
         var stitched = fixture.Laps.Select(lap => Stitch(lap, xAxis)).ToList();
         var subplots = new List<SubplotSpec>();
@@ -78,9 +83,34 @@ public static class StripChartBuilder
             ? (XRange?)null
             : new XRange(0, stitched.Max(s => s.LapRange.Max));
 
+        var spans = (focus ?? Array.Empty<RegionSpan>()).Select(r => xAxis == XAxisMode.Distance ? r.Distance : r.Time).ToList();
+        var key = viewKey;
+        if (spans.Count > 0 && view is { } whole)
+        {
+            // From the first region to the last, with a little of the track on either side for context.
+            var from = spans.Min(s => s.Min);
+            var to = spans.Max(s => s.Max);
+            var margin = FocusMarginFraction * (to - from);
+            view = new XRange(Math.Max(whole.Min, from - margin), Math.Min(whole.Max, to + margin));
+            key = $"{viewKey}|{string.Join('+', focus!.Select(r => r.Name))}"; // another choice of regions is another view
+        }
+
         // The lap picker in the session panels is the legend.
-        return new StripChartSpec(subplots, xAxis, markers, view, Legend: false, ViewKey: viewKey);
+        return new StripChartSpec(subplots, xAxis, markers, view, Legend: false, ViewKey: key)
+        {
+            Bands = spans.Select(s => new XBandSpec(s.Min, s.Max, ChartColors.Region)).ToList(),
+            DataKey = viewKey,
+        };
     }
+
+    /// <summary>How much of the focused span's width is shown on either side of it.</summary>
+    public const double FocusMarginFraction = 0.08;
+
+    /// <summary>A track region as it lies on the reference lap, on both x-axes.</summary>
+    /// <param name="Name">The region's name.</param>
+    /// <param name="Time">From and to, in seconds from the lap's start.</param>
+    /// <param name="Distance">From and to, in metres from the lap's start.</param>
+    public sealed record RegionSpan(string Name, XRange Time, XRange Distance);
 
     /// <summary>
     /// The style of lap <paramref name="i"/>: the one its session's lap list

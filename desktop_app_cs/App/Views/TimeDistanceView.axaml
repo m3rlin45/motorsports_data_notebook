@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:InfernoAnalyzer.App.ViewModels"
+             xmlns:views="using:InfernoAnalyzer.App.Views"
              xmlns:controls="using:InfernoAnalyzer.App.Controls"
              x:Class="InfernoAnalyzer.App.Views.TimeDistanceView"
              x:DataType="vm:TimeDistanceViewModel">
@@ -17,7 +18,10 @@
           <RadioButton x:Name="DistanceRadio" Content="Distance" GroupName="xaxis" IsChecked="{Binding IsDistance}" />
           <RadioButton x:Name="TimeRadio" Content="Time" GroupName="xaxis" IsChecked="{Binding IsTime}" />
         </StackPanel>
-        <TextBlock Classes="title" Text="Lap overlay" VerticalAlignment="Center" />
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <TextBlock Classes="title" Text="Lap overlay" VerticalAlignment="Center" />
+          <views:RegionTagView ToolTip.Tip="The view is brought to these regions (shaded); the laps are not cut" />
+        </StackPanel>
       </DockPanel>
     </Border>
     <Grid ColumnDefinitions="216,8,*">
