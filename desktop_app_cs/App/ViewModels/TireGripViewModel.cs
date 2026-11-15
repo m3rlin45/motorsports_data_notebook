@@ -219,8 +219,8 @@ public sealed partial class TireGripViewModel : AnalysisTabViewModel<TireGripVie
     /// </summary>
     public sealed record Result(TireGripResult A, TireGripResult? B, TireGripResult? WholeA = null);
 
-    /// <summary>The ticked track regions the analysis is restricted to (shared with the other statistical tabs); null: whole laps.</summary>
-    public RegionsViewModel? Regions { get; set; }
+    /// <inheritdoc />
+    public override RegionUse RegionUse => RegionUse.Filter;
 
     /// <inheritdoc />
     protected override Parameters? GetParameters()
@@ -255,7 +255,7 @@ public sealed partial class TireGripViewModel : AnalysisTabViewModel<TireGripVie
             _b.SessionLabel,
             Metric,
             Percentile.Value ?? 99.9,
-            Regions?.Selection() ?? RegionSelection.WholeLap);
+            RegionSnapshot());
     }
 
     /// <inheritdoc />

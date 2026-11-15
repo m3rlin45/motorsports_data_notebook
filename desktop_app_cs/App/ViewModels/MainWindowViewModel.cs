@@ -46,16 +46,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Sectors = new SectorsViewModel(SessionA, TrackStore);
         Regions = new RegionsViewModel(SessionA, TrackStore, Driver.DriverConfig.GetChannelNames);
         Sectors.TrackSaved += RefreshRegions;
-        Suspension.Regions = Regions;
-        RollGradient.Regions = Regions;
-        TireGrip.Regions = Regions;
-        Regions.Changed += () =>
-        {
-            Suspension.OnSelectionChanged();
-            RollGradient.OnSelectionChanged();
-            TireGrip.OnSelectionChanged();
-        };
         Tabs = new ObservableCollection<AnalysisTabViewModel> { TimeDistance, Sectors, Suspension, Driver, TireGrip, RollGradient };
+        foreach (var tab in Tabs)
+        {
+            tab.Regions = Regions;
+        }
+
+        Regions.Changed += OnRegionsChanged;
         ConfigSections = Tabs.Where(t => t.Config is ChannelConfigViewModel).Select(t => new ConfigSection(t.Header, (ChannelConfigViewModel)t.Config!)).ToList();
         _selectedConfigSection = ConfigSections.FirstOrDefault();
 
@@ -91,7 +88,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <summary>Profile store shared by the sessions and tabs.</summary>
     public ProfileStore Profiles { get; }
 
-    /// <summary>The track regions the statistical tabs can be restricted to, and which are ticked.</summary>
+    /// <summary>The track regions of the session and which are ticked: one choice for every tab that uses regions.</summary>
     public RegionsViewModel Regions { get; }
 
     /// <summary>Track store for the Sectors tab.</summary>
@@ -417,6 +414,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(WindowTitle));
         OnPropertyChanged(nameof(ProfileTarget));
         OnPropertyChanged(nameof(SyncProfileWithA));
+    }
+
+    private void OnRegionsChanged()
+    {
+        foreach (var tab in Tabs.Where(t => t.RegionUse != RegionUse.None))
+        {
+            tab.OnSelectionChanged();
+        }
     }
 
     private void OnSelectionChanged(LapScope scope)

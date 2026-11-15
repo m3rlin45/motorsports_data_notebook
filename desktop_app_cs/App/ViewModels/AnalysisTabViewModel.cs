@@ -38,6 +38,19 @@ public enum LapScope
 /// <param name="Command">What it does.</param>
 public sealed record TabCommand(string Header, string? Gesture, ICommand Command);
 
+/// <summary>What a tab does with the track regions ticked for the session (<see cref="RegionsViewModel"/>).</summary>
+public enum RegionUse
+{
+    /// <summary>Nothing: the tab shows whole laps whatever is ticked.</summary>
+    None,
+
+    /// <summary>The tab's analysis covers only the parts of the laps inside the ticked regions.</summary>
+    Filter,
+
+    /// <summary>The tab shows whole laps and brings the ticked regions into view.</summary>
+    Focus,
+}
+
 /// <summary>
 /// Shared tab behaviour from the Python <c>BaseAnalysisTab</c>: a 300 ms
 /// debounce after any change, one analysis at a time on a worker thread,
@@ -68,6 +81,19 @@ public abstract partial class AnalysisTabViewModel : ObservableObject
 
     /// <summary>Which lap selection of the sessions the tab analyses.</summary>
     public virtual LapScope Scope => LapScope.Analysis;
+
+    /// <summary>The track regions ticked for the session, one choice shared by every tab (set by the shell; null: none).</summary>
+    public RegionsViewModel? Regions { get; set; }
+
+    /// <summary>What the tab does with <see cref="Regions"/>; a tab that uses them is re-run when the ticks change.</summary>
+    public virtual RegionUse RegionUse => RegionUse.None;
+
+    /// <summary>
+    /// The ticked regions as an immutable snapshot for <c>GetParameters</c> (UI thread); whole laps
+    /// for a tab that does not use regions or has none to use.
+    /// </summary>
+    protected RegionSelection RegionSnapshot() =>
+        RegionUse == RegionUse.None || Regions is null ? RegionSelection.WholeLap : Regions.Selection();
 
     /// <summary>Whether the tab draws one coloured trace per lap, so the lap list should show the colour keys.</summary>
     public virtual bool UsesLapColors => false;

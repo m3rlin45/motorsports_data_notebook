@@ -339,8 +339,8 @@ public sealed partial class RollGradientViewModel : AnalysisTabViewModel<RollGra
     /// </summary>
     public sealed record Result(RollGradientResult A, RollGradientResult? B, RollGradientResult? WholeA = null);
 
-    /// <summary>The ticked track regions the analysis is restricted to (shared with the other statistical tabs); null: whole laps.</summary>
-    public RegionsViewModel? Regions { get; set; }
+    /// <inheritdoc />
+    public override RegionUse RegionUse => RegionUse.Filter;
 
     /// <inheritdoc />
     protected override Parameters? GetParameters()
@@ -389,7 +389,7 @@ public sealed partial class RollGradientViewModel : AnalysisTabViewModel<RollGra
             RollConfig.GetTrackWidths(SessionSlot.B) ?? widthsA,
             _b.SessionLabel,
             MinLateralG.Value ?? 0,
-            Regions?.Selection() ?? RegionSelection.WholeLap);
+            RegionSnapshot());
     }
 
     /// <inheritdoc />
