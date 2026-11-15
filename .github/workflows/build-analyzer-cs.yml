@@ -6,12 +6,14 @@ on:
     paths:
       - 'desktop_app_cs/**'
       - 'src/motorsports_data_notebook/data/builtin_profiles.yaml'
+      - 'workspace_template/data/**'
       - 'pyproject.toml'
       - '.github/workflows/build-analyzer-cs.yml'
   pull_request:
     paths:
       - 'desktop_app_cs/**'
       - 'src/motorsports_data_notebook/data/builtin_profiles.yaml'
+      - 'workspace_template/data/**'
       - 'pyproject.toml'
       - '.github/workflows/build-analyzer-cs.yml'
 
@@ -20,6 +22,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build parser FFI libraries
+        run: python3 desktop_app_cs/tools/build_native.py --rids linux-x64
+
+      # The iRacing sample (70 MB) lives in the libibt source fetched above, not in this repository.
+      - name: Point the IBT parity test at libibt's sample
+        run: echo "INFERNO_IBT_SAMPLE=$(ls "$PWD"/desktop_app_cs/native/src/libibt-*/tests/test_data/test.ibt)" >> "$GITHUB_ENV"
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
