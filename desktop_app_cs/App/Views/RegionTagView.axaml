@@ -1,0 +1,21 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:InfernoAnalyzer.App.ViewModels"
+             x:Class="InfernoAnalyzer.App.Views.RegionTagView"
+             x:DataType="vm:AnalysisTabViewModel"
+             IsVisible="{Binding IsRegional}">
+  <!--
+    Beside a tab's title while its result covers the ticked regions only: what it covers, and the
+    way back to whole laps. On the tab rather than in the sidebar alone, so that a chart is never
+    read as whole-lap data with the sidebar folded away.
+  -->
+  <Border Classes="regiontag" ToolTip.Tip="This tab is showing only the parts of the laps inside these regions">
+    <StackPanel Orientation="Horizontal" Spacing="2">
+      <TextBlock Text="{Binding RegionLabel}" />
+      <Button Classes="icon" Command="{Binding Regions.ClearCommand}"
+              ToolTip.Tip="Back to whole laps" AutomationProperties.Name="Clear the region selection">
+        <Path Classes="icon" Data="{StaticResource IconClose}" />
+      </Button>
+    </StackPanel>
+  </Border>
+</UserControl>

@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using InfernoAnalyzer.App.Settings;
+using InfernoAnalyzer.Core.Analysis;
 using InfernoAnalyzer.Core.Profiles;
 using InfernoAnalyzer.Core.Tracks;
 
@@ -41,21 +42,22 @@ public sealed partial class MainWindowViewModel : ObservableObject
         TimeDistance = new TimeDistanceViewModel(SessionA, SessionB, Settings);
         Suspension = new SuspensionViewModel(SessionA, SessionB);
         RollGradient = new RollGradientViewModel(SessionA, SessionB, Suspension.SuspensionConfig);
-        Driver = new DriverViewModel(SessionA, SessionB);
+        Driver = new DriverViewModel(SessionA, SessionB, DriverAnalyses);
         TireGrip = new TireGripViewModel(SessionA, SessionB);
         Sectors = new SectorsViewModel(SessionA, TrackStore);
-        Regions = new RegionsViewModel(SessionA, TrackStore, Driver.DriverConfig.GetChannelNames);
+        Regions = new RegionsViewModel(SessionA, TrackStore, Driver.DriverConfig.GetChannelNames, Driver.DetectionInputs, DriverAnalyses);
         Sectors.TrackSaved += RefreshRegions;
-        Suspension.Regions = Regions;
-        RollGradient.Regions = Regions;
-        TireGrip.Regions = Regions;
-        Regions.Changed += () =>
-        {
-            Suspension.OnSelectionChanged();
-            RollGradient.OnSelectionChanged();
-            TireGrip.OnSelectionChanged();
-        };
+        // The corners are the Driver tab's: its channel names and thresholds re-list them.
+        Driver.DriverConfig.Changed += RefreshRegionsSoon;
+        Driver.DriverConfig.ThresholdsChanged += RefreshRegionsSoon;
         Tabs = new ObservableCollection<AnalysisTabViewModel> { TimeDistance, Sectors, Suspension, Driver, TireGrip, RollGradient };
+        foreach (var tab in Tabs)
+        {
+            tab.Regions = Regions;
+        }
+
+        Regions.Changed += OnRegionsChanged;
+        Regions.MapChoice = Settings.RegionMapOpen;
         ConfigSections = Tabs.Where(t => t.Config is ChannelConfigViewModel).Select(t => new ConfigSection(t.Header, (ChannelConfigViewModel)t.Config!)).ToList();
         _selectedConfigSection = ConfigSections.FirstOrDefault();
 
@@ -91,8 +93,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <summary>Profile store shared by the sessions and tabs.</summary>
     public ProfileStore Profiles { get; }
 
-    /// <summary>The track regions the statistical tabs can be restricted to, and which are ticked.</summary>
+    /// <summary>The track regions of the session and which are ticked: one choice for every tab that uses regions.</summary>
     public RegionsViewModel Regions { get; }
+
+    /// <summary>The driver-consistency results in memory: one corner detection for the Driver tab and the region list.</summary>
+    public DriverConsistencyCache DriverAnalyses { get; } = new();
 
     /// <summary>Track store for the Sectors tab.</summary>
     public TrackStore TrackStore { get; }
@@ -168,6 +173,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         newTab.PropertyChanged += OnActiveTabPropertyChanged;
         ShowTabLapSelection(newTab);
+        Regions.Use = newTab.RegionUse;
         newTab.SetActive(true);
         if (newTab.Config is ChannelConfigViewModel config)
         {
@@ -386,13 +392,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// </summary>
     private async void RefreshRegions() => await Regions.RefreshAsync();
 
+    /// <summary>As <see cref="RefreshRegions"/>, once for a burst of changes.</summary>
+    private async void RefreshRegionsSoon() => await Regions.RefreshSoonAsync();
+
     private void OnSessionLoaded(SessionViewModel session)
     {
-        if (ReferenceEquals(session, SessionA))
-        {
-            RefreshRegions();
-        }
-
         if (session.FilePath is { } path && File.Exists(path))
         {
             Settings.AddRecent(path);
@@ -413,10 +417,27 @@ public sealed partial class MainWindowViewModel : ObservableObject
             tab.OnSessionLoaded();
         }
 
+        // With two sessions the lap lists need the height the regions' map would take.
+        Regions.MapOpenByDefault = !SessionB.HasSession;
+
+        // After the tabs: the Driver tab has taken the new session's profile, which the corners are detected with.
+        if (ReferenceEquals(session, SessionA))
+        {
+            RefreshRegions();
+        }
+
         SwapSessionsCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(WindowTitle));
         OnPropertyChanged(nameof(ProfileTarget));
         OnPropertyChanged(nameof(SyncProfileWithA));
+    }
+
+    private void OnRegionsChanged()
+    {
+        foreach (var tab in Tabs.Where(t => t.RegionUse != RegionUse.None))
+        {
+            tab.OnSelectionChanged();
+        }
     }
 
     private void OnSelectionChanged(LapScope scope)
@@ -433,6 +454,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Settings.SidebarCollapsed = IsSidebarCollapsed;
         Settings.Theme = Theme;
         Settings.LastTab = ActiveTab.Header;
+        Settings.RegionMapOpen = Regions.MapChoice;
         foreach (var tab in Tabs)
         {
             var state = new Dictionary<string, string>(StringComparer.Ordinal);

@@ -24,6 +24,9 @@
           <SolidColorBrush x:Key="AppBestBrush" Color="#7A2BD6" />
           <SolidColorBrush x:Key="AppSecondBestBrush" Color="#107C41" />
           <SolidColorBrush x:Key="AppGateBrush" Color="#B45309" />
+          <!-- A ticked track region: its chip, its toolbar tag, its stretch on the map (ChartColors.Region). The gates' amber. -->
+          <SolidColorBrush x:Key="AppRegionBrush" Color="#B45309" />
+          <SolidColorBrush x:Key="AppRegionTextBrush" Color="#FFFFFF" />
           <SolidColorBrush x:Key="AppTrackBrush" Color="#8A8A8A" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="Dark">
@@ -38,6 +41,8 @@
           <SolidColorBrush x:Key="AppBestBrush" Color="#C08BFF" />
           <SolidColorBrush x:Key="AppSecondBestBrush" Color="#4CD98A" />
           <SolidColorBrush x:Key="AppGateBrush" Color="#F59E0B" />
+          <SolidColorBrush x:Key="AppRegionBrush" Color="#F59E0B" />
+          <SolidColorBrush x:Key="AppRegionTextBrush" Color="#1E1E1E" />
           <SolidColorBrush x:Key="AppTrackBrush" Color="#8A8A8A" />
         </ResourceDictionary>
       </ResourceDictionary.ThemeDictionaries>
@@ -65,6 +70,7 @@
       <StreamGeometry x:Key="IconChannels">M3,5 H13 M3,11 H13 M6,3.5 V6.5 M10,9.5 V12.5</StreamGeometry>
       <StreamGeometry x:Key="IconCopy">M5.5,5.5 H13 V13.5 H5.5 Z M3,10.5 V2.5 H10.5</StreamGeometry>
       <StreamGeometry x:Key="IconAdd">M8,3 V13 M3,8 H13</StreamGeometry>
+      <StreamGeometry x:Key="IconMap">M2.5,4 L6,2.5 L10,4 L13.5,2.5 V12 L10,13.5 L6,12 L2.5,13.5 Z M6,2.5 V12 M10,4 V13.5</StreamGeometry>
       <StreamGeometry x:Key="IconError">M8,2.5 L14,13 H2 Z M8,6.5 V9.5 M8,11.2 V11.4</StreamGeometry>
     </ResourceDictionary>
   </Styles.Resources>
@@ -135,6 +141,43 @@
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Padding" Value="8,4" />
+  </Style>
+  <!--
+    Region chips (the sidebar's corner and sector toggles): small, so nine corners fit on a line;
+    a ticked one wears the region colour, as its stretch on the map does.
+  -->
+  <Style Selector="ToggleButton.chip, Button.chip">
+    <Setter Property="Padding" Value="4,2" />
+    <Setter Property="MinHeight" Value="24" />
+    <Setter Property="MinWidth" Value="24" />
+    <Setter Property="Margin" Value="0,0,2,2" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="ToggleButton.chip:checked /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.chip:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.chip:checked:pressed /template/ ContentPresenter#PART_ContentPresenter, Button.chip.lit /template/ ContentPresenter#PART_ContentPresenter, Button.chip.lit:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AppRegionBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AppRegionBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource AppRegionTextBrush}" />
+  </Style>
+  <!-- The tag beside a tab's title while its result covers ticked regions only. -->
+  <Style Selector="Border.regiontag">
+    <Setter Property="Background" Value="{DynamicResource AppRegionBrush}" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Padding" Value="10,0,2,0" />
+    <Setter Property="Height" Value="24" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.regiontag TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource AppRegionTextBrush}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.regiontag Button.icon">
+    <Setter Property="MinHeight" Value="20" />
+    <Setter Property="MinWidth" Value="20" />
+    <Setter Property="Padding" Value="2" />
+  </Style>
+  <Style Selector="Border.regiontag Path.icon">
+    <Setter Property="Stroke" Value="{DynamicResource AppRegionTextBrush}" />
   </Style>
   <Style Selector="Button.icon, ToggleButton.icon">
     <Setter Property="Background" Value="Transparent" />

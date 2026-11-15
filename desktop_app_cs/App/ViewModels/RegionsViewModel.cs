@@ -54,15 +54,19 @@ public sealed partial class RegionItemViewModel : ObservableObject
     private readonly Action _changed;
 
     /// <summary>Create a row; <paramref name="changed"/> runs when its tick changes.</summary>
-    public RegionItemViewModel(int index, TrackRegion region, int firstSample, int lastSample, int markerSample, Action changed)
+    public RegionItemViewModel(int index, TrackRegion region, int firstSample, int lastSample, int markerSample, string tip, Action changed)
     {
         Index = index;
         Region = region;
         FirstSample = firstSample;
         LastSample = lastSample;
         MarkerSample = markerSample;
+        Tip = tip;
         _changed = changed;
     }
+
+    /// <summary>What the region is, in a line: "Turn 3 · right · 138 km/h at the slowest point".</summary>
+    public string Tip { get; }
 
     /// <summary>Position in the list; the id the map reports and highlights.</summary>
     public int Index { get; }
@@ -72,6 +76,9 @@ public sealed partial class RegionItemViewModel : ObservableObject
 
     /// <summary>Display name.</summary>
     public string Name => Region.Name;
+
+    /// <summary>The name as it fits on a chip: "T3" for "Turn 3", a sector's name as it is.</summary>
+    public string ShortName => Region.Kind == TrackRegionKind.Corner && Name.StartsWith("Turn ", StringComparison.Ordinal) ? "T" + Name["Turn ".Length..] : Name;
 
     /// <summary>Where the region starts on the reference lap (sample index), for drawing.</summary>
     public int FirstSample { get; }
@@ -90,32 +97,51 @@ public sealed partial class RegionItemViewModel : ObservableObject
 }
 
 /// <summary>
-/// The regions of the track the statistical tabs (Suspension, Roll Gradient,
-/// Tire Grip) can be restricted to, and which are ticked. One choice shared
-/// by those tabs, as their lap selection is. The list is a property of the
-/// session and its track, not of the ticked laps: corners are detected once
-/// per session from its laps within 103 % of the fastest, with the Driver
-/// tab's channels, and sectors come from the saved track at this circuit.
+/// The regions of the session's track and which are ticked: the selector in
+/// the sidebar, under the lap lists. One choice for every tab; what a tab
+/// does with it is the tab's <see cref="RegionUse"/> (the statistical tabs
+/// cover only the ticked regions; a tab that does not use them shows whole
+/// laps and the selector says so). The list is a property of the
+/// session and its track, not of the ticked laps: corners are those of the
+/// Driver tab's analysis (its channels and thresholds, through the same
+/// <see cref="DriverConsistencyCache"/>) over the laps the session starts
+/// with ticked (<see cref="SessionViewModel.DefaultAnalysisLaps"/>), and
+/// sectors come from the saved track at this circuit.
 /// </summary>
 public sealed partial class RegionsViewModel : ObservableObject
 {
     private readonly SessionViewModel _a;
     private readonly TrackStore _store;
     private readonly Func<SessionSlot, IReadOnlyDictionary<string, string>> _channelNames;
+    private readonly Func<List<int>, DriverViewModel.SessionInputs?> _detectionInputs;
+    private readonly DriverConsistencyCache _cache;
     private double[] _x = Array.Empty<double>();
     private double[] _y = Array.Empty<double>();
     private double[] _refLat = Array.Empty<double>();
     private double[] _refLon = Array.Empty<double>();
     private int _version;
+    private int _requests;
     private bool _batch;
     private LogFile? _listedFor;
 
-    /// <summary>Create the list for Session A; <paramref name="channelNames"/> gives a session's driver-analysis channel names.</summary>
-    public RegionsViewModel(SessionViewModel a, TrackStore store, Func<SessionSlot, IReadOnlyDictionary<string, string>> channelNames)
+    /// <summary>
+    /// Create the list for Session A. <paramref name="channelNames"/> gives a session's
+    /// driver-analysis channel names (for the GPS channels laps are cut with);
+    /// <paramref name="detectionInputs"/> gives what the Driver tab's analysis of Session A would
+    /// read for some laps (<see cref="DriverViewModel.DetectionInputs"/>), run through <paramref name="cache"/>.
+    /// </summary>
+    public RegionsViewModel(
+        SessionViewModel a,
+        TrackStore store,
+        Func<SessionSlot, IReadOnlyDictionary<string, string>> channelNames,
+        Func<List<int>, DriverViewModel.SessionInputs?> detectionInputs,
+        DriverConsistencyCache cache)
     {
         _a = a;
         _store = store;
         _channelNames = channelNames;
+        _detectionInputs = detectionInputs;
+        _cache = cache;
     }
 
     /// <summary>Detected corners.</summary>
@@ -130,9 +156,38 @@ public sealed partial class RegionsViewModel : ObservableObject
     /// <summary>Raised when what the analyses should cover changed (a tick, or the reference toggle).</summary>
     public event Action? Changed;
 
-    /// <summary>Draw the whole-lap result behind a region's, for reference.</summary>
+    /// <summary>Draw the whole-lap result behind a region's, for reference (one setting for the tabs that can).</summary>
     [ObservableProperty]
     private bool _showWholeLap = true;
+
+    /// <summary>What the tab now showing does with the ticks.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsUsed))]
+    [NotifyPropertyChangedFor(nameof(Caption))]
+    private RegionUse _use = RegionUse.Filter;
+
+    /// <summary>The tab now showing uses the ticks; otherwise the selector is dimmed and the ticks wait for a tab that does.</summary>
+    public bool IsUsed => Use != RegionUse.None;
+
+    /// <summary>What the ticks do on the tab now showing, where that needs saying.</summary>
+    public string Caption => Use == RegionUse.None ? "Not used on this tab: it shows whole laps" : string.Empty;
+
+    /// <summary>Whether the map is unfolded where the user has not said: it yields its height to the lap lists when they are short of it.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsMapOpen))]
+    private bool _mapOpenByDefault = true;
+
+    /// <summary>The user's own choice for the map, once made (kept in the settings).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsMapOpen))]
+    private bool? _mapChoice;
+
+    /// <summary>The map under the chips is unfolded.</summary>
+    public bool IsMapOpen => MapChoice ?? MapOpenByDefault;
+
+    /// <summary>Fold or unfold the map, from now on as the user's choice.</summary>
+    [RelayCommand]
+    public void ToggleMap() => MapChoice = !IsMapOpen;
 
     /// <summary>The small map: the reference lap with the ticked regions coloured.</summary>
     [ObservableProperty]
@@ -149,6 +204,10 @@ public sealed partial class RegionsViewModel : ObservableObject
     /// <summary>Why there are no sectors, or empty when there are.</summary>
     [ObservableProperty]
     private string _sectorsHint = string.Empty;
+
+    /// <summary>Session A is loaded: there is a track to pick regions of (the selector is hidden otherwise).</summary>
+    [ObservableProperty]
+    private bool _hasSession;
 
     /// <summary>There are corners to list.</summary>
     public bool HasCorners => Corners.Count > 0;
@@ -197,6 +256,19 @@ public sealed partial class RegionsViewModel : ObservableObject
         OnTicksChanged();
     }
 
+    /// <summary>Tick the region at <paramref name="index"/> and nothing else (a double click on its chip).</summary>
+    public void Solo(int index)
+    {
+        _batch = true;
+        foreach (var item in Items)
+        {
+            item.IsSelected = item.Index == index;
+        }
+
+        _batch = false;
+        OnTicksChanged();
+    }
+
     /// <summary>Flip the tick of the row at <paramref name="index"/> (a click on its dot on the map).</summary>
     public void Toggle(int index)
     {
@@ -219,14 +291,14 @@ public sealed partial class RegionsViewModel : ObservableObject
         Changed?.Invoke();
     }
 
+    /// <summary>One region as listed: where it lies on the reference lap (sample indices) and its tooltip.</summary>
+    private sealed record Listed(TrackRegion Region, int First, int Last, int Marker, string Tip);
+
     /// <summary>What <see cref="Detect"/> found.</summary>
-    private sealed record Detected(
-        double[] Lat,
-        double[] Lon,
-        IReadOnlyList<(TrackRegion Region, int First, int Last, int Marker)> Corners,
-        IReadOnlyList<(TrackRegion Region, int First, int Last, int Marker)> Sectors,
-        string Hint,
-        string SectorsHint);
+    private sealed record Detected(double[] Lat, double[] Lon, IReadOnlyList<Listed> Corners, IReadOnlyList<Listed> Sectors, string Hint, string SectorsHint);
+
+    /// <summary>A ticked corner is kept across a re-listing of the same session when a corner's apex is still within this of where its was.</summary>
+    private const double SameCornerM = 30;
 
     /// <summary>The refresh last started (completed when none has been): what a caller that did not start it can wait for.</summary>
     public Task LastRefresh { get; private set; } = Task.CompletedTask;
@@ -234,25 +306,49 @@ public sealed partial class RegionsViewModel : ObservableObject
     /// <summary>
     /// Rebuild the list for the session now loaded: detect its corners (on a
     /// worker thread) and look up its track's sectors. Ticks do not carry over
-    /// to another session. For the same session again (its track's gates were
-    /// edited) the ticked corners stay ticked; sectors do not, since "S2" is a
-    /// different stretch once a gate has moved. A result for a session that has
-    /// since been replaced is dropped.
+    /// to another session. For the same session again (its track's gates or
+    /// the Driver tab's thresholds were edited) the list stays up until the
+    /// new one is known, nothing happens when that is the same list, and
+    /// otherwise a tick is kept where its region is unchanged or, for a
+    /// corner, where there is still a corner at the same place. A result for
+    /// a session that has since been replaced is dropped.
     /// </summary>
     public Task RefreshAsync() => LastRefresh = RefreshCoreAsync();
+
+    /// <summary>How long <see cref="RefreshSoonAsync"/> waits for further changes.</summary>
+    public TimeSpan Debounce { get; set; } = TimeSpan.FromMilliseconds(300);
+
+    /// <summary>
+    /// <see cref="RefreshAsync"/> after <see cref="Debounce"/>, once for a burst of calls: for
+    /// changes that arrive a keystroke at a time (a threshold or a channel name being typed).
+    /// </summary>
+    public Task RefreshSoonAsync() => LastRefresh = RefreshSoonCoreAsync();
+
+    private async Task RefreshSoonCoreAsync()
+    {
+        var request = ++_requests;
+        await Task.Delay(Debounce);
+        if (request == _requests)
+        {
+            await RefreshCoreAsync();
+        }
+    }
 
     private async Task RefreshCoreAsync()
     {
         var version = ++_version;
         var log = _a.Log;
-        var hadSelection = HasSelection;
         var sameSession = log is not null && ReferenceEquals(log, _listedFor);
-        var keptCorners = sameSession ? Corners.Where(c => c.IsSelected).Select(c => c.Region.Id).ToHashSet() : new HashSet<string>();
-        _listedFor = null;
-        Reset(log is null ? "Load a session to pick regions" : "Finding the corners…");
-        if (hadSelection && !sameSession)
+        HasSession = log is not null;
+        if (!sameSession)
         {
-            Changed?.Invoke();
+            var hadSelection = HasSelection;
+            _listedFor = null;
+            Reset(log is null ? "Load a session to pick regions" : "Finding the corners…");
+            if (hadSelection)
+            {
+                Changed?.Invoke();
+            }
         }
 
         if (log is null)
@@ -261,42 +357,58 @@ public sealed partial class RegionsViewModel : ObservableObject
         }
 
         var names = _channelNames(SessionSlot.A);
+        var gps = (names["gps_latitude"], names["gps_longitude"]);
+        var laps = SessionViewModel.DefaultAnalysisLaps(log);
+        var inputs = _detectionInputs(laps);
         var store = _store;
-        var detected = await Task.Run(() => Detect(log, names, store));
+        var cache = _cache;
+        var detected = await Task.Run(() => Detect(log, laps, gps, inputs, cache, store));
         if (version != _version)
         {
             return;
         }
 
+        var listed = detected.Corners.Concat(detected.Sectors).ToList();
+        if (sameSession && Hint == detected.Hint && SectorsHint == detected.SectorsHint && listed.Select(l => l.Region).SequenceEqual(Items.Select(i => i.Region)))
+        {
+            return; // the same list: nothing to redraw, nothing to recompute
+        }
+
+        var hadTicks = HasSelection;
+        var keptRegions = Items.Where(i => i.IsSelected).Select(i => i.Region).ToList();
+        var keptApexes = Items.Where(i => i.IsSelected && i.Region.Kind == TrackRegionKind.Corner)
+            .Select(i => new GeoPoint(_refLat[i.MarkerSample], _refLon[i.MarkerSample])).ToList();
+        Reset(detected.Hint);
         _refLat = detected.Lat;
         _refLon = detected.Lon;
         (_x, _y) = detected.Lat.Length > 0 ? Core.Analysis.Corners.GpsToLocalXy(detected.Lat, detected.Lon) : (Array.Empty<double>(), Array.Empty<double>());
         var index = 0;
-        foreach (var (region, first, last, marker) in detected.Corners)
+        foreach (var l in detected.Corners)
         {
-            Corners.Add(new RegionItemViewModel(index++, region, first, last, marker, OnTicksChanged));
+            Corners.Add(new RegionItemViewModel(index++, l.Region, l.First, l.Last, l.Marker, l.Tip, OnTicksChanged));
         }
 
-        foreach (var (region, first, last, marker) in detected.Sectors)
+        foreach (var l in detected.Sectors)
         {
-            Sectors.Add(new RegionItemViewModel(index++, region, first, last, marker, OnTicksChanged));
+            Sectors.Add(new RegionItemViewModel(index++, l.Region, l.First, l.Last, l.Marker, l.Tip, OnTicksChanged));
         }
 
-        Hint = detected.Hint;
         SectorsHint = detected.SectorsHint;
         OnPropertyChanged(nameof(HasCorners));
         OnPropertyChanged(nameof(HasSectors));
         _listedFor = log;
         _batch = true;
-        foreach (var corner in Corners.Where(c => keptCorners.Contains(c.Region.Id)))
+        foreach (var item in Items)
         {
-            corner.IsSelected = true;
+            item.IsSelected = keptRegions.Contains(item.Region)
+                || (item.Region.Kind == TrackRegionKind.Corner
+                    && keptApexes.Any(apex => GeoProjection.DistanceM(apex, new GeoPoint(_refLat[item.MarkerSample], _refLon[item.MarkerSample])) <= SameCornerM));
         }
 
         _batch = false;
-        if (hadSelection && sameSession)
+        if (hadTicks)
         {
-            OnTicksChanged(); // the kept ticks, or none where only sectors were ticked: either way the tabs recompute
+            OnTicksChanged(); // the kept ticks, or none: either way what the tabs cover may have changed
         }
         else
         {
@@ -320,47 +432,67 @@ public sealed partial class RegionsViewModel : ObservableObject
         OnPropertyChanged(nameof(Summary));
     }
 
-    private static Detected Detect(LogFile log, IReadOnlyDictionary<string, string> names, TrackStore store)
+    private static Detected Detect(
+        LogFile log, List<int> laps, (string Lat, string Lon) gps, DriverViewModel.SessionInputs? inputs, DriverConsistencyCache cache, TrackStore store)
     {
-        var none = Array.Empty<(TrackRegion, int, int, int)>();
-        var laps = LapSelection.GetTopLaps(log.Laps).Select(l => l.Num).ToList();
-        if (laps.Count == 0 || !log.TryGetChannel(names["gps_latitude"], out _) || !log.TryGetChannel(names["gps_longitude"], out _))
+        var none = Array.Empty<Listed>();
+        if (laps.Count == 0 || !log.TryGetChannel(gps.Lat, out _) || !log.TryGetChannel(gps.Lon, out _))
         {
             return new Detected(Array.Empty<double>(), Array.Empty<double>(), none, none, "Regions need GPS channels and at least one timed lap", string.Empty);
         }
 
+        var corners = new List<Listed>();
+        var hint = string.Empty;
+        DriverConsistencyResult? result = null;
+        if (inputs is null)
+        {
+            hint = "No corners: a Driver Consistency threshold is not valid (Channels…)";
+        }
+        else
+        {
+            try
+            {
+                result = DriverViewModel.Run(inputs, cache, CancellationToken.None).Result;
+            }
+            catch (Exception e) when (e is InvalidOperationException or KeyNotFoundException)
+            {
+                // The kernel's two "cannot" answers: no corners detected, or a pedal channel that is not in the file.
+                hint = "No corners found: check the throttle, brake and GPS channels (Channels…)";
+            }
+        }
+
         double[] lat;
         double[] lon;
-        var corners = new List<(TrackRegion, int, int, int)>();
-        var hint = string.Empty;
-        try
+        if (result is not null)
         {
-            var threshold = DriverViewModel.AutoThrottleThreshold(log, names["throttle"]) ?? 98.0;
-            var result = DriverConsistency.Analyze(log, laps, names, throttleThreshold: threshold);
             lat = result.RefLat;
             lon = result.RefLon;
-            var regions = TrackRegions.FromCorners(result);
-            foreach (var region in regions)
+            foreach (var region in TrackRegions.FromCorners(result))
             {
-                var corner = result.Corners.First(c => c.Name == region.Name);
-                var segments = result.Segments.Where(s => s.CornerId == corner.Id).ToList();
+                var data = result.CornerData.First(c => c.Corner.Name == region.Name);
+                var segments = result.Segments.Where(s => s.CornerId == data.Corner.Id).ToList();
                 var (first, last) = TrackRegions.IndexRange(result.RefDistance, segments.Min(s => s.StartDist), segments.Max(s => s.EndDist));
                 var apexDist = segments.FirstOrDefault(s => s.SegmentType == "corner")?.ApexDist ?? (segments.Min(s => s.StartDist) + segments.Max(s => s.EndDist)) / 2;
                 var apex = Numerics.ArgMin(result.RefDistance.Select(d => Math.Abs(d - apexDist)).ToArray());
-                corners.Add((region, first, last, apex));
+                var tip = $"{region.Name} · {(data.Corner.Direction == 'L' ? "left" : "right")}";
+                if (data.SpeedValues.Count > 0)
+                {
+                    tip += $" · {data.SpeedMean.ToString("0", System.Globalization.CultureInfo.InvariantCulture)} km/h at the slowest point";
+                }
+
+                corners.Add(new Listed(region, first, last, apex, tip));
             }
         }
-        catch (Exception e) when (e is InvalidOperationException or KeyNotFoundException or ArgumentException)
+        else
         {
-            // No corners (missing pedal channels, or none detected): sectors still work off the fastest lap's path.
-            var best = LapSelection.GetBestLap(log.Laps)!.Num;
-            var gps = log.FilterByLap(best, new[] { names["gps_latitude"], names["gps_longitude"] }).ResampleToChannel(names["gps_latitude"]);
-            lat = gps[names["gps_latitude"]].Values;
-            lon = gps[names["gps_longitude"]].Values;
-            hint = "No corners found: check the throttle, brake and GPS channels (Channels…)";
+            // No corners: sectors still work off the fastest lap's path.
+            var best = log.Laps.Where(l => laps.Contains(l.Num)).MinBy(l => l.LapTimeMs)!.Num;
+            var path = log.FilterByLap(best, new[] { gps.Lat, gps.Lon }).ResampleToChannel(gps.Lat);
+            lat = path[gps.Lat].Values;
+            lon = path[gps.Lon].Values;
         }
 
-        var sectors = new List<(TrackRegion, int, int, int)>();
+        var sectors = new List<Listed>();
         var sectorsHint = "Add gates on the Sectors tab to pick sectors here";
         if (lat.Length > 2 && store.FindNear(new GeoPoint(lat[0], lon[0])) is { Gates.Count: > 0 } track)
         {
@@ -373,7 +505,7 @@ public sealed partial class RegionsViewModel : ObservableObject
                 var last = s == regions.Count - 1 ? lat.Length - 1 : gateSamples[s];
                 if (last > first)
                 {
-                    sectors.Add((regions[s], first, last, (first + last) / 2));
+                    sectors.Add(new Listed(regions[s], first, last, (first + last) / 2, $"Sector {s + 1} of {track.Name}"));
                 }
             }
 
@@ -423,13 +555,13 @@ public sealed partial class RegionsViewModel : ObservableObject
             var ys = _y.AsSpan(item.FirstSample, count).ToArray();
             if (item.IsSelected)
             {
-                paths.Add(new TrackMapPathSpec(xs, ys, ChartColors.SessionA, 4));
+                paths.Add(new TrackMapPathSpec(xs, ys, ChartColors.Region, 4));
             }
 
             // Sectors tile the lap, so only corners get a dot to click.
             if (item.Region.Kind == TrackRegionKind.Corner)
             {
-                points.Add(new TrackMapPointSpec(_x[item.MarkerSample], _y[item.MarkerSample], ChartColors.Ink, 5, Id: item.Index));
+                points.Add(new TrackMapPointSpec(_x[item.MarkerSample], _y[item.MarkerSample], ChartColors.Ink, 5, Label: item.ShortName[1..], Id: item.Index));
             }
 
             highlights.Add(new TrackMapHighlightSpec(item.Index, xs, ys, ChartColors.HighlightA, 5, _x[item.MarkerSample], _y[item.MarkerSample]));

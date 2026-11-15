@@ -426,13 +426,15 @@ public sealed partial class DriverViewModel : AnalysisTabViewModel<DriverViewMod
     private Result? _result;
     private Parameters? _shown;
     private string? _autoThrottleChannelA;
+    private readonly DriverConsistencyCache _cache;
     private bool _autoThrottleA;
     private bool _autoThrottleB;
     private bool _keepViewMode;
 
     /// <summary>Create the tab over the two session slots.</summary>
-    public DriverViewModel(SessionViewModel a, SessionViewModel b)
+    public DriverViewModel(SessionViewModel a, SessionViewModel b, DriverConsistencyCache? cache = null)
     {
+        _cache = cache ?? new DriverConsistencyCache();
         _a = a;
         _b = b;
         DriverConfig = new DriverConfigViewModel();
@@ -686,14 +688,30 @@ public sealed partial class DriverViewModel : AnalysisTabViewModel<DriverViewMod
             follows);
     }
 
+    /// <summary>
+    /// What this tab's analysis of Session A would read for <paramref name="laps"/> now: its
+    /// channel names and thresholds (UI thread). Null without a session or with an invalid
+    /// threshold. The region list detects its corners from this, so that a "Turn 3" there is the
+    /// tab's Turn 3.
+    /// </summary>
+    public SessionInputs? DetectionInputs(List<int> laps) =>
+        _a.Log is null || laps.Count == 0 || DriverConfig.FirstError(SessionSlot.A) is not null ? null : Inputs(_a, SessionSlot.A, laps, _autoThrottleA);
+
+    /// <summary>
+    /// The driver-consistency analysis of one session (worker thread), with the throttle
+    /// threshold derived from the session where <paramref name="s"/> asks for that; through
+    /// <paramref name="cache"/>, so the same inputs are computed once.
+    /// </summary>
+    public static (DriverConsistencyResult Result, double Throttle) Run(SessionInputs s, DriverConsistencyCache cache, CancellationToken cancellation)
+    {
+        var throttle = s.AutoThrottle && AutoThrottleThreshold(s.Log, s.Names["throttle"]) is { } auto ? auto : s.ThrottleThreshold;
+        return (cache.Analyze(s.Log, s.Laps, s.Names, s.CornerThreshold, throttle, s.SustainMs, cancellation), throttle);
+    }
+
     /// <inheritdoc />
     protected override Result Analyze(Parameters p, CancellationToken cancellation)
     {
-        static (DriverConsistencyResult Result, double Throttle) Run(SessionInputs s, CancellationToken cancellation)
-        {
-            var throttle = s.AutoThrottle && AutoThrottleThreshold(s.Log, s.Names["throttle"]) is { } auto ? auto : s.ThrottleThreshold;
-            return (DriverConsistency.Analyze(s.Log, s.Laps, s.Names, s.CornerThreshold, throttle, s.SustainMs, cancellation), throttle);
-        }
+        (DriverConsistencyResult Result, double Throttle) Run(SessionInputs s, CancellationToken cancellation) => DriverViewModel.Run(s, _cache, cancellation);
 
         var a = Run(p.A, cancellation);
         if (p.B is null)

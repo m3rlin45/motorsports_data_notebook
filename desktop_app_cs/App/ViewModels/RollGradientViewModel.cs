@@ -239,11 +239,6 @@ public static class RollGradientChartBuilder
         var title = single
             ? $"Roll Gradient  |  front {F(a.Front.AbsGradientDegPerG, "0.00")} deg/g, rear {F(a.Rear.AbsGradientDegPerG, "0.00")} deg/g, roll ratio {F(a.RollRatio, "0.00")}"
             : $"Roll Gradient: {labelA} vs {labelB}";
-        if (scope.Length > 0)
-        {
-            title += $"  |  {scope}";
-        }
-
         return new ScatterGridSpec(title, paths, panels, 2, MapTitle);
     }
 
@@ -339,8 +334,8 @@ public sealed partial class RollGradientViewModel : AnalysisTabViewModel<RollGra
     /// </summary>
     public sealed record Result(RollGradientResult A, RollGradientResult? B, RollGradientResult? WholeA = null);
 
-    /// <summary>The ticked track regions the analysis is restricted to (shared with the other statistical tabs); null: whole laps.</summary>
-    public RegionsViewModel? Regions { get; set; }
+    /// <inheritdoc />
+    public override RegionUse RegionUse => RegionUse.Filter;
 
     /// <inheritdoc />
     protected override Parameters? GetParameters()
@@ -389,7 +384,7 @@ public sealed partial class RollGradientViewModel : AnalysisTabViewModel<RollGra
             RollConfig.GetTrackWidths(SessionSlot.B) ?? widthsA,
             _b.SessionLabel,
             MinLateralG.Value ?? 0,
-            Regions?.Selection() ?? RegionSelection.WholeLap);
+            RegionSnapshot());
     }
 
     /// <inheritdoc />
@@ -410,6 +405,8 @@ public sealed partial class RollGradientViewModel : AnalysisTabViewModel<RollGra
     /// <inheritdoc />
     protected override void Display(Parameters p, Result result)
     {
+        RegionLabel = p.Regions.Label;
+        CanShowWholeLap = !p.Regions.IsWholeLap && result.B is null;
         Spec = RollGradientChartBuilder.Build(result.A, result.B, p.LabelA, p.LabelB, result.WholeA, p.Regions.Label);
         var tables = new List<StatsTable> { RollGradientChartBuilder.Table(result.A, p.Regions.IsWholeLap ? p.LabelA : $"{p.LabelA}, {p.Regions.Label}") };
         if (result.B is not null)
@@ -425,6 +422,8 @@ public sealed partial class RollGradientViewModel : AnalysisTabViewModel<RollGra
     {
         Spec = null;
         Stats = Array.Empty<StatsTable>();
+        RegionLabel = string.Empty;
+        CanShowWholeLap = false;
     }
 
     /// <inheritdoc />

@@ -177,7 +177,11 @@ public class SuspensionTabTests
 
         Assert.Equal("Turn 3", regions.Summary);
         Assert.Equal(2, regions.MapSpec!.Paths.Count); // the ticked stretch coloured over the outline
-        Assert.StartsWith("Suspension Velocity Distribution · Turn 3 · ", tab.Spec!.Title);
+        Assert.Equal("Suspension Velocity Distribution", tab.Spec!.Title);
+        Assert.Matches(@"^Turn 3 · \d+ s$", tab.RegionLabel); // the tag beside the title: what the bars cover, and how much data that is
+        Assert.StartsWith("Regions: Turn 3 · ", tab.ImageCaption);
+        Assert.True(tab.CanShowWholeLap);
+        Assert.Equal("Turn 3", tab.Spec.Panels[0].Series[0].Label); // the legend names the regions
         var panel = tab.Spec.Panels[0];
         Assert.Equal(2, panel.Series.Count);
         Assert.False(panel.Series[0].Outline);
@@ -190,7 +194,7 @@ public class SuspensionTabTests
         // Two regions are their union; the reference can be turned off; "Whole lap" unticks everything.
         regions.Corners[4].IsSelected = true;
         await tab.RunNowAsync();
-        Assert.Contains("Turn 3 + Turn 5", tab.Spec!.Title);
+        Assert.StartsWith("Turn 3 + Turn 5 · ", tab.RegionLabel);
 
         regions.ShowWholeLap = false;
         await tab.RunNowAsync();
@@ -198,8 +202,9 @@ public class SuspensionTabTests
 
         regions.Clear();
         await tab.RunNowAsync();
-        Assert.Equal("Suspension Velocity Distribution", tab.Spec!.Title);
-        Assert.Equal(wholeHeights, tab.Spec.Panels[0].Series[0].Values);
+        Assert.Equal(string.Empty, tab.RegionLabel);
+        Assert.False(tab.IsRegional);
+        Assert.Equal(wholeHeights, tab.Spec!.Panels[0].Series[0].Values);
     });
 
     [Fact]
@@ -216,10 +221,12 @@ public class SuspensionTabTests
         viewModel.SessionB.Apply(Sample.Value, SessionParityTests.SamplePath());
         await tab.RunNowAsync();
 
-        // The two sessions' regions side by side and nothing else, although the reference is still ticked.
+        // The two sessions' regions side by side and nothing else, although the reference is still ticked
+        // (its checkbox is disabled: there is nothing for it to do in a comparison).
         Assert.True(viewModel.Regions.ShowWholeLap);
+        Assert.False(tab.CanShowWholeLap);
         Assert.StartsWith("Comparison: ", tab.Spec!.Title);
-        Assert.Contains(" · Turn 3 · ", tab.Spec.Title);
+        Assert.StartsWith("Turn 3 · ", tab.RegionLabel);
         var panel = tab.Spec.Panels[0];
         Assert.Equal(2, panel.Series.Count);
         Assert.DoesNotContain(panel.Series, s => s.Outline);
