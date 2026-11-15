@@ -50,6 +50,10 @@ public sealed class FixtureLap
     [JsonPropertyName("num")]
     public int Num { get; set; }
 
+    /// <summary>Session the lap came from ("A"/"B"); empty for a single-session fixture.</summary>
+    [JsonPropertyName("session")]
+    public string Session { get; set; } = string.Empty;
+
     /// <summary>Lap time in seconds.</summary>
     [JsonPropertyName("lap_time_s")]
     public double LapTimeS { get; set; }
@@ -74,13 +78,17 @@ public sealed class FixtureLap
     [JsonPropertyName("after")]
     public FixtureLap? After { get; set; }
 
+    /// <summary>"Lap 14", or "B Lap 14" when sessions are mixed.</summary>
+    [JsonIgnore]
+    public string ShortLabel => Session.Length == 0 ? $"Lap {Num}" : $"{Session} Lap {Num}";
+
     /// <summary>Legend label.</summary>
     [JsonIgnore]
-    public string Label => $"Lap {Num} ({LapTimeS:0.000}s)";
+    public string Label => $"{ShortLabel} ({LapTimeS:0.000}s)";
 
-    /// <summary>Prefix of the cursor read-outs: "L14".</summary>
+    /// <summary>Prefix of the cursor read-outs: "L14", or "B14" when sessions are mixed.</summary>
     [JsonIgnore]
-    public string Tag => $"L{Num}";
+    public string Tag => Session.Length == 0 ? $"L{Num}" : $"{Session}{Num}";
 
     /// <summary>
     /// The trace style the session's lap list shows for this lap; null for a
