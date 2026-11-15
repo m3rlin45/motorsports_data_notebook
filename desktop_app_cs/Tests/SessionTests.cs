@@ -458,6 +458,29 @@ public class ArrowConvertTests
         Assert.True(channel.Interpolate);
     }
 
+    /// <summary>libxrk 0.14.1 hands a channel over at the logger's width: accelerations and shock pots as float16.</summary>
+    [Fact]
+    public void Half_float_column_widens_exactly_and_resamples_as_single_precision()
+    {
+        var values = new HalfFloatArray.Builder().AppendRange(new[] { (Half)0.25f, (Half)1.5f, (Half)(-2.75f) }).Build();
+        var schema = new Schema.Builder()
+            .Field(f => f.Name("timecodes").DataType(Int64Type.Default))
+            .Field(f => f.Name("LateralAcc").DataType(HalfFloatType.Default).Metadata("units", "g").Metadata("interpolate", "True"))
+            .Build();
+        using var batch = new RecordBatch(schema, new IArrowArray[] { Timecodes(), values }, 3);
+
+        var channel = ArrowConvert.ToChannel(batch, "LateralAcc");
+
+        Assert.NotNull(channel);
+        Assert.Equal(new[] { 0.25, 1.5, -2.75 }, channel.Values);
+        Assert.Equal(ChannelValueType.Float16, channel.ValueType);
+
+        // Python's resampled table holds such a channel as float32: interpolated values are rounded to single precision.
+        var resampled = channel.ResampleTo(new long[] { 0, 5, 16 });
+        Assert.Equal(ChannelValueType.Float32, resampled.ValueType);
+        Assert.Equal(new[] { 0.25, (double)(float)(0.25 + 1.25 / 16 * 5), 1.5 }, resampled.Values);
+    }
+
     /// <summary>libibt's per-car array variables: one FixedSizeList per tick.</summary>
     [Fact]
     public void Vector_column_is_not_a_channel()
