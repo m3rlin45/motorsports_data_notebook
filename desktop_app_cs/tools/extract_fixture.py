@@ -1,4 +1,4 @@
-"""Dump lap channel data from a session file as JSON for the C# charting spike.
+"""Dump lap channel data from a session file as JSON for the C# app's Time/Distance demo fixture.
 
 Run from the repo root with the project environment::
 

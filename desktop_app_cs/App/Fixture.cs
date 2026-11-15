@@ -4,8 +4,9 @@ using System.Text.Json.Serialization;
 namespace InfernoAnalyzer.App;
 
 /// <summary>
-/// Lap data dumped by <c>tools/extract_fixture.py</c>. Stands in for the real
-/// data layer (libxrk FFI, Phase 1) during the charting spike.
+/// Lap data for the Time/Distance strip chart: built from a <c>LogFile</c> by
+/// <c>LapSeriesBuilder</c>, or loaded from a JSON dump of
+/// <c>tools/extract_fixture.py</c> for the <c>cs-run path.json</c> demo.
 /// </summary>
 public sealed class Fixture
 {
@@ -82,7 +83,7 @@ public sealed class FixtureLap
     public string Tag => $"L{Num}";
 
     /// <summary>
-    /// The trace style the lap list shows for this lap; null for a
+    /// The trace style the session's lap list shows for this lap; null for a
     /// dumped fixture, which is then styled by its position.
     /// </summary>
     [JsonIgnore]
