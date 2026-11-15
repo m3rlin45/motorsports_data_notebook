@@ -33,6 +33,49 @@ public class StripChartInteractionTests
         (chart.Plots[panel].Axes.Bottom.Range.Min, chart.Plots[panel].Axes.Bottom.Range.Max);
 
     [Fact]
+    public Task A_render_on_another_thread_does_not_touch_the_ui_from_there() => Ui.Run(async () =>
+    {
+        var (_, chart) = Show(Spec("session-1"));
+        var plot = chart.Plots[0];
+        plot.Axes.SetLimitsX(100, 900); // one panel zoomed; the others follow when its next render reports the change
+
+        // On Windows the compositor draws the plots on its own thread, and ScottPlot reports changed
+        // limits from inside that render. Reacting there (invalidating a control) throws in Avalonia's
+        // render loop: the frame is lost, and the window stopped drawing after a tab switch.
+        await Task.Run(() =>
+        {
+            using var surface = SkiaSharp.SKSurface.Create(new SkiaSharp.SKImageInfo(640, 240));
+            plot.Render(surface.Canvas, 640, 240);
+        }, TestContext.Current.CancellationToken);
+
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.Equal((100, 900), XRangeOf(chart, chart.Plots.Count - 1)); // synchronised, on the UI thread
+    });
+
+    [Fact]
+    public Task Composing_a_frame_replays_the_chart_without_running_scottplot() => Ui.Run(() =>
+    {
+        var (window, chart) = Show(Spec("session-1"));
+        var plot = chart.Plots[0];
+        var renders = plot.RenderManager.RenderCount;
+        Assert.True(renders > 0);
+
+        // The cursor overlay lies over the plot: redrawing it makes the compositor draw those pixels
+        // again, the plot's among them. With ScottPlot's own control that ran ScottPlot's whole render
+        // on the compositor's thread; UiThreadPlot hands the compositor a recorded picture instead.
+        chart.Overlays[0].InvalidateVisual();
+        window.CaptureRenderedFrame();
+        Assert.Equal(renders, plot.RenderManager.RenderCount);
+
+        // The plot itself invalidated: one render, on this (the UI) thread.
+        chart.PinCursor(2000);
+        chart.ZoomAboutCursor(0.5);
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        window.CaptureRenderedFrame();
+        Assert.True(plot.RenderManager.RenderCount > renders);
+    });
+
+    [Fact]
     public Task Redrawing_the_same_view_keeps_the_zoom_and_a_new_view_resets_it() => Ui.Run(() =>
     {
         var (_, chart) = Show(Spec("session-1"));
