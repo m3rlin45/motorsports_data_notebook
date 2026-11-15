@@ -47,6 +47,13 @@ public static class ChartColors
     /// <summary>Hover highlight of Session B's samples.</summary>
     public const string HighlightB = "@highlight-b";
 
+    /// <summary>
+    /// A selected region of the track (the ticked corners and sectors). The amber of the sector
+    /// gates the regions are cut at, and not one of the lap hues: it marks a place, not a lap or
+    /// a session.
+    /// </summary>
+    public const string Region = "@region";
+
     /// <summary>Warning text.</summary>
     public const string Warning = "@warning";
 
@@ -90,7 +97,8 @@ public static class ChartColors
         highlightB: "#d55181",
         warning: "#c42b1c",
         markerBrake: "#12946a",
-        opportunity: "#b88000");
+        opportunity: "#b88000",
+        region: "#b45309");
 
     /// <summary>Token values on a dark surface.</summary>
     public static IReadOnlyDictionary<string, string> DarkPalette { get; } = Build(
@@ -102,7 +110,8 @@ public static class ChartColors
         highlightB: "#ff6ec7",
         warning: "#ff8080",
         markerBrake: "#199e70",
-        opportunity: "#e0a41a");
+        opportunity: "#e0a41a",
+        region: "#f59e0b");
 
     private static Dictionary<string, string> Build(
         string[] laps,
@@ -113,7 +122,8 @@ public static class ChartColors
         string highlightB,
         string warning,
         string markerBrake,
-        string opportunity)
+        string opportunity,
+        string region)
     {
         var palette = new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -130,6 +140,7 @@ public static class ChartColors
             [HighlightA] = highlightA,
             [HighlightB] = highlightB,
             [Warning] = warning,
+            [Region] = region,
             [Neutral] = neutral,
             [Ink] = ink,
             // Band fills are drawn at low alpha behind the bars, the same tints on both surfaces.

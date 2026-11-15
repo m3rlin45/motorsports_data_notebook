@@ -36,6 +36,13 @@ public sealed class ChartHost : Panel, IDisposable
     public static readonly StyledProperty<int> HighlightedItemProperty =
         AvaloniaProperty.Register<ChartHost, int>(nameof(HighlightedItem), -1);
 
+    /// <summary>
+    /// A line written above the chart in its copied and saved images (not on screen, where the tab
+    /// says it): what the chart is restricted to, so that the image says so by itself.
+    /// </summary>
+    public static readonly StyledProperty<string?> CaptionProperty =
+        AvaloniaProperty.Register<ChartHost, string?>(nameof(Caption));
+
     private readonly TextBlock _empty = new()
     {
         HorizontalAlignment = HorizontalAlignment.Center,
@@ -97,6 +104,13 @@ public sealed class ChartHost : Panel, IDisposable
     {
         get => GetValue(HighlightedItemProperty);
         set => SetValue(HighlightedItemProperty, value);
+    }
+
+    /// <summary>A line written above the chart in its copied and saved images; null or empty for none.</summary>
+    public string? Caption
+    {
+        get => GetValue(CaptionProperty);
+        set => SetValue(CaptionProperty, value);
     }
 
     /// <summary>The surface, created with the first spec (null before that).</summary>
@@ -246,10 +260,39 @@ public sealed class ChartHost : Panel, IDisposable
 
         var scale = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1.0;
         var size = new PixelSize((int)Math.Ceiling(Bounds.Width * scale), (int)Math.Ceiling(Bounds.Height * scale));
-        var bitmap = new RenderTargetBitmap(size, new Vector(96 * scale, 96 * scale));
-        bitmap.Render(this);
-        return bitmap;
+        var dpi = new Vector(96 * scale, 96 * scale);
+        var chart = new RenderTargetBitmap(size, dpi);
+        chart.Render(this);
+        if (string.IsNullOrEmpty(Caption))
+        {
+            return chart;
+        }
+
+        // The caption in a strip above the chart, in the chart's own colours and font.
+        using (chart)
+        {
+            var theme = ChartSurfaces.ThemeFor(this);
+            var text = new FormattedText(
+                Caption,
+                System.Globalization.CultureInfo.CurrentUICulture,
+                FlowDirection.LeftToRight,
+                new Typeface(theme.FontFamily.Length > 0 ? new FontFamily(theme.FontFamily) : FontFamily.Default, FontStyle.Normal, FontWeight.SemiBold),
+                theme.LabelSize,
+                new SolidColorBrush(Color.Parse(theme.Text)));
+            var strip = Math.Ceiling(text.Height) + 2 * CaptionPadding;
+            var captioned = new RenderTargetBitmap(new PixelSize(size.Width, size.Height + (int)Math.Ceiling(strip * scale)), dpi);
+            using (var context = captioned.CreateDrawingContext())
+            {
+                context.FillRectangle(new SolidColorBrush(Color.Parse(theme.FigureBackground)), new Rect(0, 0, Bounds.Width, strip + Bounds.Height));
+                context.DrawText(text, new Point(CaptionPadding + 4, CaptionPadding));
+                context.DrawImage(chart, new Rect(0, strip, Bounds.Width, Bounds.Height));
+            }
+
+            return captioned;
+        }
     }
+
+    private const double CaptionPadding = 6;
 
     /// <summary>Put the chart on the clipboard as an image.</summary>
     public async Task CopyImageAsync()

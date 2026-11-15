@@ -172,6 +172,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         newTab.PropertyChanged += OnActiveTabPropertyChanged;
         ShowTabLapSelection(newTab);
+        Regions.Use = newTab.RegionUse;
         newTab.SetActive(true);
         if (newTab.Config is ChannelConfigViewModel config)
         {

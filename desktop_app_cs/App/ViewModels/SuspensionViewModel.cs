@@ -144,8 +144,8 @@ public static class SuspensionChartBuilder
 
     /// <summary>
     /// The 2×2 histogram grid for one session, or the side-by-side comparison of two. With
-    /// <paramref name="scope"/> the bars are a region's and it says what they cover
-    /// ("Turn 3 · 41 s"); <paramref name="wholeA"/> is then the whole laps' distribution, outlined
+    /// <paramref name="scope"/> the bars are a region's and it names them
+    /// ("Turn 3 + Turn 5"); <paramref name="wholeA"/> is then the whole laps' distribution, outlined
     /// over the bars for reference. A comparison has no such reference: its two sessions are
     /// compared with each other, not with their own whole laps.
     /// </summary>
@@ -182,7 +182,7 @@ public static class SuspensionChartBuilder
             {
                 var colors = ca.BinCenters.Select(c => c >= 0 ? ChartColors.Bump : ChartColors.Rebound).ToArray();
                 var annotation = string.Format(CultureInfo.InvariantCulture, "Skew: {0:0.00}\nStd: {1:0} mm/s", ca.Skew, ca.Std);
-                var series = new List<BarSeriesSpec> { new(wholeCornersA is null ? string.Empty : "Selected regions", ca.BinCenters, ca.Histogram, BarColors: colors) };
+                var series = new List<BarSeriesSpec> { new(wholeCornersA is null ? string.Empty : scope, ca.BinCenters, ca.Histogram, BarColors: colors) };
                 if (wholeCornersA is not null)
                 {
                     series.Add(new BarSeriesSpec("Whole lap", wholeCornersA[i].BinCenters, wholeCornersA[i].Histogram, ChartColors.Ink, Outline: true));
@@ -202,11 +202,6 @@ public static class SuspensionChartBuilder
         }
 
         var title = b is null ? "Suspension Velocity Distribution" : $"Comparison: {labelA} vs {labelB}";
-        if (scope.Length > 0)
-        {
-            title += $" · {scope}";
-        }
-
         return new HistogramGridSpec(title, panels, 2, new XRange(-300, 300), "Velocity (mm/s)", "Time (%)", bands, HoverFormat);
     }
 
@@ -375,9 +370,10 @@ public sealed partial class SuspensionViewModel : AnalysisTabViewModel<Suspensio
     {
         // Restricted to ticked regions, the bars and the tables are the regions'.
         var inRegions = !p.Regions.IsWholeLap;
-        var scope = inRegions ? $"{p.Regions.Label} · {result.RegionSecondsA.ToString("0", CultureInfo.InvariantCulture)} s" : string.Empty;
+        RegionLabel = inRegions ? $"{p.Regions.Label} · {result.RegionSecondsA.ToString("0", CultureInfo.InvariantCulture)} s" : string.Empty;
+        CanShowWholeLap = inRegions && result.B is null;
         string Named(string label) => inRegions ? $"{label}, {p.Regions.Label}" : label;
-        Spec = SuspensionChartBuilder.Build(result.A, result.B, p.LabelA, p.LabelB, result.WholeA, scope);
+        Spec = SuspensionChartBuilder.Build(result.A, result.B, p.LabelA, p.LabelB, result.WholeA, p.Regions.Label);
         var tables = SuspensionChartBuilder.StatsTables(result.A, Named(p.LabelA));
         if (result.B is not null)
         {
@@ -399,5 +395,7 @@ public sealed partial class SuspensionViewModel : AnalysisTabViewModel<Suspensio
     {
         Spec = null;
         Stats = Array.Empty<StatsTable>();
+        RegionLabel = string.Empty;
+        CanShowWholeLap = false;
     }
 }

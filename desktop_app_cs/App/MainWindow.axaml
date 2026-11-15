@@ -36,9 +36,11 @@
 
     <Grid x:Name="Body" ColumnDefinitions="Auto,Auto,*" Margin="8,4,8,8">
       <!-- Sessions down the side: the lap lists get the window's height instead of a strip above the charts. -->
-      <Grid x:Name="Sidebar" Grid.Column="0" Width="288" MinWidth="220" MaxWidth="480" RowDefinitions="Auto,8,Auto" IsVisible="{Binding !IsSidebarCollapsed}">
+      <Grid x:Name="Sidebar" Grid.Column="0" Width="288" MinWidth="220" MaxWidth="480" RowDefinitions="Auto,8,Auto,Auto" IsVisible="{Binding !IsSidebarCollapsed}">
         <views:SessionPanelView x:Name="SessionAPanel" Grid.Row="0" DataContext="{Binding SessionA}" />
         <views:SessionPanelView x:Name="SessionBPanel" Grid.Row="2" DataContext="{Binding SessionB}" />
+        <!-- File, laps, then which part of the track: pinned under the sessions, whose lap lists take what height is left. -->
+        <views:RegionPanelView x:Name="RegionPanel" Grid.Row="3" Margin="0,8,0,0" DataContext="{Binding Regions}" />
       </Grid>
       <GridSplitter Grid.Column="1" Width="8" IsVisible="{Binding !IsSidebarCollapsed}" />
       <!-- While files are dragged over the window: where they will land. -->
