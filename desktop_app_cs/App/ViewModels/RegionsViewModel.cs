@@ -233,6 +233,19 @@ public sealed partial class RegionsViewModel : ObservableObject
     [ObservableProperty]
     private TrackMapSpec? _mapSpec;
 
+    /// <summary>
+    /// The map's position marker: its one member is the map, and <see cref="ShowPosition"/> moves
+    /// the marker round the lap.
+    /// </summary>
+    public CursorLinkGroup Position { get; } = new();
+
+    /// <summary>
+    /// Show on the map where something on the active tab is on the track (the cursor on the
+    /// traces, a hovered corner): <paramref name="lapFraction"/> of the way round the lap from the
+    /// start/finish line, or null to take the marker away.
+    /// </summary>
+    public void ShowPosition(double? lapFraction) => Position.SetCursor(lapFraction);
+
     /// <summary>Index of the row under the pointer, or -1; the map emphasises it.</summary>
     [ObservableProperty]
     private int _hoveredRegion = -1;
@@ -612,6 +625,22 @@ public sealed partial class RegionsViewModel : ObservableObject
             highlights.Add(new TrackMapHighlightSpec(item.Index, xs, ys, ChartColors.HighlightA, 5, _x[item.MarkerSample], _y[item.MarkerSample]));
         }
 
-        MapSpec = new TrackMapSpec(string.Empty, paths, points, highlights, Compact: true);
+        // How far round the lap each sample of the outline is, for the position marker.
+        var along = new double[_x.Length];
+        for (var i = 1; i < along.Length; i++)
+        {
+            along[i] = along[i - 1] + Math.Sqrt(((_x[i] - _x[i - 1]) * (_x[i] - _x[i - 1])) + ((_y[i] - _y[i - 1]) * (_y[i] - _y[i - 1])));
+        }
+
+        var length = along[^1];
+        for (var i = 0; i < along.Length && length > 0; i++)
+        {
+            along[i] /= length;
+        }
+
+        MapSpec = new TrackMapSpec(string.Empty, paths, points, highlights, Compact: true)
+        {
+            Cursor = new TrackMapCursorSpec(along, _x, _y, ChartColors.HighlightA, 11),
+        };
     }
 }
