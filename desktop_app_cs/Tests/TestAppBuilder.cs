@@ -9,7 +9,14 @@ namespace InfernoAnalyzer.Tests;
 /// </summary>
 public class TestAppBuilder
 {
-    public static AppBuilder BuildAvaloniaApp() => AppBuilder
+    public static AppBuilder BuildAvaloniaApp()
+    {
+        // Avalonia logs what goes wrong inside it (a failed frame, for one) and carries on; Ui.Run fails the test on it.
+        InfernoAnalyzer.App.AvaloniaLog.Install();
+        return Build();
+    }
+
+    private static AppBuilder Build() => AppBuilder
         .Configure<InfernoAnalyzer.App.App>()
         .UseSkia()
         // The bundled font, so the saved frames look the same on every machine (and like the Linux build).
