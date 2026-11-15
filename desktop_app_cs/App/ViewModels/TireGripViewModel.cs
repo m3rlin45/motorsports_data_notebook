@@ -39,20 +39,30 @@ public static class TireGripChartBuilder
     private static string F(double v, string fmt) => v.ToString(fmt, CultureInfo.InvariantCulture);
 
     /// <summary>The 2×2 bucketed-percentile lines, one or two sessions per panel.</summary>
-    public static LineGridSpec Build(TireGripResult a, TireGripResult? b, string labelA, string labelB)
+    /// <remarks>
+    /// With <paramref name="wholeA"/> the lines are a region's and the whole laps' curve is drawn in
+    /// neutral behind them for reference; <paramref name="scope"/> names the region.
+    /// </remarks>
+    public static LineGridSpec Build(TireGripResult a, TireGripResult? b, string labelA, string labelB, TireGripResult? wholeA = null, string scope = "")
     {
         var metricLabel = a.MetricMode == "pressure" ? "Pressure" : "Temperature";
         var xLabel = $"{metricLabel} ({a.MetricUnit})";
         var cornersA = a.Corners.ToList();
         var cornersB = b?.Corners.ToList();
+        var wholeCorners = wholeA?.Corners.ToList();
         var panels = new List<LinePanelSpec>();
         for (var i = 0; i < 4; i++)
         {
             var ca = cornersA[i];
             var series = new List<LineSeriesSpec>();
+            if (wholeCorners is not null)
+            {
+                series.Add(new LineSeriesSpec("Whole lap", wholeCorners[i].BucketCenters, wholeCorners[i].BucketValues, wholeCorners[i].BucketCounts, ChartColors.Neutral));
+            }
+
             if (cornersB is null)
             {
-                series.Add(new LineSeriesSpec(string.Empty, ca.BucketCenters, ca.BucketValues, ca.BucketCounts, ChartColors.SessionA));
+                series.Add(new LineSeriesSpec(wholeCorners is null ? string.Empty : "Selected regions", ca.BucketCenters, ca.BucketValues, ca.BucketCounts, ChartColors.SessionA));
                 panels.Add(new LinePanelSpec(Titles[i], series, $"n = {ca.BucketCounts.Sum()}"));
             }
             else
@@ -65,6 +75,11 @@ public static class TireGripChartBuilder
         }
 
         var title = b is null ? $"Tire Grip: {labelA}" : $"Comparison: {labelA} vs {labelB}";
+        if (scope.Length > 0)
+        {
+            title += $" · {scope}";
+        }
+
         var hover = "{0}\n" + metricLabel + ": {1:0.0} " + a.MetricUnit + "\nTotal G: {2:0.00}\nn = {3}";
         return new LineGridSpec(title, panels, 2, xLabel, "Total G", hover);
     }
@@ -193,10 +208,17 @@ public sealed partial class TireGripViewModel : AnalysisTabViewModel<TireGripVie
         Dictionary<string, string> NamesB,
         string LabelB,
         TireMetric Metric,
-        double Percentile);
+        double Percentile,
+        RegionSelection Regions);
 
-    /// <summary>The grip curves of Session A and, in a comparison, Session B.</summary>
-    public sealed record Result(TireGripResult A, TireGripResult? B);
+    /// <summary>
+    /// The grip curves of Session A and, in a comparison, Session B, over the ticked regions when
+    /// there are any; <paramref name="WholeA"/> is then Session A's whole-lap result, for reference.
+    /// </summary>
+    public sealed record Result(TireGripResult A, TireGripResult? B, TireGripResult? WholeA = null);
+
+    /// <summary>The ticked track regions the analysis is restricted to (shared with the other statistical tabs); null: whole laps.</summary>
+    public RegionsViewModel? Regions { get; set; }
 
     /// <inheritdoc />
     protected override Parameters? GetParameters()
@@ -230,22 +252,30 @@ public sealed partial class TireGripViewModel : AnalysisTabViewModel<TireGripVie
             TireConfig.GetChannelNames(SessionSlot.B),
             _b.SessionLabel,
             Metric,
-            Percentile.Value ?? 99.9);
+            Percentile.Value ?? 99.9,
+            Regions?.Selection() ?? RegionSelection.WholeLap);
     }
 
     /// <inheritdoc />
     protected override Result Analyze(Parameters p, CancellationToken cancellation)
     {
         var mode = p.Metric == TireMetric.Pressure ? "pressure" : "temperature"; // the kernel keeps Python's mode names
-        var a = TireGrip.AnalyzeTireGripMultiLap(p.A, p.LapsA, p.NamesA, mode, percentile: p.Percentile, cancellation: cancellation);
-        var b = p.B is null ? null : TireGrip.AnalyzeTireGripMultiLap(p.B, p.LapsB, p.NamesB, mode, percentile: p.Percentile, cancellation: cancellation);
-        return new Result(a, b);
+        var a = TireGrip.AnalyzeTireGripMultiLap(
+            p.A, p.LapsA, p.NamesA, mode, percentile: p.Percentile, cancellation: cancellation, windowsByLap: p.Regions.Windows(p.A, p.LapsA, SessionSlot.A));
+        var b = p.B is null
+            ? null
+            : TireGrip.AnalyzeTireGripMultiLap(
+                p.B, p.LapsB, p.NamesB, mode, percentile: p.Percentile, cancellation: cancellation, windowsByLap: p.Regions.Windows(p.B, p.LapsB, SessionSlot.B));
+        var whole = p.Regions is { IsWholeLap: false, ShowWholeLap: true }
+            ? TireGrip.AnalyzeTireGripMultiLap(p.A, p.LapsA, p.NamesA, mode, percentile: p.Percentile, cancellation: cancellation)
+            : null;
+        return new Result(a, b, whole);
     }
 
     /// <inheritdoc />
     protected override void Display(Parameters p, Result result)
     {
-        Spec = TireGripChartBuilder.Build(result.A, result.B, p.LabelA, p.LabelB);
+        Spec = TireGripChartBuilder.Build(result.A, result.B, p.LabelA, p.LabelB, result.WholeA, p.Regions.Label);
         Stats = TireGripChartBuilder.Tables(result.A, result.B, p.LabelA, p.LabelB);
         if (result.A.Corners.All(c => c.TotalG.Length == 0))
         {

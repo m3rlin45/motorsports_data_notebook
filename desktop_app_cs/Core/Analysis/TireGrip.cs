@@ -91,7 +91,12 @@ public static class TireGrip
     };
 
     /// <summary>One lap's total G and per-corner tire metric, aligned on the lateral-G channel.</summary>
-    private static (double[] TotalG, double[][] Metrics, string MetricUnit, string AccelUnit) Collect(LogFile lap, IReadOnlyDictionary<string, string> channelNames, string[] metricKeys)
+    private static (double[] TotalG, double[][] Metrics, string MetricUnit, string AccelUnit) Collect(LogFile lap, IReadOnlyDictionary<string, string> channelNames, string[] metricKeys) =>
+        Collect(lap, channelNames, metricKeys, null);
+
+    /// <summary>As above, keeping only the samples inside <paramref name="windows"/> when given.</summary>
+    private static (double[] TotalG, double[][] Metrics, string MetricUnit, string AccelUnit) Collect(
+        LogFile lap, IReadOnlyDictionary<string, string> channelNames, string[] metricKeys, IReadOnlyList<(long Start, long End)>? windows)
     {
         var latCh = channelNames["lateral_g"];
         var inlineCh = channelNames["inline_g"];
@@ -106,6 +111,13 @@ public static class TireGrip
         }
 
         var metrics = metricChannels.Select(ch => aligned[ch].Values).ToArray();
+        if (windows is not null)
+        {
+            var keep = Tracks.TrackRegions.Keep(windows, aligned[latCh].Timecodes);
+            totalG = Tracks.TrackRegions.Take(totalG, keep);
+            metrics = metrics.Select(m => Tracks.TrackRegions.Take(m, keep)).ToArray();
+        }
+
         return (totalG, metrics, aligned[metricChannels[0]].Units, aligned[latCh].Units);
     }
 
@@ -120,7 +132,9 @@ public static class TireGrip
 
     /// <summary>
     /// <c>analyze_tire_grip_multi_lap</c>: laps concatenated; laps that fail are skipped.
-    /// <paramref name="cancellation"/> is checked between laps.
+    /// <paramref name="cancellation"/> is checked between laps. With <paramref name="windowsByLap"/> (not in
+    /// Python) only the samples inside a lap's windows are kept: the part of each lap inside the selected
+    /// track regions (<see cref="Tracks.TrackRegions"/>).
     /// </summary>
     public static TireGripResult AnalyzeTireGripMultiLap(
         LogFile log,
@@ -129,7 +143,8 @@ public static class TireGrip
         string metricMode = "pressure",
         int numBuckets = 20,
         double percentile = 99.9,
-        CancellationToken cancellation = default)
+        CancellationToken cancellation = default,
+        IReadOnlyDictionary<int, IReadOnlyList<(long Start, long End)>>? windowsByLap = null)
     {
         if (lapNumbers.Count == 0)
         {
@@ -146,7 +161,8 @@ public static class TireGrip
             cancellation.ThrowIfCancellationRequested();
             try
             {
-                var (totalG, metrics, mu, au) = Collect(log.FilterByLap(lapNum), channelNames, keys);
+                var windows = windowsByLap is null ? null : windowsByLap.TryGetValue(lapNum, out var w) ? w : Array.Empty<(long Start, long End)>();
+                var (totalG, metrics, mu, au) = Collect(log.FilterByLap(lapNum), channelNames, keys, windows);
                 if (metricUnit.Length == 0) metricUnit = mu;
                 if (accelUnit.Length == 0) accelUnit = au;
                 allTotalG.Add(totalG);

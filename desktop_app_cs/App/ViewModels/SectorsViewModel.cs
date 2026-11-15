@@ -508,6 +508,9 @@ public sealed partial class SectorsViewModel : AnalysisTabViewModel<SectorsViewM
 
     private bool CanSaveTrack => SelectedTrack is not null && IsDirty;
 
+    /// <summary>Raised when a track has been written to the store: its sectors may have changed for everything that reads them.</summary>
+    public event Action? TrackSaved;
+
     /// <summary>Store the track (user tracks file).</summary>
     [RelayCommand(CanExecute = nameof(CanSaveTrack))]
     public void SaveTrack()
@@ -519,6 +522,7 @@ public sealed partial class SectorsViewModel : AnalysisTabViewModel<SectorsViewM
 
         var track = CurrentTrack();
         _store.Save(track);
+        TrackSaved?.Invoke();
         _suppressTrackChange = true;
         // Replace by id: the selected record may be a different instance from the list's.
         var index = Tracks.Select((t, i) => (t, i)).Where(x => x.t.Id == track.Id).Select(x => x.i).DefaultIfEmpty(-1).First();
