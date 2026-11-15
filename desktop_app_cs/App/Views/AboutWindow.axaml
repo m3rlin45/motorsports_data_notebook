@@ -1,0 +1,18 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="InfernoAnalyzer.App.Views.AboutWindow"
+        Title="About Inferno Analyzer" SizeToContent="WidthAndHeight" CanResize="False" ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner" Background="{DynamicResource AppPageBrush}">
+  <StackPanel Margin="24" Spacing="12" MinWidth="320">
+    <StackPanel Orientation="Horizontal" Spacing="12">
+      <Image Source="/Assets/inferno.png" Width="48" Height="48" />
+      <StackPanel VerticalAlignment="Center">
+        <TextBlock Classes="title" Text="Inferno Analyzer" />
+        <TextBlock x:Name="VersionText" Classes="subtle" />
+      </StackPanel>
+    </StackPanel>
+    <TextBlock Text="Motorsports telemetry analysis for AIM (XRK, XRZ) and iRacing (IBT) sessions." TextWrapping="Wrap" MaxWidth="360" />
+    <TextBlock x:Name="PathsText" Classes="subtle" TextWrapping="Wrap" MaxWidth="360" />
+    <Button x:Name="CloseButton" Content="Close" IsDefault="True" IsCancel="True" HorizontalAlignment="Right" MinWidth="88" />
+  </StackPanel>
+</Window>
