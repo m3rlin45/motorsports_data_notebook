@@ -6,6 +6,7 @@ using InfernoAnalyzer.App.Settings;
 using InfernoAnalyzer.Charting;
 using InfernoAnalyzer.Core.Io;
 using InfernoAnalyzer.Core.Profiles;
+using InfernoAnalyzer.Core.Tracks;
 
 namespace InfernoAnalyzer.App.ViewModels;
 
@@ -41,12 +42,13 @@ public sealed partial class ChannelChoiceViewModel : ObservableObject
 /// channel plus delta time), with the linked crosshair. Also hosts the demo
 /// fixtures (`cs-run path.json`).
 /// </summary>
-public sealed partial class TimeDistanceViewModel : AnalysisTabViewModel<TimeDistanceViewModel.Parameters, Fixture>
+public sealed partial class TimeDistanceViewModel : AnalysisTabViewModel<TimeDistanceViewModel.Parameters, TimeDistanceViewModel.Result>
 {
     private readonly SessionViewModel _sessionA;
     private readonly SessionViewModel? _sessionB;
     private readonly AppSettings? _settings;
     private Fixture? _fixture;
+    private IReadOnlyList<StripChartBuilder.RegionSpan> _focus = Array.Empty<StripChartBuilder.RegionSpan>();
     private string? _viewKey;
     private bool _suppressChannelEvents;
 
@@ -313,7 +315,14 @@ public sealed partial class TimeDistanceViewModel : AnalysisTabViewModel<TimeDis
         List<int> LapsB,
         Dictionary<string, string> MapB,
         Dictionary<(string Session, int Lap), LapStyle> Styles,
-        string ViewKey);
+        string ViewKey,
+        RegionSelection Regions);
+
+    /// <summary>The laps' series, and where the ticked track regions lie on the reference lap (the fastest of Session A's).</summary>
+    public sealed record Result(Fixture Fixture, IReadOnlyList<StripChartBuilder.RegionSpan> Focus);
+
+    /// <summary>The traces are never cut to the ticked regions: they are shaded and brought into view.</summary>
+    public override RegionUse RegionUse => RegionUse.Focus;
 
     /// <summary>
     /// Session A channel name → Session B channel name through the vehicle
@@ -384,11 +393,65 @@ public sealed partial class TimeDistanceViewModel : AnalysisTabViewModel<TimeDis
         }
 
         var viewKey = $"{_sessionA.FilePath}|{(lapsB.Count > 0 ? _sessionB?.FilePath : null)}";
-        return new Parameters(_sessionA.Log, laps, channels, Timebase, logB, lapsB, ChannelMapToB(), styles, viewKey);
+        return new Parameters(_sessionA.Log, laps, channels, Timebase, logB, lapsB, ChannelMapToB(), styles, viewKey, RegionSnapshot());
     }
 
     /// <inheritdoc />
-    protected override Fixture Analyze(Parameters p, CancellationToken cancellation)
+    protected override Result Analyze(Parameters p, CancellationToken cancellation)
+    {
+        var fixture = BuildFixture(p, cancellation);
+        return new Result(fixture, fixture.Laps.Count == 0 ? Array.Empty<StripChartBuilder.RegionSpan>() : FocusSpans(p, fixture.Laps[0]));
+    }
+
+    /// <summary>
+    /// Where each ticked region lies on the reference lap, in seconds and in metres from its
+    /// start: the lap is cut where its own GPS path crosses the region's gates, as the
+    /// statistical tabs cut theirs, and the crossings are read off the lap's own clock and
+    /// distance channel on the chart's timebase (so they sit on the traces, not beside them).
+    /// A region this lap does not drive through gives none.
+    /// </summary>
+    private static IReadOnlyList<StripChartBuilder.RegionSpan> FocusSpans(Parameters p, FixtureLap reference)
+    {
+        var spans = new List<StripChartBuilder.RegionSpan>();
+        if (p.Regions.IsWholeLap || reference.Session == "B" || p.Log.Laps.FirstOrDefault(l => l.Num == reference.Num) is not { } lap)
+        {
+            return spans;
+        }
+
+        var (latName, lonName) = p.Regions.GpsA;
+        if (!p.Log.HasChannel(latName) || !p.Log.HasChannel(lonName))
+        {
+            return spans;
+        }
+
+        var gps = p.Log.FilterByLap(lap.Num, new[] { latName, lonName }).ResampleToChannel(latName);
+        var axis = p.Log.FilterByLap(lap.Num).SelectChannels(new[] { p.Timebase, "distance_m" }.Distinct()).ResampleToChannel(p.Timebase);
+        var timecodes = axis[p.Timebase].Timecodes;
+        var distance = axis["distance_m"].Values;
+        foreach (var region in p.Regions.Regions)
+        {
+            if (TrackRegions.Window(region, lap, gps[latName].Values, gps[lonName].Values, gps[latName].Timecodes) is not { } window)
+            {
+                continue;
+            }
+
+            var first = Array.FindIndex(timecodes, t => t >= window.Start);
+            var last = Array.FindLastIndex(timecodes, t => t <= window.End);
+            if (first < 0 || last <= first)
+            {
+                continue;
+            }
+
+            spans.Add(new StripChartBuilder.RegionSpan(
+                region.Name,
+                new XRange((timecodes[first] - timecodes[0]) / 1000.0, (timecodes[last] - timecodes[0]) / 1000.0),
+                new XRange(distance[first], distance[last])));
+        }
+
+        return spans;
+    }
+
+    private static Fixture BuildFixture(Parameters p, CancellationToken cancellation)
     {
         // Fastest selected lap first: it is the delta-time reference.
         var ordered = p.Laps.OrderBy(n => p.Log.Laps.First(l => l.Num == n).LapTimeMs).ToList();
@@ -413,10 +476,21 @@ public sealed partial class TimeDistanceViewModel : AnalysisTabViewModel<TimeDis
     }
 
     /// <inheritdoc />
-    protected override void Display(Parameters p, Fixture fixture)
+    protected override void Display(Parameters p, Result result)
     {
         _viewKey = p.ViewKey;
-        Show(fixture);
+        _focus = result.Focus;
+        RegionLabel = p.Regions.Label;
+        Show(result.Fixture);
+        if (!p.Regions.IsWholeLap && result.Focus.Count < p.Regions.Regions.Count)
+        {
+            var reference = result.Fixture.Laps.Count > 0 ? result.Fixture.Laps[0].Label : "the reference lap";
+            SetStatus(
+                result.Focus.Count == 0
+                    ? $"{p.Regions.Label} not found on {reference}: showing the whole lap"
+                    : $"Some of {p.Regions.Label} not found on {reference}",
+                StatusKind.Hint);
+        }
     }
 
     /// <inheritdoc />
@@ -424,13 +498,15 @@ public sealed partial class TimeDistanceViewModel : AnalysisTabViewModel<TimeDis
     {
         _fixture = null;
         Spec = null;
+        _focus = Array.Empty<StripChartBuilder.RegionSpan>();
+        RegionLabel = string.Empty;
     }
 
     private void Show(Fixture fixture)
     {
         _fixture = fixture;
         Summary = $"{fixture.Laps.Count} laps, {fixture.SampleCount:N0} samples";
-        Spec = StripChartBuilder.Build(fixture, XAxis, _viewKey);
+        Spec = StripChartBuilder.Build(fixture, XAxis, _viewKey, _focus);
     }
 
     /// <inheritdoc />

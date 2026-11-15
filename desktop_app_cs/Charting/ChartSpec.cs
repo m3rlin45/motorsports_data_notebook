@@ -112,6 +112,12 @@ public abstract record ChartSpec;
 /// </param>
 public sealed record XMarkerSpec(double X, string Label, string Color, int Row = 0);
 
+/// <summary>A stretch of the x-axis shaded behind the traces of every panel (a track region the view is brought to).</summary>
+/// <param name="From">Where it starts, in data units.</param>
+/// <param name="To">Where it ends.</param>
+/// <param name="Color">CSS hex colour or a <see cref="ChartColors"/> token; drawn as a faint fill.</param>
+public sealed record XBandSpec(double From, double To, string Color);
+
 /// <summary>
 /// Vertically stacked subplots sharing one x-axis, with a linked crosshair
 /// cursor. The defining view of a telemetry tool (MoTeC i2 / RaceStudio style).
@@ -142,6 +148,16 @@ public sealed record StripChartSpec(
     string? ViewKey = null
 ) : ChartSpec
 {
+    /// <summary>Stretches of the x-axis shaded behind the traces of every panel.</summary>
+    public IReadOnlyList<XBandSpec> Bands { get; init; } = Array.Empty<XBandSpec>();
+
+    /// <summary>
+    /// Identifies the data on show apart from the view of it. Where the <see cref="ViewKey"/>
+    /// changes but this does not (the same laps, brought to another stretch), a pinned cursor
+    /// that lies inside the new <see cref="InitialView"/> stays where the user put it.
+    /// </summary>
+    public string? DataKey { get; init; }
+
     /// <summary>Axis label for the bottom panel.</summary>
     public string XLabel => XAxis == XAxisMode.Distance ? "Distance (m)" : "Time (s)";
 
