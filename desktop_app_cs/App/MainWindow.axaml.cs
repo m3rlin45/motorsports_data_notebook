@@ -326,8 +326,10 @@ public partial class MainWindow : Window
 
     // ---------------------------------------------------------------- commands on the visible charts
 
+    /// <summary>The active tab's charts on screen; not the small companion maps in its side column, which are not what "the chart" means.</summary>
     private IEnumerable<ChartHost> VisibleCharts() =>
-        _views.ViewOf(ViewModel.ActiveTab)?.GetLogicalDescendants().OfType<ChartHost>().Where(h => h.IsEffectivelyVisible && h.Spec is not null)
+        _views.ViewOf(ViewModel.ActiveTab)?.GetLogicalDescendants().OfType<ChartHost>()
+            .Where(h => h.IsEffectivelyVisible && h.Spec is not null and not Charting.TrackMapSpec { Compact: true })
         ?? Enumerable.Empty<ChartHost>();
 
     private void FitCharts()

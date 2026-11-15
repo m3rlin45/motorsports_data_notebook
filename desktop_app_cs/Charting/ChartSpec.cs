@@ -173,12 +173,17 @@ public sealed record BandSpec(double Start, double End, string Color, double Alp
 /// <param name="Values">Bar heights in y units.</param>
 /// <param name="Color">CSS hex colour for every bar, or null to use <see cref="BarColors"/>.</param>
 /// <param name="BarColors">Per-bar colours when the series is not single-coloured.</param>
+/// <param name="Outline">
+/// A reference distribution: drawn as a stepped outline over the bars rather than as bars, taking
+/// no room beside them (the whole lap behind a region's histogram).
+/// </param>
 public sealed record BarSeriesSpec(
     string Label,
     double[] Centers,
     double[] Values,
     string? Color = null,
-    string[]? BarColors = null);
+    string[]? BarColors = null,
+    bool Outline = false);
 
 /// <summary>One panel of a histogram grid.</summary>
 /// <param name="Title">Panel title, e.g. "Front Left (FL)".</param>
@@ -234,7 +239,12 @@ public sealed record ScatterPanelSpec(
     bool ShowLegend = false);
 
 /// <summary>A track outline in local metres, index-aligned with the scatter series of the same <see cref="SeriesId"/>.</summary>
-public sealed record TrackPathSpec(string Label, double[] X, double[] Y, string Color, string HighlightColor, int SeriesId);
+/// <param name="Connected">
+/// Join the samples with a line. False for samples that are not one continuous drive (stretches of
+/// several laps one after another): they are drawn as dots, so no line leaps from the end of one
+/// stretch to the start of the next.
+/// </param>
+public sealed record TrackPathSpec(string Label, double[] X, double[] Y, string Color, string HighlightColor, int SeriesId, bool Connected = true);
 
 /// <summary>
 /// A track map plus scatter panels in one grid. Hovering the map near the

@@ -222,7 +222,22 @@ public static class RollGradient
     }
 
     /// <summary>Per-lap aligned inputs: smoothed lateral g, front and rear roll, and optional GPS.</summary>
-    public sealed record LapInputs(double[] LateralG, double[] RollFront, double[] RollRear, string Unit, double[]? Lat, double[]? Lon);
+    public sealed record LapInputs(double[] LateralG, double[] RollFront, double[] RollRear, string Unit, double[]? Lat, double[]? Lon, long[]? Timecodes = null)
+    {
+        /// <summary>Only the samples inside <paramref name="windows"/> (needs <see cref="Timecodes"/>).</summary>
+        public LapInputs Within(IReadOnlyList<(long Start, long End)> windows)
+        {
+            var keep = Tracks.TrackRegions.Keep(windows, Timecodes ?? throw new InvalidOperationException("these inputs carry no timecodes"));
+            return new LapInputs(
+                Tracks.TrackRegions.Take(LateralG, keep),
+                Tracks.TrackRegions.Take(RollFront, keep),
+                Tracks.TrackRegions.Take(RollRear, keep),
+                Unit,
+                Lat is null ? null : Tracks.TrackRegions.Take(Lat, keep),
+                Lon is null ? null : Tracks.TrackRegions.Take(Lon, keep),
+                Tracks.TrackRegions.Take(Timecodes, keep));
+        }
+    }
 
     /// <summary><c>_collect_aligned</c> for one lap-filtered session.</summary>
     public static LapInputs CollectAligned(
@@ -259,7 +274,7 @@ public static class RollGradient
 
         var rollFront = ComputeRollAngleDeg(Wheel(fl, motionRatios.FrontLeft), Wheel(fr, motionRatios.FrontRight), trackWidths.FrontMm);
         var rollRear = ComputeRollAngleDeg(Wheel(rl, motionRatios.RearLeft), Wheel(rr, motionRatios.RearRight), trackWidths.RearMm);
-        return new LapInputs(Smooth(lateral, smoothingWindow), rollFront, rollRear, unit, gpsLat, gpsLon);
+        return new LapInputs(Smooth(lateral, smoothingWindow), rollFront, rollRear, unit, gpsLat, gpsLon, aligned[fl].Timecodes);
     }
 
     /// <summary>GPS channel names when configured and present, else null.</summary>
@@ -305,7 +320,9 @@ public static class RollGradient
 
     /// <summary>
     /// <c>analyze_roll_gradient_multi_lap</c>: samples of all laps concatenated before fitting; unprocessable laps skipped.
-    /// <paramref name="cancellation"/> is checked between laps.
+    /// <paramref name="cancellation"/> is checked between laps. With <paramref name="windowsByLap"/> (not in
+    /// Python) only the samples inside a lap's windows are kept, after smoothing over the whole lap: the
+    /// part of each lap inside the selected track regions (<see cref="Tracks.TrackRegions"/>).
     /// </summary>
     public static RollGradientResult AnalyzeRollGradientMultiLap(
         LogFile log,
@@ -316,7 +333,8 @@ public static class RollGradient
         int smoothingWindow = 5,
         double minLateralG = 0.0,
         double binSizeG = 0.1,
-        CancellationToken cancellation = default)
+        CancellationToken cancellation = default,
+        IReadOnlyDictionary<int, IReadOnlyList<(long Start, long End)>>? windowsByLap = null)
     {
         if (lapNumbers.Count == 0)
         {
@@ -331,7 +349,10 @@ public static class RollGradient
             cancellation.ThrowIfCancellationRequested();
             try
             {
-                parts.Add(CollectAligned(log.FilterByLap(lapNum), channelNames, motionRatios, trackWidths, smoothingWindow, gps));
+                var part = CollectAligned(log.FilterByLap(lapNum), channelNames, motionRatios, trackWidths, smoothingWindow, gps);
+                parts.Add(windowsByLap is null
+                    ? part
+                    : part.Within(windowsByLap.TryGetValue(lapNum, out var windows) ? windows : Array.Empty<(long Start, long End)>()));
             }
             catch (Exception e) when (e is KeyNotFoundException or ArgumentException or InvalidOperationException)
             {

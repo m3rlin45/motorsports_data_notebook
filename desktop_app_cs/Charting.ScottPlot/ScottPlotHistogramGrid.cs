@@ -43,7 +43,7 @@ public sealed class ScottPlotHistogramGrid : ScottPlotGridSurface<HistogramGridS
             plot.Title(panelSpec.Title, size: Theme.TitleSize);
             plot.Axes.Bottom.Label.Text = row == rows - 1 ? spec.XLabel : string.Empty;
             plot.Axes.Left.Label.Text = col == 0 ? spec.YLabel : string.Empty;
-            plot.Legend.IsVisible = i == 0 && panelSpec.Series.Count > 1;
+            plot.Legend.IsVisible = i == 0 && panelSpec.Series.Count(s => s.Label.Length > 0) > 1;
             plot.Legend.Alignment = Alignment.UpperLeft;
 
             foreach (var band in spec.Bands)
@@ -53,11 +53,12 @@ public sealed class ScottPlotHistogramGrid : ScottPlotGridSurface<HistogramGridS
                 span.LineWidth = 0;
             }
 
-            var n = panelSpec.Series.Count;
-            var barWidth = panelSpec.BinWidth * (n == 1 ? 0.9 : 0.8 / n);
+            var filled = panelSpec.Series.Where(s => !s.Outline).ToList();
+            var n = filled.Count;
+            var barWidth = panelSpec.BinWidth * (n <= 1 ? 0.9 : 0.8 / n);
             for (var s = 0; s < n; s++)
             {
-                var series = panelSpec.Series[s];
+                var series = filled[s];
                 var offset = n == 1 ? 0 : (s - (n - 1) / 2.0) * barWidth;
                 var bars = new List<Bar>(series.Centers.Length);
                 for (var b = 0; b < series.Centers.Length; b++)
@@ -76,6 +77,26 @@ public sealed class ScottPlotHistogramGrid : ScottPlotGridSurface<HistogramGridS
                 var plottable = plot.Add.Bars(bars);
                 plottable.LegendText = series.Label;
                 panel.Bars.Add((series, offset, barWidth));
+            }
+
+            // Reference distributions: the top edge of their bars as one stepped line across the bins.
+            foreach (var series in panelSpec.Series.Where(s => s.Outline && s.Centers.Length > 0))
+            {
+                var half = panelSpec.BinWidth / 2;
+                var xs = new double[series.Centers.Length * 2];
+                var ys = new double[series.Centers.Length * 2];
+                for (var b = 0; b < series.Centers.Length; b++)
+                {
+                    xs[2 * b] = series.Centers[b] - half;
+                    xs[2 * b + 1] = series.Centers[b] + half;
+                    ys[2 * b] = series.Values[b];
+                    ys[2 * b + 1] = series.Values[b];
+                }
+
+                var outline = plot.Add.ScatterLine(xs, ys);
+                outline.Color = ColorOf(series.Color ?? ChartColors.Neutral);
+                outline.LineWidth = 1.5f * Theme.LineScale;
+                outline.LegendText = series.Label;
             }
 
             var zero = plot.Add.VerticalLine(0);

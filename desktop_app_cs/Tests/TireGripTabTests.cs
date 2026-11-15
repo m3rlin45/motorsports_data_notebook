@@ -13,11 +13,12 @@ namespace InfernoAnalyzer.Tests;
 public class TireGripTabTests
 {
     private static readonly ProfileStore BuiltinOnly = new("/nonexistent/profiles.yaml");
+    private static readonly InfernoAnalyzer.Core.Tracks.TrackStore NoTracks = new("/nonexistent/tracks.yaml"); // not this machine's saved tracks
     private static readonly Lazy<LogFile> Sample = new(() => SessionLoader.Load(SessionParityTests.SamplePath(), BuiltinOnly));
 
     private static async Task<MainWindowViewModel> LoadedWindow()
     {
-        var window = new MainWindowViewModel(BuiltinOnly);
+        var window = new MainWindowViewModel(BuiltinOnly, NoTracks);
         foreach (var tab in window.Tabs)
         {
             tab.Debounce = TimeSpan.Zero;
@@ -80,6 +81,40 @@ public class TireGripTabTests
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
         RenderSmokeTests.SaveRender(frame!, "tire_grip.png");
+    });
+
+    [Fact]
+    public Task A_ticked_region_restricts_the_grip_curves_with_the_whole_lap_curve_for_reference() => Ui.Run(async () =>
+    {
+        var viewModel = await LoadedWindow();
+        await viewModel.Regions.LastRefresh; // started by the session load
+        var tab = viewModel.TireGrip;
+        viewModel.ActiveTab = tab;
+        await tab.RunNowAsync();
+        var wholeCounts = tab.Spec!.Panels[0].Series[0].Counts.Sum();
+        var wholeTitle = tab.Spec.Title;
+
+        viewModel.Regions.Corners[2].IsSelected = true;
+        viewModel.Regions.Corners[4].IsSelected = true;
+        await tab.RunNowAsync();
+
+        var panel = tab.Spec!.Panels[0];
+        Assert.EndsWith(" · Turn 3 + Turn 5", tab.Spec.Title);
+        Assert.Equal(new[] { "Whole lap", "Selected regions" }, panel.Series.Select(s => s.Label));
+        Assert.Equal(InfernoAnalyzer.Charting.ChartColors.Neutral, panel.Series[0].Color);
+        Assert.Equal(wholeCounts, panel.Series[0].Counts.Sum());
+        Assert.InRange(panel.Series[1].Counts.Sum(), 1, wholeCounts - 1); // the two corners' samples only
+
+        var view = new TireGripView { DataContext = tab };
+        var window = new Window { Width = 1280, Height = 860, Content = view };
+        window.Show();
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        RenderSmokeTests.SaveRender(window.CaptureRenderedFrame()!, "tire_grip_region.png");
+
+        viewModel.Regions.Clear();
+        await tab.RunNowAsync();
+        Assert.Equal(wholeTitle, tab.Spec!.Title);
+        Assert.Single(tab.Spec.Panels[0].Series);
     });
 
     [Fact]

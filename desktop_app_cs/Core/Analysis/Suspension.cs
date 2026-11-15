@@ -267,7 +267,7 @@ public static class Suspension
         double maxVelocity = 300.0)
     {
         var ranges = velocityRanges ?? new VelocityRanges();
-        var velocities = LapWheelVelocities(lap, channelNames, motionRatios ?? MotionRatios.Toyota86Zn6, smoothingWindow, ChannelIsVelocity(lap, channelNames["shock_fl"]));
+        var (velocities, _) = LapWheelVelocities(lap, channelNames, motionRatios ?? MotionRatios.Toyota86Zn6, smoothingWindow, ChannelIsVelocity(lap, channelNames["shock_fl"]));
         return Build(velocities, binSize, maxVelocity, ranges);
     }
 
@@ -276,6 +276,14 @@ public static class Suspension
     /// lap concatenated before the histogram, so longer laps weigh more.
     /// Laps that cannot be processed are skipped, as in Python.
     /// <paramref name="cancellation"/> is checked between laps.
+    /// <para>
+    /// With <paramref name="windowsByLap"/> (not in Python) only the samples
+    /// inside a lap's windows are kept: the part of each lap inside the
+    /// selected track regions (<see cref="Tracks.TrackRegions"/>). The
+    /// velocities are derived over the whole lap first and cut afterwards, so
+    /// the smoothing and the differentiation see no edge at a region's ends.
+    /// A lap without an entry, or with no windows, contributes nothing.
+    /// </para>
     /// </summary>
     public static VelocityHistogramResult AnalyzeSuspensionVelocityMultiLap(
         LogFile log,
@@ -286,7 +294,8 @@ public static class Suspension
         int smoothingWindow = 5,
         double binSize = 10.0,
         double maxVelocity = 300.0,
-        CancellationToken cancellation = default)
+        CancellationToken cancellation = default,
+        IReadOnlyDictionary<int, IReadOnlyList<(long Start, long End)>>? windowsByLap = null)
     {
         if (lapNumbers.Count == 0)
         {
@@ -300,13 +309,24 @@ public static class Suspension
         {
             cancellation.ThrowIfCancellationRequested();
             double[][] velocities;
+            long[] timecodes;
             try
             {
-                velocities = LapWheelVelocities(log.FilterByLap(lapNum), channelNames, motionRatios ?? MotionRatios.Toyota86Zn6, smoothingWindow, isVelocity);
+                (velocities, timecodes) = LapWheelVelocities(log.FilterByLap(lapNum), channelNames, motionRatios ?? MotionRatios.Toyota86Zn6, smoothingWindow, isVelocity);
             }
             catch (Exception e) when (e is KeyNotFoundException or ArgumentException or InvalidOperationException)
             {
                 continue;
+            }
+
+            if (windowsByLap is not null)
+            {
+                var windows = windowsByLap.TryGetValue(lapNum, out var w) ? w : Array.Empty<(long Start, long End)>();
+                var keep = Tracks.TrackRegions.Keep(windows, timecodes);
+                for (var c = 0; c < 4; c++)
+                {
+                    velocities[c] = Tracks.TrackRegions.Take(velocities[c], keep);
+                }
             }
 
             for (var c = 0; c < 4; c++)
@@ -331,7 +351,7 @@ public static class Suspension
     }
 
     /// <summary>Wheel velocities (mm/s) of FL, FR, RL, RR for one lap-filtered session.</summary>
-    private static double[][] LapWheelVelocities(LogFile lap, IReadOnlyDictionary<string, string> channelNames, MotionRatios ratios, int smoothingWindow, bool isVelocity)
+    private static (double[][] Velocities, long[] Timecodes) LapWheelVelocities(LogFile lap, IReadOnlyDictionary<string, string> channelNames, MotionRatios ratios, int smoothingWindow, bool isVelocity)
     {
         var names = ShockKeys.Select(k => channelNames[k]).ToArray();
         var aligned = lap.SelectChannels(names).ResampleToChannel(names[0]);
@@ -351,6 +371,6 @@ public static class Suspension
             }
         }
 
-        return result;
+        return (result, timecodes);
     }
 }

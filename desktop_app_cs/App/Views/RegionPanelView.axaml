@@ -1,0 +1,47 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:InfernoAnalyzer.App.ViewModels"
+             xmlns:controls="using:InfernoAnalyzer.App.Controls"
+             x:Class="InfernoAnalyzer.App.Views.RegionPanelView"
+             x:DataType="vm:RegionsViewModel">
+  <!--
+    The region column of the statistical tabs: tick corners and sectors to restrict the analysis
+    to them (nothing ticked: whole laps), with the track underneath showing where they are.
+  -->
+  <DockPanel>
+    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4">
+      <Button DockPanel.Dock="Right" Classes="quiet" Content="Whole lap" Command="{Binding ClearCommand}" IsEnabled="{Binding HasSelection}"
+              ToolTip.Tip="Untick every region: analyse whole laps" />
+      <TextBlock Classes="section" Text="Regions" VerticalAlignment="Center" />
+    </DockPanel>
+    <controls:ChartHost x:Name="Map" DockPanel.Dock="Bottom" Height="168" Margin="0,8,0,0"
+                        Spec="{Binding MapSpec}" HighlightedItem="{Binding HoveredRegion}"
+                        AutomationProperties.Name="Track map of the regions"
+                        ToolTip.Tip="The ticked regions on the track; click a corner to tick it" />
+    <CheckBox DockPanel.Dock="Bottom" Content="Show whole lap behind" IsChecked="{Binding ShowWholeLap}" Margin="0,8,0,0"
+              ToolTip.Tip="Draw the whole-lap result faintly behind the regions', for reference" />
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+      <StackPanel Spacing="2">
+        <TextBlock Classes="subtle" Text="{Binding Hint}" TextWrapping="Wrap"
+                   IsVisible="{Binding Hint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        <ItemsControl x:Name="CornerRows" ItemsSource="{Binding Corners}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:RegionItemViewModel">
+              <CheckBox Content="{Binding Name}" IsChecked="{Binding IsSelected}" MinHeight="24" Padding="6,0,0,0" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <TextBlock Classes="section" Text="Sectors" Margin="0,8,0,2" IsVisible="{Binding HasSectors}" />
+        <ItemsControl x:Name="SectorRows" ItemsSource="{Binding Sectors}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:RegionItemViewModel">
+              <CheckBox Content="{Binding Name}" IsChecked="{Binding IsSelected}" MinHeight="24" Padding="6,0,0,0" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <TextBlock Classes="subtle" Text="{Binding SectorsHint}" TextWrapping="Wrap" Margin="0,8,0,0"
+                   IsVisible="{Binding SectorsHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>

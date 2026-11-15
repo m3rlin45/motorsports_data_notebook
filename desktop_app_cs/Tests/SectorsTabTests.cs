@@ -44,6 +44,44 @@ public class SectorsTabTests
     });
 
     [Fact]
+    public Task Saving_a_track_lists_its_sectors_as_regions_and_keeps_the_ticked_corners() => Ui.Run(async () =>
+    {
+        var (window, _, dir) = await LoadedWindow();
+        try
+        {
+            var regions = window.Regions;
+            await regions.LastRefresh;
+            Assert.Empty(regions.Sectors);
+            regions.Corners[2].IsSelected = true;
+
+            var tab = window.Sectors;
+            tab.NewTrack();
+            var n = tab.ReferencePath!.Value.X.Length;
+            tab.AddGateAt(n / 3);
+            tab.AddGateAt(2 * n / 3);
+            tab.SaveTrack();
+            await regions.LastRefresh;
+
+            Assert.Equal(new[] { "S1", "S2", "S3" }, regions.Sectors.Select(s => s.Name));
+            Assert.Equal(string.Empty, regions.SectorsHint);
+            Assert.True(regions.Corners[2].IsSelected);
+            Assert.Equal("Turn 3", regions.Summary);
+
+            // A sector cuts the laps as a corner does: S2 is about a third of each lap.
+            regions.Clear();
+            regions.Sectors[1].IsSelected = true;
+            var laps = window.SessionA.SelectedIn(LapScope.Analysis);
+            var windows = regions.Selection().Windows(window.SessionA.Log!, laps, SessionSlot.A)!;
+            Assert.Equal(laps.Count, windows.Count);
+            Assert.All(windows.Values, w => Assert.InRange(InfernoAnalyzer.Core.Tracks.TrackRegions.DurationS(w), 25, 60));
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    });
+
+    [Fact]
     public Task Creating_a_track_and_adding_gates_produces_a_split_table_and_saves() => Ui.Run(async () =>
     {
         var (window, path, dir) = await LoadedWindow();
