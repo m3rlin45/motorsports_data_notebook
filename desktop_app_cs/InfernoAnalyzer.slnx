@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/Core/">
+    <Project Path="Core/InfernoAnalyzer.Core.csproj" />
+  </Folder>
+  <Folder Name="/Charting/">
+    <Project Path="Charting/InfernoAnalyzer.Charting.csproj" />
+    <Project Path="Charting.ScottPlot/InfernoAnalyzer.Charting.ScottPlot.csproj" />
+  </Folder>
+  <Folder Name="/App/">
+    <Project Path="App/InfernoAnalyzer.App.csproj" />
+  </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="Tests/InfernoAnalyzer.Tests.csproj" />
+  </Folder>
+</Solution>

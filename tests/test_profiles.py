@@ -556,6 +556,14 @@ class TestVehicleName:
         log = MockLogFile(metadata={"Logger ID": 1}, file_name="session.xrk")
         assert get_vehicle_name(log) is None
 
+    def test_empty_logger_id_is_absent_like_get_logger_id(self):
+        """An empty Logger ID is no logger at all, so the file name is not parsed either."""
+        log = MockLogFile(
+            metadata={"Logger ID": ""}, file_name="CMD_KK-F_Tsukuba_Car_Race_a_0344.xrz"
+        )
+        assert get_logger_id(log) is None
+        assert get_vehicle_name(log) is None
+
     def test_non_aim_file_does_not_parse_name(self):
         log = MockLogFile(metadata={"session_info_yaml": "x"}, file_name="mx5_okayama_2024.ibt")
         assert get_vehicle_name(log) is None

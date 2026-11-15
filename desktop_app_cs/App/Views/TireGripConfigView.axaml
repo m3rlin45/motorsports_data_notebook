@@ -1,0 +1,8 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:InfernoAnalyzer.App.ViewModels"
+             xmlns:views="using:InfernoAnalyzer.App.Views"
+             x:Class="InfernoAnalyzer.App.Views.TireGripConfigView"
+             x:DataType="vm:TireGripConfigViewModel">
+  <views:ChannelEntriesView />
+</UserControl>

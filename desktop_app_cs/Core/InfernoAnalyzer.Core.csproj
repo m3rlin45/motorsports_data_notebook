@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Data model, profiles and analysis kernels. No UI dependencies, NativeAOT
+    clean: YAML is read through YamlDotNet's representation model (no
+    reflection-based deserialisation).
+  -->
+  <PropertyGroup>
+    <IsAotCompatible>true</IsAotCompatible>
+    <!-- Source-generated P/Invoke into the libxrk/libibt FFI libraries. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Native parser libraries built by tools/build_native.py into native/runtimes/<rid>/native/
+      (git-ignored). Copied under runtimes/ in every consuming project's output and publish;
+      NativeLoader probes runtimes/<rid>/native under the application directory. A single-file
+      (JIT) publish with IncludeNativeLibrariesForSelfExtract bundles them; the runtime unpacks
+      them to its own folder at start-up, where NativeLoader also looks. A NativeAOT publish
+      links the static libraries instead (Directory.Build.targets).
+    -->
+    <None Include="..\native\runtimes\**\*" Link="runtimes\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Apache.Arrow" Version="$(ApacheArrowVersion)" />
+    <PackageReference Include="YamlDotNet" Version="$(YamlDotNetVersion)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Linked, not copied: the Python package's file is the single source of truth. -->
+    <EmbeddedResource Include="..\..\src\motorsports_data_notebook\data\builtin_profiles.yaml" LogicalName="builtin_profiles.yaml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="InfernoAnalyzer.Tests" />
+  </ItemGroup>
+
+</Project>

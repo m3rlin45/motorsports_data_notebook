@@ -1,0 +1,79 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:InfernoAnalyzer.App.ViewModels"
+             xmlns:controls="using:InfernoAnalyzer.App.Controls"
+             x:Class="InfernoAnalyzer.App.Views.SessionPanelView"
+             x:DataType="vm:SessionViewModel">
+  <UserControl.Styles>
+    <!-- The fastest lap: semibold, its time in the timing-screen purple (weight carries it without colour). -->
+    <Style Selector="TextBlock.best">
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="TextBlock.best.time">
+      <Setter Property="Foreground" Value="{DynamicResource AppBestBrush}" />
+    </Style>
+    <Style Selector="Button.dropzone">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Padding" Value="12,10" />
+    </Style>
+  </UserControl.Styles>
+  <Border Classes="card">
+    <DockPanel>
+      <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+        <Button DockPanel.Dock="Right" Classes="icon" Command="{Binding CloseCommand}" IsVisible="{Binding HasSession}"
+                ToolTip.Tip="Close this session" AutomationProperties.Name="Close session">
+          <Path Classes="icon" Data="{StaticResource IconClose}" />
+        </Button>
+        <Button x:Name="OpenButton" DockPanel.Dock="Right" Classes="icon" Command="{Binding BrowseCommand}" IsVisible="{Binding HasSession}"
+                ToolTip.Tip="Open another file in this session" AutomationProperties.Name="Open file">
+          <Path Classes="icon" Data="{StaticResource IconOpen}" />
+        </Button>
+        <TextBlock Classes="title" Text="{Binding Title}" VerticalAlignment="Center" />
+      </DockPanel>
+
+      <ProgressBar DockPanel.Dock="Top" IsIndeterminate="True" IsVisible="{Binding IsLoading}" Height="2" MinHeight="2" Margin="0,0,0,8" />
+      <TextBlock DockPanel.Dock="Top" Classes="error" Text="{Binding Error}" IsVisible="{Binding HasError}" TextWrapping="Wrap" Margin="0,0,0,8" />
+
+      <!-- Nothing loaded: the whole card is the way in. -->
+      <Button x:Name="DropZone" DockPanel.Dock="Top" Classes="dropzone" Command="{Binding BrowseCommand}" IsVisible="{Binding !HasSession}"
+              ToolTip.Tip="Open an XRK, XRZ or IBT file (or drop one anywhere on the window)">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Path Classes="icon" Data="{StaticResource IconOpen}" />
+          <TextBlock Text="Open file…" VerticalAlignment="Center" />
+        </StackPanel>
+      </Button>
+
+      <StackPanel DockPanel.Dock="Top" IsVisible="{Binding HasSession}" Spacing="2" Margin="0,0,0,8">
+        <TextBlock Classes="section" Text="{Binding FileName}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding FilePath}" />
+        <TextBlock Classes="subtle" Text="{Binding Details}" TextWrapping="Wrap" />
+        <TextBlock Classes="subtle" Text="{Binding ProfileName}" TextTrimming="CharacterEllipsis" />
+      </StackPanel>
+
+      <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" IsVisible="{Binding HasSession}" Margin="-8,0,0,4">
+        <Button Classes="quiet" Content="Best" Command="{Binding SelectBestCommand}" ToolTip.Tip="Select only the fastest lap" />
+        <Button Classes="quiet" Content="Top 103%" Command="{Binding SelectTop103Command}" ToolTip.Tip="Select the laps within 103 % of the fastest" />
+        <Button Classes="quiet" Content="All" Command="{Binding SelectAllCommand}" ToolTip.Tip="Select every lap" />
+        <Button Classes="quiet" Content="None" Command="{Binding SelectNoneCommand}" ToolTip.Tip="Clear the selection" />
+      </StackPanel>
+
+      <ListBox x:Name="LapList" Classes="rows" ItemsSource="{Binding Laps}" SelectionMode="Multiple" IsVisible="{Binding HasSession}"
+               AutomationProperties.Name="Laps" ToolTip.Tip="Space ticks the highlighted laps; Shift+click highlights a range">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:LapItemViewModel">
+            <Grid ColumnDefinitions="Auto,*,Auto,56">
+              <CheckBox Grid.Column="0" IsChecked="{Binding IsSelected}" IsTabStop="False" AutomationProperties.Name="{Binding Name}" />
+              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <TextBlock Classes.best="{Binding IsBest}" Text="{Binding Name}" VerticalAlignment="Center" />
+                <controls:LapKey LapStyle="{Binding Style}" VerticalAlignment="Center" />
+              </StackPanel>
+              <TextBlock Grid.Column="2" Classes="numeric time" Classes.best="{Binding IsBest}" Text="{Binding TimeText}" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="3" Classes="numeric subtle" Text="{Binding GapText}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+            </Grid>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </DockPanel>
+  </Border>
+</UserControl>
