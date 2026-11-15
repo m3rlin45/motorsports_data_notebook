@@ -161,6 +161,17 @@ public abstract partial class AnalysisTabViewModel : ObservableObject
     /// <summary>Whether this tab is the visible one.</summary>
     public bool IsActive { get; private set; }
 
+    /// <summary>
+    /// Raised when what the pointer is over on this tab is a place on the track (a cursor on the
+    /// traces, a corner's column): how far round Session A's lap it is, as a fraction from 0 at
+    /// the start/finish line to 1, or null when it is over nothing of the kind any more. The
+    /// sidebar's map shows it.
+    /// </summary>
+    public event Action<double?>? TrackPositionChanged;
+
+    /// <summary>Raise <see cref="TrackPositionChanged"/>.</summary>
+    protected void RaiseTrackPosition(double? lapFraction) => TrackPositionChanged?.Invoke(lapFraction);
+
     /// <summary>Raised on the UI thread after a successful analysis.</summary>
     public event Action? AnalysisCompleted;
 
