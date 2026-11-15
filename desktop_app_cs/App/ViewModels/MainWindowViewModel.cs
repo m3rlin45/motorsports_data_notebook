@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using InfernoAnalyzer.App.Settings;
+using InfernoAnalyzer.Core.Analysis;
 using InfernoAnalyzer.Core.Profiles;
 using InfernoAnalyzer.Core.Tracks;
 
@@ -41,11 +42,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
         TimeDistance = new TimeDistanceViewModel(SessionA, SessionB, Settings);
         Suspension = new SuspensionViewModel(SessionA, SessionB);
         RollGradient = new RollGradientViewModel(SessionA, SessionB, Suspension.SuspensionConfig);
-        Driver = new DriverViewModel(SessionA, SessionB);
+        Driver = new DriverViewModel(SessionA, SessionB, DriverAnalyses);
         TireGrip = new TireGripViewModel(SessionA, SessionB);
         Sectors = new SectorsViewModel(SessionA, TrackStore);
-        Regions = new RegionsViewModel(SessionA, TrackStore, Driver.DriverConfig.GetChannelNames);
+        Regions = new RegionsViewModel(SessionA, TrackStore, Driver.DriverConfig.GetChannelNames, Driver.DetectionInputs, DriverAnalyses);
         Sectors.TrackSaved += RefreshRegions;
+        // The corners are the Driver tab's: its channel names and thresholds re-list them.
+        Driver.DriverConfig.Changed += RefreshRegionsSoon;
+        Driver.DriverConfig.ThresholdsChanged += RefreshRegionsSoon;
         Tabs = new ObservableCollection<AnalysisTabViewModel> { TimeDistance, Sectors, Suspension, Driver, TireGrip, RollGradient };
         foreach (var tab in Tabs)
         {
@@ -90,6 +94,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     /// <summary>The track regions of the session and which are ticked: one choice for every tab that uses regions.</summary>
     public RegionsViewModel Regions { get; }
+
+    /// <summary>The driver-consistency results in memory: one corner detection for the Driver tab and the region list.</summary>
+    public DriverConsistencyCache DriverAnalyses { get; } = new();
 
     /// <summary>Track store for the Sectors tab.</summary>
     public TrackStore TrackStore { get; }
@@ -383,13 +390,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// </summary>
     private async void RefreshRegions() => await Regions.RefreshAsync();
 
+    /// <summary>As <see cref="RefreshRegions"/>, once for a burst of changes.</summary>
+    private async void RefreshRegionsSoon() => await Regions.RefreshSoonAsync();
+
     private void OnSessionLoaded(SessionViewModel session)
     {
-        if (ReferenceEquals(session, SessionA))
-        {
-            RefreshRegions();
-        }
-
         if (session.FilePath is { } path && File.Exists(path))
         {
             Settings.AddRecent(path);
@@ -408,6 +413,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
         foreach (var tab in Tabs)
         {
             tab.OnSessionLoaded();
+        }
+
+        // After the tabs: the Driver tab has taken the new session's profile, which the corners are detected with.
+        if (ReferenceEquals(session, SessionA))
+        {
+            RefreshRegions();
         }
 
         SwapSessionsCommand.NotifyCanExecuteChanged();

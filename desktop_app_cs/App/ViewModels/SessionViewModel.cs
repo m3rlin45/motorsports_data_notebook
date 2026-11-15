@@ -263,6 +263,23 @@ public sealed partial class SessionViewModel : ObservableObject
         SessionLoaded?.Invoke();
     }
 
+    /// <summary>
+    /// The laps the statistical tabs start with, in lap order: every timed lap within 103 % of the
+    /// fastest. Also the laps a session's track regions are detected from, so that with the
+    /// default ticks the region list and the Driver tab read the same corners off the same laps.
+    /// </summary>
+    public static List<int> DefaultAnalysisLaps(LogFile log)
+    {
+        var timed = log.Laps.Where(l => l.LapTimeS > 0).ToList();
+        if (timed.Count == 0)
+        {
+            return new List<int>();
+        }
+
+        var best = timed.Min(l => l.LapTimeS);
+        return timed.Where(l => l.LapTimeS <= best * 1.03).Select(l => l.Num).ToList();
+    }
+
     private void Clear()
     {
         Log = null;
@@ -324,7 +341,7 @@ public sealed partial class SessionViewModel : ObservableObject
 
         // Defaults: the statistical tabs get every representative lap, the trace overlay the best two.
         var byTime = timed.OrderBy(l => l.LapTimeS).Select(l => l.Num).ToList();
-        _selected[LapScope.Analysis] = best is null ? new HashSet<int>() : timed.Where(l => l.LapTimeS <= best.Value * 1.03).Select(l => l.Num).ToHashSet();
+        _selected[LapScope.Analysis] = DefaultAnalysisLaps(log).ToHashSet();
         _selected[LapScope.Traces] = byTime.Take(2).ToHashSet();
         ShowScope();
 
