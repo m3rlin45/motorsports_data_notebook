@@ -69,6 +69,52 @@ public class DriverTabTests
     });
 
     [Fact]
+    public Task The_region_list_has_the_tabs_corners_from_one_run_of_the_kernel() => Ui.Run(async () =>
+    {
+        var window = await LoadedWindow();
+        var regions = window.Regions;
+        await regions.LastRefresh;
+
+        // With the default lap ticks the tab and the region list ask for the same analysis: computed once.
+        Assert.Equal(1, window.DriverAnalyses.Computations);
+        Assert.Equal(window.Driver.Corners.Select(c => c.Index + 1), regions.Corners.Select(c => int.Parse(c.Name["Turn ".Length..])));
+        Assert.Matches(@"^Turn 3 · (left|right) · \d+ km/h at the slowest point$", regions.Corners[2].Tip);
+
+        // The tab showing its derived throttle threshold re-lists nothing: same corners, the ticks stay.
+        regions.Corners[2].IsSelected = true;
+        var changes = 0;
+        regions.Changed += () => changes++;
+        await regions.RefreshAsync();
+        Assert.Equal(0, changes);
+        Assert.True(regions.Corners[2].IsSelected);
+
+        // A coarser corner threshold is fewer corners, for the tab and for the list alike. Ticks
+        // follow the place, not the number: with every corner ticked, the ones that remain (the
+        // tight ones, renumbered) are all still ticked.
+        foreach (var corner in regions.Corners)
+        {
+            corner.IsSelected = true;
+        }
+
+        var thresholds = window.Driver.DriverConfig.ThresholdsA;
+        var before = regions.Corners.Count;
+        changes = 0;
+        thresholds.CornerThreshold.Text = "0.012";
+        await window.Driver.RunNowAsync();
+        await regions.LastRefresh;
+        Assert.InRange(regions.Corners.Count, 1, before - 1);
+        Assert.Equal(window.Driver.Corners.Count, regions.Corners.Count);
+        Assert.True(changes > 0); // fewer regions: the tabs recompute
+        Assert.All(regions.Corners, c => Assert.True(c.IsSelected));
+
+        // An invalid threshold lists no corners and says why.
+        thresholds.CornerThreshold.Text = "abc";
+        await regions.LastRefresh;
+        Assert.Empty(regions.Corners);
+        Assert.Contains("threshold is not valid", regions.Hint);
+    });
+
+    [Fact]
     public Task Box_statistics_follow_numpy_and_matplotlib_conventions() => Ui.Run(() =>
     {
         var box = BoxSpec.From(1, new double[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 100 }, "#000000", "tip");
