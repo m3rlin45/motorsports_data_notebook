@@ -437,6 +437,7 @@ public sealed partial class DriverViewModel : AnalysisTabViewModel<DriverViewMod
     public DriverViewModel(SessionViewModel a, SessionViewModel b, DriverConsistencyCache? cache = null)
     {
         _cache = cache ?? new DriverConsistencyCache();
+        DetailCursor.CursorChanged += x => RaiseTrackPosition(LapFraction(x)); // the detail's x is metres along the reference lap
         _a = a;
         _b = b;
         DriverConfig = new DriverConfigViewModel();
@@ -578,6 +579,24 @@ public sealed partial class DriverViewModel : AnalysisTabViewModel<DriverViewMod
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HighlightedCorner))]
     private int _hoveredCorner = -1;
+
+    /// <summary>The detail view's cursor: where it is on the track goes to the sidebar's map.</summary>
+    public CursorLinkGroup DetailCursor { get; } = new();
+
+    /// <summary>How far round the reference lap <paramref name="distance"/> (metres along it) is, 0 to 1; null without a result.</summary>
+    private double? LapFraction(double? distance)
+    {
+        if (distance is not { } d || _result?.A.RefDistance is not { Length: > 1 } along)
+        {
+            return null;
+        }
+
+        return Math.Clamp((d - along[0]) / (along[^1] - along[0]), 0, 1);
+    }
+
+    // A corner's column under the pointer in the box plots: its apex is the place.
+    partial void OnHoveredCornerChanged(int value) =>
+        RaiseTrackPosition(value >= 0 && _result is { } r && value < r.A.Corners.Count ? LapFraction(r.A.Corners[value].ApexDist) : null);
 
     /// <summary>
     /// The corner the small map emphasises: the one under the pointer in the box plots, otherwise

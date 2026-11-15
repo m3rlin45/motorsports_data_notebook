@@ -49,7 +49,7 @@
       <Border Grid.Column="2" Classes="card flush">
         <Panel>
           <controls:ChartHost x:Name="SummaryChart" Spec="{Binding SummarySpec}" EmptyText="{Binding EmptyMessage}" IsVisible="{Binding IsSummary}" />
-          <controls:ChartHost x:Name="DetailChart" Spec="{Binding DetailSpec}" EmptyText="{Binding EmptyMessage}" IsVisible="{Binding IsDetail}" />
+          <controls:ChartHost x:Name="DetailChart" Spec="{Binding DetailSpec}" CursorGroup="{Binding DetailCursor}" EmptyText="{Binding EmptyMessage}" IsVisible="{Binding IsDetail}" />
           <controls:ChartHost x:Name="MapChart" Spec="{Binding MapSpec}" EmptyText="{Binding EmptyMessage}" IsVisible="{Binding IsMap}" />
         </Panel>
       </Border>

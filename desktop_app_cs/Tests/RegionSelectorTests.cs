@@ -154,4 +154,74 @@ public class RegionSelectorTests
         Assert.False(panel.FindControl<ChartHost>("Map")!.IsVisible);
         RenderSmokeTests.SaveRender(window.CaptureRenderedFrame()!, "sidebar_regions_two_sessions.png");
     });
+
+    [Fact]
+    public Task The_map_shows_where_the_pointer_on_the_charts_is_on_the_track() => Ui.Run(async () =>
+    {
+        var viewModel = await LoadedWindow();
+        var window = new MainWindow(viewModel) { Width = 1300, Height = 900 };
+        window.Show();
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        var regions = viewModel.Regions;
+        var map = (InfernoAnalyzer.Charting.ScottPlot.ScottPlotTrackMap)window.FindControl<RegionPanelView>("RegionPanel")!.FindControl<ChartHost>("Map")!.Surface!;
+        var line = regions.MapSpec!.Cursor!;
+        (double X, double Y) OnLap(double fraction)
+        {
+            var i = Array.FindIndex(line.Along, a => a >= fraction);
+            return (line.X[i], line.Y[i]);
+        }
+
+        static double Metres((double X, double Y) a, (double X, double Y) b) => Math.Sqrt(((a.X - b.X) * (a.X - b.X)) + ((a.Y - b.Y) * (a.Y - b.Y)));
+        Assert.Null(map.CursorPoint); // nothing under a pointer yet
+
+        // The Time/Distance cursor, against distance: a quarter of the way round the reference lap.
+        var traces = viewModel.TimeDistance;
+        viewModel.ActiveTab = traces;
+        await traces.RunNowAsync();
+        var lapLength = traces.Spec!.Subplots[0].Traces[0].Emphasis!.Value.Max;
+        traces.Cursors.SetCursor(0.25 * lapLength);
+        Assert.Equal(0.25, regions.Position.Cursor!.Value, 6);
+        Assert.InRange(Metres(map.CursorPoint!.Value, OnLap(0.25)), 0, 5);
+        RenderSmokeTests.SaveRender(window.CaptureRenderedFrame()!, "sidebar_map_cursor.png");
+
+        // On the lap stitched on after it, the same place one lap later; off the chart, no marker.
+        traces.Cursors.SetCursor(1.25 * lapLength);
+        Assert.Equal(0.25, regions.Position.Cursor!.Value, 6);
+        traces.Cursors.SetCursor(null);
+        Assert.Null(map.CursorPoint);
+
+        // Against time, the reference lap's seconds are a place and the neighbours' are not.
+        traces.ToggleXAxis();
+        var lapTime = traces.Spec!.Subplots[0].Traces[0].Emphasis!.Value.Max;
+        traces.Cursors.SetCursor(0.5 * lapTime);
+        Assert.InRange(regions.Position.Cursor!.Value, 0.3, 0.7);
+        Assert.NotNull(map.CursorPoint);
+        traces.Cursors.SetCursor(1.5 * lapTime);
+        Assert.Null(map.CursorPoint);
+        traces.ToggleXAxis();
+
+        // Another tab starts without the last one's marker. On Driver Consistency a corner's column
+        // under the pointer is its apex, which is where the map has that corner's dot.
+        traces.Cursors.SetCursor(0.25 * lapLength);
+        var driver = viewModel.Driver;
+        viewModel.ActiveTab = driver;
+        await driver.RunNowAsync();
+        Assert.Null(map.CursorPoint);
+        driver.HoveredCorner = 2;
+        var turn3 = regions.MapSpec!.Points[2];
+        Assert.InRange(Metres(map.CursorPoint!.Value, (turn3.X, turn3.Y)), 0, 30);
+        driver.HoveredCorner = -1;
+        Assert.Null(map.CursorPoint);
+
+        // The cursor of its detail view is metres along the lap.
+        driver.OpenCorner(0);
+        var turn1 = regions.MapSpec.Points[0];
+        var apex = driver.DetailSpec!.Markers!.Single(m => m.Label == "Apex").X;
+        driver.DetailCursor.SetCursor(apex);
+        Assert.InRange(Metres(map.CursorPoint!.Value, (turn1.X, turn1.Y)), 0, 30);
+
+        // A tab that is not showing does not move the marker.
+        traces.Cursors.SetCursor(0.9 * lapLength);
+        Assert.InRange(Metres(map.CursorPoint!.Value, (turn1.X, turn1.Y)), 0, 30);
+    });
 }

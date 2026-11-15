@@ -59,9 +59,9 @@
       <TextBlock x:Name="UseCaption" Classes="subtle" Text="{Binding Caption}" TextWrapping="Wrap" Margin="0,4,0,0"
                  IsVisible="{Binding !IsUsed}" />
       <controls:ChartHost x:Name="Map" Height="132" Margin="0,6,0,0" IsVisible="{Binding IsMapOpen}"
-                          Spec="{Binding MapSpec}" HighlightedItem="{Binding HoveredRegion}"
+                          Spec="{Binding MapSpec}" HighlightedItem="{Binding HoveredRegion}" CursorGroup="{Binding Position}"
                           AutomationProperties.Name="Track map of the regions"
-                          ToolTip.Tip="The ticked regions on the track; click a corner to tick it" />
+                          ToolTip.Tip="The ticked regions on the track, and where the cursor on the charts is; click a corner to tick it" />
     </StackPanel>
   </Border>
 </UserControl>
