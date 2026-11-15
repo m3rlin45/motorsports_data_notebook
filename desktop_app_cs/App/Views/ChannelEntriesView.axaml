@@ -1,0 +1,23 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:InfernoAnalyzer.App.ViewModels"
+             x:Class="InfernoAnalyzer.App.Views.ChannelEntriesView"
+             x:DataType="vm:ChannelConfigViewModel">
+  <!-- The channel-name entries every tab's configuration starts with: label, and the logged channel with completion. -->
+  <ItemsControl ItemsSource="{Binding Entries}">
+    <ItemsControl.ItemsPanel>
+      <ItemsPanelTemplate>
+        <UniformGrid Columns="2" />
+      </ItemsPanelTemplate>
+    </ItemsControl.ItemsPanel>
+    <ItemsControl.ItemTemplate>
+      <DataTemplate x:DataType="vm:ChannelEntryViewModel">
+        <DockPanel Margin="0,0,12,8">
+          <TextBlock DockPanel.Dock="Left" Classes="label" Text="{Binding Label}" Width="72" />
+          <AutoCompleteBox Text="{Binding Value}" ItemsSource="{Binding Suggestions}" IsEnabled="{Binding IsEditable}" FilterMode="Contains" MinimumPrefixLength="1"
+                           AutomationProperties.Name="{Binding Label}" />
+        </DockPanel>
+      </DataTemplate>
+    </ItemsControl.ItemTemplate>
+  </ItemsControl>
+</UserControl>
