@@ -27,6 +27,11 @@
       <Border Grid.Column="0" Classes="card">
         <DockPanel>
           <TextBlock DockPanel.Dock="Top" Classes="section" Text="Corners" Margin="0,0,0,4" />
+          <!-- Where the corner is: the one under the pointer in the box plots, otherwise the selected one. -->
+          <controls:ChartHost x:Name="MiniMap" DockPanel.Dock="Bottom" Height="168" Margin="0,8,0,0"
+                              Spec="{Binding MiniMapSpec}" HighlightedItem="{Binding HighlightedCorner}"
+                              AutomationProperties.Name="Track map of the corners"
+                              ToolTip.Tip="The highlighted corner on the track; click a corner to see its laps" />
           <ListBox x:Name="CornerList" Classes="rows" ItemsSource="{Binding Corners}" SelectedItem="{Binding SelectedCorner}"
                    AutomationProperties.Name="Corners" ToolTip.Tip="Pick a corner to see every lap through it">
             <ListBox.ItemTemplate>

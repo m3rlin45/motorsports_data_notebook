@@ -32,6 +32,10 @@ public sealed class ChartHost : Panel, IDisposable
     public static readonly StyledProperty<string?> EmptyTextProperty =
         AvaloniaProperty.Register<ChartHost, string?>(nameof(EmptyText));
 
+    /// <summary>The item the chart emphasises (<see cref="IChartSurface.HighlightItem"/>); -1 for none.</summary>
+    public static readonly StyledProperty<int> HighlightedItemProperty =
+        AvaloniaProperty.Register<ChartHost, int>(nameof(HighlightedItem), -1);
+
     private readonly TextBlock _empty = new()
     {
         HorizontalAlignment = HorizontalAlignment.Center,
@@ -88,11 +92,21 @@ public sealed class ChartHost : Panel, IDisposable
         set => SetValue(EmptyTextProperty, value);
     }
 
+    /// <summary>The item the chart emphasises; -1 for none.</summary>
+    public int HighlightedItem
+    {
+        get => GetValue(HighlightedItemProperty);
+        set => SetValue(HighlightedItemProperty, value);
+    }
+
     /// <summary>The surface, created with the first spec (null before that).</summary>
     public IChartSurface? Surface => _surface;
 
     /// <summary>Raised when the user clicks the chart.</summary>
     public event Action<ChartPoint>? ChartClicked;
+
+    /// <summary>Raised when the item under the pointer changes (-1: none); see <see cref="IChartSurface.ItemHovered"/>.</summary>
+    public event Action<int>? ItemHovered;
 
     /// <inheritdoc />
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
@@ -109,6 +123,10 @@ public sealed class ChartHost : Panel, IDisposable
         else if (change.Property == EmptyTextProperty)
         {
             _empty.Text = EmptyText;
+        }
+        else if (change.Property == HighlightedItemProperty)
+        {
+            _surface?.HighlightItem(HighlightedItem);
         }
     }
 
@@ -131,6 +149,7 @@ public sealed class ChartHost : Panel, IDisposable
             _surface = ChartSurfaces.CreateFor(spec);
             _surface.Theme = ChartSurfaces.ThemeFor(this);
             _surface.Clicked += OnSurfaceClicked;
+            _surface.ItemHovered += OnSurfaceItemHovered;
             Children.Insert(0, _surface.Control);
             JoinGroup();
         }
@@ -138,9 +157,12 @@ public sealed class ChartHost : Panel, IDisposable
         _empty.IsVisible = false;
         _surface.Control.IsVisible = true;
         _surface.Render(spec);
+        _surface.HighlightItem(HighlightedItem);
     }
 
     private void OnSurfaceClicked(ChartPoint point) => ChartClicked?.Invoke(point);
+
+    private void OnSurfaceItemHovered(int id) => ItemHovered?.Invoke(id);
 
     private void JoinGroup()
     {
@@ -276,6 +298,7 @@ public sealed class ChartHost : Panel, IDisposable
         _joined?.Remove(_surface);
         _joined = null;
         _surface.Clicked -= OnSurfaceClicked;
+        _surface.ItemHovered -= OnSurfaceItemHovered;
         Children.Remove(_surface.Control);
         _surface.Dispose();
         _surface = null;

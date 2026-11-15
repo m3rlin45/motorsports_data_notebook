@@ -154,7 +154,9 @@ public sealed class ScottPlotBoxPlot : ScottPlotGridSurface<BoxPlotSpec>
     protected override void OnPointerMoved(int index, Coordinates at, PointerEventArgs e)
     {
         base.OnPointerMoved(index, at, e);
-        PlotAt(index).Cursor = CategoryAt(at.X) >= 0 ? HandCursor : Avalonia.Input.Cursor.Default;
+        var category = CategoryAt(at.X);
+        PlotAt(index).Cursor = category >= 0 ? HandCursor : Avalonia.Input.Cursor.Default;
+        SetHoveredItem(category);
         var panel = _panels[index];
         if (panel.Hover is null)
         {
@@ -178,6 +180,7 @@ public sealed class ScottPlotBoxPlot : ScottPlotGridSurface<BoxPlotSpec>
     protected override void OnPointerExited(int index)
     {
         base.OnPointerExited(index);
+        SetHoveredItem(-1);
         HideHover(index);
     }
 
