@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.Input;
 using InfernoAnalyzer.Charting;
 using InfernoAnalyzer.Core.Analysis;
 using InfernoAnalyzer.Core.Io;
+using InfernoAnalyzer.Core.Tracks;
 
 namespace InfernoAnalyzer.App.ViewModels;
 
@@ -427,6 +428,7 @@ public sealed partial class DriverViewModel : AnalysisTabViewModel<DriverViewMod
     private Parameters? _shown;
     private string? _autoThrottleChannelA;
     private readonly DriverConsistencyCache _cache;
+    private List<int> _shownCorners = new();
     private bool _autoThrottleA;
     private bool _autoThrottleB;
     private bool _keepViewMode;
@@ -540,14 +542,21 @@ public sealed partial class DriverViewModel : AnalysisTabViewModel<DriverViewMod
     /// </summary>
     public void OpenCorner(int index)
     {
-        if (index < 0 || index >= Corners.Count)
+        // By the corner's own index, not its row: the list holds only the corners inside the ticked regions.
+        if (Corners.FirstOrDefault(c => c.Index == index) is not { } corner)
         {
             return;
         }
 
-        SelectedCorner = Corners[index];
+        SelectedCorner = corner;
         ViewMode = DriverViewMode.Detail;
     }
+
+    /// <summary>
+    /// The corner drawn in column <paramref name="column"/> of the box plots (what the summary
+    /// chart reports for a hover or a click), or -1: the columns are the shown corners only.
+    /// </summary>
+    public int CornerAtColumn(int column) => column >= 0 && column < _shownCorners.Count ? _shownCorners[column] : -1;
 
     /// <summary>Box plots.</summary>
     [ObservableProperty]
@@ -638,7 +647,14 @@ public sealed partial class DriverViewModel : AnalysisTabViewModel<DriverViewMod
     /// <paramref name="BFollowsA"/>: B shares A's thresholds, the derived
     /// throttle threshold included.
     /// </summary>
-    public sealed record Parameters(SessionInputs A, SessionInputs? B, bool BFollowsA);
+    /// <param name="A">Session A's inputs.</param>
+    /// <param name="B">Session B's, in a comparison.</param>
+    /// <param name="BFollowsA">B shares A's thresholds.</param>
+    /// <param name="Regions">The ticked track regions: only the corners inside them are shown (none ticked: every corner).</param>
+    public sealed record Parameters(SessionInputs A, SessionInputs? B, bool BFollowsA, RegionSelection Regions);
+
+    /// <inheritdoc />
+    public override RegionUse RegionUse => RegionUse.Filter;
 
     /// <summary>The results, and the throttle thresholds they were computed with (derived ones included).</summary>
     public sealed record Result(DriverConsistencyResult A, double ThrottleA, DriverConsistencyResult? B, double ThrottleB);
@@ -685,7 +701,8 @@ public sealed partial class DriverViewModel : AnalysisTabViewModel<DriverViewMod
         return new Parameters(
             Inputs(_a, SessionSlot.A, lapsA, _autoThrottleA),
             compare ? Inputs(_b, SessionSlot.B, lapsB, _autoThrottleB && !follows) : null,
-            follows);
+            follows,
+            RegionSnapshot());
     }
 
     /// <summary>
@@ -746,18 +763,37 @@ public sealed partial class DriverViewModel : AnalysisTabViewModel<DriverViewMod
             DriverConfig.ThresholdsB.ThrottleThreshold.Set(result.ThrottleB);
         }
 
-        var previous = SelectedCorner?.Index ?? 0;
-        Corners.Clear();
-        for (var i = 0; i < result.A.Corners.Count; i++)
+        // With regions ticked in the sidebar, their corners: the ticked corners themselves and the
+        // corners inside a ticked sector, matched by where the apex is.
+        var all = result.A.Corners;
+        _shownCorners = Enumerable.Range(0, all.Count)
+            .Where(i => p.Regions.CoversCorner(new GeoPoint(result.A.RefLat[all[i].ApexIdx], result.A.RefLon[all[i].ApexIdx])))
+            .ToList();
+        RegionLabel = p.Regions.Label;
+        if (_shownCorners.Count == 0)
         {
-            Corners.Add(new CornerChoice(i, $"{result.A.Corners[i].Name} ({result.A.Corners[i].Direction})"));
+            ClearDisplay();
+            RegionLabel = p.Regions.Label; // the tag stays: its cross is the way back to every corner
+            EmptyMessage = $"No corner lies inside {p.Regions.Label}";
+            SetStatus(EmptyMessage, StatusKind.Hint);
+            return;
         }
 
-        SummarySpec = DriverChartBuilder.Summary(result.A, result.B, p.A.Label, p.B?.Label ?? string.Empty);
+        var previous = SelectedCorner?.Index ?? _shownCorners[0];
+        Corners.Clear();
+        foreach (var i in _shownCorners)
+        {
+            Corners.Add(new CornerChoice(i, $"{all[i].Name} ({all[i].Direction})"));
+        }
+
+        var shown = _shownCorners.Count == all.Count
+            ? result.A
+            : result.A with { Corners = _shownCorners.Select(i => all[i]).ToList(), CornerData = _shownCorners.Select(i => result.A.CornerData[i]).ToList() };
+        SummarySpec = DriverChartBuilder.Summary(shown, result.B, p.A.Label, p.B?.Label ?? string.Empty);
         MapSpec = DriverChartBuilder.Map(result.A);
         MiniMapSpec = DriverChartBuilder.MiniMap(result.A);
-        Stats = DriverChartBuilder.Tables(result.A, result.B);
-        var keep = Corners.Count > 0 ? Corners[Math.Min(previous, Corners.Count - 1)] : null;
+        Stats = DriverChartBuilder.Tables(shown, result.B);
+        var keep = Corners.FirstOrDefault(c => c.Index == previous) ?? Corners[0];
         if (!Equals(SelectedCorner, keep))
         {
             // Re-selecting after a rerun keeps the current view mode.
@@ -768,12 +804,13 @@ public sealed partial class DriverViewModel : AnalysisTabViewModel<DriverViewMod
 
         UpdateDetail();
 
-        var totalTa = result.A.CornerData.Sum(cd => cd.TaValues.Count);
+        var totalTa = shown.CornerData.Sum(cd => cd.TaValues.Count);
         var threshold = result.ThrottleA.ToString("0.#", CultureInfo.InvariantCulture);
+        var count = shown.Corners.Count == all.Count ? $"{all.Count} corners" : $"{shown.Corners.Count} of {all.Count} corners";
         SetStatus(
             totalTa > 0
-                ? $"Done - {result.A.Corners.Count} corners, {totalTa} TA pts (thr: {threshold})"
-                : $"Done - {result.A.Corners.Count} corners, 0 TA - {DiagnoseEmptyTa(p.A, threshold)}",
+                ? $"Done - {count}, {totalTa} TA pts (thr: {threshold})"
+                : $"Done - {count}, 0 TA - {DiagnoseEmptyTa(p.A, threshold)}",
             totalTa > 0 ? StatusKind.Done : StatusKind.Hint);
     }
 
@@ -789,6 +826,8 @@ public sealed partial class DriverViewModel : AnalysisTabViewModel<DriverViewMod
         HoveredCorner = -1;
         Stats = Array.Empty<StatsTable>();
         Corners.Clear();
+        _shownCorners = new List<int>();
+        RegionLabel = string.Empty;
     }
 
     private static string DiagnoseEmptyTa(SessionInputs a, string threshold)

@@ -74,6 +74,12 @@ public class SectorsTabTests
             var windows = regions.Selection().Windows(window.SessionA.Log!, laps, SessionSlot.A)!;
             Assert.Equal(laps.Count, windows.Count);
             Assert.All(windows.Values, w => Assert.InRange(InfernoAnalyzer.Core.Tracks.TrackRegions.DurationS(w), 25, 60));
+
+            // A sector is not a corner but contains some: the Driver tab lists those.
+            window.ActiveTab = window.Driver;
+            await window.Driver.RunNowAsync();
+            Assert.Equal("S2", window.Driver.RegionLabel);
+            Assert.InRange(window.Driver.Corners.Count, 1, regions.Corners.Count - 1);
         }
         finally
         {

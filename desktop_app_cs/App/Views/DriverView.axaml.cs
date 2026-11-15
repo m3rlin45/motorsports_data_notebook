@@ -18,7 +18,14 @@ public partial class DriverView : UserControl
     public DriverView()
     {
         InitializeComponent();
-        SummaryChart.ChartClicked += OpenClickedCorner;
+        // The box plots report a column; the maps a corner.
+        SummaryChart.ChartClicked += point =>
+        {
+            if (DataContext is DriverViewModel vm)
+            {
+                vm.OpenCorner(vm.CornerAtColumn(point.ItemId));
+            }
+        };
         MapChart.ChartClicked += OpenClickedCorner;
         MiniMap.ChartClicked += OpenClickedCorner;
         // The small map follows the pointer across the box plots' columns.
@@ -26,7 +33,7 @@ public partial class DriverView : UserControl
         {
             if (DataContext is DriverViewModel vm)
             {
-                vm.HoveredCorner = corner;
+                vm.HoveredCorner = vm.CornerAtColumn(corner);
             }
         };
         // The list's selection only changes for a different corner; a click or Enter on the selected one should open it too.
