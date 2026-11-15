@@ -45,12 +45,12 @@ public class RegionSelectorTests
         Assert.Equal(new[] { "T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9" }, regions.Corners.Select(c => c.ShortName));
         Assert.Equal("Turn 3", regions.Corners[2].Name);
 
-        // The statistical tabs cover only the ticked regions and the Driver tab lists the corners
-        // inside them; the others show whole laps and the selector says so.
+        // The statistical tabs cover only the ticked regions, the Driver tab lists their corners
+        // and Time/Distance brings them into view; Sectors shows whole laps and the selector says so.
         foreach (var tab in window.Tabs)
         {
             window.ActiveTab = tab;
-            var uses = tab is SuspensionViewModel or RollGradientViewModel or TireGripViewModel or DriverViewModel;
+            var uses = tab is not SectorsViewModel; // Sectors is where sectors are defined, not a view of them
             Assert.Equal(uses, regions.IsUsed);
             Assert.Equal(uses ? string.Empty : "Not used on this tab: it shows whole laps", regions.Caption);
         }
