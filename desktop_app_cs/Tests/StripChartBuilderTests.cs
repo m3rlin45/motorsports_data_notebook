@@ -158,4 +158,35 @@ public class StripChartBuilderTests
 
         Assert.Equal(expected, result[0], precision: 9);
     }
+
+    [Fact]
+    public void Focus_regions_become_bands_and_the_initial_view_on_the_axis_in_use()
+    {
+        var fixture = TwoLapFixture();
+        var whole = StripChartBuilder.Build(fixture, XAxisMode.Distance, "run");
+        var lap = whole.InitialView!.Value;
+        Assert.Empty(whole.Bands);
+        Assert.Equal("run", whole.ViewKey);
+        Assert.Equal("run", whole.DataKey);
+
+        var width = lap.Max - lap.Min;
+        var focus = new[]
+        {
+            new StripChartBuilder.RegionSpan("Turn 3", new XRange(1, 2), new XRange(lap.Min + 0.30 * width, lap.Min + 0.40 * width)),
+            new StripChartBuilder.RegionSpan("Turn 5", new XRange(3, 4), new XRange(lap.Min + 0.60 * width, lap.Min + 0.70 * width)),
+        };
+        var spec = StripChartBuilder.Build(fixture, XAxisMode.Distance, "run", focus);
+        Assert.Equal(new[] { focus[0].Distance.Min, focus[1].Distance.Min }, spec.Bands.Select(b => b.From));
+        Assert.Equal("run|Turn 3+Turn 5", spec.ViewKey);
+        Assert.Equal("run", spec.DataKey);
+        var margin = StripChartBuilder.FocusMarginFraction * 0.40 * width; // of the span from the first region to the last
+        Assert.Equal(focus[0].Distance.Min - margin, spec.InitialView!.Value.Min, 9);
+        Assert.Equal(focus[1].Distance.Max + margin, spec.InitialView.Value.Max, 9);
+        Assert.Equal(whole.Subplots[0].Traces[0].X.Length, spec.Subplots[0].Traces[0].X.Length); // nothing cut
+
+        // Against time: the same regions by their seconds; a region at the very start does not push the view before the lap.
+        var timed = StripChartBuilder.Build(fixture, XAxisMode.Time, "run", new[] { new StripChartBuilder.RegionSpan("S1", new XRange(0, 2), new XRange(0, 50)) });
+        Assert.Equal(new XBandSpec(0, 2, ChartColors.Region), Assert.Single(timed.Bands));
+        Assert.Equal(0, timed.InitialView!.Value.Min);
+    }
 }

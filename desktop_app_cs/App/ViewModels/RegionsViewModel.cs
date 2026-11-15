@@ -32,6 +32,55 @@ public sealed record RegionSelection(
     /// <summary>Nothing is ticked: analyses cover whole laps.</summary>
     public bool IsWholeLap => Regions.Count == 0;
 
+    /// <summary>The lap the regions were listed on, as latitudes (with <see cref="RefLon"/>), for <see cref="Covers"/>.</summary>
+    public double[] RefLat { get; init; } = Array.Empty<double>();
+
+    /// <summary>Its longitudes.</summary>
+    public double[] RefLon { get; init; } = Array.Empty<double>();
+
+    /// <summary>Where each ticked region lies on that lap: its first and last sample, and its marker (a corner's apex).</summary>
+    public IReadOnlyList<(TrackRegionKind Kind, int First, int Last, int Marker)> Spans { get; init; } = Array.Empty<(TrackRegionKind, int, int, int)>();
+
+    /// <summary>A corner whose apex is within this of a ticked corner's is that corner.</summary>
+    public const double SameCornerM = 30;
+
+    /// <summary>A point further than this from the reference lap is not on this track at all.</summary>
+    private const double OffTrackM = 50;
+
+    /// <summary>
+    /// Whether a corner with its apex at <paramref name="apex"/> is one of the ticked regions'
+    /// corners: it is a ticked corner (its apex is where that one's is; a ticked corner's stretch
+    /// starts with its braking, which can reach back past the previous corner's apex, so being
+    /// inside the stretch is not the test) or it lies in a ticked sector. True for whole laps.
+    /// Matching by place holds for a corner list detected from other laps than the regions were.
+    /// </summary>
+    public bool CoversCorner(GeoPoint apex)
+    {
+        if (IsWholeLap)
+        {
+            return true;
+        }
+
+        if (Spans.Any(s => s.Kind == TrackRegionKind.Corner && GeoProjection.DistanceM(new GeoPoint(RefLat[s.Marker], RefLon[s.Marker]), apex) <= SameCornerM))
+        {
+            return true;
+        }
+
+        var nearest = -1;
+        var distance = double.MaxValue;
+        for (var i = 0; i < RefLat.Length; i++)
+        {
+            var d = GeoProjection.DistanceM(new GeoPoint(RefLat[i], RefLon[i]), apex);
+            if (d < distance)
+            {
+                distance = d;
+                nearest = i;
+            }
+        }
+
+        return distance <= OffTrackM && Spans.Any(s => s.Kind == TrackRegionKind.Sector && nearest >= s.First && nearest <= s.Last);
+    }
+
     /// <summary>
     /// Per lap, when the car was inside the ticked regions (null for whole
     /// laps: no cutting). Call on the worker thread.
@@ -228,12 +277,18 @@ public sealed partial class RegionsViewModel : ObservableObject
     {
         var a = _channelNames(SessionSlot.A);
         var b = _channelNames(SessionSlot.B);
+        var ticked = Items.Where(i => i.IsSelected).ToList();
         return new RegionSelection(
-            Items.Where(i => i.IsSelected).Select(i => i.Region).ToList(),
+            ticked.Select(i => i.Region).ToList(),
             Label(),
             ShowWholeLap,
             (a["gps_latitude"], a["gps_longitude"]),
-            (b["gps_latitude"], b["gps_longitude"]));
+            (b["gps_latitude"], b["gps_longitude"]))
+        {
+            RefLat = _refLat,
+            RefLon = _refLon,
+            Spans = ticked.Select(i => (i.Region.Kind, i.FirstSample, i.LastSample, i.MarkerSample)).ToList(),
+        };
     }
 
     private string Label()
@@ -296,9 +351,6 @@ public sealed partial class RegionsViewModel : ObservableObject
 
     /// <summary>What <see cref="Detect"/> found.</summary>
     private sealed record Detected(double[] Lat, double[] Lon, IReadOnlyList<Listed> Corners, IReadOnlyList<Listed> Sectors, string Hint, string SectorsHint);
-
-    /// <summary>A ticked corner is kept across a re-listing of the same session when a corner's apex is still within this of where its was.</summary>
-    private const double SameCornerM = 30;
 
     /// <summary>The refresh last started (completed when none has been): what a caller that did not start it can wait for.</summary>
     public Task LastRefresh { get; private set; } = Task.CompletedTask;
@@ -402,7 +454,7 @@ public sealed partial class RegionsViewModel : ObservableObject
         {
             item.IsSelected = keptRegions.Contains(item.Region)
                 || (item.Region.Kind == TrackRegionKind.Corner
-                    && keptApexes.Any(apex => GeoProjection.DistanceM(apex, new GeoPoint(_refLat[item.MarkerSample], _refLon[item.MarkerSample])) <= SameCornerM));
+                    && keptApexes.Any(apex => GeoProjection.DistanceM(apex, new GeoPoint(_refLat[item.MarkerSample], _refLon[item.MarkerSample])) <= RegionSelection.SameCornerM));
         }
 
         _batch = false;

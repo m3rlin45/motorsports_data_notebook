@@ -361,6 +361,87 @@ public class AppShellTests
     });
 
     [Fact]
+    public Task Ticked_regions_are_shaded_on_the_traces_and_brought_into_view_without_cutting_the_laps() => Ui.Run(async () =>
+    {
+        var window = new MainWindowViewModel(BuiltinOnly, new InfernoAnalyzer.Core.Tracks.TrackStore("/nonexistent/tracks.yaml"));
+        foreach (var t in window.Tabs)
+        {
+            t.Debounce = TimeSpan.Zero;
+        }
+
+        var tab = window.TimeDistance;
+        window.SessionA.Apply(Sample.Value, SessionParityTests.SamplePath());
+        await tab.RunNowAsync();
+        await window.Regions.LastRefresh;
+        var whole = tab.Spec!;
+        var lap = whole.InitialView!.Value;
+        var samples = whole.Subplots[0].Traces[0].X.Length;
+        Assert.Empty(whole.Bands);
+        Assert.False(tab.IsRegional);
+
+        window.Regions.Corners[2].IsSelected = true;
+        window.Regions.Corners[4].IsSelected = true;
+        await tab.RunNowAsync();
+
+        var spec = tab.Spec!;
+        Assert.Equal("Turn 3 + Turn 5", tab.RegionLabel);
+        Assert.Equal(samples, spec.Subplots[0].Traces[0].X.Length); // every sample of every lap is still there to pan to
+        Assert.Equal(2, spec.Bands.Count);
+        Assert.All(spec.Bands, b => Assert.Equal(ChartColors.Region, b.Color));
+        Assert.All(spec.Bands, b => Assert.InRange(b.To - b.From, 100, 1500)); // a corner's braking to its exit, in metres
+        Assert.True(spec.Bands[0].To < spec.Bands[1].From); // two stretches, Turn 4 between them
+
+        // The view: from the start of Turn 3 to the end of Turn 5 with a margin, well inside the lap.
+        var view = spec.InitialView!.Value;
+        Assert.InRange(view.Min, lap.Min, spec.Bands[0].From);
+        Assert.InRange(view.Max, spec.Bands[1].To, lap.Max);
+        Assert.True(view.Max - view.Min < 0.6 * (lap.Max - lap.Min));
+        Assert.NotEqual(whole.ViewKey, spec.ViewKey); // another choice of regions is another view...
+        Assert.Equal(whole.ViewKey, spec.DataKey); // ...of the same data
+        Assert.Equal(whole.DataKey, spec.DataKey);
+
+        // Against time the same stretches are in seconds of the reference lap.
+        tab.ToggleXAxis();
+        var timed = tab.Spec!;
+        Assert.Equal(2, timed.Bands.Count);
+        Assert.All(timed.Bands, b => Assert.InRange(b.To - b.From, 3, 40));
+        Assert.True(timed.Bands[1].To < timed.Subplots[0].Traces[0].Emphasis!.Value.Max); // inside the lap
+        tab.ToggleXAxis();
+
+        // Back to whole laps: the lap's own view and key again.
+        window.Regions.Clear();
+        await tab.RunNowAsync();
+        Assert.Empty(tab.Spec!.Bands);
+        Assert.Equal(lap, tab.Spec.InitialView);
+        Assert.Equal(whole.ViewKey, tab.Spec.ViewKey);
+        Assert.Equal(string.Empty, tab.RegionLabel);
+    });
+
+    [Fact]
+    public Task Time_distance_renders_with_a_region_in_view() => Ui.Run(async () =>
+    {
+        var viewModel = new MainWindowViewModel(BuiltinOnly, new InfernoAnalyzer.Core.Tracks.TrackStore("/nonexistent/tracks.yaml"));
+        foreach (var t in viewModel.Tabs)
+        {
+            t.Debounce = TimeSpan.Zero;
+        }
+
+        viewModel.ActiveTab = viewModel.TimeDistance;
+        viewModel.SessionA.Apply(Sample.Value, SessionParityTests.SamplePath());
+        await viewModel.TimeDistance.RunNowAsync();
+        await viewModel.Regions.LastRefresh;
+        var window = new MainWindow(viewModel) { Width = 1300, Height = 900 };
+        window.Show();
+        viewModel.Regions.Corners[2].IsSelected = true;
+        viewModel.Regions.Corners[3].IsSelected = true;
+        await viewModel.TimeDistance.RunNowAsync();
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        var frame = window.CaptureRenderedFrame();
+        Assert.NotNull(frame);
+        RenderSmokeTests.SaveRender(frame!, "strip_chart_region.png");
+    });
+
+    [Fact]
     public Task Opening_two_files_fills_both_sessions_and_one_goes_to_the_target() => Ui.Run(async () =>
     {
         var window = new MainWindowViewModel(BuiltinOnly);
