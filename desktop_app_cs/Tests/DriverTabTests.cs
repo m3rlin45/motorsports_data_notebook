@@ -127,6 +127,52 @@ public class DriverTabTests
     });
 
     [Fact]
+    public Task Ticked_regions_leave_only_their_corners_in_the_summary_the_tables_and_the_list() => Ui.Run(async () =>
+    {
+        var window = await LoadedWindow();
+        var regions = window.Regions;
+        await regions.LastRefresh;
+        var tab = window.Driver;
+        await tab.RunNowAsync();
+        var every = tab.Corners.Count;
+        Assert.Equal(every, tab.SummarySpec!.CategoryLabels.Length);
+        Assert.False(tab.IsRegional);
+
+        regions.Corners[2].IsSelected = true;
+        regions.Corners[6].IsSelected = true;
+        await tab.RunNowAsync();
+
+        Assert.Equal("Turn 3 + Turn 7", tab.RegionLabel);
+        Assert.Equal(new[] { 2, 6 }, tab.Corners.Select(c => c.Index)); // the list is the detail picker for what is shown
+        Assert.Equal(2, tab.SummarySpec!.CategoryLabels.Length);
+        Assert.All(tab.Stats, t => Assert.Equal(2, t.Rows.Count));
+        Assert.StartsWith($"Done - 2 of {every} corners", tab.Status);
+
+        // The box plots' second column is Turn 7: hovering it lights Turn 7 on the map, clicking it opens Turn 7.
+        Assert.Equal(6, tab.CornerAtColumn(1));
+        Assert.Equal(-1, tab.CornerAtColumn(2));
+        tab.OpenCorner(tab.CornerAtColumn(1));
+        Assert.Equal(6, tab.SelectedCorner!.Index);
+        Assert.True(tab.IsDetail);
+        Assert.NotNull(tab.DetailSpec);
+
+        // A corner that is not shown cannot be opened from the map; the open one stays.
+        tab.OpenCorner(0);
+        Assert.Equal(6, tab.SelectedCorner!.Index);
+
+        // Unticking the open corner moves the detail to one that is still shown.
+        regions.Corners[6].IsSelected = false;
+        await tab.RunNowAsync();
+        Assert.Equal(new[] { 2 }, tab.Corners.Select(c => c.Index));
+        Assert.Equal(2, tab.SelectedCorner!.Index);
+
+        regions.Clear();
+        await tab.RunNowAsync();
+        Assert.Equal(every, tab.Corners.Count);
+        Assert.Equal(string.Empty, tab.RegionLabel);
+    });
+
+    [Fact]
     public Task Box_statistics_follow_numpy_and_matplotlib_conventions() => Ui.Run(() =>
     {
         var box = BoxSpec.From(1, new double[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 100 }, "#000000", "tip");
