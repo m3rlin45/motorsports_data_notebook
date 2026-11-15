@@ -160,12 +160,11 @@ cs-native *ARGS:
     python3 desktop_app_cs/tools/build_native.py {{ARGS}}
 
 # Python-parity fixture for the C# session loader (Tests/Fixtures/session_86.json; Rust backend, as the C# port binds).
-# The oracle is libxrk's Python package built from the same pinned commit as the FFI library, not the installed wheel.
-# For an iRacing sample pass the .ibt and --out desktop_app_cs/Tests/Fixtures/session_ibt.json: the installed libibt wheel
-# is the release the FFI library is pinned to.
+# The oracle is the libxrk / libibt the project installs: uv.lock pins them, and build_native.py builds the FFI
+# libraries from those same releases. For an iRacing sample pass the .ibt and
+# --out desktop_app_cs/Tests/Fixtures/session_ibt.json.
 cs-session-fixture *ARGS:
-    LIBXRK_BACKEND=rust uv run --with "$(python3 desktop_app_cs/tools/build_native.py --source-dir libxrk)" \
-        python desktop_app_cs/tools/extract_session_fixture.py {{ARGS}}
+    LIBXRK_BACKEND=rust uv run python desktop_app_cs/tools/extract_session_fixture.py {{ARGS}}
 
 # Python-parity fixture for one C# analysis kernel, e.g. `just cs-kernel-fixture corners` (Tests/Fixtures/<module>_86.json)
 cs-kernel-fixture MODULE:

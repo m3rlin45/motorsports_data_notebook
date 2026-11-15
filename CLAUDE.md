@@ -146,7 +146,7 @@ desktop_app_cs/
   Charting.ScottPlot/ # the ScottPlot 5 backend: ScottPlotSurface<TSpec> bases, PlotStyle/MapStyle, one surface per spec kind
   App/               # Avalonia MVVM app: ViewModels (one per tab), Views, Controls (ChartHost, custom-drawn split table + track editor), Styles/AppStyles.axaml, Settings
   Tests/             # xunit v3 (AOT flavour) + Avalonia.Headless; Fixtures/*.json dumped by tools/extract_*_fixture.py
-  tools/             # fixture extractors (uv run), build_native.py (builds the parser FFI libs, pinned by commit), make_icon.py
+  tools/             # fixture extractors (uv run), build_native.py (builds the parser FFI libs at the libxrk/libibt versions `uv.lock` pins), make_icon.py
   native/runtimes/   # built FFI libraries (git-ignored), copied into Core's output
   native/static/     # the same as static libraries (host builds only), linked into a NativeAOT publish
 ```
