@@ -18,6 +18,7 @@ public sealed class ConfigViewLocator : IDataTemplate
     {
         SuspensionConfigViewModel => new SuspensionConfigView(),
         RollGradientConfigViewModel => new RollGradientConfigView(),
+        DriverConfigViewModel => new DriverConfigView(),
         ChannelConfigViewModel => new ChannelEntriesView(),
         _ => null,
     };
