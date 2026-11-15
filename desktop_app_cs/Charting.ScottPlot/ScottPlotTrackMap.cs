@@ -12,6 +12,9 @@ namespace InfernoAnalyzer.Charting.ScottPlot;
 /// the id through <see cref="ChartPoint.ItemId"/>. The spec's highlights are
 /// built once and only shown or hidden by <see cref="HighlightItem"/>, so
 /// following the pointer on another chart costs a redraw, not a rebuild.
+/// The same goes for the position marker of a spec with a
+/// <see cref="TrackMapSpec.Cursor"/>: <see cref="SetCursor"/> moves one
+/// marker along that line.
 /// </summary>
 public sealed class ScottPlotTrackMap : ScottPlotGridSurface<TrackMapSpec>
 {
@@ -19,6 +22,70 @@ public sealed class ScottPlotTrackMap : ScottPlotGridSurface<TrackMapSpec>
     private const double PickRadiusPx = 14;
     private readonly List<(int Id, IPlottable Plottable)> _highlights = new();
     private int _highlighted = -1;
+    private global::ScottPlot.Plottables.Marker? _cursorMarker;
+    private double? _cursorAt;
+
+    /// <summary>Where the position marker is drawn (map units), or null while it is hidden.</summary>
+    internal (double X, double Y)? CursorPoint => _cursorMarker is { IsVisible: true } m ? (m.X, m.Y) : null;
+
+    /// <inheritdoc />
+    public override void SetCursor(double? x)
+    {
+        if (x == _cursorAt)
+        {
+            return;
+        }
+
+        _cursorAt = x;
+        PlaceCursor();
+        if (Spec is not null)
+        {
+            PlotAt(0).Refresh();
+        }
+    }
+
+    /// <summary>Put the marker where <see cref="_cursorAt"/> falls on the spec's cursor line, or hide it.</summary>
+    private void PlaceCursor()
+    {
+        if (_cursorMarker is null)
+        {
+            return;
+        }
+
+        if (_cursorAt is not { } at || Spec?.Cursor is not { Along.Length: > 0 } line || double.IsNaN(at))
+        {
+            _cursorMarker.IsVisible = false;
+            return;
+        }
+
+        // The first sample at or past the position; the point between it and the one before, in proportion.
+        var next = Array.BinarySearch(line.Along, at);
+        if (next < 0)
+        {
+            next = ~next;
+        }
+
+        double px, py;
+        if (next <= 0)
+        {
+            (px, py) = (line.X[0], line.Y[0]);
+        }
+        else if (next >= line.Along.Length)
+        {
+            (px, py) = (line.X[^1], line.Y[^1]);
+        }
+        else
+        {
+            var span = line.Along[next] - line.Along[next - 1];
+            var t = span > 0 ? (at - line.Along[next - 1]) / span : 0;
+            px = line.X[next - 1] + t * (line.X[next] - line.X[next - 1]);
+            py = line.Y[next - 1] + t * (line.Y[next] - line.Y[next - 1]);
+        }
+
+        _cursorMarker.X = px;
+        _cursorMarker.Y = py;
+        _cursorMarker.IsVisible = true;
+    }
 
     /// <summary>The id whose highlight is showing, or -1.</summary>
     internal int HighlightedItem => _highlighted;
@@ -120,6 +187,16 @@ public sealed class ScottPlotTrackMap : ScottPlotGridSurface<TrackMapSpec>
                 text.OffsetY = -8;
                 _highlights.Add((highlight.Id, text));
             }
+        }
+
+        // Last, so it is on top of everything: the position marker, hidden until SetCursor places it.
+        _cursorMarker = null;
+        if (spec.Cursor is { } cursor)
+        {
+            _cursorMarker = plot.Add.Marker(0, 0, MarkerShape.FilledCircle, (float)cursor.Size, ColorOf(cursor.Color));
+            _cursorMarker.MarkerLineColor = ColorOf(Theme.DataBackground);
+            _cursorMarker.MarkerLineWidth = 2;
+            PlaceCursor();
         }
 
         ShowHighlight();
