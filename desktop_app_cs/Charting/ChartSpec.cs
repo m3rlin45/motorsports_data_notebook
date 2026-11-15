@@ -173,12 +173,17 @@ public sealed record BandSpec(double Start, double End, string Color, double Alp
 /// <param name="Values">Bar heights in y units.</param>
 /// <param name="Color">CSS hex colour for every bar, or null to use <see cref="BarColors"/>.</param>
 /// <param name="BarColors">Per-bar colours when the series is not single-coloured.</param>
+/// <param name="Outline">
+/// A reference distribution: drawn as a stepped outline over the bars rather than as bars, taking
+/// no room beside them (the whole lap behind a region's histogram).
+/// </param>
 public sealed record BarSeriesSpec(
     string Label,
     double[] Centers,
     double[] Values,
     string? Color = null,
-    string[]? BarColors = null);
+    string[]? BarColors = null,
+    bool Outline = false);
 
 /// <summary>One panel of a histogram grid.</summary>
 /// <param name="Title">Panel title, e.g. "Front Left (FL)".</param>

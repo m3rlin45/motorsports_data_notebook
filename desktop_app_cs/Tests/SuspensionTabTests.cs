@@ -152,6 +152,78 @@ public class SuspensionTabTests
     });
 
     [Fact]
+    public Task Ticking_a_region_restricts_the_histograms_to_it_with_the_whole_lap_outlined() => Ui.Run(async () =>
+    {
+        var viewModel = await LoadedWindow();
+        var regions = viewModel.Regions;
+        await regions.RefreshAsync();
+        var tab = viewModel.Suspension;
+        viewModel.ActiveTab = tab;
+        await tab.RunNowAsync();
+
+        // The session's corners, no sectors (no track saved here), nothing ticked: whole laps.
+        Assert.Equal(9, regions.Corners.Count);
+        Assert.Empty(regions.Sectors);
+        Assert.Equal("Add gates on the Sectors tab to pick sectors here", regions.SectorsHint);
+        Assert.Equal("Whole lap", regions.Summary);
+        Assert.NotNull(regions.MapSpec);
+        Assert.Single(regions.MapSpec!.Paths); // the outline only
+        Assert.Equal("Suspension Velocity Distribution", tab.Spec!.Title);
+        var wholeHeights = tab.Spec.Panels[0].Series[0].Values;
+
+        regions.Corners[2].IsSelected = true;
+        await tab.RunNowAsync();
+
+        Assert.Equal("Turn 3", regions.Summary);
+        Assert.Equal(2, regions.MapSpec!.Paths.Count); // the ticked stretch coloured over the outline
+        Assert.StartsWith("Suspension Velocity Distribution · Turn 3 · ", tab.Spec!.Title);
+        var panel = tab.Spec.Panels[0];
+        Assert.Equal(2, panel.Series.Count);
+        Assert.False(panel.Series[0].Outline);
+        Assert.True(panel.Series[1].Outline);
+        Assert.Equal(wholeHeights, panel.Series[1].Values); // the whole laps, for reference
+        Assert.NotEqual(wholeHeights, panel.Series[0].Values);
+        Assert.Equal(100, panel.Series[0].Values.Sum(), 6); // still a distribution of its own
+        Assert.Contains("Turn 3", tab.Stats[0].Title); // the tables are the region's too
+
+        // Two regions are their union; the reference can be turned off; "Whole lap" unticks everything.
+        regions.Corners[4].IsSelected = true;
+        await tab.RunNowAsync();
+        Assert.Contains("Turn 3 + Turn 5", tab.Spec!.Title);
+
+        regions.ShowWholeLap = false;
+        await tab.RunNowAsync();
+        Assert.Single(tab.Spec!.Panels[0].Series);
+
+        regions.Clear();
+        await tab.RunNowAsync();
+        Assert.Equal("Suspension Velocity Distribution", tab.Spec!.Title);
+        Assert.Equal(wholeHeights, tab.Spec.Panels[0].Series[0].Values);
+    });
+
+    [Fact]
+    public Task Region_column_renders_with_a_ticked_corner() => Ui.Run(async () =>
+    {
+        var viewModel = await LoadedWindow();
+        var window = new MainWindow(viewModel) { Width = 1300, Height = 900 };
+        window.Show();
+        await viewModel.Regions.RefreshAsync();
+        viewModel.ActiveTab = viewModel.Suspension;
+        viewModel.Regions.Corners[2].IsSelected = true;
+        await viewModel.Suspension.RunNowAsync();
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+        var frame = window.CaptureRenderedFrame();
+        Assert.NotNull(frame);
+        RenderSmokeTests.SaveRender(frame!, "suspension_region.png");
+
+        // A click on a corner's dot on the small map ticks it.
+        viewModel.Regions.Toggle(6);
+        Assert.True(viewModel.Regions.Corners[6].IsSelected);
+        Assert.Equal("Turn 3 + Turn 7", viewModel.Regions.Summary);
+    });
+
+    [Fact]
     public Task Session_b_without_laps_is_not_compared_instead_of_blocking_the_tab() => Ui.Run(async () =>
     {
         var window = await LoadedWindow();
@@ -254,7 +326,7 @@ public class SuspensionTabTests
 
         var locator = (TabViewLocator)window.FindControl<TabControl>("TabArea")!.ContentTemplate!;
         var view = locator.ViewOf(viewModel.Suspension)!;
-        var chart = view.GetLogicalDescendants().OfType<ChartHost>().Single();
+        var chart = view.FindControl<ChartHost>("Chart")!; // not the small region map beside it
         var surface = chart.Surface;
         Assert.NotNull(surface);
 
@@ -265,7 +337,7 @@ public class SuspensionTabTests
 
         // The same view and the same surface: the tab comes back as it was left, with nothing rebuilt.
         Assert.Same(view, locator.ViewOf(viewModel.Suspension));
-        Assert.Same(surface, view.GetLogicalDescendants().OfType<ChartHost>().Single().Surface);
+        Assert.Same(surface, view.FindControl<ChartHost>("Chart")!.Surface);
         Assert.NotSame(view, locator.ViewOf(viewModel.TimeDistance));
     });
 
