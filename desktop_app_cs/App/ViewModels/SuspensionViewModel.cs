@@ -309,8 +309,8 @@ public sealed partial class SuspensionViewModel : AnalysisTabViewModel<Suspensio
         VelocityHistogramResult? WholeA = null,
         double RegionSecondsA = 0);
 
-    /// <summary>The ticked track regions the analysis is restricted to (shared with the other statistical tabs); null: whole laps.</summary>
-    public RegionsViewModel? Regions { get; set; }
+    /// <inheritdoc />
+    public override RegionUse RegionUse => RegionUse.Filter;
 
     /// <inheritdoc />
     protected override Parameters? GetParameters()
@@ -351,7 +351,7 @@ public sealed partial class SuspensionViewModel : AnalysisTabViewModel<Suspensio
             SuspensionConfig.GetChannelNames(SessionSlot.B),
             SuspensionConfig.GetMotionRatios(SessionSlot.B) ?? ratiosA,
             _b.SessionLabel,
-            Regions?.Selection() ?? RegionSelection.WholeLap);
+            RegionSnapshot());
     }
 
     /// <inheritdoc />
