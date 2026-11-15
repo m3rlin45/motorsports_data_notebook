@@ -77,6 +77,9 @@ public sealed partial class RegionItemViewModel : ObservableObject
     /// <summary>Display name.</summary>
     public string Name => Region.Name;
 
+    /// <summary>The name as it fits on a chip: "T3" for "Turn 3", a sector's name as it is.</summary>
+    public string ShortName => Region.Kind == TrackRegionKind.Corner && Name.StartsWith("Turn ", StringComparison.Ordinal) ? "T" + Name["Turn ".Length..] : Name;
+
     /// <summary>Where the region starts on the reference lap (sample index), for drawing.</summary>
     public int FirstSample { get; }
 
@@ -94,9 +97,11 @@ public sealed partial class RegionItemViewModel : ObservableObject
 }
 
 /// <summary>
-/// The regions of the track the statistical tabs (Suspension, Roll Gradient,
-/// Tire Grip) can be restricted to, and which are ticked. One choice shared
-/// by those tabs, as their lap selection is. The list is a property of the
+/// The regions of the session's track and which are ticked: the selector in
+/// the sidebar, under the lap lists. One choice for every tab; what a tab
+/// does with it is the tab's <see cref="RegionUse"/> (the statistical tabs
+/// cover only the ticked regions; a tab that does not use them shows whole
+/// laps and the selector says so). The list is a property of the
 /// session and its track, not of the ticked laps: corners are those of the
 /// Driver tab's analysis (its channels and thresholds, through the same
 /// <see cref="DriverConsistencyCache"/>) over the laps the session starts
@@ -151,9 +156,38 @@ public sealed partial class RegionsViewModel : ObservableObject
     /// <summary>Raised when what the analyses should cover changed (a tick, or the reference toggle).</summary>
     public event Action? Changed;
 
-    /// <summary>Draw the whole-lap result behind a region's, for reference.</summary>
+    /// <summary>Draw the whole-lap result behind a region's, for reference (one setting for the tabs that can).</summary>
     [ObservableProperty]
     private bool _showWholeLap = true;
+
+    /// <summary>What the tab now showing does with the ticks.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsUsed))]
+    [NotifyPropertyChangedFor(nameof(Caption))]
+    private RegionUse _use = RegionUse.Filter;
+
+    /// <summary>The tab now showing uses the ticks; otherwise the selector is dimmed and the ticks wait for a tab that does.</summary>
+    public bool IsUsed => Use != RegionUse.None;
+
+    /// <summary>What the ticks do on the tab now showing, where that needs saying.</summary>
+    public string Caption => Use == RegionUse.None ? "Not used on this tab: it shows whole laps" : string.Empty;
+
+    /// <summary>Whether the map is unfolded where the user has not said: it yields its height to the lap lists when they are short of it.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsMapOpen))]
+    private bool _mapOpenByDefault = true;
+
+    /// <summary>The user's own choice for the map, once made (kept in the settings).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsMapOpen))]
+    private bool? _mapChoice;
+
+    /// <summary>The map under the chips is unfolded.</summary>
+    public bool IsMapOpen => MapChoice ?? MapOpenByDefault;
+
+    /// <summary>Fold or unfold the map, from now on as the user's choice.</summary>
+    [RelayCommand]
+    public void ToggleMap() => MapChoice = !IsMapOpen;
 
     /// <summary>The small map: the reference lap with the ticked regions coloured.</summary>
     [ObservableProperty]
@@ -170,6 +204,10 @@ public sealed partial class RegionsViewModel : ObservableObject
     /// <summary>Why there are no sectors, or empty when there are.</summary>
     [ObservableProperty]
     private string _sectorsHint = string.Empty;
+
+    /// <summary>Session A is loaded: there is a track to pick regions of (the selector is hidden otherwise).</summary>
+    [ObservableProperty]
+    private bool _hasSession;
 
     /// <summary>There are corners to list.</summary>
     public bool HasCorners => Corners.Count > 0;
@@ -212,6 +250,19 @@ public sealed partial class RegionsViewModel : ObservableObject
         foreach (var item in Items)
         {
             item.IsSelected = false;
+        }
+
+        _batch = false;
+        OnTicksChanged();
+    }
+
+    /// <summary>Tick the region at <paramref name="index"/> and nothing else (a double click on its chip).</summary>
+    public void Solo(int index)
+    {
+        _batch = true;
+        foreach (var item in Items)
+        {
+            item.IsSelected = item.Index == index;
         }
 
         _batch = false;
@@ -288,6 +339,7 @@ public sealed partial class RegionsViewModel : ObservableObject
         var version = ++_version;
         var log = _a.Log;
         var sameSession = log is not null && ReferenceEquals(log, _listedFor);
+        HasSession = log is not null;
         if (!sameSession)
         {
             var hadSelection = HasSelection;
@@ -503,13 +555,13 @@ public sealed partial class RegionsViewModel : ObservableObject
             var ys = _y.AsSpan(item.FirstSample, count).ToArray();
             if (item.IsSelected)
             {
-                paths.Add(new TrackMapPathSpec(xs, ys, ChartColors.SessionA, 4));
+                paths.Add(new TrackMapPathSpec(xs, ys, ChartColors.Region, 4));
             }
 
             // Sectors tile the lap, so only corners get a dot to click.
             if (item.Region.Kind == TrackRegionKind.Corner)
             {
-                points.Add(new TrackMapPointSpec(_x[item.MarkerSample], _y[item.MarkerSample], ChartColors.Ink, 5, Id: item.Index));
+                points.Add(new TrackMapPointSpec(_x[item.MarkerSample], _y[item.MarkerSample], ChartColors.Ink, 5, Label: item.ShortName[1..], Id: item.Index));
             }
 
             highlights.Add(new TrackMapHighlightSpec(item.Index, xs, ys, ChartColors.HighlightA, 5, _x[item.MarkerSample], _y[item.MarkerSample]));

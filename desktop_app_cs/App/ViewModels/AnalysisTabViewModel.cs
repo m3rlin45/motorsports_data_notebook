@@ -95,6 +95,29 @@ public abstract partial class AnalysisTabViewModel : ObservableObject
     protected RegionSelection RegionSnapshot() =>
         RegionUse == RegionUse.None || Regions is null ? RegionSelection.WholeLap : Regions.Selection();
 
+    /// <summary>
+    /// What the result on screen is restricted to ("Turn 3 + Turn 5 · 41 s"), or empty for whole
+    /// laps: shown as a chip beside the tab's title and written into copied chart images. It is
+    /// what the displayed analysis was computed with, not the ticks of this moment.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsRegional))]
+    [NotifyPropertyChangedFor(nameof(ImageCaption))]
+    private string _regionLabel = string.Empty;
+
+    /// <summary>
+    /// The result on screen could have the whole-lap result drawn behind it for reference: it
+    /// covers regions of one session (two sessions are compared with each other instead).
+    /// </summary>
+    [ObservableProperty]
+    private bool _canShowWholeLap;
+
+    /// <summary>The result on screen covers part of the laps only.</summary>
+    public bool IsRegional => RegionLabel.Length > 0;
+
+    /// <summary>The line a copied or saved chart image carries so that it says what it covers; empty for whole laps.</summary>
+    public string ImageCaption => IsRegional ? $"Regions: {RegionLabel}" : string.Empty;
+
     /// <summary>Whether the tab draws one coloured trace per lap, so the lap list should show the colour keys.</summary>
     public virtual bool UsesLapColors => false;
 

@@ -99,8 +99,9 @@ public class TireGripTabTests
         await tab.RunNowAsync();
 
         var panel = tab.Spec!.Panels[0];
-        Assert.EndsWith(" · Turn 3 + Turn 5", tab.Spec.Title);
-        Assert.Equal(new[] { "Whole lap", "Selected regions" }, panel.Series.Select(s => s.Label));
+        Assert.Equal(wholeTitle, tab.Spec.Title);
+        Assert.Equal("Turn 3 + Turn 5", tab.RegionLabel);
+        Assert.Equal(new[] { "Whole lap", "Turn 3 + Turn 5" }, panel.Series.Select(s => s.Label));
         Assert.Equal(InfernoAnalyzer.Charting.ChartColors.Neutral, panel.Series[0].Color);
         Assert.Equal(wholeCounts, panel.Series[0].Counts.Sum());
         Assert.InRange(panel.Series[1].Counts.Sum(), 1, wholeCounts - 1); // the two corners' samples only
@@ -114,15 +115,15 @@ public class TireGripTabTests
         // Two sessions are compared with each other: no whole-lap curve, although the reference is still ticked.
         viewModel.SessionB.Apply(Sample.Value, SessionParityTests.SamplePath());
         await tab.RunNowAsync();
-        Assert.Contains(" · Turn 3 + Turn 5", tab.Spec!.Title);
+        Assert.Equal("Turn 3 + Turn 5", tab.RegionLabel);
         Assert.Equal(2, tab.Spec.Panels[0].Series.Count);
         Assert.DoesNotContain(tab.Spec.Panels[0].Series, s => s.Label == "Whole lap" || s.Color == InfernoAnalyzer.Charting.ChartColors.Neutral);
         viewModel.SessionB.Close();
 
         viewModel.Regions.Clear();
         await tab.RunNowAsync();
-        Assert.Equal(wholeTitle, tab.Spec!.Title);
-        Assert.Single(tab.Spec.Panels[0].Series);
+        Assert.Equal(string.Empty, tab.RegionLabel);
+        Assert.Single(tab.Spec!.Panels[0].Series);
     });
 
     [Fact]

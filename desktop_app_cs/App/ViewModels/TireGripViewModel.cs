@@ -63,7 +63,7 @@ public static class TireGripChartBuilder
 
             if (cornersB is null)
             {
-                series.Add(new LineSeriesSpec(wholeCorners is null ? string.Empty : "Selected regions", ca.BucketCenters, ca.BucketValues, ca.BucketCounts, ChartColors.SessionA));
+                series.Add(new LineSeriesSpec(wholeCorners is null ? string.Empty : scope, ca.BucketCenters, ca.BucketValues, ca.BucketCounts, ChartColors.SessionA));
                 panels.Add(new LinePanelSpec(Titles[i], series, $"n = {ca.BucketCounts.Sum()}"));
             }
             else
@@ -76,11 +76,6 @@ public static class TireGripChartBuilder
         }
 
         var title = b is null ? $"Tire Grip: {labelA}" : $"Comparison: {labelA} vs {labelB}";
-        if (scope.Length > 0)
-        {
-            title += $" · {scope}";
-        }
-
         var hover = "{0}\n" + metricLabel + ": {1:0.0} " + a.MetricUnit + "\nTotal G: {2:0.00}\nn = {3}";
         return new LineGridSpec(title, panels, 2, xLabel, "Total G", hover);
     }
@@ -277,6 +272,8 @@ public sealed partial class TireGripViewModel : AnalysisTabViewModel<TireGripVie
     /// <inheritdoc />
     protected override void Display(Parameters p, Result result)
     {
+        RegionLabel = p.Regions.Label;
+        CanShowWholeLap = !p.Regions.IsWholeLap && result.B is null;
         Spec = TireGripChartBuilder.Build(result.A, result.B, p.LabelA, p.LabelB, result.WholeA, p.Regions.Label);
         Stats = TireGripChartBuilder.Tables(result.A, result.B, p.LabelA, p.LabelB);
         if (result.A.Corners.All(c => c.TotalG.Length == 0))
@@ -290,6 +287,8 @@ public sealed partial class TireGripViewModel : AnalysisTabViewModel<TireGripVie
     {
         Spec = null;
         Stats = Array.Empty<StatsTable>();
+        RegionLabel = string.Empty;
+        CanShowWholeLap = false;
     }
 
     /// <inheritdoc />

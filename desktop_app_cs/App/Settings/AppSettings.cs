@@ -42,6 +42,12 @@ public sealed class AppSettings
     /// <summary>Header of the tab that was showing.</summary>
     public string? LastTab { get; set; }
 
+    /// <summary>
+    /// Whether the map under the sidebar's region chips is unfolded, once the user has said so;
+    /// null leaves it to the app (open with one session, folded with two, for the lap lists' sake).
+    /// </summary>
+    public bool? RegionMapOpen { get; set; }
+
     /// <summary>Folder the last session was opened from.</summary>
     public string? LastFolder { get; set; }
 

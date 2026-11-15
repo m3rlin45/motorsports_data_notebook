@@ -57,6 +57,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
 
         Regions.Changed += OnRegionsChanged;
+        Regions.MapChoice = Settings.RegionMapOpen;
         ConfigSections = Tabs.Where(t => t.Config is ChannelConfigViewModel).Select(t => new ConfigSection(t.Header, (ChannelConfigViewModel)t.Config!)).ToList();
         _selectedConfigSection = ConfigSections.FirstOrDefault();
 
@@ -172,6 +173,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         newTab.PropertyChanged += OnActiveTabPropertyChanged;
         ShowTabLapSelection(newTab);
+        Regions.Use = newTab.RegionUse;
         newTab.SetActive(true);
         if (newTab.Config is ChannelConfigViewModel config)
         {
@@ -415,6 +417,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
             tab.OnSessionLoaded();
         }
 
+        // With two sessions the lap lists need the height the regions' map would take.
+        Regions.MapOpenByDefault = !SessionB.HasSession;
+
         // After the tabs: the Driver tab has taken the new session's profile, which the corners are detected with.
         if (ReferenceEquals(session, SessionA))
         {
@@ -449,6 +454,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Settings.SidebarCollapsed = IsSidebarCollapsed;
         Settings.Theme = Theme;
         Settings.LastTab = ActiveTab.Header;
+        Settings.RegionMapOpen = Regions.MapChoice;
         foreach (var tab in Tabs)
         {
             var state = new Dictionary<string, string>(StringComparer.Ordinal);

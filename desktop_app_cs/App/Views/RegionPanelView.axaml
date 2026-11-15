@@ -3,45 +3,65 @@
              xmlns:vm="using:InfernoAnalyzer.App.ViewModels"
              xmlns:controls="using:InfernoAnalyzer.App.Controls"
              x:Class="InfernoAnalyzer.App.Views.RegionPanelView"
-             x:DataType="vm:RegionsViewModel">
+             x:DataType="vm:RegionsViewModel"
+             IsVisible="{Binding HasSession}">
   <!--
-    The region column of the statistical tabs: tick corners and sectors to restrict the analysis
-    to them (nothing ticked: whole laps), with the track underneath showing where they are.
+    The sidebar's region selector, under the lap lists: file, then laps, then which part of the
+    track. A chip per corner and per sector (click: tick or untick; double click: only this one);
+    nothing ticked is whole laps. The map underneath is the legend (where is T6?) and folds away
+    when the lap lists need the height. One choice for every tab; on a tab that does not use
+    regions the chips are dimmed and a line says so.
   -->
-  <DockPanel>
-    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4">
-      <Button DockPanel.Dock="Right" Classes="quiet" Content="Whole lap" Command="{Binding ClearCommand}" IsEnabled="{Binding HasSelection}"
-              ToolTip.Tip="Untick every region: analyse whole laps" />
-      <TextBlock Classes="section" Text="Regions" VerticalAlignment="Center" />
-    </DockPanel>
-    <controls:ChartHost x:Name="Map" DockPanel.Dock="Bottom" Height="168" Margin="0,8,0,0"
-                        Spec="{Binding MapSpec}" HighlightedItem="{Binding HoveredRegion}"
-                        AutomationProperties.Name="Track map of the regions"
-                        ToolTip.Tip="The ticked regions on the track; click a corner to tick it" />
-    <CheckBox DockPanel.Dock="Bottom" Content="Show whole lap behind" IsChecked="{Binding ShowWholeLap}" Margin="0,8,0,0"
-              ToolTip.Tip="Draw the whole-lap result behind the regions', for reference. One session only: two sessions are compared with each other, without it" />
-    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-      <StackPanel Spacing="2">
-        <TextBlock Classes="subtle" Text="{Binding Hint}" TextWrapping="Wrap"
-                   IsVisible="{Binding Hint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-        <ItemsControl x:Name="CornerRows" ItemsSource="{Binding Corners}">
-          <ItemsControl.ItemTemplate>
-            <DataTemplate x:DataType="vm:RegionItemViewModel">
-              <CheckBox Content="{Binding Name}" IsChecked="{Binding IsSelected}" MinHeight="24" Padding="6,0,0,0" />
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-        <TextBlock Classes="section" Text="Sectors" Margin="0,8,0,2" IsVisible="{Binding HasSectors}" />
-        <ItemsControl x:Name="SectorRows" ItemsSource="{Binding Sectors}">
-          <ItemsControl.ItemTemplate>
-            <DataTemplate x:DataType="vm:RegionItemViewModel">
-              <CheckBox Content="{Binding Name}" IsChecked="{Binding IsSelected}" MinHeight="24" Padding="6,0,0,0" />
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-        <TextBlock Classes="subtle" Text="{Binding SectorsHint}" TextWrapping="Wrap" Margin="0,8,0,0"
-                   IsVisible="{Binding SectorsHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-      </StackPanel>
-    </ScrollViewer>
-  </DockPanel>
+  <Border Classes="card">
+    <StackPanel>
+      <DockPanel Margin="0,0,0,6">
+        <Button DockPanel.Dock="Right" Classes="icon" Command="{Binding ToggleMapCommand}"
+                ToolTip.Tip="Show or hide the track map" AutomationProperties.Name="Show or hide the track map">
+          <Path Classes="icon" Data="{StaticResource IconMap}" />
+        </Button>
+        <Button x:Name="WholeLap" DockPanel.Dock="Right" Classes="chip" Classes.lit="{Binding !HasSelection}" Content="Whole lap" Margin="0,0,4,0"
+                Command="{Binding ClearCommand}" IsEnabled="{Binding IsUsed}"
+                ToolTip.Tip="Untick every region: whole laps" />
+        <TextBlock Classes="title" Text="Regions" VerticalAlignment="Center" />
+      </DockPanel>
+      <TextBlock Classes="subtle" Text="{Binding Hint}" TextWrapping="Wrap" Margin="0,0,0,4"
+                 IsVisible="{Binding Hint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      <ItemsControl x:Name="CornerChips" ItemsSource="{Binding Corners}" IsEnabled="{Binding IsUsed}" IsVisible="{Binding HasCorners}"
+                    AutomationProperties.Name="Corners">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <WrapPanel />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:RegionItemViewModel">
+            <ToggleButton Classes="chip" Content="{Binding ShortName}" IsChecked="{Binding IsSelected}"
+                          ToolTip.Tip="{Binding Tip}" AutomationProperties.Name="{Binding Name}" />
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+      <ItemsControl x:Name="SectorChips" ItemsSource="{Binding Sectors}" IsEnabled="{Binding IsUsed}" IsVisible="{Binding HasSectors}"
+                    AutomationProperties.Name="Sectors">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <WrapPanel />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:RegionItemViewModel">
+            <ToggleButton Classes="chip" Content="{Binding ShortName}" IsChecked="{Binding IsSelected}"
+                          ToolTip.Tip="{Binding Tip}" AutomationProperties.Name="{Binding Name}" />
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+      <TextBlock Classes="subtle" Text="{Binding SectorsHint}" TextWrapping="Wrap"
+                 IsVisible="{Binding SectorsHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      <TextBlock x:Name="UseCaption" Classes="subtle" Text="{Binding Caption}" TextWrapping="Wrap" Margin="0,4,0,0"
+                 IsVisible="{Binding !IsUsed}" />
+      <controls:ChartHost x:Name="Map" Height="132" Margin="0,6,0,0" IsVisible="{Binding IsMapOpen}"
+                          Spec="{Binding MapSpec}" HighlightedItem="{Binding HoveredRegion}"
+                          AutomationProperties.Name="Track map of the regions"
+                          ToolTip.Tip="The ticked regions on the track; click a corner to tick it" />
+    </StackPanel>
+  </Border>
 </UserControl>
