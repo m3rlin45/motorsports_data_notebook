@@ -316,8 +316,32 @@ public sealed record TrackMapPathSpec(double[] X, double[] Y, string Color, doub
 /// <summary>A marked point on a track map; <see cref="Id"/> is reported back when it is clicked (negative: not clickable).</summary>
 public sealed record TrackMapPointSpec(double X, double Y, string Color, double Size, string Label = "", bool Star = false, int Id = -1);
 
+/// <summary>
+/// A stretch of a track map that can be emphasised: drawn over the map with a marker and a label
+/// while <see cref="IChartSurface.HighlightItem"/> names its <see cref="Id"/>, and not at all otherwise.
+/// </summary>
+/// <param name="Id">The item it belongs to (a corner's index).</param>
+/// <param name="X">Path x, in the map's units.</param>
+/// <param name="Y">Path y.</param>
+/// <param name="Color">Colour token or hex.</param>
+/// <param name="Width">Line width in pixels.</param>
+/// <param name="MarkerX">Where the marker and the label go (the apex), x.</param>
+/// <param name="MarkerY">Marker y.</param>
+/// <param name="Label">Label beside the marker.</param>
+public sealed record TrackMapHighlightSpec(int Id, double[] X, double[] Y, string Color, double Width, double MarkerX, double MarkerY, string Label = "");
+
 /// <summary>A standalone track map with coloured segments and marked points (equal units).</summary>
-public sealed record TrackMapSpec(string Title, IReadOnlyList<TrackMapPathSpec> Paths, IReadOnlyList<TrackMapPointSpec> Points) : ChartSpec;
+/// <param name="Title">Caption inside the frame.</param>
+/// <param name="Paths">Lines, drawn in order.</param>
+/// <param name="Points">Marked points.</param>
+/// <param name="Highlights">Stretches shown only while their item is highlighted.</param>
+/// <param name="Compact">A small companion map: no legend or scale bar, and it does not pan or zoom.</param>
+public sealed record TrackMapSpec(
+    string Title,
+    IReadOnlyList<TrackMapPathSpec> Paths,
+    IReadOnlyList<TrackMapPointSpec> Points,
+    IReadOnlyList<TrackMapHighlightSpec>? Highlights = null,
+    bool Compact = false) : ChartSpec;
 
 /// <summary>A line with markers through (X, Y), each point carrying a sample count for the hover label.</summary>
 public sealed record LineSeriesSpec(string Label, double[] X, double[] Y, long[] Counts, string Color);

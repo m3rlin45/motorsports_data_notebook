@@ -12,6 +12,11 @@ public class CursorLinkGroupTests
         public Control Control => throw new NotSupportedException("not needed by these tests");
         public event Action<double?>? CursorMoved;
         public event Action<ChartPoint>? Clicked;
+#pragma warning disable CS0067 // these fakes have no items to hover
+        public event Action<int>? ItemHovered;
+#pragma warning restore CS0067
+
+        public void HighlightItem(int id) { }
         public ChartTheme Theme { get; set; } = ChartTheme.Dark;
 
         public void Render(ChartSpec spec) { }
@@ -107,6 +112,11 @@ public class CursorLinkGroupTests
         public Control Control => throw new NotSupportedException();
         public event Action<double?>? CursorMoved;
         public event Action<ChartPoint>? Clicked;
+#pragma warning disable CS0067 // these fakes have no items to hover
+        public event Action<int>? ItemHovered;
+#pragma warning restore CS0067
+
+        public void HighlightItem(int id) { }
         public ChartTheme Theme { get; set; } = ChartTheme.Dark;
 
         public void Render(ChartSpec spec) { }

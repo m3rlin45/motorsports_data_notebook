@@ -1,4 +1,6 @@
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.VisualTree;
 using Avalonia.Headless;
 using Avalonia.Media.Imaging;
 using InfernoAnalyzer.App.ViewModels;
@@ -172,6 +174,67 @@ public class DriverTabTests
         var apex = tab.MapSpec!.Points.First(p => p.Id == 4);
         Assert.Equal(4, map.PointNear(new global::ScottPlot.Coordinates(apex.X, apex.Y)));
         Assert.Equal(-1, map.PointNear(new global::ScottPlot.Coordinates(apex.X + 5000, apex.Y)));
+    });
+
+    [Fact]
+    public Task The_small_map_shows_the_corner_under_the_pointer_in_the_box_plots() => Ui.Run(async () =>
+    {
+        var viewModel = await LoadedWindow();
+        var tab = viewModel.Driver;
+        var view = new DriverView { DataContext = tab };
+        var window = new Window { Width = 1280, Height = 860, Content = view };
+        window.Show();
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        window.CaptureRenderedFrame();
+
+        // One highlight per corner, by index, on a compact map with a clickable dot at each apex.
+        var spec = tab.MiniMapSpec!;
+        Assert.True(spec.Compact);
+        Assert.Equal(Enumerable.Range(0, tab.Corners.Count), spec.Highlights!.Select(h => h.Id));
+        Assert.Equal(Enumerable.Range(0, tab.Corners.Count), spec.Points.Select(p => p.Id));
+        Assert.All(spec.Highlights!, h => Assert.True(h.X.Length > 1));
+
+        var map = (InfernoAnalyzer.Charting.ScottPlot.ScottPlotTrackMap)view.FindControl<InfernoAnalyzer.App.Controls.ChartHost>("MiniMap")!.Surface!;
+        var summaryHost = view.FindControl<InfernoAnalyzer.App.Controls.ChartHost>("SummaryChart")!;
+        var summary = (InfernoAnalyzer.Charting.ScottPlot.ScottPlotBoxPlot)summaryHost.Surface!;
+        var firstPanel = summaryHost.GetVisualDescendants().OfType<global::ScottPlot.Avalonia.AvaPlot>().First();
+
+        // Nothing under the pointer: the corner selected in the list.
+        Assert.Equal(-1, tab.HoveredCorner);
+        Assert.Equal(tab.SelectedCorner!.Index, map.HighlightedItem);
+        Assert.True(map.VisibleHighlightParts > 0);
+
+        Point OverColumn(int corner)
+        {
+            var limits = summary.Plots[0].Axes.GetLimits();
+            var pixel = summary.Plots[0].GetPixel(new global::ScottPlot.Coordinates(tab.SummarySpec!.CategoryPositions[corner], (limits.Bottom + limits.Top) / 2));
+            return firstPanel.TranslatePoint(new Point(pixel.X, pixel.Y), window)!.Value;
+        }
+
+        window.MouseMove(OverColumn(4));
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.Equal(4, tab.HoveredCorner);
+        Assert.Equal(4, map.HighlightedItem);
+
+        window.MouseMove(OverColumn(2));
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.Equal(2, map.HighlightedItem);
+        var frame = window.CaptureRenderedFrame();
+        RenderSmokeTests.SaveRender(frame!, "driver_minimap_hover.png");
+
+        // Off the chart again: back to the selected corner.
+        var list = view.FindControl<ListBox>("CornerList")!;
+        window.MouseMove(list.TranslatePoint(new Point(20, list.Bounds.Height - 10), window)!.Value);
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.Equal(-1, tab.HoveredCorner);
+        Assert.Equal(tab.SelectedCorner.Index, map.HighlightedItem);
+
+        // The selection moves it too, and a click on the small map opens that corner.
+        tab.SelectedCorner = tab.Corners[5];
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.Equal(5, map.HighlightedItem);
+        var apex = spec.Points.First(p => p.Id == 3);
+        Assert.Equal(3, map.PointNear(new global::ScottPlot.Coordinates(apex.X, apex.Y)));
     });
 
     [Fact]

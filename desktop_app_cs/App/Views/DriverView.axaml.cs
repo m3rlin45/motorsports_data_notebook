@@ -8,7 +8,9 @@ namespace InfernoAnalyzer.App.Views;
 /// <summary>
 /// The Driver tab: summary box plots, the corner detail overlay and the
 /// track map. Clicking a corner's column in the summary, its apex on the map
-/// or its row in the list opens the detail of that corner.
+/// or its row in the list opens the detail of that corner. A small map under
+/// the list shows where the corner under the pointer in the box plots (or
+/// else the selected one) is on the track.
 /// </summary>
 public partial class DriverView : UserControl
 {
@@ -18,6 +20,15 @@ public partial class DriverView : UserControl
         InitializeComponent();
         SummaryChart.ChartClicked += OpenClickedCorner;
         MapChart.ChartClicked += OpenClickedCorner;
+        MiniMap.ChartClicked += OpenClickedCorner;
+        // The small map follows the pointer across the box plots' columns.
+        SummaryChart.ItemHovered += corner =>
+        {
+            if (DataContext is DriverViewModel vm)
+            {
+                vm.HoveredCorner = corner;
+            }
+        };
         // The list's selection only changes for a different corner; a click or Enter on the selected one should open it too.
         CornerList.Tapped += (_, _) => OpenSelectedCorner();
         CornerList.KeyDown += (_, e) =>
