@@ -26,12 +26,15 @@
                    Text="{Binding Spec.Title, FallbackValue='Tire grip', TargetNullValue='Tire grip'}" />
       </DockPanel>
     </Border>
-    <Grid ColumnDefinitions="*,Auto,Auto">
-      <Border Grid.Column="0" Classes="card flush">
+    <Grid ColumnDefinitions="184,8,*,Auto,Auto">
+      <Border Grid.Column="0" Classes="card">
+        <views:RegionPanelView DataContext="{Binding Regions}" />
+      </Border>
+      <Border Grid.Column="2" Classes="card flush">
         <controls:ChartHost x:Name="Chart" Spec="{Binding Spec}" EmptyText="{Binding EmptyMessage}" />
       </Border>
-      <GridSplitter Grid.Column="1" Width="8" IsVisible="{Binding ShowStats}" />
-      <Border Grid.Column="2" Classes="card" Width="480" MinWidth="160" IsVisible="{Binding ShowStats}">
+      <GridSplitter Grid.Column="3" Width="8" IsVisible="{Binding ShowStats}" />
+      <Border Grid.Column="4" Classes="card" Width="480" MinWidth="160" IsVisible="{Binding ShowStats}">
         <views:StatsPaneView Tables="{Binding Stats}" />
       </Border>
     </Grid>

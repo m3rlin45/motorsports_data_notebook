@@ -79,7 +79,12 @@ public sealed class ScottPlotScatterGrid : ScottPlotGridSurface<ScatterGridSpec>
         double minX = double.PositiveInfinity, maxX = double.NegativeInfinity, minY = double.PositiveInfinity, maxY = double.NegativeInfinity;
         foreach (var path in spec.Paths)
         {
-            var line = plot.Add.ScatterLine(path.X, path.Y);
+            var line = path.Connected ? plot.Add.ScatterLine(path.X, path.Y) : plot.Add.ScatterPoints(path.X, path.Y);
+            if (!path.Connected)
+            {
+                line.MarkerSize = 3;
+            }
+
             line.Color = ColorOf(path.Color).WithAlpha(PlotStyle.Alpha(Theme, 0.8));
             line.LineWidth = MapStyle.OutlineWidth * Theme.LineScale;
             line.LineStyle.Rounded = true;
