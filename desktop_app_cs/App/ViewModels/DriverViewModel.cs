@@ -343,6 +343,46 @@ public static class DriverChartBuilder
         return new TrackMapSpec("Click a corner to see its laps", paths, points);
     }
 
+    /// <summary>
+    /// The small map under the corner list: the reference lap as an outline with a dot at every apex
+    /// (clickable, id = the corner's index) and, per corner, the stretch from where its braking starts
+    /// to where its acceleration ends, which the view shows for the corner under the pointer in the
+    /// box plots or selected in the list.
+    /// </summary>
+    public static TrackMapSpec MiniMap(DriverConsistencyResult r)
+    {
+        var (x, y) = Corners.GpsToLocalXy(r.RefLat, r.RefLon);
+        var distance = r.RefDistance;
+        var paths = new List<TrackMapPathSpec> { new(x, y, ChartColors.Neutral, 2) };
+        var points = new List<TrackMapPointSpec>();
+        var highlights = new List<TrackMapHighlightSpec>();
+        for (var cornerIndex = 0; cornerIndex < r.Corners.Count; cornerIndex++)
+        {
+            var id = r.Corners[cornerIndex].Id;
+            var segments = r.Segments.Where(s => s.CornerId == id).ToList();
+            var corner = segments.FirstOrDefault(s => s.SegmentType == "corner" && s.ApexDist is not null);
+            if (corner is null)
+            {
+                continue;
+            }
+
+            var apex = Numerics.ArgMin(distance.Select(d => Math.Abs(d - corner.ApexDist!.Value)).ToArray());
+            points.Add(new TrackMapPointSpec(x[apex], y[apex], ChartColors.Ink, 5, Id: cornerIndex));
+
+            var from = segments.Min(s => s.StartDist);
+            var to = segments.Max(s => s.EndDist);
+            var idx = Enumerable.Range(0, distance.Length).Where(i => distance[i] >= from && distance[i] <= to).ToArray();
+            if (idx.Length > 1)
+            {
+                // No label: the list and the box plots name the corner, and at this size a label would not fit beside every apex.
+                highlights.Add(new TrackMapHighlightSpec(
+                    cornerIndex, idx.Select(i => x[i]).ToArray(), idx.Select(i => y[i]).ToArray(), ChartColors.HighlightA, 5, x[apex], y[apex]));
+            }
+        }
+
+        return new TrackMapSpec(string.Empty, paths, points, highlights, Compact: true);
+    }
+
     /// <summary>The stats panel tables: entry consistency and corner speed / exit.</summary>
     public static List<StatsTable> Tables(DriverConsistencyResult a, DriverConsistencyResult? b)
     {
@@ -478,6 +518,7 @@ public sealed partial class DriverViewModel : AnalysisTabViewModel<DriverViewMod
 
     /// <summary>The corner shown in the detail view.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HighlightedCorner))]
     private CornerChoice? _selectedCorner;
 
     partial void OnSelectedCornerChanged(CornerChoice? value)
@@ -517,6 +558,21 @@ public sealed partial class DriverViewModel : AnalysisTabViewModel<DriverViewMod
     /// <summary>Track map.</summary>
     [ObservableProperty]
     private TrackMapSpec? _mapSpec;
+
+    /// <summary>The small map under the corner list.</summary>
+    [ObservableProperty]
+    private TrackMapSpec? _miniMapSpec;
+
+    /// <summary>Index of the corner under the pointer in the box plots, or -1 (set by the view).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HighlightedCorner))]
+    private int _hoveredCorner = -1;
+
+    /// <summary>
+    /// The corner the small map emphasises: the one under the pointer in the box plots, otherwise
+    /// the one selected in the list; -1 when there is none.
+    /// </summary>
+    public int HighlightedCorner => HoveredCorner >= 0 ? HoveredCorner : SelectedCorner?.Index ?? -1;
 
     /// <summary>Stats tables.</summary>
     [ObservableProperty]
@@ -681,6 +737,7 @@ public sealed partial class DriverViewModel : AnalysisTabViewModel<DriverViewMod
 
         SummarySpec = DriverChartBuilder.Summary(result.A, result.B, p.A.Label, p.B?.Label ?? string.Empty);
         MapSpec = DriverChartBuilder.Map(result.A);
+        MiniMapSpec = DriverChartBuilder.MiniMap(result.A);
         Stats = DriverChartBuilder.Tables(result.A, result.B);
         var keep = Corners.Count > 0 ? Corners[Math.Min(previous, Corners.Count - 1)] : null;
         if (!Equals(SelectedCorner, keep))
@@ -710,6 +767,8 @@ public sealed partial class DriverViewModel : AnalysisTabViewModel<DriverViewMod
         SummarySpec = null;
         DetailSpec = null;
         MapSpec = null;
+        MiniMapSpec = null;
+        HoveredCorner = -1;
         Stats = Array.Empty<StatsTable>();
         Corners.Clear();
     }

@@ -31,6 +31,16 @@ public abstract class ScottPlotSurface<TSpec> : IChartSurface
     public event Action<ChartPoint>? Clicked;
 
     /// <inheritdoc />
+    public event Action<int>? ItemHovered;
+
+    private int _hoveredItem = -1;
+
+    /// <inheritdoc />
+    public virtual void HighlightItem(int id)
+    {
+    }
+
+    /// <inheritdoc />
     public ChartTheme Theme
     {
         get => _theme;
@@ -96,6 +106,18 @@ public abstract class ScottPlotSurface<TSpec> : IChartSurface
 
     /// <summary>Raise <see cref="Clicked"/>.</summary>
     protected void RaiseClicked(ChartPoint point) => Clicked?.Invoke(point);
+
+    /// <summary>Report the item under the pointer (-1: none); raises <see cref="ItemHovered"/> only when it changed.</summary>
+    protected void SetHoveredItem(int id)
+    {
+        if (id == _hoveredItem)
+        {
+            return;
+        }
+
+        _hoveredItem = id;
+        ItemHovered?.Invoke(id);
+    }
 
     /// <summary>The data coordinates under the pointer of <paramref name="e"/> on <paramref name="avaPlot"/>.</summary>
     protected static Coordinates ToCoordinates(AvaPlot avaPlot, PointerEventArgs e)
