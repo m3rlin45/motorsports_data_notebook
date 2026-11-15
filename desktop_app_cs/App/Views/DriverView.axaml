@@ -19,8 +19,12 @@
           <RadioButton Content="Detail" GroupName="drvview" IsChecked="{Binding IsDetail}" ToolTip.Tip="Every lap through the selected corner" />
           <RadioButton Content="Track map" GroupName="drvview" IsChecked="{Binding IsMap}" ToolTip.Tip="Braking and acceleration zones on the track" />
         </StackPanel>
-        <TextBlock Classes="title" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                   Text="{Binding SummarySpec.Title, FallbackValue='Driver consistency', TargetNullValue='Driver consistency'}" />
+        <!-- The title gives way (ellipsis) before the region tag does. -->
+        <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Left">
+          <TextBlock Grid.Column="0" Classes="title" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                     Text="{Binding SummarySpec.Title, FallbackValue='Driver consistency', TargetNullValue='Driver consistency'}" />
+          <views:RegionTagView Grid.Column="1" Margin="8,0,0,0" />
+        </Grid>
       </DockPanel>
     </Border>
     <Grid ColumnDefinitions="184,8,*,Auto,Auto">
