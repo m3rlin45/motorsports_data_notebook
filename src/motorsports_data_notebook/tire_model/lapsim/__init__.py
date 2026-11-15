@@ -12,6 +12,8 @@ Segment B (#204), the track model:
   against (B2).
 - :mod:`.dem`: ground elevation from the GSI tiles, for B2's altitude
   check only.
+- :mod:`.drawings`: the operators' published corner geometry, transcribed,
+  for B2's check against it.
 - :mod:`.pit`: where an out-lap from the pit joins the driven line.
 - :mod:`.holdout`: the ladder of holdouts, day against day up to car
   against car, through production's heat chain (B3).

@@ -67,8 +67,14 @@ def main(argv: list[str] | None = None) -> int:
             from .dem import GsiDem
 
             ground = GsiDem(workspace / "gsi", fetch=not args.dem_offline)
+        from .drawings import DRAWINGS
+
         report = gates.check_track_truth(
-            root, cache_dir=workspace / "cache", tracks_dir=workspace / "tracks", dem=ground
+            root,
+            cache_dir=workspace / "cache",
+            tracks_dir=workspace / "tracks",
+            dem=ground,
+            drawings=DRAWINGS,
         )
     elif args.cmd == "check-track-holdout":
         from . import holdout
