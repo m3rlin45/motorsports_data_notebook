@@ -29,15 +29,16 @@ internal static class MapStyle
     }
 
     /// <summary>
-    /// Fit the data with equal units and add a scale bar sized to a round
-    /// length near a fifth of the map's extent.
+    /// Fit the data with equal units and, unless <paramref name="scaleBar"/> is off (a map too
+    /// small to read one from), add a scale bar sized to a round length near a fifth of the
+    /// map's extent.
     /// </summary>
-    public static void Finish(Plot plot, ChartTheme theme)
+    public static void Finish(Plot plot, ChartTheme theme, bool scaleBar = true)
     {
         plot.Axes.AutoScale();
         var limits = plot.Axes.GetLimits();
         var extent = Math.Max(limits.HorizontalSpan, limits.VerticalSpan);
-        if (double.IsFinite(extent) && extent > 0)
+        if (scaleBar && double.IsFinite(extent) && extent > 0)
         {
             var length = RoundLength(extent / 5);
             var bar = plot.Add.ScaleBar(length, 0);

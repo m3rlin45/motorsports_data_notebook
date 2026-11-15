@@ -38,6 +38,18 @@ public interface IChartSurface : IDisposable
     /// <summary>Raised when the user clicks the chart.</summary>
     event Action<ChartPoint>? Clicked;
 
+    /// <summary>
+    /// Raised when the item under the pointer changes: its id (what a click would report as
+    /// <see cref="ChartPoint.ItemId"/>), or -1 when the pointer is over none or has left the chart.
+    /// </summary>
+    event Action<int>? ItemHovered;
+
+    /// <summary>
+    /// Emphasise the item with this id, for charts that can (a track map's
+    /// <see cref="TrackMapHighlightSpec"/>); -1 for none. Must not raise <see cref="ItemHovered"/>.
+    /// </summary>
+    void HighlightItem(int id);
+
     /// <summary>Colours for the current UI theme; setting it re-renders the current spec.</summary>
     ChartTheme Theme { get; set; }
 
