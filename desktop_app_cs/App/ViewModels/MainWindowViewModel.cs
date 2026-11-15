@@ -54,6 +54,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
         foreach (var tab in Tabs)
         {
             tab.Regions = Regions;
+            tab.TrackPositionChanged += position =>
+            {
+                if (ReferenceEquals(tab, ActiveTab))
+                {
+                    Regions.ShowPosition(position); // where the pointer on that tab is, on the sidebar's map
+                }
+            };
         }
 
         Regions.Changed += OnRegionsChanged;
@@ -173,6 +180,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         newTab.PropertyChanged += OnActiveTabPropertyChanged;
         ShowTabLapSelection(newTab);
         Regions.Use = newTab.RegionUse;
+        Regions.ShowPosition(null); // the last tab's cursor is not this one's
         newTab.SetActive(true);
         if (newTab.Config is ChannelConfigViewModel config)
         {

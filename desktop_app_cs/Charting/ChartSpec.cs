@@ -356,6 +356,18 @@ public sealed record TrackMapPointSpec(double X, double Y, string Color, double 
 /// <param name="Label">Label beside the marker.</param>
 public sealed record TrackMapHighlightSpec(int Id, double[] X, double[] Y, string Color, double Width, double MarkerX, double MarkerY, string Label = "");
 
+/// <summary>
+/// The line a track map's position marker travels: <see cref="IChartSurface.SetCursor"/> with a
+/// value in the units of <see cref="Along"/> puts the marker at that point of the line (between
+/// samples in proportion), null hides it. For showing on the map where a cursor on another chart is.
+/// </summary>
+/// <param name="Along">How far along the line each sample is, ascending (a fraction of the lap, metres, ...).</param>
+/// <param name="X">Sample x, in the map's units.</param>
+/// <param name="Y">Sample y.</param>
+/// <param name="Color">Colour token or hex of the marker.</param>
+/// <param name="Size">Marker diameter in pixels.</param>
+public sealed record TrackMapCursorSpec(double[] Along, double[] X, double[] Y, string Color, double Size);
+
 /// <summary>A standalone track map with coloured segments and marked points (equal units).</summary>
 /// <param name="Title">Caption inside the frame.</param>
 /// <param name="Paths">Lines, drawn in order.</param>
@@ -367,7 +379,11 @@ public sealed record TrackMapSpec(
     IReadOnlyList<TrackMapPathSpec> Paths,
     IReadOnlyList<TrackMapPointSpec> Points,
     IReadOnlyList<TrackMapHighlightSpec>? Highlights = null,
-    bool Compact = false) : ChartSpec;
+    bool Compact = false) : ChartSpec
+{
+    /// <summary>The line a position marker can be put on with <see cref="IChartSurface.SetCursor"/>; null: the map has none.</summary>
+    public TrackMapCursorSpec? Cursor { get; init; }
+}
 
 /// <summary>A line with markers through (X, Y), each point carrying a sample count for the hover label.</summary>
 public sealed record LineSeriesSpec(string Label, double[] X, double[] Y, long[] Counts, string Color);

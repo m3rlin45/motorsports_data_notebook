@@ -62,6 +62,7 @@ public sealed partial class TimeDistanceViewModel : AnalysisTabViewModel<TimeDis
         _sessionA = sessionA;
         _sessionB = sessionB;
         _settings = settings;
+        Cursors.CursorChanged += OnCursorChanged;
         Commands = new[]
         {
             new TabCommand("Distance / time _axis", "F9", ToggleXAxisCommand),
@@ -320,6 +321,42 @@ public sealed partial class TimeDistanceViewModel : AnalysisTabViewModel<TimeDis
 
     /// <summary>The laps' series, and where the ticked track regions lie on the reference lap (the fastest of Session A's).</summary>
     public sealed record Result(Fixture Fixture, IReadOnlyList<StripChartBuilder.RegionSpan> Focus);
+
+    /// <summary>
+    /// Where the chart's cursor is on the track, for the sidebar's map: how far round the
+    /// reference lap (the first, Session A's fastest ticked) the cursor's x is. Against distance,
+    /// a cursor on the stitched lap before or after is the same place one lap earlier or later;
+    /// against time, only the reference lap's own seconds are a place.
+    /// </summary>
+    internal static double? LapFraction(Fixture? fixture, XAxisMode axis, double? cursor)
+    {
+        if (cursor is not { } x || fixture is null || fixture.Laps.Count == 0)
+        {
+            return null;
+        }
+
+        var lap = fixture.Laps[0];
+        var length = lap.DistanceM.Length > 0 ? lap.DistanceM[^1] : 0;
+        if (length <= 0)
+        {
+            return null;
+        }
+
+        if (axis == XAxisMode.Distance)
+        {
+            var turns = x / length;
+            return turns - Math.Floor(turns);
+        }
+
+        if (x < 0 || x > lap.TimeS[^1])
+        {
+            return null;
+        }
+
+        return Math.Clamp(StripChartBuilder.Interpolate(lap.TimeS, lap.DistanceM, new[] { x })[0] / length, 0, 1);
+    }
+
+    private void OnCursorChanged(double? x) => RaiseTrackPosition(LapFraction(_fixture, XAxis, x));
 
     /// <summary>The traces are never cut to the ticked regions: they are shaded and brought into view.</summary>
     public override RegionUse RegionUse => RegionUse.Focus;
