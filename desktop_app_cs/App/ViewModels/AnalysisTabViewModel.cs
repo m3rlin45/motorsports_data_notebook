@@ -44,7 +44,10 @@ public enum RegionUse
     /// <summary>Nothing: the tab shows whole laps whatever is ticked.</summary>
     None,
 
-    /// <summary>The tab's analysis covers only the parts of the laps inside the ticked regions.</summary>
+    /// <summary>
+    /// The tab shows only what lies inside the ticked regions: the statistical tabs cut the laps
+    /// to them, the Driver tab lists the corners inside them.
+    /// </summary>
     Filter,
 
     /// <summary>The tab shows whole laps and brings the ticked regions into view.</summary>
