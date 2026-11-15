@@ -16,6 +16,8 @@ on:
       - 'workspace_template/data/**'
       - 'pyproject.toml'
       - '.github/workflows/build-analyzer-cs.yml'
+  release:
+    types: [published]
 
 jobs:
   test:
@@ -190,3 +192,41 @@ jobs:
             !desktop_app_cs/App/bin/Release/net10.0/linux-x64/publish/*.pdb
             !desktop_app_cs/App/bin/Release/net10.0/linux-x64/publish/*.dbg
           retention-days: 30
+
+  # A published release gets the two executables this run built and tested. They go on as
+  # InfernoAnalyzer-CS.exe and InfernoAnalyzer-CS-Linux: the release's InfernoAnalyzer.exe and
+  # InfernoAnalyzer-Linux are the Python desktop app's (build-desktop.yml), and an asset of the
+  # same name would replace them.
+  attach-to-release:
+    needs: [build-windows, build-linux]
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: InfernoAnalyzer-Windows
+          path: windows/
+
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: InfernoAnalyzer-Linux
+          path: linux/
+
+      - name: Name the release assets
+        run: |
+          mkdir dist
+          mv windows/InfernoAnalyzer.exe dist/InfernoAnalyzer-CS.exe
+          mv linux/InfernoAnalyzer dist/InfernoAnalyzer-CS-Linux
+          ls -l dist
+
+      - name: Attach to release
+        uses: softprops/action-gh-release@v2
+        with:
+          fail_on_unmatched_files: true
+          files: |
+            dist/InfernoAnalyzer-CS.exe
+            dist/InfernoAnalyzer-CS-Linux
