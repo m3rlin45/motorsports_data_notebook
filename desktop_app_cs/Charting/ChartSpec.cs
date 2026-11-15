@@ -212,4 +212,45 @@ public sealed record HistogramGridSpec(
     IReadOnlyList<BandSpec> Bands,
     string HoverFormat = "{0}\n{1:0.##}: {2:0.##}") : ChartSpec;
 
+/// <summary>A cloud of points; samples with the same <see cref="SeriesId"/> are index-aligned across panels and the map.</summary>
+public sealed record ScatterSeriesSpec(string Label, double[] X, double[] Y, string Color, int SeriesId, double Alpha = 0.2);
+
+/// <summary>A straight line between two points (a fit line).</summary>
+public sealed record LineSpec(double X1, double Y1, double X2, double Y2, string Color);
+
+/// <summary>Emphasised markers (binned means).</summary>
+public sealed record MarkerSeriesSpec(double[] X, double[] Y, string Color);
+
+/// <summary>One scatter panel.</summary>
+public sealed record ScatterPanelSpec(
+    string Title,
+    string XLabel,
+    string YLabel,
+    IReadOnlyList<ScatterSeriesSpec> Scatter,
+    IReadOnlyList<LineSpec> Lines,
+    IReadOnlyList<MarkerSeriesSpec> Markers,
+    string Annotation = "",
+    string Warning = "",
+    bool ShowLegend = false);
+
+/// <summary>A track outline in local metres, index-aligned with the scatter series of the same <see cref="SeriesId"/>.</summary>
+public sealed record TrackPathSpec(string Label, double[] X, double[] Y, string Color, string HighlightColor, int SeriesId);
+
+/// <summary>
+/// A track map plus scatter panels in one grid. Hovering the map near the
+/// track highlights the samples recorded there on every panel (the
+/// roll-gradient view).
+/// </summary>
+/// <param name="Title">Figure title.</param>
+/// <param name="Paths">Track paths for the map (empty: the map says there is no GPS).</param>
+/// <param name="Panels">Scatter panels after the map, row-major.</param>
+/// <param name="Columns">Panels per row (the map is the first cell).</param>
+/// <param name="MapTitle">Title of the map cell.</param>
+public sealed record ScatterGridSpec(
+    string Title,
+    IReadOnlyList<TrackPathSpec> Paths,
+    IReadOnlyList<ScatterPanelSpec> Panels,
+    int Columns,
+    string MapTitle = "Track map") : ChartSpec;
+
 

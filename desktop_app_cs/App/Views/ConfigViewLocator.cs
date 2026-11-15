@@ -17,6 +17,7 @@ public sealed class ConfigViewLocator : IDataTemplate
     public Control? Build(object? param) => param switch
     {
         SuspensionConfigViewModel => new SuspensionConfigView(),
+        RollGradientConfigViewModel => new RollGradientConfigView(),
         ChannelConfigViewModel => new ChannelEntriesView(),
         _ => null,
     };
