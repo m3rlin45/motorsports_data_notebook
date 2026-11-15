@@ -4,6 +4,7 @@ using InfernoAnalyzer.Charting;
 using InfernoAnalyzer.Core.Analysis;
 using InfernoAnalyzer.Core.Io;
 using InfernoAnalyzer.Core.Profiles;
+using InfernoAnalyzer.Core.Tracks;
 
 namespace InfernoAnalyzer.App.ViewModels;
 
@@ -141,8 +142,20 @@ public static class SuspensionChartBuilder
     /// <summary>The hover label: which bar, its velocity bin and the share of the lap spent there.</summary>
     private const string HoverFormat = "{0}\nVelocity: {1:0} mm/s\nTime: {2:0.00}%";
 
-    /// <summary>The 2×2 histogram grid for one session, or the side-by-side comparison of two.</summary>
-    public static HistogramGridSpec Build(VelocityHistogramResult a, VelocityHistogramResult? b, string labelA, string labelB)
+    /// <summary>
+    /// The 2×2 histogram grid for one session, or the side-by-side comparison of two. With
+    /// <paramref name="scope"/> the bars are a region's and it says what they cover
+    /// ("Turn 3 · 41 s"); <paramref name="wholeA"/> is then the whole laps' distribution, outlined
+    /// over the bars for reference. A comparison has no such reference: its two sessions are
+    /// compared with each other, not with their own whole laps.
+    /// </summary>
+    public static HistogramGridSpec Build(
+        VelocityHistogramResult a,
+        VelocityHistogramResult? b,
+        string labelA,
+        string labelB,
+        VelocityHistogramResult? wholeA = null,
+        string scope = "")
     {
         var r = a.VelocityRanges;
         var bands = new List<BandSpec>
@@ -159,6 +172,7 @@ public static class SuspensionChartBuilder
         var titles = new[] { "Front Left (FL)", "Front Right (FR)", "Rear Left (RL)", "Rear Right (RR)" };
         var cornersA = a.Corners.ToList();
         var cornersB = b?.Corners.ToList();
+        var wholeCornersA = b is null ? wholeA?.Corners.ToList() : null;
         var panels = new List<HistogramPanelSpec>();
         for (var i = 0; i < 4; i++)
         {
@@ -168,7 +182,13 @@ public static class SuspensionChartBuilder
             {
                 var colors = ca.BinCenters.Select(c => c >= 0 ? ChartColors.Bump : ChartColors.Rebound).ToArray();
                 var annotation = string.Format(CultureInfo.InvariantCulture, "Skew: {0:0.00}\nStd: {1:0} mm/s", ca.Skew, ca.Std);
-                panels.Add(new HistogramPanelSpec(titles[i], new[] { new BarSeriesSpec(string.Empty, ca.BinCenters, ca.Histogram, BarColors: colors) }, binWidth, annotation));
+                var series = new List<BarSeriesSpec> { new(wholeCornersA is null ? string.Empty : "Selected regions", ca.BinCenters, ca.Histogram, BarColors: colors) };
+                if (wholeCornersA is not null)
+                {
+                    series.Add(new BarSeriesSpec("Whole lap", wholeCornersA[i].BinCenters, wholeCornersA[i].Histogram, ChartColors.Ink, Outline: true));
+                }
+
+                panels.Add(new HistogramPanelSpec(titles[i], series, binWidth, annotation));
             }
             else
             {
@@ -182,6 +202,11 @@ public static class SuspensionChartBuilder
         }
 
         var title = b is null ? "Suspension Velocity Distribution" : $"Comparison: {labelA} vs {labelB}";
+        if (scope.Length > 0)
+        {
+            title += $" · {scope}";
+        }
+
         return new HistogramGridSpec(title, panels, 2, new XRange(-300, 300), "Velocity (mm/s)", "Time (%)", bands, HoverFormat);
     }
 
@@ -269,10 +294,23 @@ public sealed partial class SuspensionViewModel : AnalysisTabViewModel<Suspensio
         List<int> LapsB,
         Dictionary<string, string> NamesB,
         MotionRatios RatiosB,
-        string LabelB);
+        string LabelB,
+        RegionSelection Regions);
 
-    /// <summary>The histograms of Session A and, in a comparison, Session B.</summary>
-    public sealed record Result(VelocityHistogramResult A, VelocityHistogramResult? B);
+    /// <summary>
+    /// The histograms of Session A and, in a comparison, Session B, over the ticked regions when
+    /// there are any (<paramref name="RegionSecondsA"/> is how much of Session A's laps they cover).
+    /// <paramref name="WholeA"/> is then Session A's whole-lap result for reference: a single
+    /// session only, and only when the reference is wanted.
+    /// </summary>
+    public sealed record Result(
+        VelocityHistogramResult A,
+        VelocityHistogramResult? B,
+        VelocityHistogramResult? WholeA = null,
+        double RegionSecondsA = 0);
+
+    /// <summary>The ticked track regions the analysis is restricted to (shared with the other statistical tabs); null: whole laps.</summary>
+    public RegionsViewModel? Regions { get; set; }
 
     /// <inheritdoc />
     protected override Parameters? GetParameters()
@@ -312,29 +350,49 @@ public sealed partial class SuspensionViewModel : AnalysisTabViewModel<Suspensio
             lapsB,
             SuspensionConfig.GetChannelNames(SessionSlot.B),
             SuspensionConfig.GetMotionRatios(SessionSlot.B) ?? ratiosA,
-            _b.SessionLabel);
+            _b.SessionLabel,
+            Regions?.Selection() ?? RegionSelection.WholeLap);
     }
 
     /// <inheritdoc />
     protected override Result Analyze(Parameters p, CancellationToken cancellation)
     {
-        var a = Suspension.AnalyzeSuspensionVelocityMultiLap(p.A, p.LapsA, p.NamesA, p.RatiosA, cancellation: cancellation);
-        var b = p.B is null ? null : Suspension.AnalyzeSuspensionVelocityMultiLap(p.B, p.LapsB, p.NamesB, p.RatiosB, cancellation: cancellation);
-        return new Result(a, b);
+        var windowsA = p.Regions.Windows(p.A, p.LapsA, SessionSlot.A);
+        var a = Suspension.AnalyzeSuspensionVelocityMultiLap(p.A, p.LapsA, p.NamesA, p.RatiosA, cancellation: cancellation, windowsByLap: windowsA);
+        var b = p.B is null
+            ? null
+            : Suspension.AnalyzeSuspensionVelocityMultiLap(p.B, p.LapsB, p.NamesB, p.RatiosB, cancellation: cancellation, windowsByLap: p.Regions.Windows(p.B, p.LapsB, SessionSlot.B));
+
+        // The whole laps behind a region: for one session only. Two sessions are compared with each other.
+        var whole = p.B is null && p.Regions is { IsWholeLap: false, ShowWholeLap: true }
+            ? Suspension.AnalyzeSuspensionVelocityMultiLap(p.A, p.LapsA, p.NamesA, p.RatiosA, cancellation: cancellation)
+            : null;
+        return new Result(a, b, whole, windowsA?.Values.Sum(TrackRegions.DurationS) ?? 0);
     }
 
     /// <inheritdoc />
     protected override void Display(Parameters p, Result result)
     {
-        Spec = SuspensionChartBuilder.Build(result.A, result.B, p.LabelA, p.LabelB);
-        var tables = SuspensionChartBuilder.StatsTables(result.A, p.LabelA);
+        // Restricted to ticked regions, the bars and the tables are the regions'.
+        var inRegions = !p.Regions.IsWholeLap;
+        var scope = inRegions ? $"{p.Regions.Label} · {result.RegionSecondsA.ToString("0", CultureInfo.InvariantCulture)} s" : string.Empty;
+        string Named(string label) => inRegions ? $"{label}, {p.Regions.Label}" : label;
+        Spec = SuspensionChartBuilder.Build(result.A, result.B, p.LabelA, p.LabelB, result.WholeA, scope);
+        var tables = SuspensionChartBuilder.StatsTables(result.A, Named(p.LabelA));
         if (result.B is not null)
         {
-            tables.AddRange(SuspensionChartBuilder.StatsTables(result.B, p.LabelB));
+            tables.AddRange(SuspensionChartBuilder.StatsTables(result.B, Named(p.LabelB)));
         }
 
         Stats = tables;
+        if (inRegions && result.RegionSecondsA < LowDataSeconds)
+        {
+            SetStatus($"Only {result.RegionSecondsA.ToString("0.#", CultureInfo.InvariantCulture)} s of data in {p.Regions.Label}: tick more laps or regions for a steadier histogram", StatusKind.Hint);
+        }
     }
+
+    /// <summary>Below this much time inside the ticked regions the histogram is flagged as thin.</summary>
+    public const double LowDataSeconds = 10;
 
     /// <inheritdoc />
     protected override void ClearDisplay()

@@ -44,6 +44,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Driver = new DriverViewModel(SessionA, SessionB);
         TireGrip = new TireGripViewModel(SessionA, SessionB);
         Sectors = new SectorsViewModel(SessionA, TrackStore);
+        Regions = new RegionsViewModel(SessionA, TrackStore, Driver.DriverConfig.GetChannelNames);
+        Suspension.Regions = Regions;
+        Regions.Changed += () => Suspension.OnSelectionChanged();
         Tabs = new ObservableCollection<AnalysisTabViewModel> { TimeDistance, Sectors, Suspension, Driver, TireGrip, RollGradient };
         ConfigSections = Tabs.Where(t => t.Config is ChannelConfigViewModel).Select(t => new ConfigSection(t.Header, (ChannelConfigViewModel)t.Config!)).ToList();
         _selectedConfigSection = ConfigSections.FirstOrDefault();
@@ -79,6 +82,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     /// <summary>Profile store shared by the sessions and tabs.</summary>
     public ProfileStore Profiles { get; }
+
+    /// <summary>The track regions the statistical tabs can be restricted to, and which are ticked.</summary>
+    public RegionsViewModel Regions { get; }
 
     /// <summary>Track store for the Sectors tab.</summary>
     public TrackStore TrackStore { get; }
@@ -366,8 +372,19 @@ public sealed partial class MainWindowViewModel : ObservableObject
         ActiveTab.SetStatus($"Profile saved for {ident}", StatusKind.Done);
     }
 
+    /// <summary>
+    /// Rebuild the region list for Session A. Not awaited by its callers (a session load does not
+    /// wait for corner detection), so a failure goes to the UI thread's exception handler from here.
+    /// </summary>
+    private async void RefreshRegions() => await Regions.RefreshAsync();
+
     private void OnSessionLoaded(SessionViewModel session)
     {
+        if (ReferenceEquals(session, SessionA))
+        {
+            RefreshRegions();
+        }
+
         if (session.FilePath is { } path && File.Exists(path))
         {
             Settings.AddRecent(path);
