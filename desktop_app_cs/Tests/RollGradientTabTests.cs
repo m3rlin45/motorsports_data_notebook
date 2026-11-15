@@ -107,7 +107,8 @@ public class RollGradientTabTests
         await tab.RunNowAsync();
 
         var spec = tab.Spec!;
-        Assert.EndsWith("  |  Turn 3", spec.Title);
+        Assert.Equal(wholeTitle.Split('|')[0], spec.Title.Split('|')[0]); // "Roll Gradient", then the region's own numbers
+        Assert.Equal("Turn 3", tab.RegionLabel);
         Assert.DoesNotContain(wholeNote, spec.Panels[0].Annotation); // a fit of the corner's samples only
         Assert.Equal(wholeLines + 1, spec.Panels[0].Lines.Count); // its own fit and the whole laps' in grey
         Assert.Equal(InfernoAnalyzer.Charting.ChartColors.Neutral, spec.Panels[0].Lines[^1].Color);
@@ -128,7 +129,7 @@ public class RollGradientTabTests
         viewModel.Regions.ShowWholeLap = true;
         viewModel.SessionB.Apply(Sample.Value, SessionParityTests.SamplePath());
         await tab.RunNowAsync();
-        Assert.EndsWith("  |  Turn 3", tab.Spec!.Title);
+        Assert.Equal("Turn 3", tab.RegionLabel);
         Assert.Equal(2, tab.Spec.Panels[0].Scatter.Count);
         Assert.DoesNotContain(tab.Spec.Panels[0].Lines, l => l.Color == InfernoAnalyzer.Charting.ChartColors.Neutral);
         Assert.DoesNotContain("whole lap", tab.Spec.Panels[0].Annotation);
@@ -137,6 +138,7 @@ public class RollGradientTabTests
         viewModel.Regions.Clear();
         await tab.RunNowAsync();
         Assert.Equal(wholeTitle, tab.Spec!.Title);
+        Assert.Equal(string.Empty, tab.RegionLabel);
         Assert.Equal(wholeNote, tab.Spec.Panels[0].Annotation);
     });
 

@@ -24,6 +24,9 @@
           <SolidColorBrush x:Key="AppBestBrush" Color="#7A2BD6" />
           <SolidColorBrush x:Key="AppSecondBestBrush" Color="#107C41" />
           <SolidColorBrush x:Key="AppGateBrush" Color="#B45309" />
+          <!-- A ticked track region: its toolbar tag and its stretch on the map; the lit "Whole lap" (ChartColors.Region). The gates' amber. -->
+          <SolidColorBrush x:Key="AppRegionBrush" Color="#B45309" />
+          <SolidColorBrush x:Key="AppRegionTextBrush" Color="#FFFFFF" />
           <SolidColorBrush x:Key="AppTrackBrush" Color="#8A8A8A" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="Dark">
@@ -38,6 +41,8 @@
           <SolidColorBrush x:Key="AppBestBrush" Color="#C08BFF" />
           <SolidColorBrush x:Key="AppSecondBestBrush" Color="#4CD98A" />
           <SolidColorBrush x:Key="AppGateBrush" Color="#F59E0B" />
+          <SolidColorBrush x:Key="AppRegionBrush" Color="#F59E0B" />
+          <SolidColorBrush x:Key="AppRegionTextBrush" Color="#1E1E1E" />
           <SolidColorBrush x:Key="AppTrackBrush" Color="#8A8A8A" />
         </ResourceDictionary>
       </ResourceDictionary.ThemeDictionaries>
@@ -135,6 +140,42 @@
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Padding" Value="8,4" />
+  </Style>
+  <!-- The region selector's "Whole lap": lit in the region colour while nothing is ticked, as the state it stands for. -->
+  <Style Selector="Button.chip">
+    <Setter Property="Padding" Value="8,2" />
+    <Setter Property="MinHeight" Value="24" />
+  </Style>
+  <Style Selector="Button.chip.lit /template/ ContentPresenter#PART_ContentPresenter, Button.chip.lit:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AppRegionBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AppRegionBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource AppRegionTextBrush}" />
+  </Style>
+  <!-- A corner's or sector's row in the region selector: the whole width is the checkbox, like a lap's row. -->
+  <Style Selector="CheckBox.regionrow">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+  </Style>
+  <!-- The tag beside a tab's title while its result covers ticked regions only. -->
+  <Style Selector="Border.regiontag">
+    <Setter Property="Background" Value="{DynamicResource AppRegionBrush}" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Padding" Value="10,0,2,0" />
+    <Setter Property="Height" Value="24" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.regiontag TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource AppRegionTextBrush}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.regiontag Button.icon">
+    <Setter Property="MinHeight" Value="20" />
+    <Setter Property="MinWidth" Value="20" />
+    <Setter Property="Padding" Value="2" />
+  </Style>
+  <Style Selector="Border.regiontag Path.icon">
+    <Setter Property="Stroke" Value="{DynamicResource AppRegionTextBrush}" />
   </Style>
   <Style Selector="Button.icon, ToggleButton.icon">
     <Setter Property="Background" Value="Transparent" />
