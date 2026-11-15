@@ -44,6 +44,7 @@ public sealed class TabViewLocator : IDataTemplate
     private static Control Create(AnalysisTabViewModel tab) => tab switch
     {
         TimeDistanceViewModel => new TimeDistanceView(),
+        SuspensionViewModel => new SuspensionView(),
         _ => new TextBlock { Text = tab.Header },
     };
 
