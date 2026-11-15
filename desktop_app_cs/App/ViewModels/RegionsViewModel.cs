@@ -54,8 +54,10 @@ public sealed partial class RegionItemViewModel : ObservableObject
     private readonly Action _changed;
 
     /// <summary>Create a row; <paramref name="changed"/> runs when its tick changes.</summary>
-    public RegionItemViewModel(int index, TrackRegion region, int firstSample, int lastSample, int markerSample, string tip, Action changed)
+    public RegionItemViewModel(int index, TrackRegion region, int firstSample, int lastSample, int markerSample, string tip, Action changed, string direction = "", string speed = "")
     {
+        Direction = direction;
+        Speed = speed;
         Index = index;
         Region = region;
         FirstSample = firstSample;
@@ -64,6 +66,12 @@ public sealed partial class RegionItemViewModel : ObservableObject
         Tip = tip;
         _changed = changed;
     }
+
+    /// <summary>A corner's direction for its row, "L" or "R"; empty for a sector.</summary>
+    public string Direction { get; }
+
+    /// <summary>A corner's speed at its slowest point for its row ("138 km/h"); empty where unknown and for a sector.</summary>
+    public string Speed { get; }
 
     /// <summary>What the region is, in a line: "Turn 3 · right · 138 km/h at the slowest point".</summary>
     public string Tip { get; }
@@ -76,6 +84,9 @@ public sealed partial class RegionItemViewModel : ObservableObject
 
     /// <summary>Display name.</summary>
     public string Name => Region.Name;
+
+    /// <summary>The name in short: "T3" for "Turn 3", a sector's name as it is (the map numbers its corners with it).</summary>
+    public string ShortName => Region.Kind == TrackRegionKind.Corner && Name.StartsWith("Turn ", StringComparison.Ordinal) ? "T" + Name["Turn ".Length..] : Name;
 
     /// <summary>Where the region starts on the reference lap (sample index), for drawing.</summary>
     public int FirstSample { get; }
@@ -94,9 +105,11 @@ public sealed partial class RegionItemViewModel : ObservableObject
 }
 
 /// <summary>
-/// The regions of the track the statistical tabs (Suspension, Roll Gradient,
-/// Tire Grip) can be restricted to, and which are ticked. One choice shared
-/// by those tabs, as their lap selection is. The list is a property of the
+/// The regions of the session's track and which are ticked: the selector in
+/// the sidebar, under the lap lists. One choice for every tab; what a tab
+/// does with it is the tab's <see cref="RegionUse"/> (the statistical tabs
+/// cover only the ticked regions; a tab that does not use them shows whole
+/// laps and the selector says so). The list is a property of the
 /// session and its track, not of the ticked laps: corners are those of the
 /// Driver tab's analysis (its channels and thresholds, through the same
 /// <see cref="DriverConsistencyCache"/>) over the laps the session starts
@@ -151,9 +164,21 @@ public sealed partial class RegionsViewModel : ObservableObject
     /// <summary>Raised when what the analyses should cover changed (a tick, or the reference toggle).</summary>
     public event Action? Changed;
 
-    /// <summary>Draw the whole-lap result behind a region's, for reference.</summary>
+    /// <summary>Draw the whole-lap result behind a region's, for reference (one setting for the tabs that can).</summary>
     [ObservableProperty]
     private bool _showWholeLap = true;
+
+    /// <summary>What the tab now showing does with the ticks.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsUsed))]
+    [NotifyPropertyChangedFor(nameof(Caption))]
+    private RegionUse _use = RegionUse.Filter;
+
+    /// <summary>The tab now showing uses the ticks; otherwise the selector is dimmed and the ticks wait for a tab that does.</summary>
+    public bool IsUsed => Use != RegionUse.None;
+
+    /// <summary>What the ticks do on the tab now showing, where that needs saying.</summary>
+    public string Caption => Use == RegionUse.None ? "Not used on this tab: it shows whole laps" : string.Empty;
 
     /// <summary>The small map: the reference lap with the ticked regions coloured.</summary>
     [ObservableProperty]
@@ -170,6 +195,10 @@ public sealed partial class RegionsViewModel : ObservableObject
     /// <summary>Why there are no sectors, or empty when there are.</summary>
     [ObservableProperty]
     private string _sectorsHint = string.Empty;
+
+    /// <summary>Session A is loaded: there is a track to pick regions of (the selector is hidden otherwise).</summary>
+    [ObservableProperty]
+    private bool _hasSession;
 
     /// <summary>There are corners to list.</summary>
     public bool HasCorners => Corners.Count > 0;
@@ -218,6 +247,19 @@ public sealed partial class RegionsViewModel : ObservableObject
         OnTicksChanged();
     }
 
+    /// <summary>Tick the region at <paramref name="index"/> and nothing else (a double click on its row).</summary>
+    public void Solo(int index)
+    {
+        _batch = true;
+        foreach (var item in Items)
+        {
+            item.IsSelected = item.Index == index;
+        }
+
+        _batch = false;
+        OnTicksChanged();
+    }
+
     /// <summary>Flip the tick of the row at <paramref name="index"/> (a click on its dot on the map).</summary>
     public void Toggle(int index)
     {
@@ -241,7 +283,7 @@ public sealed partial class RegionsViewModel : ObservableObject
     }
 
     /// <summary>One region as listed: where it lies on the reference lap (sample indices) and its tooltip.</summary>
-    private sealed record Listed(TrackRegion Region, int First, int Last, int Marker, string Tip);
+    private sealed record Listed(TrackRegion Region, int First, int Last, int Marker, string Tip, string Direction = "", string Speed = "");
 
     /// <summary>What <see cref="Detect"/> found.</summary>
     private sealed record Detected(double[] Lat, double[] Lon, IReadOnlyList<Listed> Corners, IReadOnlyList<Listed> Sectors, string Hint, string SectorsHint);
@@ -288,6 +330,7 @@ public sealed partial class RegionsViewModel : ObservableObject
         var version = ++_version;
         var log = _a.Log;
         var sameSession = log is not null && ReferenceEquals(log, _listedFor);
+        HasSession = log is not null;
         if (!sameSession)
         {
             var hadSelection = HasSelection;
@@ -333,7 +376,7 @@ public sealed partial class RegionsViewModel : ObservableObject
         var index = 0;
         foreach (var l in detected.Corners)
         {
-            Corners.Add(new RegionItemViewModel(index++, l.Region, l.First, l.Last, l.Marker, l.Tip, OnTicksChanged));
+            Corners.Add(new RegionItemViewModel(index++, l.Region, l.First, l.Last, l.Marker, l.Tip, OnTicksChanged, l.Direction, l.Speed));
         }
 
         foreach (var l in detected.Sectors)
@@ -423,12 +466,14 @@ public sealed partial class RegionsViewModel : ObservableObject
                 var apexDist = segments.FirstOrDefault(s => s.SegmentType == "corner")?.ApexDist ?? (segments.Min(s => s.StartDist) + segments.Max(s => s.EndDist)) / 2;
                 var apex = Numerics.ArgMin(result.RefDistance.Select(d => Math.Abs(d - apexDist)).ToArray());
                 var tip = $"{region.Name} · {(data.Corner.Direction == 'L' ? "left" : "right")}";
+                var speed = string.Empty;
                 if (data.SpeedValues.Count > 0)
                 {
-                    tip += $" · {data.SpeedMean.ToString("0", System.Globalization.CultureInfo.InvariantCulture)} km/h at the slowest point";
+                    speed = $"{data.SpeedMean.ToString("0", System.Globalization.CultureInfo.InvariantCulture)} km/h";
+                    tip += $" · {speed} at the slowest point";
                 }
 
-                corners.Add(new Listed(region, first, last, apex, tip));
+                corners.Add(new Listed(region, first, last, apex, tip, data.Corner.Direction.ToString(), speed));
             }
         }
         else
@@ -503,13 +548,13 @@ public sealed partial class RegionsViewModel : ObservableObject
             var ys = _y.AsSpan(item.FirstSample, count).ToArray();
             if (item.IsSelected)
             {
-                paths.Add(new TrackMapPathSpec(xs, ys, ChartColors.SessionA, 4));
+                paths.Add(new TrackMapPathSpec(xs, ys, ChartColors.Region, 4));
             }
 
             // Sectors tile the lap, so only corners get a dot to click.
             if (item.Region.Kind == TrackRegionKind.Corner)
             {
-                points.Add(new TrackMapPointSpec(_x[item.MarkerSample], _y[item.MarkerSample], ChartColors.Ink, 5, Id: item.Index));
+                points.Add(new TrackMapPointSpec(_x[item.MarkerSample], _y[item.MarkerSample], ChartColors.Ink, 5, Label: item.ShortName[1..], Id: item.Index));
             }
 
             highlights.Add(new TrackMapHighlightSpec(item.Index, xs, ys, ChartColors.HighlightA, 5, _x[item.MarkerSample], _y[item.MarkerSample]));

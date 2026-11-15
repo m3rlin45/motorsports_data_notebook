@@ -56,6 +56,9 @@ public partial class MainWindow : Window
         viewModel.RecentFiles.CollectionChanged += OnRecentFilesChanged;
         viewModel.SessionA.PropertyChanged += OnSessionPropertyChanged;
         viewModel.SessionB.PropertyChanged += OnSessionPropertyChanged;
+        // The region card's share of the sidebar follows the sidebar's height and what the card lists.
+        Sidebar.SizeChanged += (_, _) => ArrangeSidebar();
+        viewModel.Regions.PropertyChanged += (_, _) => ArrangeSidebar();
 
         RestoreWindowState();
         ApplyTheme(viewModel.Theme);
@@ -222,15 +225,48 @@ public partial class MainWindow : Window
 
     // ---------------------------------------------------------------- layout
 
+    /// <summary>A loaded session's panel is left at least this tall when the region card has to give way: its header and about six laps.</summary>
+    private const double SessionMinHeight = 300;
+
+    /// <summary>The region card keeps at least this many of its rows in sight (with its header and its map) however short the sidebar is.</summary>
+    private const int RegionMinRows = 3;
+
+    private const double RegionRowHeight = 24;
+
     /// <summary>
     /// A loaded session's panel shares the sidebar's height; an empty one
     /// shrinks to its "Open file" row, so a lone Session A gets the whole
-    /// column for its laps.
+    /// column for its laps. The region card under them is as tall as its
+    /// rows need while that leaves every loaded session its header and about
+    /// six laps; when it does not, the card is what gives way (its rows
+    /// scroll), down to a few rows above its map.
     /// </summary>
     private void ArrangeSidebar()
     {
-        Sidebar.RowDefinitions[0].Height = ViewModel.SessionA.HasSession ? GridLength.Star : GridLength.Auto;
-        Sidebar.RowDefinitions[2].Height = ViewModel.SessionB.HasSession ? GridLength.Star : GridLength.Auto;
+        var a = ViewModel.SessionA.HasSession;
+        var b = ViewModel.SessionB.HasSession;
+        Sidebar.RowDefinitions[0].Height = a ? GridLength.Star : GridLength.Auto;
+        Sidebar.RowDefinitions[2].Height = b ? GridLength.Star : GridLength.Auto;
+
+        var available = Sidebar.Bounds.Height;
+        if (!a || available <= 0)
+        {
+            Sidebar.RowDefinitions[3].Height = GridLength.Auto; // no session: the card is not shown; before the first layout: nothing to share out yet
+            return;
+        }
+
+        RegionPanel.Measure(new Size(Sidebar.Bounds.Width, double.PositiveInfinity));
+        var natural = RegionPanel.DesiredSize.Height;
+        var regions = ViewModel.Regions;
+        var rows = regions.Corners.Count + regions.Sectors.Count;
+        var least = natural - (Math.Max(0, rows - RegionMinRows) * RegionRowHeight);
+        SessionBPanel.Measure(new Size(Sidebar.Bounds.Width, double.PositiveInfinity));
+        var sessions = SessionMinHeight + Sidebar.RowDefinitions[1].Height.Value + (b ? SessionMinHeight : SessionBPanel.DesiredSize.Height);
+        var height = Math.Clamp(available - sessions, least, natural);
+        if (Sidebar.RowDefinitions[3].Height is not { IsAbsolute: true } current || Math.Abs(current.Value - height) > 0.5)
+        {
+            Sidebar.RowDefinitions[3].Height = new GridLength(height);
+        }
     }
 
     private void OnSessionPropertyChanged(object? sender, PropertyChangedEventArgs e)

@@ -71,11 +71,23 @@ public class DriverTabTests
     [Fact]
     public Task The_region_list_has_the_tabs_corners_from_one_run_of_the_kernel() => Ui.Run(async () =>
     {
-        var window = await LoadedWindow();
+        // The session loads behind another tab: the region list detects the corners, and the Driver
+        // tab, opened afterwards with the default lap ticks, asks for the same analysis and gets
+        // that result instead of running the kernel again.
+        var window = new MainWindowViewModel(BuiltinOnly, new InfernoAnalyzer.Core.Tracks.TrackStore("/nonexistent/tracks.yaml"));
+        foreach (var tab in window.Tabs)
+        {
+            tab.Debounce = TimeSpan.Zero;
+        }
+
+        window.ActiveTab = window.Sectors;
+        window.SessionA.Apply(Sample.Value, SessionParityTests.SamplePath());
         var regions = window.Regions;
         await regions.LastRefresh;
-
-        // With the default lap ticks the tab and the region list ask for the same analysis: computed once.
+        Assert.Equal(1, window.DriverAnalyses.Computations);
+        window.ActiveTab = window.Driver;
+        await window.Driver.RunNowAsync();
+        await regions.LastRefresh;
         Assert.Equal(1, window.DriverAnalyses.Computations);
         Assert.Equal(window.Driver.Corners.Select(c => c.Index + 1), regions.Corners.Select(c => int.Parse(c.Name["Turn ".Length..])));
         Assert.Matches(@"^Turn 3 · (left|right) · \d+ km/h at the slowest point$", regions.Corners[2].Tip);
