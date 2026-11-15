@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """Build the libxrk/libibt FFI libraries the C# analyzer loads.
 
-Fetches each parser repository at its pinned commit (a plain tarball from
-GitHub, no git needed) into `desktop_app_cs/native/src/`, builds the FFI
+Fetches each parser repository at the release the Python project is locked to
+(the `libxrk` / `libibt` versions in `uv.lock`, as the tag `v<version>`; a
+plain tarball from GitHub, no git needed) into `desktop_app_cs/native/src/`,
+so the C# analyzer and the Python package always read files with the same
+parser: bump the dependency in pyproject.toml, `uv lock`, and rebuild. Builds the FFI
 crate with cargo for each requested runtime, and copies the shared library
 to `desktop_app_cs/native/runtimes/<rid>/native/` where the C# projects pick
 it up (see Core/InfernoAnalyzer.Core.csproj and Core/Io/NativeLoader.cs).
@@ -33,26 +36,25 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import tomllib
 import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 NATIVE = ROOT / "desktop_app_cs" / "native"
+LOCK = ROOT / "uv.lock"
 
-# Pinned parser commits: the ones carrying the FFI crates. libibt is at its
-# v0.2.0 release tag, the version the Python project depends on, so the
-# installed wheel and the FFI library are the same parser; libxrk is at the
-# master commit that landed libxrk-ffi until a release carries it.
+# The parsers and their FFI crates. Which version of each is built is not
+# written here: it is the one uv.lock resolves for the Python project (see
+# locked_version), fetched as that release's tag.
 PARSERS = {
     "libxrk": {
         "repo": "m3rlin45/libxrk",
-        "ref": "33f311f46495ca321eedb29f261bfb80e1d66d8b",
         "crate": "libxrk-ffi",
         "lib": "xrk_ffi",
     },
     "libibt": {
         "repo": "m3rlin45/libibt",
-        "ref": "1c880537720d0b52ecce1a93ea15ae287e7935f0",  # v0.2.0
         "crate": "libibt-ffi",
         "lib": "ibt_ffi",
     },
@@ -81,12 +83,41 @@ def host_rid() -> str:
     return f"{os_name}-{arch}"
 
 
+def locked_version(name: str, lock: Path = LOCK) -> str:
+    """The version of package `name` that uv.lock pins for the Python project.
+
+    Parameters
+    ----------
+    name : str
+        The package name as it appears in the lock file (``libxrk``).
+    lock : Path, optional
+        The lock file to read (the repository's ``uv.lock``).
+
+    Returns
+    -------
+    str
+        The locked version, e.g. ``"0.14.1"``.
+
+    Raises
+    ------
+    SystemExit
+        If the lock file has no such package.
+    """
+    with lock.open("rb") as f:
+        packages = tomllib.load(f).get("package", [])
+    versions = [p["version"] for p in packages if p.get("name") == name]
+    if len(versions) != 1:
+        raise SystemExit(f"{lock.name} pins {len(versions)} versions of {name}; expected one")
+    return versions[0]
+
+
 def fetch_source(name: str, spec: dict) -> Path:
-    """The parser checkout at its pinned ref (downloaded once)."""
-    dest = NATIVE / "src" / f"{name}-{spec['ref'][:12]}"
+    """The parser source at the locked release's tag (downloaded once)."""
+    version = locked_version(name)
+    dest = NATIVE / "src" / f"{name}-{version}"
     if (dest / "Cargo.toml").exists():
         return dest
-    url = f"https://codeload.github.com/{spec['repo']}/tar.gz/{spec['ref']}"
+    url = f"https://codeload.github.com/{spec['repo']}/tar.gz/refs/tags/v{version}"
     print(f"fetching {url}", file=sys.stderr)
     with urllib.request.urlopen(url, timeout=120) as response:  # noqa: S310 - fixed https host
         data = response.read()
@@ -160,7 +191,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.add_argument(
             f"--source-{name}",
             type=Path,
-            help=f"local {name} checkout to build instead of the pinned ref",
+            help=f"local {name} checkout to build instead of the locked release",
         )
     parser.add_argument(
         "--source-dir",

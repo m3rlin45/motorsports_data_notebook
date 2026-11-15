@@ -91,6 +91,7 @@ internal static class ArrowConvert
         {
             DoubleArray => ChannelValueType.Float64,
             FloatArray => ChannelValueType.Float32,
+            HalfFloatArray => ChannelValueType.Float16,
             BooleanArray => ChannelValueType.Boolean,
             _ => ChannelValueType.Integer,
         };
@@ -166,6 +167,9 @@ internal static class ArrowConvert
     {
         DoubleArray a => a.Values.ToArray(),
         FloatArray a => WidenD(a.Values),
+
+        // libxrk hands a channel over at the width the logger wrote it; a float16 widens exactly.
+        HalfFloatArray a => WidenHalf(a.Values),
         Int64Array a => WidenD(a.Values),
         Int32Array a => WidenD(a.Values),
         Int16Array a => WidenD(a.Values),
@@ -175,6 +179,17 @@ internal static class ArrowConvert
         BooleanArray a => Enumerable.Range(0, a.Length).Select(i => a.GetValue(i) == true ? 1.0 : 0.0).ToArray(),
         _ => throw new NotSupportedException($"value column of type {array.Data.DataType.Name}"),
     };
+
+    private static double[] WidenHalf(ReadOnlySpan<Half> values)
+    {
+        var result = new double[values.Length];
+        for (var i = 0; i < values.Length; i++)
+        {
+            result[i] = (double)values[i];
+        }
+
+        return result;
+    }
 
     private static long[] Widen<T>(ReadOnlySpan<T> values) where T : struct, IConvertible
     {

@@ -220,10 +220,12 @@ cases to `Tests/Fixtures/profiles.json`; `ProfilesParityTests` replays them.
   codes (0 ok, 1 index, 2 null, 3 panic; `NativeStatus` in C#). Rust
   round-trip tests drive the ABI as a foreign caller on each repo's sample.
   Both build as cdylib + staticlib for linux-x64 and (cross-compiled with
-  mingw) win-x64. `tools/build_native.py` pins both by commit: `libxrk` at
-  master 33f311f4 (the commit that landed `libxrk-ffi`; no release carries it
-  yet), `libibt` at 1c880537, its v0.2.0 tag, which is also the version the
-  Python project depends on.
+  mingw) win-x64. `tools/build_native.py` builds both at the versions the Python
+  project is locked to: it reads `libxrk` and `libibt` from `uv.lock` and
+  fetches each release's tag (`v<version>`), so a dependency bump in
+  `pyproject.toml` moves both sides together (since 2026-11-15; before that
+  the script pinned commits of its own and the two sides had drifted apart
+  by eleven libxrk commits).
 - `Core/Io`: `NativeLoader` (resolves `runtimes/<rid>/native/` or the exe
   dir), source-generated `LibraryImport` bindings (`XrkNative`, `IbtNative`),
   `NativeSessionReader` (Arrow C stream → `Channel`/`Lap`, metadata JSON
@@ -249,11 +251,12 @@ cases to `Tests/Fixtures/profiles.json`; `ProfilesParityTests` replays them.
   70 MB sample is not in this repo); CI points it at the copy in the libibt
   source that `build_native.py` fetches. The IBT fixture is dumped with the
   libibt wheel the project installs (0.2.0, the release the FFI library is
-  built from). The AIM fixture is dumped with libxrk's Python package built from the same
-  pinned commit (`just cs-session-fixture` does this), not the 0.13.0 wheel
-  the project installs: master has since fixed unit codes, added the
-  `GPS_ITOW` / `GPS_Week` channels and a `session` lap column, and orders
-  channels by index. Channel order and each channel's first/last/min/max
+  built from). The AIM fixture is dumped with the libxrk the project installs
+  (`just cs-session-fixture`), the same release the FFI library is built
+  from. libxrk hands a channel over at the width the logger wrote it:
+  float16 for accelerations and shock pots (`ChannelValueType.Float16`),
+  which widens exactly and, as in Python, becomes a float32 channel when
+  resampled. Channel order and each channel's first/last/min/max
   match exactly; sums to 1e-9 relative (numpy sums pairwise).
 - Build: `just cs-native` (host) or `--rids linux-x64 win-x64`; CI installs
   Rust and builds the libraries before the C# test and publish jobs; the

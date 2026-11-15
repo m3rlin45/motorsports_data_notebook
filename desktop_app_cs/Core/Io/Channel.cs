@@ -11,6 +11,13 @@ public enum ChannelValueType
     /// <summary>32-bit float: interpolated values are rounded back to single precision, as Python's Arrow cast does.</summary>
     Float32,
 
+    /// <summary>
+    /// 16-bit float (what some loggers write for accelerations and shock pots). Resampling makes it a
+    /// <see cref="Float32"/> channel, as libxrk does: the values widen exactly and interpolated ones
+    /// are rounded to single precision.
+    /// </summary>
+    Float16,
+
     /// <summary>Any integer width.</summary>
     Integer,
 
@@ -128,7 +135,7 @@ public sealed class Channel
                     var span = (double)(xs[hi] - xs[lo]);
                     var slope = span > 0 ? (ys[hi] - ys[lo]) / span : 0;
                     var value = slope * (t - xs[lo]) + ys[lo];
-                    result[i] = ValueType == ChannelValueType.Float32 ? (float)value : value;
+                    result[i] = ValueType is ChannelValueType.Float32 or ChannelValueType.Float16 ? (float)value : value;
                 }
             }
             else
@@ -139,7 +146,9 @@ public sealed class Channel
             }
         }
 
-        return With((long[])target.Clone(), result);
+        // A resampled float16 channel is a float32 one from here on (see ChannelValueType.Float16).
+        var resampledType = ValueType == ChannelValueType.Float16 ? ChannelValueType.Float32 : ValueType;
+        return new Channel(Name, (long[])target.Clone(), result, Metadata, resampledType);
     }
 
     /// <summary>Index of the first element ≥ <paramref name="value"/> (numpy searchsorted left).</summary>
