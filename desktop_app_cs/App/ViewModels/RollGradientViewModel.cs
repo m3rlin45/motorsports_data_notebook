@@ -148,7 +148,14 @@ public static class RollGradientChartBuilder
     private static string F(double v, string fmt) => v.ToString(fmt, CultureInfo.InvariantCulture);
 
     /// <summary>The figure for one session or an A/B overlay.</summary>
-    public static ScatterGridSpec Build(RollGradientResult a, RollGradientResult? b, string labelA, string labelB)
+    /// <remarks>
+    /// With <paramref name="scope"/> the clouds are a region's and it names the region;
+    /// <paramref name="wholeA"/> is then the whole laps' result, its fits drawn as neutral lines for
+    /// reference and quoted in the notes. A comparison has no such reference: its two sessions are
+    /// compared with each other.
+    /// </remarks>
+    public static ScatterGridSpec Build(
+        RollGradientResult a, RollGradientResult? b, string labelA, string labelB, RollGradientResult? wholeA = null, string scope = "")
     {
         var results = b is null ? new[] { (a, "Session A") } : new[] { (a, labelA), (b, labelB) };
         var series = results.Select(r => Downsample(r.Item1, r.Item2)).ToList();
@@ -183,8 +190,18 @@ public static class RollGradientChartBuilder
             if (Fit(s.RollR, r.RollRatio, r.RollRatioInterceptDeg, color) is { } tl) ratioLines.Add(tl);
             if (s.X is not null && s.Y is not null)
             {
-                paths.Add(new TrackPathSpec(s.Label, s.X, s.Y, color, Highlights[i % 2], i));
+                // A region's samples are a stretch of every lap in turn, not one continuous drive.
+                paths.Add(new TrackPathSpec(s.Label, s.X, s.Y, color, Highlights[i % 2], i, Connected: scope.Length == 0));
             }
+        }
+
+        if (wholeA is not null && single)
+        {
+            // The whole laps' fits across the region's own span: how the region differs from the lap.
+            var s = series[0];
+            if (Fit(s.Lat, wholeA.Front.GradientDegPerG, wholeA.Front.InterceptDeg, ChartColors.Neutral) is { } fl) frontLines.Add(fl);
+            if (Fit(s.Lat, wholeA.Rear.GradientDegPerG, wholeA.Rear.InterceptDeg, ChartColors.Neutral) is { } rl) rearLines.Add(rl);
+            if (Fit(s.RollR, wholeA.RollRatio, wholeA.RollRatioInterceptDeg, ChartColors.Neutral) is { } tl) ratioLines.Add(tl);
         }
 
         string frontNote, rearNote, ratioNote, warning = string.Empty;
@@ -193,6 +210,13 @@ public static class RollGradientChartBuilder
             frontNote = $"gradient = {F(a.Front.GradientDegPerG, "+0.000;-0.000")} deg/g\nR² = {F(a.Front.R2, "0.000")}   n = {a.Front.NSamples}";
             rearNote = $"gradient = {F(a.Rear.GradientDegPerG, "+0.000;-0.000")} deg/g\nR² = {F(a.Rear.R2, "0.000")}   n = {a.Rear.NSamples}";
             ratioNote = $"roll ratio F/R = {F(a.RollRatio, "0.000")}\nR² = {F(a.RollRatioR2, "0.000")}";
+            if (wholeA is not null)
+            {
+                frontNote += $"\nwhole lap {F(wholeA.Front.GradientDegPerG, "+0.000;-0.000")} deg/g (grey)";
+                rearNote += $"\nwhole lap {F(wholeA.Rear.GradientDegPerG, "+0.000;-0.000")} deg/g (grey)";
+                ratioNote += $"\nwhole lap {F(wholeA.RollRatio, "0.000")} (grey)";
+            }
+
             if (!a.SignsConsistent)
             {
                 warning = "front/rear roll in opposite directions:\ncheck left/right channel assignment";
@@ -215,6 +239,11 @@ public static class RollGradientChartBuilder
         var title = single
             ? $"Roll Gradient  |  front {F(a.Front.AbsGradientDegPerG, "0.00")} deg/g, rear {F(a.Rear.AbsGradientDegPerG, "0.00")} deg/g, roll ratio {F(a.RollRatio, "0.00")}"
             : $"Roll Gradient: {labelA} vs {labelB}";
+        if (scope.Length > 0)
+        {
+            title += $"  |  {scope}";
+        }
+
         return new ScatterGridSpec(title, paths, panels, 2, MapTitle);
     }
 
@@ -300,10 +329,18 @@ public sealed partial class RollGradientViewModel : AnalysisTabViewModel<RollGra
         MotionRatios RatiosB,
         TrackWidths WidthsB,
         string LabelB,
-        double MinLateralG);
+        double MinLateralG,
+        RegionSelection Regions);
 
-    /// <summary>The roll gradients of Session A and, in a comparison, Session B.</summary>
-    public sealed record Result(RollGradientResult A, RollGradientResult? B);
+    /// <summary>
+    /// The roll gradients of Session A and, in a comparison, Session B, over the ticked regions when
+    /// there are any; <paramref name="WholeA"/> is then Session A's whole-lap result, for reference
+    /// (a single session only).
+    /// </summary>
+    public sealed record Result(RollGradientResult A, RollGradientResult? B, RollGradientResult? WholeA = null);
+
+    /// <summary>The ticked track regions the analysis is restricted to (shared with the other statistical tabs); null: whole laps.</summary>
+    public RegionsViewModel? Regions { get; set; }
 
     /// <inheritdoc />
     protected override Parameters? GetParameters()
@@ -351,22 +388,30 @@ public sealed partial class RollGradientViewModel : AnalysisTabViewModel<RollGra
             _suspension.GetMotionRatios(SessionSlot.B) ?? ratiosA,
             RollConfig.GetTrackWidths(SessionSlot.B) ?? widthsA,
             _b.SessionLabel,
-            MinLateralG.Value ?? 0);
+            MinLateralG.Value ?? 0,
+            Regions?.Selection() ?? RegionSelection.WholeLap);
     }
 
     /// <inheritdoc />
     protected override Result Analyze(Parameters p, CancellationToken cancellation)
     {
-        var a = RollGradient.AnalyzeRollGradientMultiLap(p.A, p.LapsA, p.NamesA, p.RatiosA, p.WidthsA, minLateralG: p.MinLateralG, cancellation: cancellation);
-        var b = p.B is null ? null : RollGradient.AnalyzeRollGradientMultiLap(p.B, p.LapsB, p.NamesB, p.RatiosB, p.WidthsB, minLateralG: p.MinLateralG, cancellation: cancellation);
-        return new Result(a, b);
+        var windowsA = p.Regions.Windows(p.A, p.LapsA, SessionSlot.A);
+        var a = RollGradient.AnalyzeRollGradientMultiLap(p.A, p.LapsA, p.NamesA, p.RatiosA, p.WidthsA, minLateralG: p.MinLateralG, cancellation: cancellation, windowsByLap: windowsA);
+        var b = p.B is null
+            ? null
+            : RollGradient.AnalyzeRollGradientMultiLap(
+                p.B, p.LapsB, p.NamesB, p.RatiosB, p.WidthsB, minLateralG: p.MinLateralG, cancellation: cancellation, windowsByLap: p.Regions.Windows(p.B, p.LapsB, SessionSlot.B));
+        var whole = p.B is null && p.Regions is { IsWholeLap: false, ShowWholeLap: true }
+            ? RollGradient.AnalyzeRollGradientMultiLap(p.A, p.LapsA, p.NamesA, p.RatiosA, p.WidthsA, minLateralG: p.MinLateralG, cancellation: cancellation)
+            : null;
+        return new Result(a, b, whole);
     }
 
     /// <inheritdoc />
     protected override void Display(Parameters p, Result result)
     {
-        Spec = RollGradientChartBuilder.Build(result.A, result.B, p.LabelA, p.LabelB);
-        var tables = new List<StatsTable> { RollGradientChartBuilder.Table(result.A, p.LabelA) };
+        Spec = RollGradientChartBuilder.Build(result.A, result.B, p.LabelA, p.LabelB, result.WholeA, p.Regions.Label);
+        var tables = new List<StatsTable> { RollGradientChartBuilder.Table(result.A, p.Regions.IsWholeLap ? p.LabelA : $"{p.LabelA}, {p.Regions.Label}") };
         if (result.B is not null)
         {
             tables.Add(RollGradientChartBuilder.Table(result.B, p.LabelB));

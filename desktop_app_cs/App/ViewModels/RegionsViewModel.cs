@@ -108,6 +108,7 @@ public sealed partial class RegionsViewModel : ObservableObject
     private double[] _refLon = Array.Empty<double>();
     private int _version;
     private bool _batch;
+    private LogFile? _listedFor;
 
     /// <summary>Create the list for Session A; <paramref name="channelNames"/> gives a session's driver-analysis channel names.</summary>
     public RegionsViewModel(SessionViewModel a, TrackStore store, Func<SessionSlot, IReadOnlyDictionary<string, string>> channelNames)
@@ -227,19 +228,29 @@ public sealed partial class RegionsViewModel : ObservableObject
         string Hint,
         string SectorsHint);
 
+    /// <summary>The refresh last started (completed when none has been): what a caller that did not start it can wait for.</summary>
+    public Task LastRefresh { get; private set; } = Task.CompletedTask;
+
     /// <summary>
     /// Rebuild the list for the session now loaded: detect its corners (on a
     /// worker thread) and look up its track's sectors. Ticks do not carry over
-    /// to another session; a result for a session that has since been
-    /// replaced is dropped.
+    /// to another session. For the same session again (its track's gates were
+    /// edited) the ticked corners stay ticked; sectors do not, since "S2" is a
+    /// different stretch once a gate has moved. A result for a session that has
+    /// since been replaced is dropped.
     /// </summary>
-    public async Task RefreshAsync()
+    public Task RefreshAsync() => LastRefresh = RefreshCoreAsync();
+
+    private async Task RefreshCoreAsync()
     {
         var version = ++_version;
         var log = _a.Log;
         var hadSelection = HasSelection;
+        var sameSession = log is not null && ReferenceEquals(log, _listedFor);
+        var keptCorners = sameSession ? Corners.Where(c => c.IsSelected).Select(c => c.Region.Id).ToHashSet() : new HashSet<string>();
+        _listedFor = null;
         Reset(log is null ? "Load a session to pick regions" : "Finding the corners…");
-        if (hadSelection)
+        if (hadSelection && !sameSession)
         {
             Changed?.Invoke();
         }
@@ -275,7 +286,22 @@ public sealed partial class RegionsViewModel : ObservableObject
         SectorsHint = detected.SectorsHint;
         OnPropertyChanged(nameof(HasCorners));
         OnPropertyChanged(nameof(HasSectors));
-        BuildMap();
+        _listedFor = log;
+        _batch = true;
+        foreach (var corner in Corners.Where(c => keptCorners.Contains(c.Region.Id)))
+        {
+            corner.IsSelected = true;
+        }
+
+        _batch = false;
+        if (hadSelection && sameSession)
+        {
+            OnTicksChanged(); // the kept ticks, or none where only sectors were ticked: either way the tabs recompute
+        }
+        else
+        {
+            BuildMap();
+        }
     }
 
     private void Reset(string hint)

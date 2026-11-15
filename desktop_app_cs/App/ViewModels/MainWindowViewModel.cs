@@ -45,8 +45,16 @@ public sealed partial class MainWindowViewModel : ObservableObject
         TireGrip = new TireGripViewModel(SessionA, SessionB);
         Sectors = new SectorsViewModel(SessionA, TrackStore);
         Regions = new RegionsViewModel(SessionA, TrackStore, Driver.DriverConfig.GetChannelNames);
+        Sectors.TrackSaved += RefreshRegions;
         Suspension.Regions = Regions;
-        Regions.Changed += () => Suspension.OnSelectionChanged();
+        RollGradient.Regions = Regions;
+        TireGrip.Regions = Regions;
+        Regions.Changed += () =>
+        {
+            Suspension.OnSelectionChanged();
+            RollGradient.OnSelectionChanged();
+            TireGrip.OnSelectionChanged();
+        };
         Tabs = new ObservableCollection<AnalysisTabViewModel> { TimeDistance, Sectors, Suspension, Driver, TireGrip, RollGradient };
         ConfigSections = Tabs.Where(t => t.Config is ChannelConfigViewModel).Select(t => new ConfigSection(t.Header, (ChannelConfigViewModel)t.Config!)).ToList();
         _selectedConfigSection = ConfigSections.FirstOrDefault();

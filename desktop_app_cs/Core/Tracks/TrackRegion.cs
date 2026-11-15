@@ -234,6 +234,33 @@ public static class TrackRegions
         return false;
     }
 
+    /// <summary>Indices of the <paramref name="timecodes"/> that lie inside <paramref name="windows"/> (see <see cref="Contains"/>).</summary>
+    public static int[] Keep(IReadOnlyList<(long Start, long End)> windows, ReadOnlySpan<long> timecodes)
+    {
+        var keep = new List<int>();
+        for (var i = 0; i < timecodes.Length; i++)
+        {
+            if (Contains(windows, timecodes[i]))
+            {
+                keep.Add(i);
+            }
+        }
+
+        return keep.ToArray();
+    }
+
+    /// <summary>The elements of <paramref name="source"/> at <paramref name="indices"/>.</summary>
+    public static T[] Take<T>(T[] source, int[] indices)
+    {
+        var result = new T[indices.Length];
+        for (var i = 0; i < indices.Length; i++)
+        {
+            result[i] = source[indices[i]];
+        }
+
+        return result;
+    }
+
     /// <summary>Total length of <paramref name="windows"/> in seconds.</summary>
     public static double DurationS(IEnumerable<(long Start, long End)> windows) => windows.Sum(w => w.End - w.Start) / 1000.0;
 }

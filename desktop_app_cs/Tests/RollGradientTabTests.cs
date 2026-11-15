@@ -15,11 +15,12 @@ namespace InfernoAnalyzer.Tests;
 public class RollGradientTabTests
 {
     private static readonly ProfileStore BuiltinOnly = new("/nonexistent/profiles.yaml");
+    private static readonly InfernoAnalyzer.Core.Tracks.TrackStore NoTracks = new("/nonexistent/tracks.yaml"); // not this machine's saved tracks
     private static readonly Lazy<LogFile> Sample = new(() => SessionLoader.Load(SessionParityTests.SamplePath(), BuiltinOnly));
 
     private static async Task<MainWindowViewModel> LoadedWindow()
     {
-        var window = new MainWindowViewModel(BuiltinOnly);
+        var window = new MainWindowViewModel(BuiltinOnly, NoTracks);
         foreach (var tab in window.Tabs)
         {
             tab.Debounce = TimeSpan.Zero;
@@ -88,6 +89,55 @@ public class RollGradientTabTests
         window.MouseMove(new Point(5, 5));
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
         Assert.Equal(0, surface.HighlightedCount);
+    });
+
+    [Fact]
+    public Task A_ticked_region_restricts_the_roll_gradient_with_the_whole_lap_fit_for_reference() => Ui.Run(async () =>
+    {
+        var viewModel = await LoadedWindow();
+        await viewModel.Regions.LastRefresh; // started by the session load
+        var tab = viewModel.RollGradient;
+        viewModel.ActiveTab = tab;
+        await tab.RunNowAsync();
+        var wholeNote = tab.Spec!.Panels[0].Annotation; // gradient, R² and the sample count
+        var wholeLines = tab.Spec.Panels[0].Lines.Count;
+        var wholeTitle = tab.Spec.Title;
+
+        viewModel.Regions.Corners[2].IsSelected = true;
+        await tab.RunNowAsync();
+
+        var spec = tab.Spec!;
+        Assert.EndsWith("  |  Turn 3", spec.Title);
+        Assert.DoesNotContain(wholeNote, spec.Panels[0].Annotation); // a fit of the corner's samples only
+        Assert.Equal(wholeLines + 1, spec.Panels[0].Lines.Count); // its own fit and the whole laps' in grey
+        Assert.Equal(InfernoAnalyzer.Charting.ChartColors.Neutral, spec.Panels[0].Lines[^1].Color);
+        Assert.Contains("whole lap", spec.Panels[0].Annotation);
+        Assert.Contains("Turn 3", tab.Stats[0].Title);
+
+        var view = new RollGradientView { DataContext = tab };
+        var window = new Window { Width = 1280, Height = 860, Content = view };
+        window.Show();
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        RenderSmokeTests.SaveRender(window.CaptureRenderedFrame()!, "roll_gradient_region.png");
+
+        viewModel.Regions.ShowWholeLap = false;
+        await tab.RunNowAsync();
+        Assert.Equal(wholeLines, tab.Spec!.Panels[0].Lines.Count);
+
+        // Two sessions are compared with each other: no whole-lap line, although the reference is still ticked.
+        viewModel.Regions.ShowWholeLap = true;
+        viewModel.SessionB.Apply(Sample.Value, SessionParityTests.SamplePath());
+        await tab.RunNowAsync();
+        Assert.EndsWith("  |  Turn 3", tab.Spec!.Title);
+        Assert.Equal(2, tab.Spec.Panels[0].Scatter.Count);
+        Assert.DoesNotContain(tab.Spec.Panels[0].Lines, l => l.Color == InfernoAnalyzer.Charting.ChartColors.Neutral);
+        Assert.DoesNotContain("whole lap", tab.Spec.Panels[0].Annotation);
+        viewModel.SessionB.Close();
+
+        viewModel.Regions.Clear();
+        await tab.RunNowAsync();
+        Assert.Equal(wholeTitle, tab.Spec!.Title);
+        Assert.Equal(wholeNote, tab.Spec.Panels[0].Annotation);
     });
 
     [Fact]

@@ -239,7 +239,12 @@ public sealed record ScatterPanelSpec(
     bool ShowLegend = false);
 
 /// <summary>A track outline in local metres, index-aligned with the scatter series of the same <see cref="SeriesId"/>.</summary>
-public sealed record TrackPathSpec(string Label, double[] X, double[] Y, string Color, string HighlightColor, int SeriesId);
+/// <param name="Connected">
+/// Join the samples with a line. False for samples that are not one continuous drive (stretches of
+/// several laps one after another): they are drawn as dots, so no line leaps from the end of one
+/// stretch to the start of the next.
+/// </param>
+public sealed record TrackPathSpec(string Label, double[] X, double[] Y, string Color, string HighlightColor, int SeriesId, bool Connected = true);
 
 /// <summary>
 /// A track map plus scatter panels in one grid. Hovering the map near the

@@ -322,11 +322,10 @@ public static class Suspension
             if (windowsByLap is not null)
             {
                 var windows = windowsByLap.TryGetValue(lapNum, out var w) ? w : Array.Empty<(long Start, long End)>();
-                var keep = Enumerable.Range(0, timecodes.Length).Where(i => Tracks.TrackRegions.Contains(windows, timecodes[i])).ToArray();
+                var keep = Tracks.TrackRegions.Keep(windows, timecodes);
                 for (var c = 0; c < 4; c++)
                 {
-                    var source = velocities[c];
-                    velocities[c] = keep.Select(i => source[i]).ToArray();
+                    velocities[c] = Tracks.TrackRegions.Take(velocities[c], keep);
                 }
             }
 

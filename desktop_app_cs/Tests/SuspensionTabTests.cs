@@ -19,11 +19,12 @@ namespace InfernoAnalyzer.Tests;
 public class SuspensionTabTests
 {
     private static readonly ProfileStore BuiltinOnly = new("/nonexistent/profiles.yaml");
+    private static readonly InfernoAnalyzer.Core.Tracks.TrackStore NoTracks = new("/nonexistent/tracks.yaml"); // not this machine's saved tracks
     private static readonly Lazy<LogFile> Sample = new(() => SessionLoader.Load(SessionParityTests.SamplePath(), BuiltinOnly));
 
     private static async Task<MainWindowViewModel> LoadedWindow()
     {
-        var window = new MainWindowViewModel(BuiltinOnly);
+        var window = new MainWindowViewModel(BuiltinOnly, NoTracks);
         foreach (var tab in window.Tabs)
         {
             tab.Debounce = TimeSpan.Zero;
@@ -156,7 +157,7 @@ public class SuspensionTabTests
     {
         var viewModel = await LoadedWindow();
         var regions = viewModel.Regions;
-        await regions.RefreshAsync();
+        await regions.LastRefresh; // started by the session load
         var tab = viewModel.Suspension;
         viewModel.ActiveTab = tab;
         await tab.RunNowAsync();
@@ -233,7 +234,7 @@ public class SuspensionTabTests
         var viewModel = await LoadedWindow();
         var window = new MainWindow(viewModel) { Width = 1300, Height = 900 };
         window.Show();
-        await viewModel.Regions.RefreshAsync();
+        await viewModel.Regions.LastRefresh; // started by the session load
         viewModel.ActiveTab = viewModel.Suspension;
         viewModel.Regions.Corners[2].IsSelected = true;
         await viewModel.Suspension.RunNowAsync();
