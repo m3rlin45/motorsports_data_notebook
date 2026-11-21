@@ -1961,6 +1961,116 @@ and the raw accelerometer, gave 0.92–0.99 with r = 0.62–0.80 at Fuji and
 Tsukuba; this one is cruder (the track's curvature for every lap, and
 the audit slope's share gone) and agrees with it.
 
+**In the lap** (`solver._road`; on wherever a track has a bank, by the
+owner's decision of 2026-11-17). With b the lean into the turn (the bank
+with the curvature's sign):
+
+- the tyres hold `V²|κ|·cos b − g·sin b` sideways;
+- the load is `g·cos θ·cos b + V²(κ_v + |κ|·sin b)`;
+- so the cornering limit is `V²(|κ|·cos b − μ(κ_v + |κ|·sin b)) =
+  g(μ·cos θ·cos b + sin b)`, and on a straight the tyres hold the car
+  against the cross-slope.
+
+The bank is folded into the track's arrays before either form of the
+solver sees them (`|κ|·cos b`, `κ_v + |κ|·sin b`, `cos θ·cos b`, and one
+new array `g·sin b`), so the passes changed in three statements and a
+flat road is the old arithmetic: before it was switched on, with every
+road flat, the node speeds, u and lap times of every track and car in
+both forms were the same to the last bit as before the change (72
+cases), and the C2 and C3 reports and the car JSONs came out unchanged.
+Sines and cosines are taken once in numpy, outside the passes, so the
+two forms stay identical with a bank too (tested to the last bit).
+`Profile.from_track(track, bank=False)` and `Drive.bank = False` take a
+road as flat; that is a comparison the gate reports, not a setting.
+
+**In the heat** (`bank.tyre_lateral_g`, `holdout.tyre_heat(..., bank)`).
+The simulated heat took the ground-frame lateral `V²κ` whatever the
+road. On a banked road it now takes what the tyres hold, `V²κ·cos b / g
+− sin b` with b the angle by which the left side is higher: what an
+accelerometer on the road's plane reads, which is what production's
+chain is given by a car with a sound one. `SimLap.lat_tyre_g` is the
+same formula at a step's two nodes; `lat_g` stays the ground-frame
+lateral.
+
+**The first design left the term off**, by the reviewer's rule set
+before its run (C5, item 11) and because S1 did not improve. The owner
+asked why, and the answer did not hold: the bank is measured and read
+right, a term that is left out is paid for by whatever is fitted next
+(the driver model would have taken Tsukuba's and Fuji's bank for the
+driver's use of the grip), S1 is the score the review showed does not
+carry the tyre model's need, and on the measure that does the bank
+wins. So it is on and there is no default to set.
+
+**Gate C3 with it on** (verdict as before: Inferno 86 inside on 29 of
+31 days and 4 of 4 layouts, KK-SII 19 of 19, KK-F 13 of 13; the low-power
+control is told on 13 of the Inferno 86's days where it was 15). By held-out
+layout, the car and `mu_y` set without the layout each way, heat as the
+largest over the four tyres of the absolute median log ratio of
+simulated to logged heat (tyres' frame with the bank, ground frame
+without):
+
+| car | layout | S1 with / without (m/s) | u with / without | heat, own lap time | heat, pace carried |
+|---|---|---|---|---|---|
+| Inferno 86 | Fuji | 1.20 / 1.33 | 0.970 / 1.032 | 1.1 / 1.2 % | 1.5 / 6.9 % |
+| Inferno 86 | Motegi | 1.38 / 1.48 | 0.993 / 1.031 | 2.3 / 2.6 % | 4.9 / 8.0 % |
+| Inferno 86 | Sodegaura | 0.98 / 0.95 | 0.949 / 0.896 | 0.8 / 0.5 % | 1.2 / 6.5 % |
+| Inferno 86 | Tsukuba | 1.03 / 1.11 | 0.884 / 0.909 | 1.8 / 0.9 % | 9.5 / 7.3 % |
+| KK-F | Fuji | 1.27 / 1.28 | 0.930 / 0.913 | 3.1 / 3.1 % | 1.1 / 2.5 % |
+| KK-F | Suzuka | 1.41 / 1.41 | 0.971 / 0.950 | 2.0 / 2.4 % | 3.6 / 2.5 % |
+| KK-F | Tsukuba | 1.16 / 1.11 | 0.968 / 1.001 | 2.7 / 1.5 % | 4.2 / 6.4 % |
+| KK-SII | Fuji | 1.43 / 1.50 | 0.907 / 0.891 | 4.2 / 4.2 % | 2.6 / 3.8 % |
+| KK-SII | Suzuka | 1.46 / 1.45 | 1.007 / 0.987 | 1.9 / 2.5 % | 6.4 / 5.4 % |
+| KK-SII | Tsukuba | 1.23 / 1.19 | 0.941 / 0.970 | 3.6 / 2.5 % | 3.9 / 3.6 % |
+
+- **Heat at a layout the car has not run, the pace carried from its
+  other layouts: 3.7 % with the bank against 5.9 % without** (median of
+  the ten folds; lower in six). It is the review's number, now the
+  gate's. At the lap's own lap time it is 2.1 % against 2.4 %, with
+  Tsukuba worse on each car there too (0.9 → 1.8, 1.5 → 2.7 and
+  2.5 → 3.6 %).
+- **The pace level carries better to seven of ten layouts, and worse to
+  Tsukuba for all three cars.** `|u − 1|` falls at every layout but
+  Tsukuba (mean over the seven 0.061 → 0.041) and rises at Tsukuba on
+  each car (0.091 → 0.116, 0.001 → 0.032, 0.030 → 0.059). With the bank,
+  a car set elsewhere has grip to spare at Tsukuba: the cars do not use
+  Tsukuba's bank as the model gives it (the hairpins overshoot and the
+  fast corners fall behind), which is the car or the driver and not the
+  road.
+- **S1 is lower in five of ten cells and the apex speed nearer in
+  three.** The apexes come out slower with the bank (S3 is lower in nine
+  of ten cells; Suzuka −0.45 → −0.73 and −0.46 → −0.69): `mu_y` by the
+  convention falls when the road carries part of the cornering, and the
+  corners without much bank lose it. Over the day folds the Inferno 86's
+  median S1 goes from 1.11 to 1.10 m/s, the KK-F's from 1.23 to 1.28 and
+  the KK-SII's from 1.29 to 1.33.
+
+**What it moves in the car** (gate C2). `mu_y` by its convention is
+1.128 / 1.270 / 1.334 (Inferno 86 / KK-SII / KK-F) where it was 1.190 /
+1.433 / 1.464, which is 16 / 24 / 21 % under the apex table's level
+where it was 11–14 %. The apex table is in the ground frame, where the
+road's help is counted as the car's grip: on simulated laps of a known
+car it now returns a level 8.5 / 13.7 / 15.0 % over the planted `mu_y`
+(2.3–2.8 % on flat roads). The spread of the reference u between
+layouts is 14.2 / 7.4 / 3.4 % where it was 8.3 / 7.3 / 6.2 %; the
+Inferno 86's is Tsukuba. `mu_b` is a measurement and does not move, so
+the solver's `mu_b / mu_y` is 0.85 / 0.95 / 0.93 where it was 0.80 /
+0.85 / 0.85, and the logs hold 0.64–0.65 (C5, item 2, in the ground
+frame): the simulated car brakes harder against its cornering than
+before.
+
+**Not done.**
+- The car's sample tables are still in the ground frame: the apex
+  table's level, the lateral the braking shape is read against and the
+  lateral of the cornering drag all count the road's help as the car's.
+  They go to the tyres' frame with the tables' next version, which the
+  driver model needs anyway (#312).
+- Braking against cornering (above) and Tsukuba are the driver
+  model's.
+- The Fuji survey (#251) is the truth the 0.94 is to be held against.
+- A bank from every sound-IMU session (six sessions agree to
+  0.014–0.020 rad per node) would cover the crossover at Suzuka and
+  tracks outside Japan.
+
 #### B3. One track for every car (`holdout.py`, gate `check-track-holdout`, 2026-11-15)
 
 The statistic is profile against profile: the curvature from one group of
@@ -2518,6 +2628,387 @@ that row was reaching for.
 - **Braking is the least stable number.** `mu_b` by layout: Inferno 86
   0.86 (Sodegaura) to 0.99 (Fuji); KK-F 1.07 (Suzuka, two days) to 1.24
   (Fuji, two days); KK-SII 1.15–1.17.
+
+#### C3. The car on held-out days and layouts (`car_holdout.py`, gate `check-car-holdout`, 2026-11-15)
+
+**Folds**: leave-one-day-out per layout and leave-one-layout-out. The car
+is read from its tables without the held-out laps, `mu_y` set by the
+convention on what is left, and each held-out build lap simulated at its
+own lap time with the powertrain the car had that day, the day's shift
+point and the session's air (`car_gate.Drive`). The shift point of a
+held-out day comes from that day's own logs: it is the driver's, like
+the lap time. **Statistics** per lap, a fold reading the median: S1, the
+RMS difference of speed over the nodes; S2, the simulated less the logged
+top speed, mean over the layout's straights (stretches between two apexes
+of 200 m or more on which the car gains 5 m/s); S3, the same for the
+minimum speed at the apexes; and the braking point, where the simulated
+lap stops gaining speed less where the lap's brake application (peak
+≥ 0.5 g) began. **Controls** through the same folds: the fold's own car
+with its power × 0.85 and `mu_y` raised by the convention to hold the
+reference laps; and another car's parameters (the KK-SII's for the
+Inferno 86, the Inferno 86's for both formula cars). **Verdict**: a model
+is inside a fold when S1 ≤ the fold's day floor + 0.4 m/s and |S2|,
+|S3| ≤ 1.0 m/s; a fold where a control is inside, or that has no floor,
+has no power against that control. A car that is outside on any powered
+fold fails; one that is not passes when it has a powered day fold and a
+powered layout fold for each control, and is otherwise not scored. The
+track is the layout's own, built from every car's laps.
+
+On simulated laps (the unit test) the gate passes the car that drove them
+and finds both controls outside on every fold.
+
+Gate C3 on the dataset through 2026-11-14 (73 folds of three laps or
+more: 63 by day with 1,102 held-out laps, 10 by layout; two minutes, 24
+before the solver's passes were compiled):
+
+| Check | Threshold | Measured | |
+|---|---|---|---|
+| KK-F (with the KK-F-V2's day) | inside on every powered fold; both controls powered by day and by layout | inside 13 of 13 day folds and 3 of 3 layouts; both controls outside on all of them | pass |
+| KK-SII | the same | inside 19 of 19 day folds, both controls outside on all 19; inside at Suzuka and Tsukuba as layouts, both controls outside (Fuji, one day, has no floor) | pass |
+| Inferno 86 | the same | inside 27 of 31 day folds and 3 of 4 layouts; outside on four powered day folds, all before the shift light, and at Tsukuba as a layout | **fail**, cause below |
+| Braking point | median within ± 5 m | Inferno 86 −20 m, KK-F −11 m, KK-SII −1.5 m by day (−17, −11, −1 by layout): the simulation brakes early on two cars | **fail** |
+| Top-speed band | on a held-out layout's top quarter of speeds, the model's drag within 0.3 m/s of the best of 0 / 0.5 / 1 / 1.5 × it | the model's drag is the best of the four on all seven cells | pass |
+| Cornering drag | in the default only if it lowers the top-quarter error and does not raise the leave-one-layout-out error | with it, S1 lower in 10 of 10 cells (by 0.08–0.23 m/s) and the top quarter in 10 of 10 (0.02–0.34) | met; it is on |
+
+**Since 2026-11-16 the default carries two more terms** (C4 below), and
+the gate reads: Inferno 86 inside on 29 of 31 day folds and 4 of 4
+layouts (**fail** on two days, Sodegaura 2025-03-20 and Tsukuba
+2025-07-26, both on S2); KK-SII 19 of 19; KK-F 13 of 13 and 3 of 3;
+braking point +10.8 m (KK-SII), +3.3 m (Inferno 86), +0.6 m (KK-F) by
+day (by the statistic as corrected in C4), so within ± 5 m on two cars
+and late on the third. The table above
+and the medians below are the gate as it stood on 2026-11-15.
+
+Medians over the folds, S1 / S2 / S3 in m/s:
+
+| | fitted | power × 0.85 | other car |
+|---|---|---|---|
+| Inferno 86, by day | 1.36 / +0.57 / +0.42 | 1.37 / −0.74 / +1.03 | 3.02 / +2.55 / −0.47 |
+| Inferno 86, by layout | 1.31 / +0.61 / +0.11 | 1.42 / −0.76 / +1.06 | 3.08 / +2.83 / −0.77 |
+| KK-SII, by day | 1.14 / +0.22 / +0.12 | 1.39 / −1.54 / +0.83 | 2.11 / −1.14 / +1.21 |
+| KK-SII, by layout | 1.46 / +0.31 / +0.05 | 1.64 / −1.46 / +0.97 | 2.11 / −0.61 / +1.23 |
+| KK-F, by day | 1.20 / +0.06 / +0.35 | 1.50 / −1.48 / +0.93 | 2.57 / −1.70 / +1.45 |
+| KK-F, by layout | 1.40 / +0.06 / +0.34 | 1.80 / −1.56 / +1.15 | 2.52 / −1.25 / +1.59 |
+
+**How the gate moved as the model did** (Inferno 86, day folds inside
+and its median S2; the same run each time):
+
+| Model | Inferno 86 inside | S2 | KK-SII | KK-F |
+|---|---|---|---|---|
+| one power per car, no cornering drag | 17 of 31 | +0.89 | fail (16 of 19) | pass |
+| + cornering drag | 19 of 31 | +0.62 | pass (19 of 19) | pass |
+| + powertrains, shift point, air, drag across gears | 27 of 31 | +0.57 | pass (19 of 19) | pass (13 of 13) |
+
+The Inferno 86 by period of its history, day folds:
+
+| | To 2025-10-05 (before the shift light) | 2025-10-13 to 2026-04-06 | Second engine |
+|---|---|---|---|
+| inside | 12 of 16 | 9 of 9 | 6 of 6 |
+| S1 over its floor | +0.12 | −0.24 | +0.05 |
+| S2 | +0.72 | +0.17 | +0.54 |
+| the low-power control inside | 11 of 16 | 1 of 9 | 3 of 6 |
+
+The second engine's six days, which the first model could not tell from
+a 10 % error in power, are all inside with the car's own chassis and a
+scale of 1.08 on the engine. So are the nine days after the shift light.
+
+**What is left: two points go back to C2.**
+
+1. **The Inferno 86 on its early, hot days.** The four failing day folds
+   are Sodegaura on 2025-03-20, 05-05 and 06-09 and Tsukuba on
+   2025-07-26 (S2 +1.58, a 36 °C day), and the failing layout is Tsukuba
+   (S2 +1.21 over 37 laps on four days). Before the shift light the car
+   is 0.7 m/s fast at the end of the straights with its own shift point
+   and standard-air correction, and a car with 85 % of the power fits 11
+   of those 16 days. C2's day levels say the same from the tables: at
+   equal rpm what the air correction leaves on this car still goes with
+   density (a slope of 0.67, R² 0.46), and the days before the shift
+   light are its spring and summer. The candidate is a term for what
+   heat costs this engine beyond standard air (the intake draws from a
+   hot engine bay; the SAE factor knows only the ambient); by the issue's
+   rule it would have to lower the leave-one-layout-out error to enter.
+   Not built.
+2. **The simulation brakes early**: 22 m on the Inferno 86 at Sodegaura
+   (9 at Fuji, 11 at Tsukuba, 5 at Motegi), 8–22 m on the KK-F, and
+   within 3 m on the KK-SII at Tsukuba. `mu_b` is one p90 over every
+   zone of the car, which for the Inferno 86 is mostly Sodegaura's (0.86
+   against 0.99 at Fuji), and a build lap's u of about 0.95 scales it
+   down again; a stop from 55 to 25 m/s at 0.85 g instead of 1.0 g is
+   22 m longer. The KK-SII's −66 m at Suzuka is the statistic, not the
+   car: on a stretch with a lift or a dab between two apexes "the last
+   stop that began on the stretch" is not always the stop for the corner
+   at its end. The clause needs a braking peak that follows speed, and a
+   matching of stops to corners, before it can be scored there.
+
+**A gear change takes no time in the solver**, and the cars that lift to
+shift are the ones still a little fast at the end of the straights
+(Inferno 86 +0.2 to +0.5 m/s on its days after the shift light, KK-SII
++0.2 to +0.3, the flat-shifting KK-F +0.06). That reading was withdrawn
+once, when cornering drag turned out to be most of what it had been
+credited with; at this size it is consistent with a lift of a few tenths
+of a second per shift and is inside the limits. Shift dips are a
+reported variant of #206.
+
+**What changed on the Inferno 86, from the owner and the logs
+(2026-11-15).** The model above was prompted by two changes the day
+levels showed and the owner named.
+
+- **From October 2025 the gears are held about 350 rpm longer.** The
+  owner: "in october I got a new shift light and started shifting
+  slightly later". Full-throttle rpm at its 99th percentile is
+  6,990–7,250 on every Sodegaura and Tsukuba day to 2025-10-05 and
+  7,330–7,440 on every day after; third gear tops out at 34–35 m/s before and 36–36.7 after; the
+  share of full-throttle samples above 7,000 rpm goes from 7 % to 29 %.
+  The first day at the higher figure is Motegi on 2025-10-04; Sodegaura
+  the next day is still at the lower one; from Fuji on 2025-10-13 every
+  day is high. The engine is the same one: at equal rpm, weather
+  corrected, the two cold Sodegaura days after it read 1–2 % above the
+  last Sodegaura day before it.
+- **Between 2026-04-06 and 2026-07-15 the engine was replaced** (the
+  owner: "between april and July, the engine was replaced"), **and the
+  final drive went from 4.3 to 4.1 with it.** Engine rpm per m/s of rear
+  wheel speed in third gear is 207.0–207.3 on every day to 2026-04-06 and
+  197.4–197.8 from 2026-07-15, and 163.0 against 155.5 in fourth: a
+  factor of 0.954 in both, and 4.10 / 4.30 is 0.9535. Wheel speed over
+  GPS speed is 0.97–0.99 throughout, so it is not the tyres. The new
+  engine makes 8 % more power at equal rpm and holds it to 7,250 rpm
+  where the old one falls off above 7,000 (the curves are in C2).
+
+Read per speed bin, as the first model did, all of this was "power": the
+bin from 35 to 40 m/s was fourth gear (0.13–0.15 g) and is now third
+(0.18–0.21 g), +24 % at both Sodegaura and Fuji, while the bins that kept
+their gear rose 4–13 %; and the same-month comparisons a year apart read
++6 % at Fuji, +14 % at Sodegaura and +7 % at Tsukuba with the weather
+taken out.
+
+**Recorded beside the gate, as the issue asks**: `ref_u` per layout with
+its day sd is in C2 above. **Not built**: the era ladder (the table by
+period above is its first row), the class's cross-circuit ratios and
+wet-over-dry lap time against the model, the per-corner residual table,
+wind on the main straight, and the standing comparison columns
+(interpolation, the other-day median trace, the within-session floor).
+
+#### C4. Two more terms: the braking limit's shape and the shift time (2026-11-16)
+
+Both are measured per car and both are in the default solver
+(`solver.BRAKE_SHAPE_DEFAULT`, `solver.SHIFT_LOSS_DEFAULT`), **on by the
+owner's decision of 2026-11-16**: neither meets the rule cornering drag
+entered on in every cell, and one car is worse with them, both recorded
+below.
+
+**Where the simulated lap left the logged one.** At every car's stops
+from 30 m/s or more the simulation was 0.3 to 1.0 m/s fast just before
+the driver brakes and then 1 to 2 m/s *slow* for about 100 m, level
+again by the apex: it began braking earlier (gate C3's braking point:
+17 m early on the Inferno 86, 11 m on the KK-F). Over the first 60 m
+its deceleration was the logged one; what it lacked was deceleration
+while cornering. The time it lost there it made up with grip, which is
+why its apexes were fast (S3 +0.43 m/s on the Inferno 86).
+
+**The braking limit's shape** (`car.braking_shape`, `grip.brake_ellipse`).
+#206 writes the braking limit as a diamond: cornering at a share `x` of
+the lateral limit leaves `1 − x` of `mu_b`. The braking zones say
+otherwise. With `x` the lateral at a zone's peak deceleration over the
+apex table's level and `y` that peak over `mu_b`, the 90th percentile of
+`y` in bands of `x`:
+
+| `x` | 0.3–0.4 | 0.4–0.5 | 0.5–0.6 | 0.6–0.7 | 0.7–0.8 | 0.8–0.9 | diamond at 0.65 | ellipse at 0.65 |
+|---|---|---|---|---|---|---|---|---|
+| Inferno 86 (4,002 zones) | 0.90 | 0.84 | 0.70 | 0.61 | 0.51 | 0.43 | 0.35 | 0.76 |
+| KK-SII (2,080) | 0.81 | 0.70 | 0.61 | 0.56 | 0.47 | 0.40 | | |
+| KK-F (1,842) | 0.86 | 0.78 | 0.56 | 0.53 | 0.50 | 0.46 | | |
+
+`brake_ellipse` is the median over the bands of how far the 90th
+percentile lies from the diamond towards the ellipse `√(1 − x²)`: 0.69
+(Inferno 86), 0.52 (KK-SII), 0.63 (KK-F). The solver takes
+`(1 − e)·(1 − x) + e·√(1 − x²)` of `mu_b`. It is a blend and not an
+exponent on purpose: a power is not the same number to the last bit in
+numpy and in compiled code, and a square root is.
+
+**`mu_b` is now the level of the zones braked in a straight line**
+(`car.braking_level`: a peak with under 0.2 of the lateral level): 0.95,
+1.21, 1.25, where the 90th percentile over every zone was 0.89, 1.16,
+1.18. A stop made while cornering has less than `mu_b` to brake with,
+which is the shape's to say and not a lower `mu_b`; and read against
+the level over every zone the shape estimator gave a simulated car's
+share back 0.09 high. Read against the straight-line level it gives it
+back (+0.03 in the median over fifteen simulated cars with shares from
+0.2 to 0.8, seven laps a layout; the gate's own three laps a layout
+read 0.10 to 0.12 high on few zones), and `mu_b` within 2 %.
+
+**The shift time** (`car.shift_times`, a powertrain's `shift_s`). Across
+an upshift the full-throttle table has a gap; the speed gained over it
+falls short of what the power either side of it gives, and the
+shortfall over the engine's own acceleration there is the time it gave
+nothing, less what the same test reads over one second inside a gear
+(0.00 to 0.05 s):
+
+| upshift out of the | 1st seen | 2nd | 3rd | 4th |
+|---|---|---|---|---|
+| Inferno 86, first engine (gears 2 to 6) | 0.28 | 0.36 | 0.58 | 0.29 |
+| Inferno 86, second engine | 0.25 | 0.33 | 0.62 | |
+| KK-SII | 0.01 | 0.08 | 0.05 | |
+| KK-F | 0.02 | 0.02 | 0.00 | 0.01 |
+| SFJ | 0.15 | 0.15 | 0.20 | |
+
+(seconds; the Inferno 86's slow one is fourth to fifth, across the
+gate). A shift is the engine's work `P · shift_s` lost. Taken at a place
+on the road it would make the lap time jump as u moves a corner's speed
+across a shift point, so the solver takes it as 25 % less power over a
+band of speed above the shift, as wide as loses that work on the flat
+(`SolverCar.shift_bands`): the lap time stays continuous in u and
+nothing changes in the passes. A version that coasts for the measured
+time after each shift gave the same speed errors to 0.01 m/s on the
+Inferno 86's build laps. On a grade the band over- or understates the
+loss by the ratio of the accelerations.
+
+**Gate C3 with each, re-run whole** (`mu_y` set again by its convention
+each time; day folds, medians; S1 / S2 / S3 in m/s). The first rows are
+with `mu_b` over every zone and the shape read against it (0.79, 0.57,
+0.73), as the terms were first tried; the last of each car is the
+default as it now stands:
+
+| | inside | S1 | S2 | S3 | braking point | `mu_y` |
+|---|---|---|---|---|---|---|
+| Inferno 86, neither | 27 of 31 | 1.36 | +0.56 | +0.43 | −16.7 m | 1.222 |
+| shift time | 26 | 1.26 | +0.26 | +0.54 | −14.2 m | 1.260 |
+| braking shape | 21 | 1.09 | +0.85 | −0.21 | −4.5 m | 1.152 |
+| both | 29 | 1.05 | +0.52 | −0.03 | −1.2 m | 1.192 |
+| **both, `mu_b` in a straight line (the default)** | **29** | **1.11** | +0.54 | −0.03 | −1.2 m | 1.190 |
+| KK-F, neither | 13 of 13 | 1.20 | +0.04 | +0.35 | −10.5 m | 1.522 |
+| both | 13 | 1.18 | +0.20 | −0.01 | −1.0 m | 1.464 |
+| **the default** | **13** | **1.23** | +0.21 | −0.02 | +0.6 m | 1.464 |
+| KK-SII, neither | 19 of 19 | 1.14 | +0.22 | +0.12 | −1.5 m | 1.511 |
+| braking shape (it has no shift) | 19 | 1.26 | +0.26 | −0.14 | +7.0 m | 1.434 |
+| **the default** | **19** | **1.29** | +0.29 | −0.12 | +8.5 m | 1.433 |
+
+Each alone moves the Inferno 86's error from one statistic to another
+(the shift time takes the straights' and leaves fast apexes; the braking
+shape takes the braking zones' and leaves fast straights); together they
+bring it inside on 29 of 31 days and on all four layouts (3 before),
+with the braking point 1 m from the logged one. What is left outside is
+Sodegaura 2025-03-20 (four laps, S2 +1.02) and Tsukuba 2025-07-26
+(S2 +1.26). The KK-F's braking point comes to 1 m as well and its
+held-out layouts improve (S1 1.40 to 1.28). Gate C2 passes; in sample
+the Inferno 86 is at 0.93 (Sodegaura) to 1.40 m/s (Motegi, floor 1.28).
+
+**Against them.** The KK-SII, whose braking point the diamond already
+had, brakes 8.5 m late, and its S1 by day rises from 1.14 to 1.29 (still
+inside on all 19). The straight-line `mu_b` is the estimator that gives
+a known car back, and it scores a little worse than the level over
+every zone (S1 0.03 to 0.06 higher on each car): the logged laps do not
+hold the peak they reach, and a share 0.1 to 0.25 lower scored better
+still on the KK-SII and the KK-F (1.17 and 1.05), which was not taken
+because it is a fit to the gate and not a measurement. On the
+leave-one-layout-out cells (one term switched, `mu_y` left) the braking
+shape lowers S1 in 6 of 10 and brings the braking point nearer in 6 of
+10; the shift time lowers S1 in 5 of 7 and is worse at the Inferno 86's
+two fast layouts; cornering drag, beside the two, is at 8 of 10 where
+it entered on ten of ten.
+
+**The braking point, measured where it can be** (same day). The gate's
+braking point is where the simulated lap stops gaining speed less where
+the driver's brake application began. Twice a lap at Suzuka the car
+lifts for a fast corner and brakes 120 to 170 m later (into turn 1 and
+into Spoon), and there the statistic read −122 and −168 m while the two
+laps stop gaining speed within 14 to 18 m of each other. A lap's value
+is the median over its straights with a stop, so a Suzuka day read −5 m
+or −120 m according to whether a fourth straight registered a stop: the
+KK-SII's "braking point" jumped from July, when it moved from Tsukuba to
+Suzuka, and nothing in the driving did. The statistic now takes a
+straight only if the logged lap gained speed on it until it braked (its
+speed peak within 30 m of the application; `car_holdout.BRAKE_CLEAN_M`),
+and the gate reports `peak_to_peak` beside it, the same from speed peak
+to speed peak over every straight. Nothing else in gate C3 moved. By
+day, with the default:
+
+| | braking point | speed peak to speed peak |
+|---|---|---|
+| Inferno 86 | +3.3 m | +11 m |
+| KK-F | +0.6 m | +12 m |
+| KK-SII | +10.8 m | +14 m |
+
+(The braking points in the table of configurations above are by the
+statistic as it then was.) The KK-SII is +6 to +20 m on each of its
+twelve Tsukuba days and +7 to +15 m on each of its seven Suzuka days:
+no step in the summer.
+
+**What is still missing: the stop does not begin at once.** Speed peak
+to speed peak the simulation is 11 to 14 m late on all three cars; the
+application is a poor reference because the driver lifts before it.
+From the stops made from full throttle at 30 m/s or more (1,559 of
+them, 51 sessions):
+
+| | Inferno 86 | KK-F | KK-SII |
+|---|---|---|---|
+| lift to brake application | 0.32 s | 0.24 s | 0.16 s |
+| speed peak to application | 0.20 s, 7 m | 0.24 s, 12 m | 0.08 s, 3 m |
+| brake pressure to 80 % of the stop's highest | 0.24 s | 0.36 s | 0.20 s |
+
+The solver goes from full drive to full braking between two nodes. A
+lift of 0.16 to 0.32 s and half a build of 0.2 to 0.36 s are 12 to 19 m
+at these speeds, which is the size of what it is late by. Twenty metres
+after the application it is 0.8 to 1.6 m/s fast on every car, and by
+the apex 0.2 to 1.2 m/s slow. Under the diamond the two errors hid each
+other: too little braking while cornering made it start early, and no
+lift or build let it start late. This is also why a lower braking share
+scored better than the measured one. The transition is the next term
+(tried below).
+
+**The onset, tried (same day; `solver.BRAKE_ONSET_DEFAULT`, off).** The
+braking-zone table now has, per stop, the time from the last sample at
+full throttle to the application (`lift_s`, between the middles of the
+two samples) and from the application to 80 % of the stop's highest
+pressure (`build_s`). `car.brake_onset` takes the lift plus half the
+build over the dry stops from full throttle at 30 m/s or more
+(`grip.onset_s`): 0.43 s (Inferno 86: 0.28 + 0.24 to 80 %), 0.25 s
+(KK-SII: 0.12 + 0.20), 0.40 s (KK-F: 0.20 + 0.32), each steady from
+day to day (0.36–0.53, 0.20–0.32, 0.33–0.44). It is the driver's on
+this car, like the shift point, and is carried per car for now.
+
+The solver cuts every speed peak of the lap flat where it is that long
+in time (`_kernel.open_peaks`): the lap leaves the drive curve early,
+coasts, and joins the same braking curve. It is the opening of the
+speed trace by a window of that time (the lowest speed in the window
+after each node, then the highest of those in the window before it),
+which is why it needs no event: minima are untouched, a top already
+that flat is untouched, the result moves smoothly with u, and it is
+minima and maxima only, so the numpy and the compiled form agree to the
+last bit. A simulated car's onset comes back 0.02 to 0.035 s high.
+
+Gate C3 re-run whole with it (day folds, medians):
+
+| | inside | S1 | S2 | S3 | speed peak to speed peak |
+|---|---|---|---|---|---|
+| Inferno 86, without | 29 of 31 | 1.11 | +0.54 | −0.03 | +11 m |
+| with | **31** | 1.10 | +0.06 | −0.02 | −4 m |
+| KK-SII, without | 19 of 19 | 1.29 | +0.29 | −0.12 | +14 m |
+| with | 19 | 1.29 | +0.04 | −0.12 | +4 m |
+| KK-F, without | 13 of 13 | 1.23 | +0.21 | −0.02 | +12 m |
+| with | 12 | 1.21 | −0.22 | −0.01 | −4 m |
+
+S1 is lower on 41 of the 63 day folds and higher on none. The Inferno
+86 is inside on every day and every layout, so it **passes** gate C3
+for the first time; its fast straights (S2) were the missing onset. The
+KK-F loses one day, the KK-F-V2's (2026-11-13, S2 −1.16: with the onset
+its top speed is short, on a powertrain with one day and a borrowed
+curve). The braking point against the application reads −12.6, +0.2 and
+−17.0 m, which is the lift itself (the logged lap stops gaining speed 7,
+3 and 12 m before the application): against the logged speed peak the
+simulation is within 4 m on all three (8 m on the KK-F's held-out
+layouts). Left off pending the owner's decision; the gate's braking
+point would have to be read speed peak to speed peak with it.
+
+The KK-SII's three days of 2026-05-22 to 05-24 are the one real shift
+in its braking: the straight-line peak falls to 1.00–1.09 g from 1.19–
+1.26 g on every other day, with the pedal pressure, while cornering,
+power and lap time are as before. The team's notes for the 22nd have
+"spitting rain/misting" and, in the next session, "ended hitting a vita
+in T1".
+
+**The KK-SII stays on its level.** Through its curve and gears with the
+shift time its S1 is higher on 12 of 19 days and on two of three
+layouts (S2 +0.29 to +0.40), so `solver.INFERRED_GEARS_DRIVE` stays off.
 
 #### D1 (in part). The lap solver (`solver.py`, 2026-11-15)
 
