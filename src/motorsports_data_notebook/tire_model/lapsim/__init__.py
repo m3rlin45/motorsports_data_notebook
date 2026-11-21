@@ -20,4 +20,10 @@ Segment B (#204), the track model:
 - :mod:`.holdout`: the ladder of holdouts, day against day up to car
   against car, through production's heat chain (B3).
 - :mod:`.gates`: the gate reports; :mod:`.cli` runs them.
+
+Segment C (#205), the car model:
+
+- :mod:`.heat`: production's heat chain on one lap of any series.
+- :mod:`.frame`: the session frame record, what a session's accelerometer
+  reads of a ground-frame motion (C0).
 """

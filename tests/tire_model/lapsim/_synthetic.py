@@ -10,6 +10,7 @@ receiver whose velocity solution trails its position solution reports them.
 
 from __future__ import annotations
 
+import json
 import math
 from pathlib import Path
 
@@ -75,6 +76,7 @@ def synthetic_session(
     noise_m: float = 0.0,
     slew: tuple[int, float] | None = None,
     accel_delay_s: float | None = None,
+    accel_frame: tuple[float, float, float] = (1.0, 0.0, 0.0),
     pace: float = 1.0,
     seed: int = 0,
 ) -> tuple[pd.DataFrame, dict]:
@@ -142,8 +144,9 @@ def synthetic_session(
         s_acc = np.interp(np.maximum(t - accel_delay_s, 0.0), t_fine, s_fine)
         v_acc = speed_at(s_acc) / pace
         h_acc = stadium(s_acc)[2]
-        frame["lat_g"] = sign * v_acc * np.gradient(h_acc, t) / 9.80665
-        frame["long_g"] = np.gradient(v_acc, t) / 9.80665
+        slope, lat_zero, long_zero = accel_frame
+        frame["lat_g"] = slope * sign * v_acc * np.gradient(h_acc, t) / 9.80665 + lat_zero
+        frame["long_g"] = np.gradient(v_acc, t) / 9.80665 + long_zero
     crossings = np.interp(np.arange(n_laps + 1) * LENGTH_M, s_fine, t_fine)
     truth = {
         "t": t,
@@ -179,12 +182,14 @@ def lap_rows(session_id: str, truth: dict) -> pd.DataFrame:
 def write_dataset(root: Path, sessions: dict[str, dict]) -> None:
     """A dataset root holding synthetic sessions. ``sessions`` maps a
     session id to ``{"car", "date", "kwargs"}`` (``kwargs`` for
-    :func:`synthetic_session`)."""
+    :func:`synthetic_session`), optionally with ``accel_source`` (default
+    ``imu``) and ``has_tpms`` (default True)."""
     session_rows = []
     laps = []
     for sid, spec in sessions.items():
         frame, truth = synthetic_session(**spec.get("kwargs", {}))
-        write_session_timeseries(root, sid, frame, gyro_source="imu")
+        accel_source = spec.get("accel_source", "imu")
+        write_session_timeseries(root, sid, frame, accel_source=accel_source, gyro_source="imu")
         laps.append(lap_rows(sid, truth))
         session_rows.append(
             {
@@ -198,7 +203,8 @@ def write_dataset(root: Path, sessions: dict[str, dict]) -> None:
                 "track_canonical": LAYOUT_ID,
                 "lap_length_m": LENGTH_M,
                 "lap_source": "logger",
-                "accel_source": "imu",
+                "accel_source": accel_source,
+                "has_tpms": bool(spec.get("has_tpms", True)),
                 "kin_imu_lat_slope": 1.0,
                 "gyro_source": "imu",
                 "status": "ok",
@@ -212,3 +218,15 @@ def write_dataset(root: Path, sessions: dict[str, dict]) -> None:
     pq.write_table(
         pa.Table.from_pandas(pd.concat(laps, ignore_index=True)), root / "laps/2026-01.parquet"
     )
+
+
+def write_model_json(root: Path, cars: tuple[str, ...] = ("car",)) -> None:
+    """A ``tire_model.json`` holding only the force shares of ``cars``."""
+    model = {
+        "heat_input": {
+            "fitted_by_car": {c: {"g_transfer": 2.5} for c in cars},
+            "car_facts_by_car": {c: {"p_f": 0.45, "brake_bias_front": 0.6} for c in cars},
+        },
+        "car_aliases": {"alias": cars[0]},
+    }
+    (root / "tire_model.json").write_text(json.dumps(model))
