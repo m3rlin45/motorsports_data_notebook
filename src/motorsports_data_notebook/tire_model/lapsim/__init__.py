@@ -11,7 +11,9 @@ Segment B (#204), the track model:
   build laps' Doppler course, and the inertial profile it is checked
   against (B2).
 - :mod:`.dem`: ground elevation from the GSI tiles, for B2's altitude
-  check only.
+  check and the road's bank.
+- :mod:`.bank`: the road's bank at a track's nodes, from the elevation
+  model across the line (#299).
 - :mod:`.drawings`: the operators' published corner geometry, transcribed,
   for B2's check against it.
 - :mod:`.pit`: where an out-lap from the pit joins the driven line.

@@ -35,13 +35,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_truth = sub.add_parser(
         "check-track-truth",
-        help="Gate B2: build every layout's track and check it against the inertial sensors "
-        "and the GSI elevation model.",
+        help="Gate B2: build every layout's track, check it against the inertial sensors "
+        "and the GSI elevation model, and give it its bank from that model.",
     )
     p_truth.add_argument(
         "--no-dem",
         action="store_true",
-        help="Skip the altitude check (it fetches elevation tiles on first use).",
+        help="Skip the altitude check and the bank (they fetch elevation tiles on first "
+        "use); the tracks are then saved without a bank.",
     )
     p_truth.add_argument(
         "--dem-offline",

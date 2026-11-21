@@ -123,6 +123,24 @@ class TestCli:
         assert "# B1: " in capsys.readouterr().out
 
 
+class TestBankAgainstSensor:
+    def test_the_slope_the_roll_and_the_rest(self):
+        rng = np.random.default_rng(5)
+        bank = rng.normal(0.0, 0.03, 600)
+        lat_g = rng.normal(0.0, 0.8, 600) + 8.0 * bank  # banked where the car corners
+        proxy = 0.9 * bank - 0.02 * lat_g + 0.013 + rng.normal(0.0, 0.004, 600)
+        got = gates.bank_against_sensor(bank, proxy, lat_g * 9.80665)
+        assert got["nodes"] == 600
+        assert got["slope"] == pytest.approx(0.9, abs=0.03)
+        assert got["per_g"] == pytest.approx(-0.02, abs=0.002)
+        assert got["partial_r"] > 0.9
+        assert got["rms_g_fitted"] == pytest.approx(0.004, abs=0.0005) and got["rms_g"] > 0.01
+
+    def test_too_few_nodes_is_no_reading(self):
+        few = np.zeros(gates.BANK_SENSOR_MIN_NODES - 1)
+        assert gates.bank_against_sensor(few, few, few) is None
+
+
 class TestCheckTrackTruth:
     @pytest.fixture()
     def inertial_root(self, tmp_path):
