@@ -29,4 +29,9 @@ Segment C (#205), the car model:
 - :mod:`.samples`: what each car did on its build laps, as tables: full
   throttle, coast, braking zones and apexes (C1).
 - :mod:`.car`: the car model read from those tables (C2).
+
+Segment D (#206), the solver:
+
+- :mod:`.solver`: the quasi-steady-state lap solver and ``solve_u``, the
+  part of D1 that C's gates need.
 """

@@ -2377,6 +2377,179 @@ The KK-SII has rpm and no gear channel. Its gear is made from speed over
 rpm, which gives it the curve, the shift point and the gear sets above;
 the solver drives it on its one `p_specific` (see the rule above).
 
+#### D1 (in part). The lap solver (`solver.py`, 2026-11-15)
+
+C2's remaining clauses and all of C3 need `simulate_lap` and `solve_u`,
+which #206 specifies under D1 and says can be built before C. This is
+that part of D1 and no more: the limits and the integrator exactly as
+#206 writes them (grip `G = u·w·g·N` with `N = cos θ + V²κ_v/g`; the
+cornering limit in closed form; the braking diamond; drive as the lesser
+of `P/V` and what is left of the grip; `dV/dt = a_tyre − c·V² − g·grade`;
+trapezoidal steps in `V²` over the track's own 2 m nodes; a forward and a
+backward pass from the slowest apex). The engine's power at a speed is
+one number, or a curve against rpm read at the rpm of the gear the
+driver is in (the lowest gear under the driver's shift point there,
+`SolverCar.power_at`); the day's air scales the power and the drag.
+`SimLap` is per step, not per
+node: a step's mean speed times its time is its length, so distance and
+the closed-lap identity hold to rounding. One term is added to #206's
+drive rule: the engine gives `P/V − k·lat²` (`k_corner_drag`), on by
+default since gate C3 let it in (`solver.CORNER_DRAG_DEFAULT`).
+
+One thing differs from the text. The far end of a forward step is found
+by fixed-point iteration, and at the edge of the envelope that iteration
+does not converge: what is left of the grip grows as a square root of the
+distance from the limit, and the iterate hops across the root (found on a
+constant radius with drag, where the car must sit 0.002 m/s under the
+limit so that the remaining grip carries the drag). Where four rounds do
+not settle to 1e-7 m/s the step is solved by bisection.
+
+Unit tests (the clauses of gate D1 that #206 states in closed form):
+constant radius to 1e-9; power and drag on a straight against
+`V³(s) = p/c + (V₀³ − p/c)·e^(−3cs)` within 0.01 m/s; braking with drag
+against its closed form within 0.01 m/s and the braking point within one
+node; terminal speed on a 5 % grade to 0.01 %; a crest against the closed
+form of the cornering limit; distance to 1e-12; `Σ V·long·dt = 0`; lap
+time and node speeds invariant to the start node; the mirrored track
+mirrors the lateral exactly; halving the step moves the lap time by under
+0.05 %; no step over the combined rule by 0.005; T(u) strictly falling;
+`solve_u` round trip to 1e-6 and `no_root` for a lap the car cannot do.
+
+**Shift dips, measured and not yet in the solver.** Across an upshift
+the full-throttle table has a gap; the speed gained over it against what
+the power seen just before and after would have given, as seconds of
+drive lost (median; the same test over one second inside a gear reads
+0.01–0.06 s on every car, which is the method's own bias):
+
+| | 1→2 | 2→3 | 3→4 | 4→5 | 5→6 |
+|---|---|---|---|---|---|
+| Inferno 86, first engine | | 0.34 | 0.44 | 0.76 | 0.86 (21 shifts) |
+| Inferno 86, second engine | | 0.30 | 0.41 | 0.78 | |
+| KK-SII (gears as seen, lowest = 1) | 0.04 | 0.16 | 0.15 | | |
+| KK-F | | 0.03 | 0.06 | 0.04 | 0.05 |
+
+The Inferno 86 is 0.7–0.9 m/s short after every upshift and the solver,
+which shifts in no time, is not: that is the size and the sign of its
+bias over the top quarter of speeds in gate C3 (+0.56 m/s by day), and
+the KK-F, which loses nothing, has none (+0.04). The KK-SII loses about
+0.1 s in its two upper shifts.
+
+**Still #206's**: the outside reference ovals (the issue gives their lap
+times, 35.7254 / 36.5213 / 36.0337 s, but not their geometry), the
+heat-chain parity with production's per-lap heat, the pace table, the
+`outside_support` status and the gear table (shift dips: C4; the bank:
+B2b).
+
+**Batches, and speed.** The solver works on a batch of laps of one
+track, each with its own car and its own u (`solver.solve_laps`,
+`solver.drive_laps`; one lap is a batch of one), in two forms that give
+the same numbers to the last bit:
+
+- `_tensor.py` is numpy with the laps as an axis: a step along the track
+  is taken by every lap at once, and so is a step of the search for u.
+  A lap of a batch is driven exactly as it would be alone, which takes
+  three things: each lap is turned to its own slowest apex, a forward
+  step that does not settle is bisected only for the laps it does not
+  settle on, and a lap that has closed is left alone while the others
+  go round again. It is the reference, and what runs without numba.
+- `_kernel.py` is the same statements compiled with numba, one lane per
+  lap, the lanes side by side on the cores (in the `tire-model` extra).
+
+The passes are a recurrence along the lap (a node's speed comes from the
+node before), so numpy still walks the nodes in Python, about 200 µs a
+node whatever the batch; the batch axis divides that among the laps.
+Per lap at Fuji (2,253 nodes; eight threads):
+
+| laps at once | 1 | 10 | 100 | 1,000 |
+|---|---|---|---|---|
+| driven at a given u, numpy | 490 ms | 68 ms | 8.2 ms | 1.7 ms |
+| driven at a given u, numba | 0.52 ms | | 0.27 ms | 0.21 ms |
+| u solved for a lap time, numpy | 4.1 s | 1.0 s | 125 ms | 19 ms |
+| u solved for a lap time, numba | 3.9 ms | 2.5 ms | 1.2 ms | 0.77 ms |
+
+(The scalar Python loop the solver began as took 8.9 ms a lap. Compiling
+the numpy form as it stands gives 0.6 ms a lap from a hundred laps and
+10 ms for one, so the compiled form is written per lane instead.) The
+search for u is scipy's `brentq` written out, in both forms; it agrees
+with scipy's to 2e-10 in u. Tests hold the two forms to identical node
+speeds, lap times, u and statuses on thirteen profiles and on mixed
+batches with laps that have no root.
+
+The gates run compiled: C3 went from 23 min 36 s (the scalar Python
+loop) to 2 min 13 s (compiled, lap by lap) to 1 min 31 s (batches over
+the cores) to 50 s (the fit below), and C2 from 17 s to 5 s, the reports
+unchanged in every line each time.
+
+**The fit.** A fold refits the car, so gate C3 fits it 76 times. The fit
+is grouped statistics over the full-throttle table (300,000 to 470,000
+rows a car), and what made it slow was Python around them: the
+powertrain of a sample looked up once per sample (now once per car and
+day), loops over days, gears and layouts each calling pandas on its own
+group (now one grouped call for all of them: `shift_rpm_by_day`,
+`gear_sets_by_day`, `power_scale_by`, the corners' 90th percentiles),
+whole-table copies where a statistic reads five columns, and the table
+relabelled inside every fit. With the first of those gone a fit took
+0.62 s, and 0.26 s with the rest, with every number of the model and of
+its unrounded workings identical on 95 fits (four cars, every
+leave-one-day-out and leave-one-layout-out fold). What is left is
+about twenty-five grouped medians and quantiles over those rows at 5 to
+10 ms each, which is pandas' own compiled speed; a batch axis over the
+folds would not lower it, because the cost is per row and not per call.
+Of the time gate C3 spends in its folds, about half is now the fits, a
+quarter the conventions (every day-best lap solved for u, two or three
+rounds, for the fitted car and the low-power control of each fold) and
+a sixth the held-out laps. The gate's time moves with the machine: three
+runs of the same code took 50, 50 and 56 s, and one taken straight after
+a long profiling run 85 s.
+
+**The gates before the car (B1 to C1).** They work session by session
+(250 to 315 of them): read the timeseries, put it on one clock, lay the
+laps on the track. Run from an empty workspace:
+
+| gate | before | after |
+|---|---|---|
+| B1 `check-geometry` | 18 s | 14 s |
+| B2 `check-track-truth` | 56 s | 29 s |
+| B3 `check-track-holdout` | 33 s | 19 s |
+| C0 `check-frame` | 38 s | 26 s |
+| C1 `check-envelope-samples` | 43 s | 33 s |
+
+with every report, every track JSON and every cached table identical.
+What was slow was work repeated per lap that belongs to the session or
+the track, and numpy taking columns one at a time:
+
+- the band of the build laps at the pit exit (two percentiles over laps
+  × bins) was recomputed for every out-lap (`pit.build_band`, once per
+  track);
+- numpy's `nanmedian` along an axis takes each row or column in Python
+  (`geometry.nan_median` sorts them all at once and takes each line's
+  middle, to the last bit);
+- laying a lap on the reference line built a points × 81 candidates
+  array to find each point's nearest vertex (compiled:
+  `_kernel.nearest_vertex`, the same vertex);
+- the heat replay masked the whole session and interpolated its speed
+  again for every lap, and the gyro scale filtered and sorted the whole
+  session's gyro for every lap (once per session now; a lap is a slice);
+- a clock looked up in itself moved by a constant was a binary search
+  per sample (`geometry.sorted_bounds`, one walk);
+- the kinematics loader made one Python string per row for its source
+  labels.
+
+What is left is per session and real: about 25 ms of parquet reads,
+30 ms in the kinematics loader, 20 ms of geometry and 25 ms for the
+frame record, already array code. Each gate does them again for every
+session, so the next step for these gates is not more vectorizing but
+keeping a session's geometry between gates.
+
+A lap takes 0.3–1.2 ms compiled (1,039–2,878 nodes); `solver.solve_u_near` solves a
+lap's u in about eight laps (a bracket opened around a guess, the last
+lap's u in the same session, and Brent's method inside it) where
+`solve_u`'s bisection takes two dozen. With `mu_y` still at the apex table's level, no
+cornering drag and u = 1 the solver laps Tsukuba in 58.99 s (KK-SII), Suzuka in 135.77 s (KK-SII),
+Fuji in 122.53 s and Sodegaura in 74.30 s (Inferno 86): 3–5 % under the
+cars' reference laps, which is what the convention for `mu_y` then
+removes.
+
 ## 3. Test methodology
 
 ### 3.1 Two distinct validations
