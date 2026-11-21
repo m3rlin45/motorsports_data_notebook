@@ -4,6 +4,8 @@ The car's limits apart from the driver's use of them. Design of 2026-11-17; the 
 
 Part of #202. Follows the review of the car model (#205) by seven reviewers on 2026-11-16/17; its measurements are in `docs/tire_model.md` §2.12 C5 and are quoted here with the reviewer who made them. Feeds #206 (the pace knob, D2), #208 (heat at a track the car has not run) and #263 (where the car can go faster). A design, not yet built; the numbers are the review's probes and are re-measured by the gate below.
 
+**Built so far (2026-11-21): the braking use.** The model's `driver` entry holds the level the driver brakes at as a share of `mu_b·u` (0.80 / 0.85 / 0.84) and the shape held under cornering, read from the logged deceleration at each lap's own u (`car_gate.set_use`); the laps are braked on it and the car's limit stays the car's. Gate C3's score went from 34 to 56 of 76 cells. The reading rule, what it was tested against and what it leaves wrong are in `docs/tire_model.md` §2.12 C7. Still as designed here and not built: the cornering use with the apex table's level in place of the convention, the tables in the tyres' frame, the max driver, and the four decisions below.
+
 ## What
 
 Keep two things apart that the car model now mixes: **what the car can do** (its limits, read from the best it has been seen to do) and **how it is driven** (how much of each limit the driver uses, and how the controls move). The owner's rule for the shift point, "how it is driven is not the car", applied to grip.

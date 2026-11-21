@@ -260,6 +260,26 @@ class TestFolds:
         assert raw.power["p_specific"] == pytest.approx(CAR.p_specific, rel=0.01)  # untouched
         assert ch.convene(raw, tracks, best.iloc[:0]) is None
 
+    def test_convene_reads_the_drivers_braking_or_keeps_one(self, monkeypatch):
+        tables, rows, tracks = _sim_dataset(monkeypatch)
+        best = cg.day_best_laps(rows, "sim")
+        raw = cm.fit_car(tables, "sim")[0]
+        lap_time = rows.set_index(["session_id", "lap_num"])["lap_time_s"]
+        laps = cg.car_use_laps(tables, lap_time, "sim", tracks)
+        assert set(laps) == {"a", "b"} and len(laps["a"].frame) == 3
+        # three laps a layout are too few nodes for a reading: braked at the limit
+        plain = ch.convene(raw, tracks, best)
+        assert ch.convene(raw, tracks, best, laps=laps).model.driver == {}
+        # a driver's use that was read elsewhere is kept, and the softer braking wants more grip
+        use = {"brake_use": 0.8, "brake_use_ellipse": 0.4}
+        kept = ch.convene(raw, tracks, best, use=use)
+        assert kept.model.driver == use and kept.car().brake_use == 0.8
+        assert kept.model.grip["mu_y"] > plain.model.grip["mu_y"] * 1.005
+        # a fold's reading is from the laps that are left
+        left = ch.laps_left(laps, "a", "2000-01-02")
+        assert len(left["a"].frame) == 2 and len(left["b"].frame) == 3
+        assert set(ch.laps_left(laps, "a")) == {"b"}
+
     def test_the_gate_passes_the_car_and_catches_both_controls(self, monkeypatch):
         tables, rows, tracks = _sim_dataset(monkeypatch)
         other = _model(sv.SolverCar(mu_y=1.0, mu_b=0.8, p_specific=60.0, c_drag=2.0e-4))
@@ -279,6 +299,10 @@ class TestFolds:
         assert "S1_flat" not in lay  # no track has a bank
         # every held-out lap has its braking beside what two logged laps differ by
         held = laps[laps["kind"] == "day"]
+        # and, braked at the limit, the same again: no driver's use could be read of three laps
+        assert folds["brake_use"].isna().all()
+        assert np.array_equal(held["S1_limit"].to_numpy(), held["S1"].to_numpy())
+        assert np.array_equal(held["brake_g_limit"].to_numpy(), held["brake_g"].to_numpy())
         assert held["brake_g"].notna().all() and held["brake_g"].median() < 0.05
         # and the yardsticks: at each level the fastest of a layout's three laps
         assert set(yard["level"]) == set(ch.PACE_LEVELS)

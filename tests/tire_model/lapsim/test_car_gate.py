@@ -226,6 +226,126 @@ class TestConvention:
         assert list(cg.day_best_laps(keyed, "car")["session_id"]) == ["b", "d"]
 
 
+class TestBrakingUse:
+    """How the driver brakes, read from speed traces at each lap's own u."""
+
+    USE = {"brake_use": 0.8, "brake_use_ellipse": 0.4}
+
+    def _driven(self):
+        """Two ovals whose corners come on slowly (braking under every share
+        of lateral), a model with a braking use, and laps it drove."""
+        tracks = {
+            "a": _oval_track("a", straight=600.0, radius=100.0, ramp=200.0),
+            "b": _oval_track("b", straight=500.0, radius=70.0, ramp=160.0),
+        }
+        model = _model(brake_ellipse=0.7)
+        model.driver = dict(self.USE)
+        car = cg.Drive(model).car()
+        laps = {}
+        for key, track in tracks.items():
+            got = sv.drive_laps(track, car, np.linspace(0.94, 1.06, 13))
+            frame = pd.DataFrame(
+                {
+                    "session_id": [f"s{k}" for k in range(13)],
+                    "lap_num": 1,
+                    "date": [f"d{k % 3}" for k in range(13)],
+                    "lap_time_s": got.lap_time_s,
+                }
+            )
+            laps[key] = cg.use_laps(track, frame, got.v_node_ms)
+        return tracks, model, laps
+
+    def test_time_into_a_stop_that_passes_the_start_line(self):
+        slowing = np.zeros((1, 10), bool)
+        slowing[0, [0, 1, 4, 5, 6, 9]] = True
+        t = cg.time_into_stop(slowing, np.full((1, 10), 20.0), 2.0)  # 0.1 s a node
+        assert t[0, [4, 5, 6]] == pytest.approx([0.0, 0.1, 0.2])
+        assert t[0, [9, 0, 1]] == pytest.approx([0.0, 0.1, 0.2])  # began before the line
+        assert np.isnan(t[0, [2, 3, 7, 8]]).all()
+        assert np.isnan(
+            cg.time_into_stop(np.zeros((1, 10), bool), np.full((1, 10), 20.0), 2.0)
+        ).all()
+
+    def test_the_reading_gives_a_level_and_a_shape_back(self, monkeypatch):
+        monkeypatch.setattr(cg, "USE_BAND_MIN_NODES", 5)
+        x = np.tile(np.linspace(0.02, 0.88, 44), 5)
+        y = 0.8 * (0.6 * (1.0 - x) + 0.4 * np.sqrt(1.0 - x * x))
+        level, shape, bands = cg.read_use(y, x)
+        assert level == pytest.approx(0.8, abs=1e-3) and shape == pytest.approx(0.4, abs=1e-3)
+        assert len(bands) == cg.USE_BANDS and bands["nodes"].sum() == len(x)
+        assert np.isnan(cg.read_use(y[:4], x[:4])[0])  # one band is no reading
+
+    def test_the_nodes_are_past_the_build_and_in_the_solvers_terms(self):
+        tracks, model, laps = self._driven()
+        own = laps["a"]
+        assert len(own.frame) == 13 and set(own.lap) == set(range(13))
+        # braking force over the load: what slows the car less the drag, never over the level
+        car = cg.Drive(model).car()
+        force = own.slowing - car.c_drag * own.v2
+        u = np.linspace(0.94, 1.06, 13)[own.lap]
+        assert np.nanmax(force / (car.mu_b * u)) < 0.8 * 1.03
+        assert (own.lat >= 0).all() and np.nanmax(own.lat / (car.mu_y * u)) <= 1.02
+        some = own.keep(own.frame["date"].to_numpy() != "d0")
+        assert len(some.frame) == 8 and set(some.lap) == set(range(8))
+        assert len(some.lap) == int((own.frame["date"].to_numpy()[own.lap] != "d0").sum())
+
+    def test_a_use_planted_in_simulated_laps_comes_back(self, monkeypatch):
+        monkeypatch.setattr(cg, "USE_BAND_MIN_NODES", 20)
+        tracks, model, laps = self._driven()
+        back, work = cg.set_use(cg.Drive(_model(brake_ellipse=0.7)), tracks, laps)
+        assert back.driver["brake_use"] == pytest.approx(0.8, rel=0.03)
+        assert back.driver["brake_use_ellipse"] == pytest.approx(0.4, abs=0.08)
+        assert back.grip == model.grip  # the car's limits are not touched
+        assert len(work["rounds"]) >= 2 and work["laps"] == 26 and work["nodes"] > 500
+        # the first reading, from laps braked at the limit, is not yet the one that holds
+        assert abs(work["rounds"][0][0] - 0.8) > abs(work["rounds"][-1][0] - 0.8)
+        again = cg.recover_use(cg.Drive(model), tracks, laps)
+        assert again["level_back"] == pytest.approx(again["level"], rel=0.03)
+        assert again["shape_back"] == pytest.approx(again["shape"], abs=0.08)
+
+    def test_too_few_nodes_and_the_laps_are_braked_at_the_limit(self):
+        tracks, model, laps = self._driven()
+        one = {k: v.keep(np.arange(len(v.frame)) == 0) for k, v in laps.items()}  # a lap each
+        back, work = cg.set_use(cg.Drive(model), tracks, one)
+        assert back.driver == {} and work["rounds"] == []
+        assert cg.Drive(back).car().brake_use == 1.0
+
+    def test_the_convention_moves_the_share_and_leaves_the_laps(self):
+        track = _oval_track()
+        model = _model()
+        model.driver = dict(self.USE)
+        moved = cg._with_mu_y(model, 1.26)  # mu_y × 1.05
+        assert moved.driver["brake_use"] == pytest.approx(0.84)
+        a = sv.simulate_lap(track, sv.SolverCar.from_model(model), 1.05)
+        b = sv.simulate_lap(track, sv.SolverCar.from_model(moved), 1.0)
+        assert a.v_node_ms == pytest.approx(b.v_node_ms, rel=1e-9)
+        assert cg._with_mu_y(model, 1.26, hold_use=True).driver["brake_use"] == 0.8
+        car = sv.SolverCar.from_model(model)
+        best = pd.DataFrame(
+            {
+                "layout_id": "a",
+                "date": ["d1", "d2", "d3"],
+                "lap_time_s": [sv.lap_time(track, car, u) for u in (0.98, 1.0, 1.02)],
+            }
+        )
+        start = cg._with_mu_y(model, 1.35)
+        got, _ = cg.set_convention(start, {"a": track}, best)
+        assert got.grip["mu_y"] == pytest.approx(1.2, abs=0.005)
+        assert got.driver["brake_use"] == pytest.approx(0.8, abs=0.005)
+        held, _ = cg.set_convention(start, {"a": track}, best, hold_use=True)
+        assert held.driver["brake_use"] == start.driver["brake_use"]
+        assert held.grip["mu_y"] < got.grip["mu_y"]  # braked harder, the laps want less grip
+
+    def test_a_drive_can_brake_at_the_limit(self):
+        model = _model(brake_ellipse=0.7)
+        model.driver = dict(self.USE)
+        drive = cg.Drive(model)
+        assert (drive.car().brake_use, drive.car().brake_ellipse) == (0.8, 0.4)
+        limit = drive.but(brake_use=False)
+        assert (limit.car().brake_use, limit.car().brake_ellipse) == (1.0, 0.7)
+        assert not limit.but(bank=False).brake_use  # and it is kept
+
+
 class TestInSample:
     def test_a_lap_the_model_drove_scores_zero_at_its_own_u(self):
         track = _oval_track()
@@ -363,4 +483,5 @@ class TestGate:
             assert want in names
         saved = cm.CarModel.load(tmp_path / "cars" / "car.json")
         assert saved.ref_u and "median over layouts" in saved.meta["mu_y_source"]
+        assert saved.driver == {}  # a dozen laps: too few braking nodes to read the driver
         assert list(saved.ref_u.values())[0][0] == pytest.approx(1.0, abs=0.01)

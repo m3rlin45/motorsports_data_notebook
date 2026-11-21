@@ -354,6 +354,69 @@ class TestBrakingShape:
         assert sv.SolverCar.from_model(model).brake_ellipse == 0.0
 
 
+class TestBrakingUse:
+    """The level a lap is braked at, as a share of the car's limit: the
+    driver's, where the limit is the car's."""
+
+    USED = replace(CAR, brake_use=0.8, brake_ellipse=0.5)
+
+    def test_a_share_of_the_limit_is_that_limit(self):
+        prof = _oval(straight=500.0)
+        used = sv.simulate_lap(prof, self.USED)
+        lower = sv.simulate_lap(prof, replace(CAR, mu_b=CAR.mu_b * 0.8, brake_ellipse=0.5))
+        assert np.array_equal(used.v_node_ms, lower.v_node_ms)
+        at_limit = sv.simulate_lap(prof, replace(CAR, brake_ellipse=0.5))
+        assert used.lap_time_s > at_limit.lap_time_s + 0.05
+        # the car that brakes less begins sooner
+        assert np.argmax(used.v_node_ms[:260]) < np.argmax(at_limit.v_node_ms[:260])
+        # 1 is the level the lap is braked at, and the car's limit is not reached
+        assert sv.combined_use(used, prof, self.USED).max() <= 1.005
+        braking = used.long_tyre_g < -0.3
+        assert sv.combined_use(used, prof, replace(self.USED, brake_use=1.0))[braking].max() < 0.85
+
+    def test_the_knob_multiplies_it_and_the_lap_time_still_falls(self):
+        prof = _oval(straight=500.0)
+        times = sv.drive_laps(prof, self.USED, np.linspace(0.6, 1.5, 91))
+        assert np.all(np.diff(times.lap_time_s) < 0)
+        same = sv.drive_laps(prof, replace(CAR, mu_b=0.8, brake_ellipse=0.5), [0.9, 1.1])
+        assert np.array_equal(sv.drive_laps(prof, self.USED, [0.9, 1.1]).v_node_ms, same.v_node_ms)
+
+    @pytest.mark.skipif(not _kernel.HAVE_NUMBA, reason="numba is not installed")
+    def test_the_two_forms_agree_to_the_last_bit(self, monkeypatch):
+        prof = _oval(straight=500.0)
+        times = [sv.lap_time(prof, self.USED, u) for u in (0.95, 1.0, 1.05)]
+        got = {}
+        for compiled in (True, False):
+            monkeypatch.setattr(sv, "USE_COMPILED", compiled)
+            got[compiled] = sv.solve_laps(prof, self.USED, times)
+        assert np.array_equal(got[True].u, got[False].u)
+        assert np.array_equal(got[True].v_node_ms, got[False].v_node_ms)
+
+    def test_from_a_models_driver_unless_switched_off(self):
+        model = CarModel(
+            car="c",
+            raw_car="c",
+            mass_kg=None,
+            grip={"mu_y": 1.3, "mu_b": 0.9, "n_brake": 1.0, "brake_ellipse": 0.7},
+            power={"c_drag": 2.0e-4, "p_specific": 70.0},
+            wet={"grip_scale": None},
+            driver={"brake_use": 0.8, "brake_use_ellipse": 0.4},
+        )
+        car = sv.SolverCar.from_model(model)
+        # the limit stays the car's; the lap is braked at the driver's level and shape
+        assert (car.mu_b, car.brake_use, car.brake_ellipse) == (0.9, 0.8, 0.4)
+        limit = sv.SolverCar.from_model(model, brake_use=False)
+        assert (limit.mu_b, limit.brake_use, limit.brake_ellipse) == (0.9, 1.0, 0.7)
+        diamond = sv.SolverCar.from_model(model, brake_shape=False)
+        assert (diamond.brake_use, diamond.brake_ellipse) == (0.8, 0.0)
+        assert CarModel.from_json(model.to_json()).driver == model.driver
+        model.driver = {}  # a car whose driver was not read: braked at the limit
+        assert sv.SolverCar.from_model(model).brake_use == 1.0
+        assert sv.SolverCar.from_model(model).brake_ellipse == 0.7
+        old = {k: v for k, v in model.to_json().items() if k != "driver"}
+        assert CarModel.from_json(old).driver == {}  # a JSON from before the entry
+
+
 class TestShiftTime:
     """The time an upshift takes, taken as a share of the power over a
     band of speed above the shift."""
