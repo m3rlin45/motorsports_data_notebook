@@ -3511,7 +3511,10 @@ failing 11 are apex cells, and it is the only area with more cells in
 reach than the noise (the logged lap's own apex windows put in: +11 apex
 and +3 speed cells). What was measured:
 
-- Within a day, per 1 % of lap time the logged apex speed rises
+- *(Qualified 2026-11-22: a slope against lap time within a day can be
+  made by selection alone, see "Withdrawn as a reading of the knob"
+  below; this bullet and the next record what the logs hold, not how
+  pace moves the lap.)* Within a day, per 1 % of lap time the logged apex speed rises
   0.28–0.37 m/s and the simulated 0.34–0.41; the logged top speed
   0.21–0.32 and the simulated 0.20–0.23: the knob puts too much of a
   faster lap into the corners.
@@ -3530,6 +3533,120 @@ and +3 speed cells). What was measured:
   be needed): at two of them the lap's own curvature at its minimum
   speed is 9–13 % under the track's peak. A track matter (the line
   through linked corners), not a car term.
+
+**The pace knob is the driver's (owner's decision, 2026-11-22).** "The
+pace knob shouldn't change the grip, it should change how we use the
+grip ... spending less time at the max"; "pace knob should be a driver
+knob". Today u is a scale on `mu_y` and `mu_b`: a slower lap is a car
+with less grip driven at its limit at every apex and through every stop.
+It does two jobs at once, the grip of the day and the condition (the
+track, the tyres, the water) and how hard the lap was driven, and a wet
+lap differs from a dry one by that scale and nothing else
+(`wet.grip_scale` multiplies the same two numbers, so it only moves
+where u = 1 sits). The decision: grip is the car's, the day's and the
+condition's; the lap's pace is what the driver does with it. Not built;
+its form is #313's to find, and how the day's grip is told from the
+day's driving by a lap time is open.
+
+**The car's limit is its best moments put together (owner's decision,
+2026-11-22).** A lap time and a speed trace fix only the product of the
+car's limit and the driver's use of it, so the true limit cannot be read
+from one driver's laps (the driver committee's planted test: a driver
+who never reaches the limit and a weaker car driven to it read back as
+the same car). The owner: "while we cannot find the true limit, we can
+certainly use momentary max performances to derive a limit that is
+higher than has ever been attained so far". The car model therefore
+holds the best the car has been shown to do in each respect, each taken
+where it was best (cornering, braking, the two together, drive under
+lateral load), so that the whole is above anything one lap has reached;
+it is a floor under the true limit and is labelled so. The driver model
+is every way a lap falls short of it, and the lap with no shortfall (the
+"max driver", #263) is by definition faster than any logged lap. Not
+built. The committee's reading of it (`docs/lapsim_driver_model.md`,
+clause 1): per corner the expected best of m passes (m the owner's
+choice; 20 by default) of the lateral over the tyres' load, on the mean
+of the two readings of each pass with the sensors' noise taken out, the
+median over corners: 1.278 / 1.539 / 1.492 at m = 20 (Inferno 86 /
+KK-SII / KK-F), where the convention was 1.160 / 1.318 / 1.372; the lap with every use at 1 is
+faster than the best logged lap in every cell (thinnest the Inferno 86
+at Fuji, 0.80 %). A maximum or a 99th percentile rises as days are
+added (2–4 %) and reads the sensor; a 90th percentile reads the driver.
+
+*What a faster lap is made of* (scratch, 2026-11-22; 1,124 dry build
+laps on 63 days; the within-day slope per 1 % of pace, that is a lap
+time 1 % shorter, ± the standard error over resampled days; one function
+reads the logged speed and the simulated speed of the same lap at the
+track's nodes, in the tyres' frame):
+
+| per 1 % of pace within a day | Inferno 86 | KK-SII | KK-F | simulated (the knob) |
+|---|---|---|---|---|
+| u | | | | +3.2 to +3.3 % |
+| lateral held, 95th percentile of the lap | +1.6 ± 0.2 % | +1.5 ± 0.2 % | +2.0 ± 0.3 % | +3.2 % |
+| lateral at the apexes | +2.0 ± 0.2 % | +1.8 ± 0.2 % | +1.8 ± 0.1 % | +2.8 to +2.9 % |
+| the lap's own peak lateral per corner over the corner's p90 (apex table), median corner | +1.2 ± 0.2 % | +1.4 ± 0.2 % | +1.3 ± 0.4 % | |
+| the same, the lap's best corners | +1.2 ± 0.2 % | +1.1 ± 0.2 % | +0.1 ± 0.7 % | |
+| corners within 5 % of their own p90 (40 in 100 on the median lap) | +8.1 ± 1.0 in 100 | +8.7 ± 1.7 | +8.0 ± 3.4 | every corner, always |
+| braking force, 95th percentile of the braking nodes | +1.2 ± 0.6 % | +3.8 ± 0.7 % | +3.1 ± 0.4 % | +3.1 to +3.2 % |
+| lap time within 15 % of the usual peaks (a third of the lap) | +3.1 ± 0.1 points | +2.7 ± 0.2 | +3.4 ± 0.2 | +5.0 to +6.1 |
+| apex speed | +1.07 ± 0.08 % | +1.18 ± 0.08 % | +1.12 ± 0.09 % | +1.29 to +1.41 % |
+| top speed | +0.66 ± 0.12 % | +0.28 ± 0.06 % | +0.40 ± 0.16 % | +0.17 to +0.49 % |
+
+A single scratch reading, in sample, re-checked the same day by two
+members of the driver committee: on all laps it reproduces; on the laps
+within 1 % of the day's best the lateral shortfall holds on the Inferno
+86 (+1.8 ± 0.4 % against +3.2 %), is weaker on the KK-SII (+2.1 ± 0.6 %)
+and inside noise on the KK-F (+2.4 ± 0.6 %), and the apex-speed row's
+excess is gone, so that part is carried by the slower laps. "Corners at
+their own maximum" follows by arithmetic from a uniform shift of a 6 %
+corner-to-corner scatter and is no evidence of its own.
+
+**Withdrawn as a reading of the knob (the driver committee's selection
+test, 2026-11-22; `docs/lapsim_driver_model.md`).** Laps simulated with
+no knob at all, only the measured corner-to-corner scatter, give
+within-day slopes of the same size (lateral at the apexes +2.0 to +2.4 %
+per 1 % of pace against 2.05 logged on the Inferno 86 at Sodegaura), and
+a direction planted in the knob is not read back by such slopes: taking
+the faster laps of a day takes the laps whose corners happened to go
+well. The table above is what the logs hold; it does not show how the
+driver's pace moves the lap, and the paragraph below is kept as it was
+written, not as a finding. What scatter does not make is the braking
+row: the Inferno 86's peak braking hardly rises with pace (ABS), the
+formula cars' rises more than a uniform knob gives.
+
+Both pictures are in it. The peaks the driver reaches do rise with pace,
+by about half of what the knob gives them (1.2–2.0 % against 3.2 %; the
+formula cars' braking peaks by all of it, the Inferno 86's by a third);
+the rest of a quicker lap is more corners taken at their maximum (8 more
+in 100) and more speed down the straights than the knob has. Whether the
+part of the peaks that moves is the grip of that hour or the driver's
+commitment a lap time cannot say. A use that is one share of the limit
+everywhere is the knob's arithmetic under another name: a driver knob
+differs only where the use is uneven round the lap.
+
+*Wet laps, scored once* (scratch, 2026-11-22; the gates take dry laps
+only). The car and the braking use read from the dry laps, 134 wet build
+laps each at its own lap time, all laps of a cell together and the car
+not held out by day, so not the gate's number. The three cells with two
+wet days or more pass 11 of 12 measures against another wet day's lap (9
+of 12 braked at the limit), but that yardstick is loose (S1 between two
+wet days 1.4–2.1 m/s). S1 is 1.6–1.8 m/s on the Inferno 86 (1.0–1.2 on
+its dry laps) and 1.17 on the KK-F at Tsukuba (1.02). The braking use
+does not carry to the wet on the Inferno 86: read from its wet laps as
+from its dry ones the share is 1.33 times the dry one (1.30 Sodegaura,
+1.28 Tsukuba), 1.04 on the KK-SII and 0.79 on the KK-F, and the shape
+held is rounder on the formula cars (0.60–0.95 against 0.30–0.54 at
+Tsukuba). One wet scale on cornering and braking alike is wrong per car.
+Re-checked in g by a member of the driver committee (each wet day's p90
+against the car's dry p90 at the layout, drag out): the direction holds
+and the size is smaller: lateral 0.77–0.88 and straight-line braking
+0.82–0.94 on the Inferno 86 (braking above lateral on 5 of 6 days),
+0.77–0.88 and 0.62–0.96 on the KK-F (below on 4 of 5), 0.70–0.78 and
+0.73–0.79 on the KK-SII; by brake pressure against deceleration the
+limit moved on one of the Inferno 86's wet days and the driver's use on
+three.
+Tsukuba's wet track in place of the dry one changes little (91 laps): S1
+0.03–0.05 m/s lower, the ends of the straights 0.06–0.21 m/s higher, u
+up 2.0–2.5 %, the apex errors and the braking shares as they were.
 
 **Step 3: the Inferno 86 is stronger in a straight line from 2025-11.**
 The day's full-throttle level over the first engine's curve at equal rpm
