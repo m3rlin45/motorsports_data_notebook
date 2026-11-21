@@ -47,12 +47,16 @@ import numpy as np
 import pandas as pd
 
 from ...tire_etl.kinematics import G_MS2, load_kinematics
+from . import _kernel
 from . import geometry as geo
 
 logger = logging.getLogger(__name__)
 
 DS_M = 2.0
 PROJECT_WINDOW_M = 80.0
+#: Whether the search for the nearest vertex runs compiled (numba); the
+#: numpy search it replaces gives the same vertex and runs without it.
+USE_COMPILED = _kernel.HAVE_NUMBA
 OFFSET_SMOOTH_M = 20.0
 KAPPA_WINDOW_M = 10.0
 GRADE_WINDOW_M = 50.0
@@ -289,9 +293,20 @@ def project_onto(
     sr = np.concatenate([[0.0], np.cumsum(seg)])
     sr = sr - sr[pad]
     centre = np.clip(np.rint(np.asarray(s_guess, float) / ds).astype(np.int64) + pad, 0, n)
-    cand = np.clip(centre[:, None] + np.arange(-half, half + 1)[None, :], 0, n)
-    d2 = (x[:, None] - xr[cand]) ** 2 + (y[:, None] - yr[cand]) ** 2
-    near = cand[np.arange(len(x)), np.argmin(d2, axis=1)]
+    if USE_COMPILED:
+        near = _kernel.nearest_vertex(
+            np.ascontiguousarray(xr, dtype=float),
+            np.ascontiguousarray(yr, dtype=float),
+            np.ascontiguousarray(x, dtype=float),
+            np.ascontiguousarray(y, dtype=float),
+            centre,
+            half,
+            n,
+        )
+    else:  # the same search as one array of points × candidates
+        cand = np.clip(centre[:, None] + np.arange(-half, half + 1)[None, :], 0, n)
+        d2 = (x[:, None] - xr[cand]) ** 2 + (y[:, None] - yr[cand]) ** 2
+        near = cand[np.arange(len(x)), np.argmin(d2, axis=1)]
     best_s = np.full(len(x), np.nan)
     best_off = np.full(len(x), np.nan)
     best_d = np.full(len(x), np.inf)
@@ -437,10 +452,10 @@ def median_course(course: np.ndarray, min_laps: int = MIN_BIN_LAPS) -> tuple[np.
     carrier = np.interp(idx, idx[ok], carrier[ok])
     delta = course - carrier[None, :]
     with np.errstate(invalid="ignore"):
-        const = np.nanmedian(delta, axis=1)
+        const = geo.nan_median(delta, 1)
         delta = delta - const[:, None]
         count = np.isfinite(delta).sum(axis=0)
-        med = np.nanmedian(delta, axis=0)
+        med = geo.nan_median(delta, 0)
     med[count < min_laps] = np.nan
     med = np.interp(idx, idx[np.isfinite(med)], med[np.isfinite(med)])
     psi = carrier + med
@@ -649,7 +664,7 @@ class TrackBuild:
     def speed_median(self) -> np.ndarray:
         """Per-bin median speed of the build laps at the model's n bins."""
         with np.errstate(invalid="ignore"):
-            return _fill_nan_periodic(np.nanmedian(self.proj.speed[:, :-1], axis=0))
+            return _fill_nan_periodic(geo.nan_median(self.proj.speed[:, :-1], 0))
 
 
 def _reference_from_fastest(
@@ -672,7 +687,7 @@ def _rereference(
     ends move onto the median line and are then made one point.
     """
     with np.errstate(invalid="ignore"):
-        med = np.nanmedian(offset, axis=0)
+        med = geo.nan_median(offset, 0)
     seg = np.hypot(np.diff(xr), np.diff(yr))
     half = int(round(OFFSET_SMOOTH_M / 2.0 / float(seg.mean())))
     if closed:
@@ -707,13 +722,13 @@ def _altitude(
     alt = proj.alt[:, :-1].copy()
     sessions = np.array([lap.session_id for lap in laps])
     with np.errstate(invalid="ignore"):
-        profile = np.nanmedian(alt, axis=0)
+        profile = geo.nan_median(alt, 0)
         for sid in np.unique(sessions):
             m = sessions == sid
             off = np.nanmedian(alt[m] - profile[None, :])
             if np.isfinite(off):
                 alt[m] -= off
-        profile = np.nanmedian(alt, axis=0)
+        profile = geo.nan_median(alt, 0)
     profile = _fill_nan_periodic(profile)
     profile = _periodic_mean(profile, int(round(ALT_SMOOTH_M / 2.0 / ds)))
     half = max(int(round(GRADE_WINDOW_M / 2.0 / ds)), 1)
@@ -795,7 +810,7 @@ def build_from_laps(
         ds2 = float(proj2.grid[-1] / (len(xr2) - 1))
         kappa2 = _kappa_from_course(proj2.course, ds2)[0]
         with np.errstate(invalid="ignore"):
-            v = _fill_nan_periodic(np.nanmedian(proj.speed[:, :-1], axis=0))
+            v = _fill_nan_periodic(geo.nan_median(proj.speed[:, :-1], 0))
         k2 = np.interp(np.arange(n) / n, np.arange(len(kappa2)) / len(kappa2), kappa2, period=1.0)
         reproject_rms = float(np.sqrt(np.mean((v * v * (kappa - k2) / G_MS2) ** 2)))
 
@@ -803,7 +818,7 @@ def build_from_laps(
     kappa_doppler = kappa
     if np.isfinite(proj.lat_g).any():
         with np.errstate(invalid="ignore"):
-            v_med = _fill_nan_periodic(np.nanmedian(proj.speed[:, :-1], axis=0))
+            v_med = _fill_nan_periodic(geo.nan_median(proj.speed[:, :-1], 0))
         k_in = _inertial_kappa(proj)[0]
         kappa, fills = fill_from_inertial(kappa, k_in, v_med, ds)
 
@@ -937,7 +952,7 @@ def _inertial_kappa(
     with np.errstate(invalid="ignore", divide="ignore"):
         k = np.where(v > 5.0, lat * G_MS2 / (v * v), np.nan)
         count = np.isfinite(k).sum(axis=0)
-        med = np.nanmedian(k, axis=0) if len(k) else np.full(lat.shape[1], np.nan)
+        med = geo.nan_median(k, 0) if len(k) else np.full(lat.shape[1], np.nan)
     med = np.where(count >= MIN_BIN_LAPS, med, np.nan)
     return np.asarray(med), count
 
