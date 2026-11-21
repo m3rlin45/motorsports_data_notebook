@@ -53,6 +53,10 @@ def main(argv: list[str] | None = None) -> int:
         "check-track-holdout",
         help="Gate B3: the ladder of holdouts, day against day up to car against car.",
     )
+    sub.add_parser(
+        "check-frame",
+        help="Gate C0: the session frame record carries a ground-frame lap to the logged heat.",
+    )
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     root = args.dataset_root or default_dataset_root()
@@ -83,6 +87,10 @@ def main(argv: list[str] | None = None) -> int:
         report = holdout.check_track_holdout(
             root, cache_dir=workspace / "cache", folds_dir=workspace / "tracks" / "folds"
         )
+    elif args.cmd == "check-frame":
+        from . import frame
+
+        report = frame.check_frame(root, cache_dir=workspace / "cache")
     else:  # pragma: no cover - argparse rejects unknown commands
         parser.error(f"unknown command {args.cmd}")
     path = gates.write_report(report, workspace / "reports")

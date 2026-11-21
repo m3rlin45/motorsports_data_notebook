@@ -1509,7 +1509,7 @@ KK-SII RR appears to have had **a single bad sensor that ran across 5
 consecutive Fuji sessions on 2026-02-25/26**, and KK-SII RL had a similar
 recurring failure across **2 Tsukuba sessions on 2026-03-22**.
 
-### 2.12 Lap simulation: the track model (issues #202, #204)
+### 2.12 Lap simulation: the track model and the car model (issues #202, #204, #205)
 
 Exploration code in `tire_model/lapsim/`; nothing here is read by the
 production model. Reports and caches go to `workspace/lapsim/` (not
@@ -2041,6 +2041,93 @@ Beside the ladder (not gated):
   −0.015, EK9 at Motegi −0.018, Inferno 86 at Motegi +0.037 on 15 laps,
   and within ±0.009 on the other nine. It tells the same story as the
   ladder and shows no bias the profiles share.
+
+#### C0. The session frame record (`frame.py`, `heat.py`, gate `check-frame`, 2026-11-15)
+
+Segment C (#205) is the car model. Its first piece needs no car: it
+measures what a session's accelerometer reads of a motion known in the
+ground frame, which is where the track and any simulated lap live.
+
+- **Ground frame**, on the position clock: lateral `V·Δψ/Δt` from the
+  Doppler course, longitudinal `ΔV/Δt`, both central differences over
+  0.5 s (`frame.ground_series`).
+- **The record**, per session, from its clean laps: the accelerometer's
+  lateral slope and zero against the ground-frame lateral (a line fitted
+  with 4-sd clipping), and its longitudinal zero, the median over the laps
+  of lap-mean accelerometer minus lap-mean `dV/dt`. The accelerometer is
+  first averaged over the same 0.5 s and moved onto the position clock by
+  its measured delay. A longitudinal slope is measured and not applied.
+  Nothing is fitted per car.
+- **A GPS-sourced lap has no record.** Its logged series low-passed over
+  0.5 s is the ground frame: 0.001–0.003 in heat on 61 cells
+  (`gps_channel`), 0.010 on the two `gps_position` cells.
+- **Heat is production's chain** (`heat.bin_1s`, `heat.lap_heat`): the
+  share model on 1 s means of the four positive parts and of speed, the
+  seconds counted from the lap's start so that two series of one lap are
+  binned alike. The issue's text had `pace_sim.corner_heat_means`; #206's
+  finding 11 replaced it. The same two functions serve D1.
+- **The record is a measurement, not something applied downstream.** After
+  the reviews of D and E a simulated lap is compared with an observed one
+  in the ground frame on both sides. What C0 leaves behind is the size of
+  the sensor frame per session, for #255.
+
+Gate C0 on the dataset through 2026-11-14: 282 sessions with clean laps,
+223 of them with a fitted record (the other 59 have no accelerometer
+laps); 2,750 clean laps, 9 of them left out because they change source.
+Scored per (session, source) with three or more laps: 249 cells, 151 of
+them in the 147 sessions with TPMS (1,699 laps). The statistic is the log
+ratio of lap-mean heat per tyre, the lap's ground-frame series through its
+session's record over the series as logged, averaged over the session's
+laps; a session reads its worst tyre.
+
+| Check | Threshold | Measured | |
+|---|---|---|---|
+| Worst tyre per session, sessions with TPMS | P90 ≤ 0.03 per car | Inferno 86 0.028, KK-SII 0.017, KK-F 0.009 (57, 69 and 22 cells); with no record 0.085, 0.086, 0.087 | pass |
+| Per-tyre mean (fl / fr / rl / rr) | within ± 0.02 per car | Inferno 86 −0.014 / −0.012 / −0.005 / 0.000; KK-SII −0.006 / −0.007 / +0.003 / +0.003; KK-F −0.001 / +0.003 / +0.002 / +0.004 | pass |
+| Sessions without TPMS | reported | 98 cells, P90 0.053; accelerometer cells: SFJ 0.094, Inferno 86 0.041, EK9 0.020, RX8 0.013 | reported |
+| The clocks | reported | −0.005 to +0.004 per cell and tyre | reported |
+| Accelerometer noise | reported | +0.005 to +0.014 by tyre on every logger but the SFJ's, +0.036 to +0.056 there | reported |
+
+Four cells with TPMS are over 0.03, none over 0.036. The KK-F-V2's three
+sessions read 0.006–0.008 and are listed (under ten cells).
+
+What the record's parameters are:
+
+- **Lateral slope, by layout** (median over sessions): Inferno 86 Sodegaura
+  1.013, Motegi 0.994, Fuji 0.990, Tsukuba 0.949; KK-SII Suzuka 0.955,
+  Tsukuba 0.951, Fuji 0.939; KK-F and KK-F-V2 Tsukuba 0.943 and 0.942; EK9
+  Motegi 0.955; SFJ 0.967–0.979; RX8 0.997. The design review read
+  1.015 / 0.991 / 0.955 for the Inferno 86: the slope belongs to the layout
+  as much as to the car, which is why a per-car `sensor_scale` could not
+  carry it.
+- **Longitudinal zero, by day**: Inferno 86 −0.019 to +0.114 g over 37
+  days from 2025-03-24 (sd 0.024 g between days, 0.003 g between the
+  sessions of a day), and −0.17 g on its first two days (2025-03-08 and
+  03-16: the logger sat about 10° nose-down); KK-SII −0.074 to +0.025 g
+  over 20 days; KK-F +0.006 to +0.046 g over 8; EK9 0.000 and +0.090 g on
+  its two days. On the Inferno 86 a zero of +0.01 g is +0.9 % of rear heat
+  and −0.8 % of front heat as production computes it, so the day-to-day sd
+  is about 2 % of heat on either axle from the mount alone (#255).
+- **Longitudinal slope** (not applied): 0.93–1.02 by car and layout.
+- **Accelerometer delay** behind GPS position: 122–126 ms on the SW4, 50
+  and 64 ms on the Inferno 86's two loggers, 30–34 ms on the EK9, RX8 and
+  SFJ, as B2 found.
+
+Two things the gate turned up:
+
+1. **The clocks cost nothing in heat.** Production bins the accelerometer
+   on its own clock against a speed that is itself late; putting all three
+   on the position clock moves a cell's heat by at most 0.005. The delays
+   matter for a sample-by-sample comparison (B2), not for a lap mean.
+2. **Where the record misses, it is vibration.** Heat from the
+   accelerometer as logged is 0.5–1.4 % above heat from the same series
+   low-passed over 0.5 s on seven of the eight car and logger pairs (#206's
+   finding 13 measured 0.7–1.3 %), and 3.6–5.6 % on the SFJ's logger, whose
+   lateral residual is 0.064 g against 0.023–0.043 g elsewhere. The record
+   reads low there by the same amount on all four tyres (−0.053 to
+   −0.058). A slope and a zero cannot carry content above the ground
+   frame's bandwidth. The SFJ has no TPMS, so nothing production fits is
+   touched; it matters if SFJ laps are ever used as logged heat.
 
 ## 3. Test methodology
 
