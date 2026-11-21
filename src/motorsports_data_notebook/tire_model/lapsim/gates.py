@@ -526,11 +526,60 @@ DEM_GRADE_RMS_MAX = 0.01
 DRAWING_TURN_MAX_DEG = 5.0
 DRAWING_EDGE_MIN = 0.95
 DEM_RELIEF_MAX_M = 3.0
-#: A bridge in the bare-earth model: it leaves the logged altitude by more
-#: than this against the difference's median over the base length.
-DEM_NOTCH_M = 2.0
-DEM_NOTCH_BASE_M = 300.0
-DEM_NOTCH_WIDEN_M = 30.0
+#: The bank is held against a car's accelerometer where the car has this
+#: many unflagged nodes with both.
+BANK_SENSOR_MIN_NODES = 200
+
+
+def _bank_row(info: dict) -> dict:
+    """The line of gate B2's bank table from :func:`.bank.road_bank`'s numbers."""
+    return {
+        "nodes": info["nodes"],
+        "filled": info["no_data"] + info["bridge"] + info["not_plane"],
+        "bridge": info["bridge"],
+        "not_plane": info["not_plane"],
+        "layers": ", ".join(f"{k} {v:.0%}" for k, v in info["layers"].items()),
+        "crown_p90": info["crown_p90"],
+        "straight_sd": info["straight_sd_rad"],
+        "into_corners": info["into_corners_mean_rad"],
+        "into_corners_sd": info["into_corners_sd_rad"],
+        "max_abs": info["max_abs_rad"],
+    }
+
+
+def bank_against_sensor(bank: np.ndarray, proxy_g: np.ndarray, lat_ms2: np.ndarray) -> dict | None:
+    """The bank against what an accelerometer reads of it.
+
+    Node by node, ``proxy_g`` is the ground-frame lateral less the
+    accelerometer's (g, right-positive): on a road whose left side is
+    higher by the angle ``bank`` the accelerometer reads that much less.
+    The accelerometer has been divided by its session's audit slope,
+    which takes out whatever goes with the lateral (``lat_ms2``): the
+    body's roll, and with it the bank's own habit of leaning into the
+    turns. So the proxy is fitted as ``slope × bank + per_g × lateral +
+    constant`` and the bank is read where it does not follow the lateral:
+    ``slope`` (1 where the bank is read in full), ``per_g``, the partial
+    correlation of the proxy with the bank (``partial_r``), and the rms of
+    the proxy with the lateral and the constant taken out, before and
+    after the bank is (``rms_g``, ``rms_g_fitted``). None under
+    :data:`BANK_SENSOR_MIN_NODES` nodes."""
+    if len(bank) < BANK_SENSOR_MIN_NODES:
+        return None
+    lat = np.asarray(lat_ms2, float) / 9.80665
+    rest = np.column_stack([lat, np.ones(len(bank))])
+    left_p = proxy_g - rest @ np.linalg.lstsq(rest, proxy_g, rcond=None)[0]
+    left_b = bank - rest @ np.linalg.lstsq(rest, bank, rcond=None)[0]
+    full = np.column_stack([bank, lat, np.ones(len(bank))])
+    coef = np.linalg.lstsq(full, proxy_g, rcond=None)[0]
+    spread = float(np.std(left_p) * np.std(left_b))
+    return {
+        "nodes": int(len(bank)),
+        "slope": float(coef[0]),
+        "per_g": float(coef[1]),
+        "partial_r": float(np.mean(left_p * left_b) / spread) if spread > 0.0 else float("nan"),
+        "rms_g": float(np.std(left_p)),
+        "rms_g_fitted": float(np.std(proxy_g - full @ coef)),
+    }
 
 
 def _corner_bins(corner: dict, ds: float, n: int) -> np.ndarray:
@@ -714,16 +763,20 @@ def check_track_truth(
     """Gate B2: the profile is right in scale, apex curvature and gentle
     curvature, against sensors it was not built from. ``dem`` (an object
     with ``elevation(lat, lon) -> (height, layer)``, see :mod:`.dem`) adds
-    the altitude check against the ground elevation model; ``drawings``
-    (layout -> the operator's transcribed geometry, see :mod:`.drawings`)
-    adds the check against the published corners."""
+    the altitude check against the ground elevation model and gives each
+    track its bank (:mod:`.bank`); ``drawings`` (layout -> the operator's
+    transcribed geometry, see :mod:`.drawings`) adds the check against the
+    published corners."""
     from ...tire_etl.kinematics import G_MS2
+    from . import bank as bankmod
     from . import track as trk
 
     rep = GateReport("B2", "the track profile (`lapsim check-track-truth`)")
     assembly, inertial, apex, low, side, grade_rows, fills, by_year = [], [], [], [], [], [], [], []
     dem_rows: list[dict] = []
     notches: list[dict] = []
+    bank_rows: list[dict] = []
+    bank_sensor: list[dict] = []
     wet_rows: list[dict] = []
     pit_rows: list[dict] = []
     draw_rows: list[dict] = []
@@ -742,6 +795,10 @@ def check_track_truth(
 
         model.meta["pit"] = pitmod.pit_exit(root, build)
         pit_rows.append({"layout": layout, **model.meta["pit"]})
+        # The road's bank, from the elevation model across the track's line.
+        banked = bankmod.attach(model, dem)  # type: ignore[arg-type]
+        if banked is not None:
+            bank_rows.append({"layout": layout, "basis": "dry", **_bank_row(banked.info)})
         if tracks_dir is not None:
             model.save(Path(tracks_dir) / f"{layout}.json")
         ds, n = model.ds_m, model.n
@@ -790,6 +847,12 @@ def check_track_truth(
             if name != "all":
                 own = trk._kappa_from_course(proj.course[rows], ds)[0]
             d = v * v * (own - k_in) / G_MS2
+            if banked is not None and name != "all":
+                # what the accelerometer reads of the bank, on sensors it was not made from
+                keep = (banked.flag == 0) & ~in_fill & np.isfinite(d)
+                row_b = bank_against_sensor(banked.left_rad[keep], d[keep], (v * v * own)[keep])
+                if row_b is not None:
+                    bank_sensor.append({"layout": layout, "car": name, "imu_laps": n_imu, **row_b})
             stretch = trk.lateral_difference_g(own, k_in, v, ds, trk.FILL_STRETCH_M)
             stretch = np.where(in_fill | ~np.isfinite(k_in), 0.0, stretch)
             worst = int(np.argmax(np.abs(stretch)))
@@ -921,14 +984,10 @@ def check_track_truth(
                 g_dem = (np.roll(ground, -half) - np.roll(ground, half)) / (2 * half * ds)
                 # A bridge: the bare-earth model steps away from the logged
                 # altitude and back within a few tens of metres.
-                diff = ground - model.alt_m
-                reach = int(round(DEM_NOTCH_BASE_M / 2.0 / ds))
-                ring = np.concatenate([diff[-reach:], diff, diff[:reach]])
-                base = np.array([np.median(ring[i : i + 2 * reach + 1]) for i in range(n)])
-                zones = trk.find_zones(np.abs(diff - base) > DEM_NOTCH_M, ds, DEM_NOTCH_WIDEN_M)
+                zones, departure = bankmod.notch_zones(ground, model.alt_m, ds)
                 masked = np.zeros(n, dtype=bool)
                 for a, b in zones:
-                    idx = np.arange(a, b + 1) if a <= b else np.arange(a, b + 1 + n) % n
+                    idx = bankmod.zone_nodes((a, b), n)
                     masked[idx] = True
                     notches.append(
                         {
@@ -936,7 +995,7 @@ def check_track_truth(
                             "s_from_m": a * ds,
                             "s_to_m": b * ds,
                             "dem_minus_logged_m": float(
-                                (diff - base)[idx][np.argmax(np.abs((diff - base)[idx]))]
+                                departure[idx][np.argmax(np.abs(departure[idx]))]
                             ),
                         }
                     )
@@ -991,6 +1050,9 @@ def check_track_truth(
                 wet = trk.build_track_model(
                     root, layout, cache_dir=cache_dir, basis="wet", inertial=False, n_boot=0
                 )
+                wet_bank = bankmod.attach(wet.model, dem)  # type: ignore[arg-type]
+                if wet_bank is not None:
+                    bank_rows.append({"layout": layout, "basis": "wet", **_bank_row(wet_bank.info)})
                 if tracks_dir is not None:
                     wet.model.save(Path(tracks_dir) / f"{layout}__wet.json")
                 row.update(built="yes", **wet_against_dry(wet, build, force_shares))
@@ -1189,6 +1251,51 @@ def check_track_truth(
         )
     else:
         rep.items.append(GateItem("Altitude against the GSI DEM", None, "not measured", "see #204"))
+    if bank_rows:
+        bk = pd.DataFrame(bank_rows)
+        dry = bk[bk["basis"] == "dry"]
+        detail = (
+            "The cross-slope of the ground over "
+            f"± {bankmod.HALF_WIDTH_M:g} m across the track's line, ± {bankmod.SMOOTH_M:g} m mean "
+            "along it; positive in `into_corners` leans into the turn. `filled`: nodes read from "
+            "their neighbours (no data, a bridge, a section that is not a plane). `crown_p90`: "
+            "how far the two halves of a section differ in slope at a tenth of the nodes. "
+            "`straight_sd`: the scatter along the straights about each straight's own mean, an "
+            "upper bound of the noise.\n\n" + md_table(bk, floats="{:.3g}")
+        )
+        enough = [r for r in bank_sensor if r["imu_laps"] >= INERTIAL_MIN_LAPS]
+        if bank_sensor:
+            detail += (
+                "\n\nAgainst each car's accelerometer on its own laps: ground-frame lateral less "
+                "the accelerometer's, node by node, fitted as slope × bank + `per_g` × lateral + a "
+                "constant. A slope of 1 is the bank read in full. The accelerometer is already "
+                "divided by its session's audit slope, which takes out what goes with the "
+                "lateral, so the bank is read where it does not follow the lateral; `rms_g` is "
+                "the proxy with the lateral and the constant out, `rms_g_fitted` with the bank "
+                f"out too. A car under {INERTIAL_MIN_LAPS} IMU laps is listed and not quoted."
+                "\n\n" + md_table(pd.DataFrame(bank_sensor), floats="{:.3g}")
+            )
+        rep.items.append(
+            GateItem(
+                "Bank from the GSI DEM",
+                None,
+                f"mean into the corners {dry['into_corners'].min():.3f}–"
+                f"{dry['into_corners'].max():.3f} rad; scatter on the straights "
+                f"{dry['straight_sd'].min():.3f}–{dry['straight_sd'].max():.3f} rad; "
+                f"{int(dry['filled'].sum())} nodes filled"
+                + (
+                    "; accelerometer slope "
+                    + ", ".join(f"{r['car']} {r['layout']} {r['slope']:.2f}" for r in enough)
+                    if enough
+                    else ""
+                ),
+                "reported (#299): the bank kept with each track; a slope of 1 against a sensor "
+                "is the bank read in full",
+                detail,
+            )
+        )
+    else:
+        rep.items.append(GateItem("Bank from the GSI DEM", None, "not measured", "see #299"))
     pt = pd.DataFrame(pit_rows)
     if "s_join_m" in pt.columns:
         rep.items.append(

@@ -54,6 +54,24 @@ class TestHeatChain:
         mirrored = ho.tyre_heat(SHARE, -kappa, speed, ds)
         assert mirrored == pytest.approx([fr, fl, rr, rl])
 
+    def test_on_a_banked_road_the_heat_is_of_what_the_tyres_hold(self):
+        kappa, speed, ds = _oval()
+        flat = ho.tyre_heat(SHARE, kappa, speed, ds)
+        assert np.array_equal(ho.tyre_heat(SHARE, kappa, speed, ds, np.zeros(len(kappa))), flat)
+        # the corners lean into the turn (right turns: the left side higher)
+        into = np.where(kappa > 0, 0.06, 0.0)
+        banked = ho.tyre_heat(SHARE, kappa, speed, ds, into)
+        assert (banked < flat).all()
+        # by what the road carries: 0.06 of about 1 g of cornering, less on the lightly loaded side
+        assert 0.02 < 1.0 - banked[0] / flat[0] < 0.08
+        assert (ho.tyre_heat(SHARE, kappa, speed, ds, -into) > flat).all()  # leaning out
+        # the mirrored road
+        fl, fr, rl, rr = banked
+        assert ho.tyre_heat(SHARE, -kappa, speed, ds, -into) == pytest.approx([fr, fl, rr, rl])
+        # a cross-slope on the straights has the tyres holding the car against it
+        across = np.where(kappa > 0, 0.0, 0.03)
+        assert (ho.tyre_heat(SHARE, kappa, speed, ds, across) > flat).all()
+
     def test_longitudinal_g_is_the_speed_traces_own(self):
         ds = 2.0
         s = np.arange(500) * ds
