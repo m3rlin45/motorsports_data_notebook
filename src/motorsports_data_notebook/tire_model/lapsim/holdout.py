@@ -44,6 +44,7 @@ import pandas as pd
 
 from ...tire_etl.kinematics import G_MS2
 from ..heat_input import CarFacts, ShareParams, share_heat_rate
+from . import bank as bankmod
 from . import geometry as geo
 from . import track as trk
 from .gates import TRACK_LAYOUTS, GateItem, GateReport, md_table
@@ -113,10 +114,23 @@ def longitudinal_g(speed: np.ndarray, ds: float) -> np.ndarray:
     return np.asarray(speed * dvds / G_MS2)
 
 
-def tyre_heat(share: ShareParams, kappa: np.ndarray, speed: np.ndarray, ds: float) -> np.ndarray:
+def tyre_heat(
+    share: ShareParams,
+    kappa: np.ndarray,
+    speed: np.ndarray,
+    ds: float,
+    bank: np.ndarray | None = None,
+) -> np.ndarray:
     """Lap-mean heat rate per tyre (``fl, fr, rl, rr``; G·m/s) of a lap on
-    the profile ``kappa`` at the speed trace ``speed``."""
-    lat = speed * speed * kappa / G_MS2
+    the profile ``kappa`` at the speed trace ``speed``.
+
+    ``bank`` is the road's bank at the nodes (rad, positive where the left
+    side is higher; :attr:`~.track.TrackModel.bank`). With it the lateral
+    is what the tyres hold on the banked road
+    (:func:`~.bank.tyre_lateral_g`), which is what production's chain
+    reads from an accelerometer; without it the road is taken as flat and
+    the lateral is ``V²κ``."""
+    lat = bankmod.tyre_lateral_g(kappa, speed, bank)
     long = longitudinal_g(speed, ds)
     dt = ds / np.maximum(speed, 1.0)
     parts = (np.maximum(lat, 0), np.maximum(-lat, 0), np.maximum(long, 0), np.maximum(-long, 0))
@@ -169,7 +183,7 @@ def _kappa(proj: trk.Projection, rows: np.ndarray, ds: float) -> np.ndarray:
 
 def _speed(proj: trk.Projection, rows: np.ndarray) -> np.ndarray:
     with np.errstate(invalid="ignore"):
-        return trk._fill_nan_periodic(np.nanmedian(proj.speed[rows][:, :-1], axis=0))
+        return trk._fill_nan_periodic(geo.nan_median(proj.speed[rows][:, :-1], 0))
 
 
 def ladder(

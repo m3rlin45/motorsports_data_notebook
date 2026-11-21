@@ -9,7 +9,9 @@ from motorsports_data_notebook.tire_model.lapsim import dem as demmod
 from motorsports_data_notebook.tire_model.lapsim import gates
 from motorsports_data_notebook.tire_model.lapsim import geometry as geo
 
-from ._synthetic import LAYOUT_ID, write_dataset
+from motorsports_data_notebook.tire_model.lapsim import track as trk
+
+from ._synthetic import LAYOUT_ID, RADIUS_M, STRAIGHT_M, write_dataset
 
 
 def _write_tile(cache, layer, zoom, x, y, values):
@@ -90,6 +92,17 @@ class _FlatGround:
         return height, np.full(len(lat), "dem5a", dtype=object)
 
 
+class _TiltedGround:
+    """Ground rising to the east by ``slope``."""
+
+    def __init__(self, gate, slope):
+        self.gate, self.slope = gate, slope
+
+    def elevation(self, lat, lon):
+        xy = geo.local_xy(lat, lon, self.gate.lat, self.gate.lon)
+        return 55.0 + self.slope * xy[:, 0], np.full(len(lat), "dem5a", dtype=object)
+
+
 class TestAltitudeCheck:
     @pytest.fixture()
     def root(self, tmp_path):
@@ -123,10 +136,36 @@ class TestAltitudeCheck:
         assert "1 bridge notches" in item.measured
         assert "-6" in item.detail
 
-    def test_without_a_model_the_check_is_not_measured(self, root):
-        report = gates.check_track_truth(root, layouts=(LAYOUT_ID,))
-        item = {i.name: i for i in report.items}["Altitude against the GSI DEM"]
+    def test_without_a_model_the_check_is_not_measured(self, root, tmp_path):
+        report = gates.check_track_truth(root, layouts=(LAYOUT_ID,), tracks_dir=tmp_path / "tracks")
+        items = {i.name: i for i in report.items}
+        item = items["Altitude against the GSI DEM"]
         assert item.passed is None and item.measured == "not measured"
+        assert items["Bank from the GSI DEM"].measured == "not measured"
+        track = trk.TrackModel.load(tmp_path / "tracks" / f"{LAYOUT_ID}.json")
+        assert len(track.bank) == 0 and "bank" not in track.meta
+
+    def test_the_track_gets_its_bank_from_the_model(self, root, tmp_path):
+        ground = _TiltedGround(geo.layout_gate(LAYOUT_ID), 0.04)
+        report = gates.check_track_truth(
+            root, layouts=(LAYOUT_ID,), dem=ground, tracks_dir=tmp_path / "tracks"
+        )
+        item = {i.name: i for i in report.items}["Bank from the GSI DEM"]
+        assert item.passed is None  # reported
+        assert "0 nodes filled" in item.measured and "straight_sd" in item.detail
+        track = trk.TrackModel.load(tmp_path / "tracks" / f"{LAYOUT_ID}.json")
+        assert len(track.bank) == track.n and (track.bank_flag == 0).all()
+        # up the first straight the car goes north and the low side is on its
+        # left; down the other it goes south and the high side is
+        north = int(round(30.0 / track.ds_m))
+        south = int(round((STRAIGHT_M / 2 + np.pi * RADIUS_M + 100.0) / track.ds_m))
+        assert track.bank[north] == pytest.approx(-np.arctan(0.04), abs=2e-3)
+        assert track.bank[south] == pytest.approx(np.arctan(0.04), abs=2e-3)
+        assert track.meta["bank"]["nodes"] == track.n
+        # the stadium turns right: at the first corner's apex the car heads
+        # east, up the slope, and the road does not lean
+        apex = int(round((STRAIGHT_M / 2 + np.pi * RADIUS_M / 2) / track.ds_m))
+        assert abs(track.bank[apex]) < 3e-3
 
     def test_local_lat_lon_inverts_local_xy(self):
         gate = geo.layout_gate(LAYOUT_ID)

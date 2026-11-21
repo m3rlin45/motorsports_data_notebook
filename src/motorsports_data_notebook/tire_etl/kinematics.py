@@ -796,6 +796,11 @@ def _interp_series(t_out: np.ndarray, t_in: np.ndarray, x_in: np.ndarray) -> np.
     return out
 
 
+def _repeated(value: str, n: int) -> pa.Array:
+    """``n`` rows of one string."""
+    return pa.repeat(pa.scalar(value, type=pa.string()), n)
+
+
 def _kin_part(
     base: pa.Table,
     t_b: np.ndarray,
@@ -811,12 +816,14 @@ def _kin_part(
     t_v, v = speed
     spd = _interp_series(t_b, t_v, v) if t_v.size else np.full(n, np.nan)
     yaw = _interp_series(t_b, gps["t"], gps["yaw"]) if gps is not None else np.full(n, np.nan)
-    yaw_src = np.full(n, "gps_position" if gps is not None else "none", dtype=object)
+    # the source labels as arrow strings from the start: one value repeated,
+    # not a Python string per row
+    yaw_src = _repeated("gps_position" if gps is not None else "none", n)
     if yaw_imu is not None and yaw_imu[0].size >= 2:
         # the gyro where it has samples, the position-derived yaw rate elsewhere
         have = _nearest_distance(yaw_imu[0], t_b) <= COVERAGE_TOL_S
         yaw = np.where(have, np.interp(t_b, *yaw_imu), yaw)
-        yaw_src[have] = "imu"
+        yaw_src = pc.if_else(pa.array(have), _repeated("imu", n), yaw_src)
     cols: dict = {"t_session_s": pa.array(t_b, type=pa.float64())}
     for key, typ in (("lap_num", pa.int16()), ("stint_id", pa.int16()), ("t_lap_s", pa.float32())):
         if key in base.schema.names:
@@ -825,9 +832,9 @@ def _kin_part(
     cols["lat_g"] = pa.array(np.asarray(lat, np.float32))
     cols["long_g"] = pa.array(np.asarray(long, np.float32))
     cols["yaw_rate_dps"] = pa.array(np.asarray(yaw, np.float32))
-    cols["lat_source"] = pa.array([source] * n, type=pa.string())
-    cols["long_source"] = pa.array([source] * n, type=pa.string())
-    cols["yaw_source"] = pa.array(yaw_src.tolist(), type=pa.string())
+    cols["lat_source"] = _repeated(source, n)
+    cols["long_source"] = _repeated(source, n)
+    cols["yaw_source"] = yaw_src
     return pa.table(cols)
 
 

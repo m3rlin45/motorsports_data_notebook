@@ -29,12 +29,27 @@ JOIN_STAY_M = 150.0
 MIN_OUTLAP_SAMPLES = 200
 
 
+def build_band(build: trk.TrackBuild) -> tuple[np.ndarray, np.ndarray]:
+    """The band the build laps occupy at each bin: their 1st and 99th
+    percentile of lateral offset, widened by :data:`BAND_MARGIN_M`."""
+    with np.errstate(invalid="ignore"):
+        lo = np.nanpercentile(build.proj.offset[:, :-1], 1, axis=0) - BAND_MARGIN_M
+        hi = np.nanpercentile(build.proj.offset[:, :-1], 99, axis=0) + BAND_MARGIN_M
+    return np.asarray(lo), np.asarray(hi)
+
+
 def join_of_outlap(
-    build: trk.TrackBuild, t: np.ndarray, x: np.ndarray, y: np.ndarray, speed: np.ndarray
+    build: trk.TrackBuild,
+    t: np.ndarray,
+    x: np.ndarray,
+    y: np.ndarray,
+    speed: np.ndarray,
+    band: tuple[np.ndarray, np.ndarray] | None = None,
 ) -> tuple[float, float] | None:
     """``(s_join_m, rolling_s)`` of one out-lap given as samples up to the
     line it ends on; None when it never leaves the build laps' band (it
-    did not start in the pit lane) or never settles inside it."""
+    did not start in the pit lane) or never settles inside it. ``band`` is
+    :func:`build_band` of the build, for a caller with many out-laps."""
     model = build.model
     length, ds, n = model.length_m, model.ds_m, model.n
     path = np.concatenate([[0.0], np.cumsum(np.hypot(np.diff(x), np.diff(y)))])
@@ -48,9 +63,7 @@ def join_of_outlap(
         return None
     t, x, y, speed, guess = t[keep], x[keep], y[keep], speed[keep], guess[keep]
     s, off = trk.project_onto(build.ref_x, build.ref_y, x, y, guess, closed=True)
-    with np.errstate(invalid="ignore"):
-        lo = np.nanpercentile(build.proj.offset[:, :-1], 1, axis=0) - BAND_MARGIN_M
-        hi = np.nanpercentile(build.proj.offset[:, :-1], 99, axis=0) + BAND_MARGIN_M
+    lo, hi = build_band(build) if band is None else band
     b = np.clip(np.rint(s / ds).astype(int), 0, n - 1)
     inside = (off >= lo[b]) & (off <= hi[b])
     if inside.all():
@@ -89,6 +102,7 @@ def pit_exit(root: Path, build: trk.TrackBuild, *, max_outlaps: int = 60) -> dic
         & laps["session_id"].astype(str).isin(here)
     ].sort_values("session_id", ascending=False)
     joins: list[tuple[float, float]] = []
+    band = build_band(build)  # the same for every out-lap
     for sid, grp in out.groupby("session_id", sort=False):
         if len(joins) >= max_outlaps:
             break
@@ -108,7 +122,7 @@ def pit_exit(root: Path, build: trk.TrackBuild, *, max_outlaps: int = 60) -> dic
             if i1 - i0 < MIN_OUTLAP_SAMPLES or len(np.unique(geom.seg[i0:i1])) != 1:
                 continue
             sl = slice(i0, i1)
-            hit = join_of_outlap(build, geom.t[sl], geom.x[sl], geom.y[sl], raw_speed[sl])
+            hit = join_of_outlap(build, geom.t[sl], geom.x[sl], geom.y[sl], raw_speed[sl], band)
             if hit is not None:
                 joins.append(hit)
     if not joins:

@@ -64,6 +64,15 @@ class TestPitJoin:
         t, x, y, speed = _outlap(join_s=180.0)
         assert pit.join_of_outlap(b, t[-50:], x[-50:], y[-50:], speed[-50:]) is None
 
+    def test_the_band_is_the_builds_and_can_be_handed_in(self, build):
+        _, b = build
+        lo, hi = pit.build_band(b)
+        assert lo.shape == hi.shape == (b.model.n,) and np.all(hi - lo >= 2 * pit.BAND_MARGIN_M)
+        t, x, y, speed = _outlap(join_s=180.0)
+        assert pit.join_of_outlap(b, t, x, y, speed, (lo, hi)) == pit.join_of_outlap(
+            b, t, x, y, speed
+        )
+
     def test_layout_without_pit_out_laps(self, build):
         root, b = build
         # the synthetic out-laps start on the track itself

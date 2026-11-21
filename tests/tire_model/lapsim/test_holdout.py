@@ -15,6 +15,7 @@ from motorsports_data_notebook.tire_model.lapsim import holdout as ho
 from motorsports_data_notebook.tire_model.lapsim import track as trk
 
 from ._synthetic import LAYOUT_ID, write_dataset
+from ._synthetic import write_model_json as _write_model_json
 
 SHARE = ShareParams(
     p_f=0.45,
@@ -35,17 +36,6 @@ def _oval(n=400, ds=2.0):
     return kappa, speed, ds
 
 
-def _write_model_json(root, cars=("car",)):
-    model = {
-        "heat_input": {
-            "fitted_by_car": {c: {"g_transfer": 2.5} for c in cars},
-            "car_facts_by_car": {c: {"p_f": 0.45, "brake_bias_front": 0.6} for c in cars},
-        },
-        "car_aliases": {"alias": cars[0]},
-    }
-    (root / "tire_model.json").write_text(json.dumps(model))
-
-
 class TestHeatChain:
     def test_right_turns_load_the_left_tyres(self):
         kappa, speed, ds = _oval()
@@ -53,6 +43,24 @@ class TestHeatChain:
         assert fl > fr and rl > rr
         mirrored = ho.tyre_heat(SHARE, -kappa, speed, ds)
         assert mirrored == pytest.approx([fr, fl, rr, rl])
+
+    def test_on_a_banked_road_the_heat_is_of_what_the_tyres_hold(self):
+        kappa, speed, ds = _oval()
+        flat = ho.tyre_heat(SHARE, kappa, speed, ds)
+        assert np.array_equal(ho.tyre_heat(SHARE, kappa, speed, ds, np.zeros(len(kappa))), flat)
+        # the corners lean into the turn (right turns: the left side higher)
+        into = np.where(kappa > 0, 0.06, 0.0)
+        banked = ho.tyre_heat(SHARE, kappa, speed, ds, into)
+        assert (banked < flat).all()
+        # by what the road carries: 0.06 of about 1 g of cornering, less on the lightly loaded side
+        assert 0.02 < 1.0 - banked[0] / flat[0] < 0.08
+        assert (ho.tyre_heat(SHARE, kappa, speed, ds, -into) > flat).all()  # leaning out
+        # the mirrored road
+        fl, fr, rl, rr = banked
+        assert ho.tyre_heat(SHARE, -kappa, speed, ds, -into) == pytest.approx([fr, fl, rr, rl])
+        # a cross-slope on the straights has the tyres holding the car against it
+        across = np.where(kappa > 0, 0.0, 0.03)
+        assert (ho.tyre_heat(SHARE, kappa, speed, ds, across) > flat).all()
 
     def test_longitudinal_g_is_the_speed_traces_own(self):
         ds = 2.0

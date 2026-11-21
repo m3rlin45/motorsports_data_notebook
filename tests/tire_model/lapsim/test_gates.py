@@ -111,6 +111,13 @@ class TestCheckGeometry:
         rep.items.append(gates.GateItem("c", False, "3"))
         assert not rep.passed
 
+    def test_a_gate_that_is_a_score_heads_its_report_with_it(self):
+        rep = gates.GateReport("C3", "t", [gates.GateItem("a", None, "1")], score="41 of 96")
+        text = rep.to_markdown()
+        assert "Attainment: 41 of 96" in text and "Overall:" not in text
+        assert rep.passed  # nothing in it is a pass or a fail
+        assert "Overall: pass" in gates.GateReport("B1", "t").to_markdown()
+
 
 class TestCli:
     def test_check_geometry_writes_the_report(self, root, tmp_path, capsys):
@@ -121,6 +128,24 @@ class TestCli:
         assert (tmp_path / "ws" / "reports" / "B1_geometry.md").exists()
         assert (tmp_path / "ws" / "cache" / "lap_index.parquet").exists()
         assert "# B1: " in capsys.readouterr().out
+
+
+class TestBankAgainstSensor:
+    def test_the_slope_the_roll_and_the_rest(self):
+        rng = np.random.default_rng(5)
+        bank = rng.normal(0.0, 0.03, 600)
+        lat_g = rng.normal(0.0, 0.8, 600) + 8.0 * bank  # banked where the car corners
+        proxy = 0.9 * bank - 0.02 * lat_g + 0.013 + rng.normal(0.0, 0.004, 600)
+        got = gates.bank_against_sensor(bank, proxy, lat_g * 9.80665)
+        assert got["nodes"] == 600
+        assert got["slope"] == pytest.approx(0.9, abs=0.03)
+        assert got["per_g"] == pytest.approx(-0.02, abs=0.002)
+        assert got["partial_r"] > 0.9
+        assert got["rms_g_fitted"] == pytest.approx(0.004, abs=0.0005) and got["rms_g"] > 0.01
+
+    def test_too_few_nodes_is_no_reading(self):
+        few = np.zeros(gates.BANK_SENSOR_MIN_NODES - 1)
+        assert gates.bank_against_sensor(few, few, few) is None
 
 
 class TestCheckTrackTruth:

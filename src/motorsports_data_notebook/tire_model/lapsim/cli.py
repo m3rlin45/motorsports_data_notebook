@@ -35,13 +35,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_truth = sub.add_parser(
         "check-track-truth",
-        help="Gate B2: build every layout's track and check it against the inertial sensors "
-        "and the GSI elevation model.",
+        help="Gate B2: build every layout's track, check it against the inertial sensors "
+        "and the GSI elevation model, and give it its bank from that model.",
     )
     p_truth.add_argument(
         "--no-dem",
         action="store_true",
-        help="Skip the altitude check (it fetches elevation tiles on first use).",
+        help="Skip the altitude check and the bank (they fetch elevation tiles on first "
+        "use); the tracks are then saved without a bank.",
     )
     p_truth.add_argument(
         "--dem-offline",
@@ -51,6 +52,22 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser(
         "check-track-holdout",
         help="Gate B3: the ladder of holdouts, day against day up to car against car.",
+    )
+    sub.add_parser(
+        "check-frame",
+        help="Gate C0: the session frame record carries a ground-frame lap to the logged heat.",
+    )
+    sub.add_parser(
+        "check-envelope-samples",
+        help="Gate C1: the car's sample tables (full throttle, coast, braking zones, apexes).",
+    )
+    sub.add_parser(
+        "check-car-fit",
+        help="Gate C2: the car model from the sample tables, and through the solver.",
+    )
+    sub.add_parser(
+        "check-car-holdout",
+        help="Gate C3: the car on held-out days and layouts, against two planted wrong cars.",
     )
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -81,6 +98,31 @@ def main(argv: list[str] | None = None) -> int:
 
         report = holdout.check_track_holdout(
             root, cache_dir=workspace / "cache", folds_dir=workspace / "tracks" / "folds"
+        )
+    elif args.cmd == "check-frame":
+        from . import frame
+
+        report = frame.check_frame(root, cache_dir=workspace / "cache")
+    elif args.cmd == "check-envelope-samples":
+        from . import samples
+
+        report = samples.check_envelope_samples(
+            root, cache_dir=workspace / "cache", tracks_dir=workspace / "tracks"
+        )
+    elif args.cmd == "check-car-fit":
+        from . import car_gate
+
+        report = car_gate.check_car_fit(
+            root,
+            cache_dir=workspace / "cache",
+            tracks_dir=workspace / "tracks",
+            cars_dir=workspace / "cars",
+        )
+    elif args.cmd == "check-car-holdout":
+        from . import car_holdout
+
+        report = car_holdout.check_car_holdout(
+            root, cache_dir=workspace / "cache", tracks_dir=workspace / "tracks"
         )
     else:  # pragma: no cover - argparse rejects unknown commands
         parser.error(f"unknown command {args.cmd}")
