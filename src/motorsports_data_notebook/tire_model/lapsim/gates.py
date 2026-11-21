@@ -60,6 +60,9 @@ class GateReport:
     title: str
     items: list[GateItem] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    #: A gate that is a score to be raised and not a pass or a fail says
+    #: here what it reached ("41 of 96"); it then heads the report.
+    score: str = ""
 
     @property
     def passed(self) -> bool:
@@ -68,7 +71,10 @@ class GateReport:
     def to_markdown(self) -> str:
         mark = {True: "pass", False: "**FAIL**", None: "reported"}
         out = [f"# {self.gate}: {self.title}", ""]
-        out.append(f"Overall: {'pass' if self.passed else '**FAIL**'}")
+        if self.score:
+            out.append(f"Attainment: {self.score}")
+        else:
+            out.append(f"Overall: {'pass' if self.passed else '**FAIL**'}")
         out += ["", "| Check | Threshold | Measured | Result |", "|---|---|---|---|"]
         for it in self.items:
             out.append(f"| {it.name} | {it.threshold} | {it.measured} | {mark[it.passed]} |")
