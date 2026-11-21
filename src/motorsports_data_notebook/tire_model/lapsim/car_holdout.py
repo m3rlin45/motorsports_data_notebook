@@ -3,7 +3,9 @@ gate tell it from a wrong car's? (lap simulation segment C3, issue #205)
 
 **Folds.** Leave-one-day-out per layout, and leave-one-layout-out: the
 car is read from its tables without the held-out laps (:func:`fold_car`),
-``mu_y`` set by the convention on what is left, and every held-out build
+the driver's braking use read from the speed traces that are left
+(:func:`~.car_gate.set_use`), ``mu_y`` set by the convention on what is
+left, and every held-out build
 lap is simulated at its own lap time, its own u, with the powertrain the
 car had that day, the driver's shift point of the day and the session's
 air (:class:`~.car_gate.Drive`). The shift point of a held-out day comes
@@ -24,7 +26,9 @@ from that day's own logs: it is the driver's, like the lap time.
 
 **Controls** through the same folds: (a) the fold's own car with
 ``p_specific × 0.85`` and ``mu_y`` raised by the convention until the
-reference laps are matched again; (b) another car's parameter set. A lap
+reference laps are matched again, braked as the fold's fitted car is
+(its driver's level in g at the reference pace); (b) another car's
+parameter set, its driver's use with it. A lap
 time alone cannot tell either from the car, because u is solved from it.
 
 **Verdict.** A model is *inside* a fold when ``S1`` is within the fold's
@@ -78,7 +82,7 @@ MIN_FOLD_LAPS = 3
 #: the deceleration read from the change of V² over this distance centred
 #: on the node; a lap needs this many such nodes to have a score.
 BRAKE_MATCH_MIN_G = 0.2
-BRAKE_MATCH_WINDOW_M = 16.0
+BRAKE_MATCH_WINDOW_M = cg.DECEL_WINDOW_M
 BRAKE_MATCH_MIN_NODES = 20
 #: The measures are read on the laps above each of these percentiles of
 #: pace among the car's laps at the layout (owner, 2026-11-21): the fast
@@ -117,15 +121,7 @@ class Layout:
         return cls(track=track, apex_nodes=windows, stretches=stretches if apex else [])
 
 
-def deceleration_g(v: np.ndarray, ds: float, window_m: float = BRAKE_MATCH_WINDOW_M) -> np.ndarray:
-    """Deceleration along a closed lap (g, positive where the car slows)
-    from its speed at the track's nodes: the change of ``V²`` over
-    ``window_m`` centred on each node, ``−Δ(V²) / (2·Δs)``. The last axis
-    is the nodes."""
-    half = max(int(round(window_m / 2.0 / ds)), 1)
-    v2 = np.asarray(v, float) ** 2
-    drop = np.roll(v2, half, axis=-1) - np.roll(v2, -half, axis=-1)
-    return np.asarray(drop / (2.0 * 2 * half * ds) / G_MS2)
+deceleration_g = cg.deceleration_g
 
 
 def braking_match(v_sim: np.ndarray, v_obs: np.ndarray, ds: float) -> float:
@@ -383,15 +379,25 @@ def fold_car(
     shifts: dict[str, float] | None = None,
     gears: dict[str, tuple[float, ...]] | None = None,
     power_scale: float = 1.0,
+    laps: dict[str, cg.UseLaps] | None = None,
 ) -> cg.Drive | None:
     """The car read from ``tables`` (already without the held-out laps)
     with ``mu_y`` by the convention on ``best`` (the day-best laps that
     are left), as a :class:`~.car_gate.Drive` with the days' shift points
     and air; ``power_scale`` plants a wrong power before the convention is
-    set. None when the tables give no power, drag or braking."""
+    set, and ``laps`` are those the driver's braking use is read from
+    (:func:`convene`). None when the tables give no power, drag or
+    braking."""
     model = cm.fit_car(tables, car, air=air)[0]
     return convene(
-        model, tracks, best, air=air, shifts=shifts, gears=gears, power_scale=power_scale
+        model,
+        tracks,
+        best,
+        air=air,
+        shifts=shifts,
+        gears=gears,
+        power_scale=power_scale,
+        laps=laps,
     )
 
 
@@ -405,12 +411,19 @@ def convene(
     gears: dict[str, tuple[float, ...]] | None = None,
     power_scale: float = 1.0,
     bank: bool = True,
+    laps: dict[str, cg.UseLaps] | None = None,
+    use: dict | None = None,
 ) -> cg.Drive | None:
     """``model`` (as :func:`~.car.fit_car` returns it) as a
-    :class:`~.car_gate.Drive` with its power scaled and ``mu_y`` then set
-    by the convention on ``best``; None when the model lacks power, drag
-    or braking, or no reference lap is left. ``bank=False`` has its
-    laps, the reference laps among them, driven on a flat road."""
+    :class:`~.car_gate.Drive` with its power scaled, the driver's braking
+    use read from ``laps`` (:func:`~.car_gate.set_use`) and ``mu_y`` then
+    set by the convention on ``best``; None when the model lacks power,
+    drag or braking, or no reference lap is left. Without ``laps`` the
+    laps are braked at the car's limit, or with ``use`` (a ``driver`` as
+    another model of the car carries it, read under its convention) as
+    that driver brakes: the level in g at the reference pace is held.
+    ``bank=False`` has its laps, the reference laps among them, driven on
+    a flat road."""
     need = (
         model.power["p_specific"],
         model.power["c_drag"],
@@ -428,7 +441,26 @@ def convene(
         bank=bank,
     )
     left = {k: v for k, v in tracks.items() if k in set(best["layout_id"])}
-    return drive.but(model=cg.set_convention(drive, left, best)[0])
+    if laps:
+        drive = drive.but(model=cg.set_use(drive, left, laps)[0])
+    elif use:
+        drive = drive.but(model=cg.with_use(drive.model, use))
+    held = bool(use) and not laps
+    return drive.but(model=cg.set_convention(drive, left, best, hold_use=held)[0])
+
+
+def laps_left(
+    laps: dict[str, cg.UseLaps], layout_id: str, date: str | None = None
+) -> dict[str, cg.UseLaps]:
+    """``laps`` without those of ``layout_id`` (on ``date`` only, when
+    one is given): what a fold's braking use is read from."""
+    out: dict[str, cg.UseLaps] = {}
+    for key, own in laps.items():
+        if key != layout_id:
+            out[key] = own
+        elif date is not None:
+            out[key] = own.keep((own.frame["date"] != date).to_numpy())
+    return out
 
 
 def _pair_floor(
@@ -469,8 +501,10 @@ def run_folds(
     ``folds`` has one row per fold and model (``fit``, ``low_power``,
     ``other_car``): ``kind`` (``day`` or ``layout``), ``layout_id``,
     ``date``, ``laps``, ``floor`` and the medians ``S1, S2, S3, brake_g``.
-    ``laps`` has the per-lap statistics of the fitted car with its
-    variants on the layout folds: ``S1_other`` and ``top_other`` (the
+    ``laps`` has the per-lap statistics of the fitted car, the same with
+    the suffix ``_limit`` for the fold's car braked at its limit (no
+    driver's use, ``mu_y`` set again: the gate as it stood before the
+    use), and its variants on the layout folds: ``S1_other`` and ``top_other`` (the
     same car with its cornering drag the other way round: off when the
     car carries it, on when it does not), ``S1_flat``, ``S3_flat``,
     ``top_flat`` and ``u_flat`` (the fold's car with every road taken as
@@ -483,8 +517,8 @@ def run_folds(
     ``level``): how far two logged laps are from each other on each
     measure, at each level of pace. With ``shares`` (the
     production force shares per car, :func:`~.holdout.production_shares`)
-    the layout folds also carry :func:`heat_errors`, on the bank and with
-    the suffix ``_flat`` without it.
+    the layout folds also carry :func:`heat_errors`, on the bank, with
+    the suffix ``_flat`` without it and ``_limit`` braked at the limit.
     """
     own = car_only(tables, car)
     best_all = cg.day_best_laps(rows, car)
@@ -492,6 +526,10 @@ def run_folds(
     layouts = {k: Layout.of(v) for k, v in tracks.items() if k in set(best_all["layout_id"])}
     other_car = cg.Drive(other, air=air) if isinstance(other, cm.CarModel) else other
     any_bank = any(len(t.bank) for t in tracks.values())
+    # what the driver's braking use is read from, less each fold's laps
+    use_tracks = {k: v.track for k, v in layouts.items()}
+    use_laps = cg.car_use_laps(own, lap_time, car, use_tracks)
+    use_flat = cg.car_use_laps(own, lap_time, car, use_tracks, bank=False) if any_bank else {}
     share = None
     if shares is not None:
         try:
@@ -531,12 +569,20 @@ def run_folds(
                 )
             ]
             raw = cm.fit_car(without(own, layout_id, date), car, air=air)[0]
-            fitted = convene(raw, tracks, best, air=air, shifts=shifts, gears=gears)
+            read = laps_left(use_laps, layout_id, date)
+            fitted = convene(raw, tracks, best, air=air, shifts=shifts, gears=gears, laps=read)
             if fitted is None:
                 logger.info("holdout: no car for %s without %s %s", car, layout_id, date or "")
                 continue
             low = convene(
-                raw, tracks, best, air=air, shifts=shifts, gears=gears, power_scale=POWER_CONTROL
+                raw,
+                tracks,
+                best,
+                air=air,
+                shifts=shifts,
+                gears=gears,
+                power_scale=POWER_CONTROL,
+                use=fitted.model.driver,  # a wrong power is planted, not another driver
             )
             models: dict[str, cg.Drive | None] = {
                 "fit": fitted,
@@ -566,6 +612,8 @@ def run_folds(
                         "model": name,
                         **{k: float(scores[k].median()) for k in ("S1", "S2", "S3", "brake_g")},
                         "u": float(scores["u"].median()),
+                        "brake_use": driven.model.driver.get("brake_use", float("nan")),
+                        "held_shape": driven.model.driver.get("brake_use_ellipse", float("nan")),
                         "mu_y": driven.model.grip["mu_y"],
                         "p_specific": driven.model.power["p_specific"] * driven.power_scale,
                         "c_drag": driven.model.power["c_drag"],
@@ -577,6 +625,12 @@ def run_folds(
                 per_lap.insert(0, "car", car)
                 per_lap.insert(1, "kind", kind)
                 per_lap.insert(2, "layout_id", layout_id)
+                # the fold's car braked at its limit, mu_y set again
+                plain = convene(raw, tracks, best, air=air, shifts=shifts, gears=gears)
+                if plain is not None:
+                    at_limit = score_laps(plain, layout, held, v_held)
+                    for col in (*YARDSTICK_MEASURES, "u"):
+                        per_lap[f"{col}_limit"] = at_limit[col]
                 if kind == "layout":
                     flipped = driven.but(corner_drag=not sv.CORNER_DRAG_DEFAULT)
                     variant = score_laps(flipped, layout, held, v_held)
@@ -598,7 +652,16 @@ def run_folds(
                     # and with every road taken as flat, mu_y set again by
                     # the convention on the layouts that are left
                     level = (
-                        convene(raw, tracks, best, air=air, shifts=shifts, gears=gears, bank=False)
+                        convene(
+                            raw,
+                            tracks,
+                            best,
+                            air=air,
+                            shifts=shifts,
+                            gears=gears,
+                            bank=False,
+                            laps=laps_left(use_flat, layout_id, date),
+                        )
                         if any_bank
                         else None
                     )
@@ -608,7 +671,7 @@ def run_folds(
                             per_lap[f"{col}_flat"] = on_flat[col]
                     # heat per tyre, at the lap's own time and with the pace carried
                     own_best = best_all[best_all["layout_id"] == layout_id]
-                    for who, tag in ((driven, ""), (level, "_flat")):
+                    for who, tag in ((driven, ""), (level, "_flat"), (plain, "_limit")):
                         if share is None or who is None:
                             continue
                         heat = heat_errors(who, layout, held, v_held, share, own_best)
@@ -768,7 +831,17 @@ def check_car_holdout(
         best = cg.day_best_laps(rows, c)
         model, work = cm.fit_car(car_only(tables, c), c, air=air)
         shifts[c], gears[c] = cg.day_shifts(work), cg.day_gears(work)
-        full[c] = convene(model, tracks, best, air=air, shifts=shifts[c], gears=gears[c])
+        own = {k: v for k, v in tracks.items() if k in set(best["layout_id"])}
+        lap_time = rows.set_index(["session_id", "lap_num"])["lap_time_s"]
+        full[c] = convene(
+            model,
+            tracks,
+            best,
+            air=air,
+            shifts=shifts[c],
+            gears=gears[c],
+            laps=cg.car_use_laps(car_only(tables, c), lap_time, c, own),
+        )
     all_folds, all_laps, all_yard = [], [], []
     for c in cars:
         # another car's parameters, its own default powertrain and shift point
@@ -828,11 +901,59 @@ def check_car_holdout(
         )
 
     # 2. Against the logged lap, at three levels of pace: the gate's score.
-    pace = by_pace(laps[laps["kind"] == "day"], yardsticks)
+    day_laps = laps[laps["kind"] == "day"]
+    pace = by_pace(day_laps, yardsticks)
+    use_note = ""
     if len(pace):
         grid = attainment(pace)
         grid["level"] = [f"P{lv:g}" for lv in grid["level"]]
         got = grid[grid["scored"]]
+        # the same cells with the car braked at its limit: what the driver's use is worth
+        at_limit = {f"{k}_limit": k for k in YARDSTICK_MEASURES}
+        if set(at_limit) <= set(day_laps.columns):
+            was = attainment(
+                by_pace(
+                    day_laps.drop(columns=list(YARDSTICK_MEASURES)).rename(columns=at_limit),
+                    yardsticks,
+                )
+            )
+            was["level"] = [f"P{lv:g}" for lv in was["level"]]
+            cell = ["car", "layout_id", "level", "measure"]
+            both = got.merge(was[cell + ["simulated", "passed"]], on=cell, suffixes=("", "_limit"))
+            won = both["passed"] & ~both["passed_limit"]
+            lost = ~both["passed"] & both["passed_limit"]
+            tally = (
+                both.assign(won=won, lost=lost)
+                .groupby("measure", sort=False)
+                .agg(
+                    cells=("passed", "size"),
+                    passed=("passed", "sum"),
+                    at_the_limit=("passed_limit", "sum"),
+                    won=("won", "sum"),
+                    lost=("lost", "sum"),
+                )
+            )
+            tally.index = [MEASURE_NAMES[k] for k in tally.index]
+            use_note = (
+                f"{int(both['passed_limit'].sum())} of {len(both)} with the car braked at its "
+                f"limit: the driver's braking use wins {int(won.sum())} cells and loses "
+                f"{int(lost.sum())}"
+            )
+            use_table = (
+                "\n\n**The driver's braking use** (the car's `driver`, read in each fold from "
+                "the laps that are left): the same cells with the fold's car braked at its limit "
+                "instead, `mu_y` set again (`at_the_limit`).\n\n"
+                + md_table(tally.reset_index(names="measure"))
+                + "\n\nCells that change:\n\n"
+                + md_table(
+                    both[won | lost][cell + ["simulated", "simulated_limit", "other_day"]].assign(
+                        change=np.where(won[won | lost], "won", "lost")
+                    ),
+                    floats="{:.3f}",
+                )
+            )
+        else:
+            use_table = ""
         rep.score = (
             f"{int(got['passed'].sum())} of {len(got)} cells (car × layout × level of pace × "
             f"measure) no further from the logged lap than a logged lap of another day is; "
@@ -882,12 +1003,14 @@ def check_car_holdout(
                 )
             )
             detail += f"\n\n**{MEASURE_NAMES[k]}**\n\n" + md_table(one, floats="{:.3f}")
+        detail += use_table
         rep.items.insert(
             0,
             GateItem(
                 "Attainment",
                 None,
-                f"{_tally(got)} cells; by measure: {by_measure}; by level: {by_level}",
+                f"{_tally(got)} cells; by measure: {by_measure}; by level: {by_level}"
+                + (f"; {use_note}" if use_note else ""),
                 "a score to be raised, not a pass or a fail (owner, 2026-11-21): the cells in "
                 "which the simulated lap is no further from the logged lap than a logged lap of "
                 "another day is",
@@ -1005,14 +1128,68 @@ def check_car_holdout(
         nearer = int((term["brake_g_with"] < term["brake_g_without"]).sum())
         rep.items.append(
             GateItem(
-                "The braking limit's shape as a term of the default",
+                "The shape of the braking under cornering as a term of the default",
                 None,
                 f"with it, leave-one-layout-out S1 is lower in {lower} of {len(term)} cells and "
                 f"the braking nearer the logged lap's in {nearer} of {len(term)}",
                 "in the default only if it does not raise the leave-one-layout-out error and "
                 "brings the braking nearer the logged lap's (`brake_g`); "
                 + ("it is on" if sv.BRAKE_SHAPE_DEFAULT else "it is off"),
-                "With the car's own `brake_ellipse` against the diamond.\n\n"
+                "With the shape the laps are braked on (the driver's held one where the car "
+                "carries a braking use, else the limit's `brake_ellipse`) against the diamond."
+                "\n\n" + md_table(term, floats="{:.3f}"),
+            )
+        )
+
+    # 4c'. The driver's braking use: against the car braked at its limit.
+    if "S1_limit" in lay.columns:
+        term = (
+            lay.groupby(["car", "layout_id"])
+            .agg(
+                laps=("S1", "count"),
+                S1_with=("S1", "median"),
+                S1_without=("S1_limit", "median"),
+                S3_with=("S3", "median"),
+                S3_without=("S3_limit", "median"),
+                brake_g_with=("brake_g", "median"),
+                brake_g_without=("brake_g_limit", "median"),
+                u_with=("u", "median"),
+                u_without=("u_limit", "median"),
+            )
+            .reset_index()
+        )
+        cells = [g for _, g in lay.groupby(["car", "layout_id"])]
+        for name, kind in (("heat", "h"), ("heat_carried", "hc")):
+            term[f"{name}_with"] = [worst_tyre(g, kind) for g in cells]
+            term[f"{name}_without"] = [worst_tyre(g, kind, "_limit") for g in cells]
+        lower = int((term["S1_with"] < term["S1_without"]).sum())
+        nearer = int((term["brake_g_with"] < term["brake_g_without"]).sum())
+        apex = int((term["S3_with"].abs() < term["S3_without"].abs()).sum())
+        measured = (
+            f"with it, leave-one-layout-out S1 is lower in {lower} of {len(term)} cells, the "
+            f"braking nearer the logged lap's in {nearer} and the apex speed nearer in {apex}"
+        )
+        if term["heat_carried_with"].notna().any():
+            cooler = int((term["heat_carried_with"] < term["heat_carried_without"]).sum())
+            measured += (
+                f"; worst-tyre heat with the pace carried "
+                f"{100 * float(term['heat_carried_with'].median()):.1f} % with it, "
+                f"{100 * float(term['heat_carried_without'].median()):.1f} % without (lower in "
+                f"{cooler}), and at the lap's own time "
+                f"{100 * float(term['heat_with'].median()):.1f} % against "
+                f"{100 * float(term['heat_without'].median()):.1f} %"
+            )
+        rep.items.append(
+            GateItem(
+                "The driver's braking use as a term of the default",
+                None,
+                measured,
+                "reported; it is on by the owner's decision of 2026-11-21 (the attainment "
+                "committee's step 1)",
+                "With the laps braked as the driver brakes (the level and the held shape read "
+                "from the car's other layouts) against the car braked at its limit, `mu_y` set "
+                "by the convention each way. The day folds' cells are in the attainment item. "
+                "`heat` and `heat_carried` as in the bank's item below.\n\n"
                 + md_table(term, floats="{:.3f}"),
             )
         )
@@ -1083,6 +1260,8 @@ def check_car_holdout(
             S2=("S2", "median"),
             S3=("S3", "median"),
             u=("u", "median"),
+            brake_use=("brake_use", "median"),
+            held_shape=("held_shape", "median"),
             mu_y=("mu_y", "median"),
             p_specific=("p_specific", "median"),
         )
@@ -1106,6 +1285,7 @@ def check_car_holdout(
 __all__ = [
     "Layout",
     "attainment",
+    "laps_left",
     "by_pace",
     "braking_match",
     "car_only",

@@ -239,8 +239,14 @@ class SolverCar:
     #: planted wrong power.
     power_scale: float = 1.0
     #: How far the braking limit is from the diamond (0: what the cornering
-    #: leaves of the grip, taken linearly) towards the ellipse (1).
+    #: leaves of the grip, taken linearly) towards the ellipse (1): the
+    #: car's own shape, or the one the driver holds when the lap is braked
+    #: as the driver brakes (``brake_use`` under 1).
     brake_ellipse: float = 0.0
+    #: The driver's: the level the lap is braked at, as a share of
+    #: ``mu_b`` (1: at the car's limit). The pace knob multiplies it like
+    #: the limit.
+    brake_use: float = 1.0
     #: Seconds between full drive and full braking: every speed peak of the
     #: lap is flat for this long (:func:`._kernel.open_peaks`).
     onset_s: float = 0.0
@@ -340,6 +346,7 @@ class SolverCar:
         brake_shape: bool | None = None,
         onset_s: float | None = None,
         brake_onset: bool | None = None,
+        brake_use: bool = True,
     ) -> "SolverCar":
         """The solver's car from a model.
 
@@ -362,6 +369,10 @@ class SolverCar:
         SAE factor and the drag goes with the density; without them the
         car runs in standard air. ``corner_drag`` says whether
         ``k_corner_drag`` is carried (None: :data:`CORNER_DRAG_DEFAULT`).
+        ``brake_use`` says whether the lap is braked as the driver brakes
+        (the model's ``driver``: the driver's level as a share of ``mu_b`` and
+        the shape held under cornering, in place of the limit's) or at the car's limit;
+        a model without a ``driver`` is braked at the limit either way.
         """
         on = CORNER_DRAG_DEFAULT if corner_drag is None else corner_drag
         wet = model.wet.get("grip_scale")
@@ -387,6 +398,9 @@ class SolverCar:
         lost: tuple[float, ...] = ()
         if geared and (SHIFT_LOSS_DEFAULT if shift_loss is None else shift_loss):
             lost = _shift_times_for(spec.get("shift_s") or {}, own_gears, numbers, ratios, gears)
+        driver = model.driver if brake_use else {}
+        use, held = driver.get("brake_use"), driver.get("brake_use_ellipse")
+        ellipse = held if use is not None and held is not None else model.grip.get("brake_ellipse")
         c_drag = float(model.power["c_drag"])
         if rho is not None and math.isfinite(rho) and model.power.get("rho_ref"):
             c_drag *= rho / float(model.power["rho_ref"])
@@ -406,10 +420,11 @@ class SolverCar:
             power_scale=1.0 / cf if cf and math.isfinite(cf) else 1.0,
             shift_s=lost,
             brake_ellipse=(
-                float(model.grip.get("brake_ellipse") or 0.0)
+                float(ellipse or 0.0)
                 if (BRAKE_SHAPE_DEFAULT if brake_shape is None else brake_shape)
                 else 0.0
             ),
+            brake_use=float(use) if use is not None else 1.0,
             onset_s=(
                 float(
                     onset_s
@@ -574,7 +589,7 @@ def _passes(
         _power_table(car),
         1.0 / POWER_TABLE_DV,
         mu,
-        car.mu_b * u * w,
+        car.mu_b * car.brake_use * u * w,
         car.c_drag,
         car.k_corner_drag,
         car.brake_ellipse,
@@ -766,7 +781,7 @@ def _lanes(profile: Profile, cars: list[SolverCar], wet: bool) -> tuple:
         np.ascontiguousarray(np.stack([_power_table(car) for car in index])),
         which,
         np.array([car.mu_y for car in cars], dtype=float),
-        np.array([car.mu_b for car in cars], dtype=float),
+        np.array([car.mu_b * car.brake_use for car in cars], dtype=float),
         np.array([car.wet_scale if wet else 1.0 for car in cars], dtype=float),
         np.array([car.c_drag for car in cars], dtype=float),
         np.array([car.k_corner_drag for car in cars], dtype=float),
@@ -898,7 +913,9 @@ def combined_use(sim: SimLap, profile: Profile, car: SolverCar, *, wet: bool = F
     it: under braking the tyre's deceleration over what the cornering
     leaves of the braking limit (the diamond, or the car's own shape
     between it and the ellipse) where it leaves any, else the lateral over
-    its limit; under drive the two combine as an ellipse. 1 is the limit."""
+    its limit; under drive the two combine as an ellipse. 1 is the limit
+    the lap is driven to: under braking the driver's level where the car
+    carries one (``brake_use``)."""
     w = car.wet_scale if wet else 1.0
     n = profile.n
     first = np.arange(n) if profile.closed else np.arange(n - 1)
@@ -918,7 +935,7 @@ def combined_use(sim: SimLap, profile: Profile, car: SolverCar, *, wet: bool = F
         )
         lat = np.abs(sim.lat_tyre_g)
     a_y = car.mu_y * sim.u * w * load
-    a_b = car.mu_b * sim.u * w * load
+    a_b = car.mu_b * car.brake_use * sim.u * w * load
     tyre = sim.long_tyre_g
     used = np.minimum(lat / a_y, 1.0)
     left = (1.0 - car.brake_ellipse) * (1.0 - used) + car.brake_ellipse * np.sqrt(1.0 - used**2)
