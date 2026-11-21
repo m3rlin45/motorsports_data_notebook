@@ -7,10 +7,13 @@ the photogrammetric ``dem5b`` / ``dem5c`` and the 10 m ``dem`` (zoom 14)
 behind it where the laser model has no cover. Tiles are fetched once and
 kept in ``workspace/lapsim/gsi/``.
 
-The model is used for the check only: a track's ``alt_m`` and ``grade``
-come from the logs, and nothing derived from these tiles is committed
-(GSI asks for attribution, and publishing a product that combines its
-elevation model may need approval under the Survey Act; see #204).
+A track's ``alt_m`` and ``grade`` come from the logs and the model only
+checks them. The road's bank is the one thing read from the model itself
+(:mod:`.bank`, #299): the logs do not give it. It is kept with the track
+in ``workspace/lapsim/tracks/``, and nothing derived from these tiles is
+committed (GSI asks for attribution, and publishing a product that
+combines its elevation model may need approval under the Survey Act; see
+#204).
 
 The model is bare earth, so a bridge deck reads the ground beneath it.
 Heights are above mean sea level where GPS altitude is above the

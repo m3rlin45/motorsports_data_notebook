@@ -567,6 +567,12 @@ class TrackModel:
     #: Vertical curvature d(grade)/ds (1/m): positive in a compression,
     #: negative over a crest. The normal load goes with 1 + V²·kappa_v / g.
     kappa_v: np.ndarray = field(default_factory=lambda: np.zeros(0))
+    #: The road's bank (rad) from the ground elevation model, positive
+    #: where the left side of the direction of travel is higher
+    #: (:mod:`.bank`); empty where the track has none. ``bank_flag`` says
+    #: per node how it was read (:data:`.bank.FLAGS`).
+    bank: np.ndarray = field(default_factory=lambda: np.zeros(0))
+    bank_flag: np.ndarray = field(default_factory=lambda: np.zeros(0, dtype=np.int64))
 
     @property
     def n(self) -> int:
@@ -590,6 +596,11 @@ class TrackModel:
         def _list(a: np.ndarray, nd: int) -> list:
             return [None if not np.isfinite(v) else round(float(v), nd) for v in a]
 
+        banked = (
+            {"bank_rad": _list(self.bank, 5), "bank_flag": [int(v) for v in self.bank_flag]}
+            if len(self.bank)
+            else {}
+        )
         return {
             "layout_key": self.layout_key,
             "track_canonical": self.track_canonical,
@@ -608,6 +619,7 @@ class TrackModel:
             "corners": self.corners,
             "fills": self.fills,
             "meta": self.meta,
+            **banked,
         }
 
     @classmethod
@@ -632,6 +644,8 @@ class TrackModel:
             gate=dict(data.get("sf_gate", {})),
             meta=dict(data.get("meta", {})),
             kappa_v=_arr("kappa_v_1_per_m") if "kappa_v_1_per_m" in data else np.zeros(0),
+            bank=_arr("bank_rad") if "bank_rad" in data else np.zeros(0),
+            bank_flag=np.asarray(data.get("bank_flag", []), dtype=np.int64),
         )
 
     def save(self, path: Path) -> Path:

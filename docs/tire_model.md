@@ -1896,6 +1896,71 @@ is in that state today (the reference is within 2.4 % of the fastest
 session everywhere except the RX8 at Sodegaura, 7 %, and the Inferno 86
 at Tsukuba, 5.3 %).
 
+#### B2b. The road's bank (`bank.py`, 2026-11-17)
+
+Built on the owner's decisions of 2026-11-17, after the review's third
+round (C5, item 11): the bank goes into the track model, into the lap
+wherever a track has one, and into the simulated heat. Issue #299, which
+asked for a list of corners where every car's lateral runs high, now
+asks for this instead.
+
+**How it is read** (`bank.road_bank`). At each 2 m node: the line's
+direction over ± 6 m, the ground's height at 1 m steps out to 5 m either
+side of it (the GSI 5 m laser mesh, bilinear), and a least-squares line
+through the eleven heights. Its slope is the cross-slope, positive where
+the left side of the direction of travel is higher. A node is flagged and
+filled along the track from its neighbours where the model has no data,
+where gate B2's altitude check finds a bridge (`bank.notch_zones`, the
+same stretches as above), or where the section is not a plane (residual
+over 0.15 m rms or slope over 0.12: a wall, an earth bank). Then a mean
+over ± 10 m along the track; the angle is the slope's arctangent. Gate B2
+attaches it to each track it builds (`TrackModel.bank`, `bank_flag`,
+`meta["bank"]`; the wet track gets its own on its own line) and reports
+it. With `--no-dem`, or where the tiles do not reach, a track has no
+bank and is driven flat. The bank is derived from GSI's tiles, so like
+the tiles it stays in `workspace/` and is not committed.
+
+| layout | nodes filled (bridge / not a plane) | scatter on the straights (rad) | mean into the corners (rad) | sd over the corners | largest |
+|---|---|---|---|---|---|
+| Tsukuba | 0 | 0.0033 | 0.035 | 0.024 | 0.085 |
+| Tsukuba, wet line | 0 | 0.0031 | 0.036 | 0.024 | 0.090 |
+| Fuji | 0 | 0.0038 | 0.035 | 0.021 | 0.079 |
+| Motegi | 6 (0 / 6) | 0.0101 | 0.031 | 0.016 | 0.104 |
+| Sodegaura | 0 | 0.0026 | 0.011 | 0.008 | 0.045 |
+| Suzuka | 202 (175 / 27) | 0.0188 | 0.037 | 0.020 | 0.098 |
+
+The scatter on the straights (about each straight's own mean) is an
+upper bound of the noise: a straight's cross-slope also changes along
+it. The two halves of a section differ in slope by 0.016–0.049 at a
+tenth of the nodes, which is the crown and the kerbs a 5 m mesh cannot
+give. These are the reviewer's numbers to the fourth decimal: the built
+version is the prototype's method.
+
+**Against the accelerometers** (gate B2, reported). Per car on its own
+laps, the ground-frame lateral less the accelerometer's is the bank the
+sensor sees. The accelerometer is already divided by its session's audit
+slope, which takes out whatever goes with the lateral, the bank's habit
+of leaning into the turns with it; so the fit (`slope × bank + per_g ×
+lateral + constant`, `gates.bank_against_sensor`) reads the bank only
+where it does not follow the lateral. Cars with 30 IMU laps or more:
+
+| layout | car | IMU laps | slope | partial r |
+|---|---|---|---|---|
+| Fuji | Inferno 86 | 111 | 0.94 | 0.63 |
+| Tsukuba | Inferno 86 | 37 | 1.00 | 0.39 |
+| Tsukuba | KK-F | 93 | 1.09 | 0.52 |
+| Tsukuba | KK-SII | 92 | 1.45 | 0.44 |
+| Suzuka | KK-SII | 106 | 0.90 | 0.46 |
+| Sodegaura | Inferno 86 | 336 | 0.71 | 0.29 |
+| Motegi | EK9 | 30 | 0.60 | 0.21 |
+
+Where the bank is large and the laps are many the slope is 0.9–1.1; at
+Sodegaura the bank is too small to read (sd 0.008 rad) and the KK-SII at
+Tsukuba reads high. The review's own check, on the laps' own course rate
+and the raw accelerometer, gave 0.92–0.99 with r = 0.62–0.80 at Fuji and
+Tsukuba; this one is cruder (the track's curvature for every lap, and
+the audit slope's share gone) and agrees with it.
+
 #### B3. One track for every car (`holdout.py`, gate `check-track-holdout`, 2026-11-15)
 
 The statistic is profile against profile: the curvature from one group of
