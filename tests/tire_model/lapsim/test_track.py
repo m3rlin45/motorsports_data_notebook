@@ -70,6 +70,27 @@ class TestLineTools:
         s_open, _ = trk.project_onto(x, y, px, py, np.array([0.0, LENGTH_M]))
         assert s_open[0] == pytest.approx(0.0, abs=1e-6)
 
+    @pytest.mark.skipif(not trk._kernel.HAVE_NUMBA, reason="numba is not installed")
+    @pytest.mark.parametrize("closed", [True, False])
+    def test_the_compiled_search_finds_the_same_vertex(self, closed, monkeypatch):
+        rng = np.random.default_rng(8)
+        s_true = np.linspace(0.0, LENGTH_M, 358)
+        x, y, _ = stadium(s_true)
+        x[-1], y[-1] = x[0], y[0]
+        # a lap beside the line, with points off both ends, a bad guess and one without a fix
+        s_lap = np.sort(rng.uniform(-30.0, LENGTH_M + 30.0, 900))
+        px, py, _ = stadium(s_lap)
+        px, py = px + rng.normal(0.0, 3.0, px.size), py + rng.normal(0.0, 3.0, py.size)
+        guess = s_lap + rng.normal(0.0, 20.0, s_lap.size)
+        guess[5] = 1e9
+        px[7] = np.nan
+        got = {}
+        for compiled in (True, False):
+            monkeypatch.setattr(trk, "USE_COMPILED", compiled)
+            got[compiled] = trk.project_onto(x, y, px, py, guess, closed=closed)
+        for a, b in zip(got[True], got[False]):
+            assert np.array_equal(a, b, equal_nan=True)  # to the last bit
+
     def test_bins_a_lap_does_not_reach_come_from_its_other_end(self):
         grid = np.arange(0.0, 101.0, 2.0)
         s = np.linspace(3.0, 101.0, 200)  # starts 3 m late, ends 1 m past the line

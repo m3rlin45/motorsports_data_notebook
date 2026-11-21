@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -261,6 +262,61 @@ class TestGyroScale:
         hole = (t < a + 5.0) | (t > a + 8.0)
         assert math.isnan(geo.gyro_scale(geom, t[hole], w[hole], a, b))
         assert math.isnan(geo.gyro_scale(geom, t[:50], w[:50], a, b))
+
+    def test_a_lap_is_a_slice_of_the_sessions_gyro(self):
+        geom, truth, frame = _geometry(n_laps=3, gyro_scale=0.93, gyro_offset_dps=0.4)
+        t = frame["t_session_s"].to_numpy(copy=True)
+        w = frame["yaw_rate_dps"].to_numpy(copy=True)
+        w[::97] = np.nan  # samples the series leaves out
+        mixed = np.random.default_rng(1).permutation(t.size)  # and it need not come in order
+        series = geo.gyro_series(t[mixed], w[mixed])
+        assert np.all(np.diff(series[0]) >= 0) and np.isfinite(series[1]).all()
+        for a, b in zip(truth["crossings"][:-1], truth["crossings"][1:]):
+            assert geo.gyro_scale_of(geom, *series, a, b) == geo.gyro_scale(geom, t, w, a, b)
+
+
+class TestAllAtOnce:
+    """The helpers that take every row, column or sample in one go, against
+    numpy doing them one at a time."""
+
+    @pytest.mark.parametrize("shape", [(7, 80), (40, 300), (301, 50), (1, 9), (5, 1)])
+    def test_the_median_of_every_row_and_column(self, shape):
+        rng = np.random.default_rng(sum(shape))
+        a = rng.normal(size=shape)
+        a[rng.random(shape) < 0.15] = np.nan
+        a[:, 0] = np.nan  # a column of nothing
+        a[-1, :] = np.nan  # and a row
+        a[0, -1] = np.inf
+        for axis in (0, 1):
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")  # numpy warns of a line of nothing but NaN
+                want = np.nanmedian(a, axis=axis)
+            assert np.array_equal(geo.nan_median(a, axis), want, equal_nan=True)
+        full = rng.normal(size=shape)
+        assert np.array_equal(geo.nan_median(full, 0), np.median(full, axis=0))
+        assert geo.nan_median(np.empty((0, 4)), 1).shape == (0,)
+
+    def test_a_sorted_query_is_found_in_one_walk(self):
+        rng = np.random.default_rng(4)
+        key = np.sort(rng.uniform(0.0, 100.0, 5000))
+        key[100:110] = key[100]  # equal keys
+        for query in (key - 0.25, key + 0.25, key, np.array([-1.0, 50.0, 50.0, 500.0]), key[:0]):
+            for side in ("left", "right"):
+                assert np.array_equal(
+                    geo.sorted_bounds(key, query, side), np.searchsorted(key, query, side=side)
+                )
+        # a query out of order, or a clock with a hole in it, goes to numpy
+        for bad_key, query in ((key, key[::-1].copy()), (np.where(key > 50, np.nan, key), key)):
+            assert np.array_equal(
+                geo.sorted_bounds(bad_key, query), np.searchsorted(bad_key, query)
+            )
+        x = rng.normal(size=key.size)
+        x[::7] = np.nan
+        lo, hi = np.searchsorted(key, key - 0.5, "left"), np.searchsorted(key, key + 0.5, "right")
+        want = np.array(
+            [np.nanmean(x[a:b]) if np.isfinite(x[a:b]).any() else np.nan for a, b in zip(lo, hi)]
+        )
+        assert geo.nan_window_mean(x, key, 0.5) == pytest.approx(want, nan_ok=True)
 
 
 def _index_rows(session_id, car, times, *, condition="dry", layout="tsukuba_2000", **over):

@@ -169,7 +169,7 @@ def _kappa(proj: trk.Projection, rows: np.ndarray, ds: float) -> np.ndarray:
 
 def _speed(proj: trk.Projection, rows: np.ndarray) -> np.ndarray:
     with np.errstate(invalid="ignore"):
-        return trk._fill_nan_periodic(np.nanmedian(proj.speed[rows][:, :-1], axis=0))
+        return trk._fill_nan_periodic(geo.nan_median(proj.speed[rows][:, :-1], 0))
 
 
 def ladder(
