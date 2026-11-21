@@ -15,7 +15,12 @@ from that day's own logs: it is the driver's, like the lap time.
 - ``S2``: signed end-of-straight speed error, the mean over the layout's
   straights of the simulated top speed less the logged one;
 - ``S3``: signed apex speed error, the mean over the corners of the
-  simulated minimum less the logged one.
+  simulated minimum less the logged one;
+- ``brake_g``: how far the lap's braking is from the logged lap's
+  (:func:`braking_match`): wherever the logged lap slows by 0.2 g or
+  more, the RMS difference of deceleration at the same places on the
+  track. Its yardstick is the same measure between two logged laps
+  (:func:`pace_yardsticks`).
 
 **Controls** through the same folds: (a) the fold's own car with
 ``p_specific × 0.85`` and ``mu_y`` raised by the convention until the
@@ -37,12 +42,14 @@ ones included; a track without them is B3's subject.
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
+from ...tire_etl.kinematics import G_MS2
 from ..heat_input import ShareParams
 from . import car as cm
 from . import car_gate as cg
@@ -67,6 +74,18 @@ STRAIGHT_MIN_M = 200.0
 STRAIGHT_MIN_GAIN_MS = 5.0
 APEX_WINDOW_M = 20.0
 MIN_FOLD_LAPS = 3
+#: Braking is scored where the logged lap slows by this much or more (g),
+#: the deceleration read from the change of V² over this distance centred
+#: on the node; a lap needs this many such nodes to have a score.
+BRAKE_MATCH_MIN_G = 0.2
+BRAKE_MATCH_WINDOW_M = 16.0
+BRAKE_MATCH_MIN_NODES = 20
+#: The measures are read on the laps above each of these percentiles of
+#: pace among the car's laps at the layout (owner, 2026-11-21): the fast
+#: laps matter most and repeat best, and three levels show whether the
+#: simulation holds as the pace rises. Percentiles and not a margin of
+#: lap time: the same share of the laps at every layout.
+PACE_LEVELS = (75.0, 90.0, 95.0)
 TOP_BAND_QUANTILE = 0.75
 DRAG_GRID = (0.0, 0.5, 1.0, 1.5)
 TOP_BAND_MAX = 0.3
@@ -98,13 +117,107 @@ class Layout:
         return cls(track=track, apex_nodes=windows, stretches=stretches if apex else [])
 
 
+def deceleration_g(v: np.ndarray, ds: float, window_m: float = BRAKE_MATCH_WINDOW_M) -> np.ndarray:
+    """Deceleration along a closed lap (g, positive where the car slows)
+    from its speed at the track's nodes: the change of ``V²`` over
+    ``window_m`` centred on each node, ``−Δ(V²) / (2·Δs)``. The last axis
+    is the nodes."""
+    half = max(int(round(window_m / 2.0 / ds)), 1)
+    v2 = np.asarray(v, float) ** 2
+    drop = np.roll(v2, half, axis=-1) - np.roll(v2, -half, axis=-1)
+    return np.asarray(drop / (2.0 * 2 * half * ds) / G_MS2)
+
+
+def braking_match(v_sim: np.ndarray, v_obs: np.ndarray, ds: float) -> float:
+    """How far a lap's braking is from the logged lap's (g): the RMS
+    difference of :func:`deceleration_g` between the two, at the same
+    places on the track, over the nodes where the logged lap slows by
+    :data:`BRAKE_MATCH_MIN_G` or more.
+
+    The two laps are compared by position, node against node, with
+    nothing moved to make them line up: braking at another place counts
+    as much as braking at another strength. NaN where the logged lap has
+    fewer than :data:`BRAKE_MATCH_MIN_NODES` such nodes. ``v_sim`` may be
+    a simulated lap or another logged one (how closely the driver repeats
+    a lap is the measure's yardstick, :func:`pace_yardsticks`)."""
+    obs = deceleration_g(trk._fill_nan_periodic(np.asarray(v_obs, float)), ds)
+    zone = obs >= BRAKE_MATCH_MIN_G
+    if int(zone.sum()) < BRAKE_MATCH_MIN_NODES:
+        return float("nan")
+    sim = deceleration_g(trk._fill_nan_periodic(np.asarray(v_sim, float)), ds)
+    return float(np.sqrt(np.mean((sim - obs)[zone] ** 2)))
+
+
+def fast_laps(lap_time_s: np.ndarray, percentile: float) -> np.ndarray:
+    """Which laps of a car at a layout are above ``percentile`` of pace:
+    the fastest tenth of them at 90 (rounded up, so there is always one,
+    and laps tied with the slowest of them are in)."""
+    t = np.asarray(lap_time_s, float)
+    if not t.size:
+        return np.zeros(0, bool)
+    keep = max(int(math.ceil(t.size * (1.0 - percentile / 100.0))), 1)
+    return np.asarray(t <= np.sort(t)[keep - 1])
+
+
+YARDSTICK_MEASURES = ("S1", "S2", "S3", "brake_g")
+
+
+def pace_yardsticks(
+    layout: "Layout",
+    laps: pd.DataFrame,
+    v_obs: np.ndarray,
+    levels: tuple[float, ...] = PACE_LEVELS,
+) -> pd.DataFrame:
+    """Reality against itself, at each level of pace: for every lap of a
+    car at a layout (``date, lap_time_s``; ``v_obs`` its speed at the
+    nodes) that is above the level's percentile (:func:`fast_laps`), how
+    far other logged laps of that set are from it.
+
+    One row per lap and level: ``lap`` (the lap's row in ``laps``),
+    ``level`` and, for each of :data:`YARDSTICK_MEASURES`,
+    ``<measure>_other_day`` and ``<measure>_same_day``: the median over
+    the lap's :data:`~.car_gate.FLOOR_PAIRS_PER_LAP` nearest laps in lap
+    time, from other days and from its own, of :func:`lap_stats` with the
+    other lap standing where the simulated one would. ``S2`` and ``S3``
+    are sizes (absolute values). NaN without a pair: at a high level a
+    layout's set may hold one day's laps only.
+
+    Two logged laps each carry their own lap-to-lap variation, and two
+    from different days two GPS position offsets where a simulated lap
+    against a logged one carries one; so a simulation that matched the
+    driver's usual lap would read under ``other_day``, and ``same_day``
+    is about the best any could do."""
+    t = laps["lap_time_s"].to_numpy(float)
+    day = laps["date"].to_numpy()
+    filled = [trk._fill_nan_periodic(np.asarray(v, float)) for v in v_obs]
+    rows: list[dict] = []
+    for level in levels:
+        inset = fast_laps(t, level)
+        for i in np.flatnonzero(inset):
+            row: dict = {"lap": int(i), "level": float(level)}
+            others = inset & (np.arange(len(t)) != i)
+            for tag, pool in (("other_day", day != day[i]), ("same_day", day == day[i])):
+                pick = np.flatnonzero(others & pool)
+                pick = pick[np.argsort(np.abs(t[pick] - t[i]))][: cg.FLOOR_PAIRS_PER_LAP]
+                stats = [lap_stats(layout, filled[j], filled[i]) for j in pick]
+                for k in YARDSTICK_MEASURES:
+                    vals = [abs(st[k]) for st in stats if np.isfinite(st[k])]
+                    row[f"{k}_{tag}"] = float(np.median(vals)) if vals else float("nan")
+            rows.append(row)
+    cols = ["lap", "level"] + [
+        f"{k}_{tag}" for tag in ("other_day", "same_day") for k in YARDSTICK_MEASURES
+    ]
+    return pd.DataFrame(rows, columns=cols)
+
+
 def lap_stats(layout: Layout, v_sim: np.ndarray, v_obs: np.ndarray) -> dict:
-    """``S1, S2, S3`` of one lap (module docstring) and
+    """``S1, S2, S3`` and ``brake_g`` of one lap (module docstring) and
     ``top``: the RMS difference over the nodes where the logged lap is in
     its own top quarter of speed."""
     ds = layout.track.ds_m
     ok = np.isfinite(v_obs)
     out = {"S1": cg._rms((v_sim - v_obs)[ok]), "S2": np.nan, "S3": np.nan}
+    out["brake_g"] = braking_match(v_sim, v_obs, ds)
     band = ok & (v_obs >= np.nanquantile(v_obs, TOP_BAND_QUANTILE))
     out["top"] = cg._rms((v_sim - v_obs)[band])
     if layout.apex_nodes:
@@ -140,7 +253,14 @@ def score_laps(who: cg.Who, layout: Layout, laps: pd.DataFrame, v_obs: np.ndarra
     )
     rows = []
     for i in range(len(recs)):
-        row = {"u": float(got.u[i]), "S1": np.nan, "S2": np.nan, "S3": np.nan, "top": np.nan}
+        row = {
+            "u": float(got.u[i]),
+            "S1": np.nan,
+            "S2": np.nan,
+            "S3": np.nan,
+            "brake_g": np.nan,
+            "top": np.nan,
+        }
         if got.ok[i]:
             row.update(lap_stats(layout, got.v_node_ms[i], v_obs[i]))
         rows.append(row)
@@ -337,8 +457,8 @@ def run_folds(
     shifts: dict[str, float] | None = None,
     gears: dict[str, tuple[float, ...]] | None = None,
     shares: dict[str, ShareParams] | None = None,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Every fold of ``car``: ``(folds, laps)``.
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Every fold of ``car``: ``(folds, laps, yardsticks)``.
 
     ``tables`` and ``rows`` are by family (:func:`~.car.as_families`). A
     held-out lap is driven with its own day's powertrain, shift point and
@@ -348,7 +468,7 @@ def run_folds(
 
     ``folds`` has one row per fold and model (``fit``, ``low_power``,
     ``other_car``): ``kind`` (``day`` or ``layout``), ``layout_id``,
-    ``date``, ``laps``, ``floor`` and the medians ``S1, S2, S3``.
+    ``date``, ``laps``, ``floor`` and the medians ``S1, S2, S3, brake_g``.
     ``laps`` has the per-lap statistics of the fitted car with its
     variants on the layout folds: ``S1_other`` and ``top_other`` (the
     same car with its cornering drag the other way round: off when the
@@ -357,7 +477,11 @@ def run_folds(
     flat, ``mu_y`` set again by the convention there, so that ``u``
     against ``u_flat`` says how the pace level carries to the held-out
     layout each way) and, on a layout that reaches 50 m/s, ``top_<k>``
-    (the top-quarter RMS at k × the model's drag). With ``shares`` (the
+    (the top-quarter RMS at k × the model's drag). ``yardsticks`` is
+    :func:`pace_yardsticks` of the car's laps at each layout, keyed like
+    ``laps`` (``car, layout_id, session_id, lap_num, date`` and
+    ``level``): how far two logged laps are from each other on each
+    measure, at each level of pace. With ``shares`` (the
     production force shares per car, :func:`~.holdout.production_shares`)
     the layout folds also carry :func:`heat_errors`, on the bank and with
     the suffix ``_flat`` without it.
@@ -376,6 +500,7 @@ def run_folds(
             logger.info("holdout: no force shares for %s, its heat is not scored", car)
     fold_rows: list[dict] = []
     lap_rows: list[pd.DataFrame] = []
+    yard_rows: list[pd.DataFrame] = []
     for layout_id, layout in layouts.items():
         cell, v_cell = own.lap_speeds(car, layout_id)
         if cell.empty:
@@ -383,6 +508,12 @@ def run_folds(
         keys = pd.MultiIndex.from_frame(cell[["session_id", "lap_num"]])
         cell = cell.assign(lap_time_s=lap_time.reindex(keys).to_numpy())
         cell_floor = cg.day_floor(cell, v_cell)["floor"]
+        yard = pace_yardsticks(layout, cell, v_cell)
+        keyed = cell.iloc[yard["lap"].to_numpy()][["session_id", "lap_num", "date"]]
+        yard = pd.concat([keyed.reset_index(drop=True), yard.drop(columns="lap")], axis=1)
+        yard.insert(0, "car", car)
+        yard.insert(1, "layout_id", layout_id)
+        yard_rows.append(yard)
         days = sorted(cell["date"].unique())
         plans: list[tuple[str, str | None]] = [("layout", None)]
         if len(days) > 1:
@@ -433,7 +564,7 @@ def run_folds(
                     {
                         **base,
                         "model": name,
-                        **{k: float(scores[k].median()) for k in ("S1", "S2", "S3")},
+                        **{k: float(scores[k].median()) for k in ("S1", "S2", "S3", "brake_g")},
                         "u": float(scores["u"].median()),
                         "mu_y": driven.model.grip["mu_y"],
                         "p_specific": driven.model.power["p_specific"] * driven.power_scale,
@@ -463,6 +594,7 @@ def run_folds(
                     )
                     per_lap["S1_brake"] = braked["S1"]
                     per_lap["S3_brake"] = braked["S3"]
+                    per_lap["brake_g_brake"] = braked["brake_g"]
                     # and with every road taken as flat, mu_y set again by
                     # the convention on the layouts that are left
                     level = (
@@ -492,7 +624,70 @@ def run_folds(
                 lap_rows.append(per_lap)
     folds = pd.DataFrame(fold_rows)
     laps = pd.concat(lap_rows, ignore_index=True) if lap_rows else pd.DataFrame()
-    return folds, laps
+    yardsticks = pd.concat(yard_rows, ignore_index=True) if yard_rows else pd.DataFrame()
+    return folds, laps, yardsticks
+
+
+def by_pace(laps: pd.DataFrame, yardsticks: pd.DataFrame) -> pd.DataFrame:
+    """The measures per car, layout and level of pace: held-out laps
+    (``laps`` of :func:`run_folds`) joined to their yardsticks, as the
+    median over days of the day's median lap. Columns: ``car, layout_id,
+    level, laps, days``, then per measure of :data:`YARDSTICK_MEASURES`
+    the simulated lap's (``S2`` and ``S3`` as sizes),
+    ``<measure>_other_day`` and ``<measure>_same_day``."""
+    if laps.empty or yardsticks.empty:
+        return pd.DataFrame()
+    keys = ["car", "layout_id", "session_id", "lap_num"]
+    sim = laps[keys + list(YARDSTICK_MEASURES)].copy()
+    sim[["S2", "S3"]] = sim[["S2", "S3"]].abs()
+    both = yardsticks.merge(sim, on=keys, how="inner")
+    cols = [f"{k}{tag}" for k in YARDSTICK_MEASURES for tag in ("", "_other_day", "_same_day")]
+    cell = ["car", "layout_id", "level"]
+    days = both.groupby(cell + ["date"], sort=False)[cols].median()
+    out = days.groupby(cell, sort=False)[cols].median()
+    out.insert(0, "laps", both.groupby(cell, sort=False).size())
+    out.insert(1, "days", days.groupby(cell, sort=False).size())
+    return out.reset_index()
+
+
+#: What the measures are called in the report.
+MEASURE_NAMES = {
+    "S1": "speed round the lap (m/s)",
+    "S2": "end of straights (m/s)",
+    "S3": "apex (m/s)",
+    "brake_g": "braking (g)",
+}
+
+
+def attainment(pace: pd.DataFrame) -> pd.DataFrame:
+    """The gate as a score (owner, 2026-11-21: not a hard pass or fail;
+    the goal is to raise the number of passes). One row per car, layout,
+    level of pace and measure (:func:`by_pace`): ``simulated``,
+    ``other_day`` and ``same_day`` (two logged laps), ``scored`` (the cell
+    has both a simulated figure and logged laps of another day to set it
+    against) and ``passed``: the simulated lap is no further from the
+    logged lap than a logged lap of another day is."""
+    rows = []
+    for r in pace.to_dict("records"):
+        for k in YARDSTICK_MEASURES:
+            sim, other = float(r[k]), float(r[f"{k}_other_day"])
+            scored = bool(np.isfinite(sim) and np.isfinite(other))
+            rows.append(
+                {
+                    "car": r["car"],
+                    "layout_id": r["layout_id"],
+                    "level": r["level"],
+                    "measure": k,
+                    "laps": int(r["laps"]),
+                    "days": int(r["days"]),
+                    "simulated": sim,
+                    "other_day": other,
+                    "same_day": float(r[f"{k}_same_day"]),
+                    "scored": scored,
+                    "passed": bool(scored and sim <= other),
+                }
+            )
+    return pd.DataFrame(rows)
 
 
 # ---------------------------------------------------------------- the verdict
@@ -514,7 +709,7 @@ def verdict(folds: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     kind the counts and ``result`` (``pass``, ``fail`` or ``not scored``)."""
     keys = ["car", "kind", "layout_id", "date"]
     f = folds.assign(inside=inside(folds))
-    wide = f[f["model"] == "fit"][keys + ["laps", "floor", "S1", "S2", "S3", "inside"]]
+    wide = f[f["model"] == "fit"][keys + ["laps", "floor", "S1", "S2", "S3", "brake_g", "inside"]]
     for name in MODELS[1:]:
         ctl = f[f["model"] == name][keys + ["S1", "S2", "S3", "inside"]]
         ctl = ctl.rename(columns={c: f"{c}_{name}" for c in ("S1", "S2", "S3", "inside")})
@@ -574,12 +769,12 @@ def check_car_holdout(
         model, work = cm.fit_car(car_only(tables, c), c, air=air)
         shifts[c], gears[c] = cg.day_shifts(work), cg.day_gears(work)
         full[c] = convene(model, tracks, best, air=air, shifts=shifts[c], gears=gears[c])
-    all_folds, all_laps = [], []
+    all_folds, all_laps, all_yard = [], [], []
     for c in cars:
         # another car's parameters, its own default powertrain and shift point
         stand_in = full.get(OTHER_CAR.get(c, ""))
         other = stand_in.but(shifts={}, gears={}) if stand_in is not None else None
-        folds, laps = run_folds(
+        folds, laps, yard = run_folds(
             tables,
             rows,
             tracks,
@@ -592,8 +787,10 @@ def check_car_holdout(
         )
         all_folds.append(folds)
         all_laps.append(laps)
+        all_yard.append(yard)
     folds = pd.concat(all_folds, ignore_index=True)
     laps = pd.concat(all_laps, ignore_index=True)
+    yardsticks = pd.concat(all_yard, ignore_index=True)
     wide, by = verdict(folds)
     rep = GateReport("C3", "the car on held-out days and layouts (`lapsim check-car-holdout`)")
     rep.notes.append(
@@ -614,7 +811,7 @@ def check_car_holdout(
         rep.items.append(
             GateItem(
                 f"{c}: inside on every powered fold, both controls outside",
-                {"pass": True, "fail": False}.get(res),
+                None,
                 res
                 + "; "
                 + "; ".join(
@@ -623,10 +820,79 @@ def check_car_holdout(
                     f"outside on a powered fold {r.fit_outside_on_powered}"
                     for r in g.itertuples()
                 ),
-                f"S1 ≤ day floor + {S1_OVER_FLOOR_MAX}, |S2| ≤ {S2_MAX}, |S3| ≤ {S3_MAX} m/s; a "
-                "powered day fold and a powered layout fold per control",
+                f"reported: S1 ≤ day floor + {S1_OVER_FLOOR_MAX}, |S2| ≤ {S2_MAX}, |S3| ≤ {S3_MAX} "
+                "m/s over every quick lap; a powered day fold and a powered layout fold per "
+                "control",
                 md_table(wide[wide["car"] == c].drop(columns=["car"]), floats="{:.2f}"),
             )
+        )
+
+    # 2. Against the logged lap, at three levels of pace: the gate's score.
+    pace = by_pace(laps[laps["kind"] == "day"], yardsticks)
+    if len(pace):
+        grid = attainment(pace)
+        grid["level"] = [f"P{lv:g}" for lv in grid["level"]]
+        got = grid[grid["scored"]]
+        rep.score = (
+            f"{int(got['passed'].sum())} of {len(got)} cells (car × layout × level of pace × "
+            f"measure) no further from the logged lap than a logged lap of another day is; "
+            f"{int((~grid['scored']).sum())} cells have no such lap to be set against"
+        )
+
+        def _tally(frame: pd.DataFrame) -> str:
+            return f"{int(frame['passed'].sum())} of {len(frame)}"
+
+        count = got.groupby(["car", "layout_id", "measure"], sort=False)["passed"].agg(
+            ["sum", "size"]
+        )
+        count["tally"] = [f"{int(a)} of {int(b)}" for a, b in zip(count["sum"], count["size"])]
+        board = (
+            count["tally"]
+            .unstack("measure")
+            .reindex(columns=list(YARDSTICK_MEASURES))
+            .rename(columns=MEASURE_NAMES)
+            .fillna("")
+            .reset_index()
+        )
+        detail = (
+            "A cell is one car at one layout at one level of pace on one measure. A level's "
+            "laps are those above that percentile of pace among the car's laps at the layout "
+            f"({', '.join(f'P{lv:g}' for lv in PACE_LEVELS)}: to see that the simulation holds "
+            "as the pace rises). The car is fitted without the lap's day and the lap driven at "
+            "its own lap time. `simulated`: the simulated lap against the logged one; "
+            "`other_day` and `same_day`: another logged lap of the same set against it, from "
+            "other days and from its own. Each figure is the median over days of the day's "
+            "median lap. A cell passes when `simulated` is no more than `other_day`; one "
+            "without laps of another day in its set is not scored. Speed round the lap is the "
+            "RMS difference of speed; the end of the straights and the apex are sizes; braking "
+            f"is the RMS difference of deceleration where the logged lap slows by "
+            f"{BRAKE_MATCH_MIN_G} g or more.\n\nPasses of the levels scored, per car and "
+            "layout:\n\n" + md_table(board)
+        )
+        by_measure = ", ".join(
+            f"{MEASURE_NAMES[k].split(' (')[0]} {_tally(got[got['measure'] == k])}"
+            for k in YARDSTICK_MEASURES
+        )
+        by_level = ", ".join(f"{lv} {_tally(g)}" for lv, g in got.groupby("level", sort=False))
+        for k in YARDSTICK_MEASURES:
+            one = grid[grid["measure"] == k].drop(columns=["measure", "scored"])
+            one = one.assign(
+                passed=np.where(
+                    grid.loc[one.index, "scored"], np.where(one["passed"], "pass", "no"), ""
+                )
+            )
+            detail += f"\n\n**{MEASURE_NAMES[k]}**\n\n" + md_table(one, floats="{:.3f}")
+        rep.items.insert(
+            0,
+            GateItem(
+                "Attainment",
+                None,
+                f"{_tally(got)} cells; by measure: {by_measure}; by level: {by_level}",
+                "a score to be raised, not a pass or a fail (owner, 2026-11-21): the cells in "
+                "which the simulated lap is no further from the logged lap than a logged lap of "
+                "another day is",
+                detail,
+            ),
         )
 
     fit = folds[folds["model"] == "fit"]
@@ -646,12 +912,12 @@ def check_car_holdout(
         rep.items.append(
             GateItem(
                 "Top-speed band",
-                bool((band["model_over_best"] <= TOP_BAND_MAX).all()) if len(band) else None,
+                None,
                 "; ".join(
                     f"{r.car} {r.layout_id} +{r.model_over_best:.2f}" for r in band.itertuples()
                 )
                 + " m/s over the best of the grid",
-                f"the held-out layout's top quarter of speeds: RMSE with the model's drag within "
+                f"reported: the held-out layout's top quarter of speeds: RMSE with the model's drag within "
                 f"{TOP_BAND_MAX} m/s of the best over {DRAG_GRID} × it",
                 "The drag is the one the car has without the held-out layout (`c_drag_e4`); "
                 "`top_k`: RMS over the nodes where the lap is in its top quarter of speed, at "
@@ -719,7 +985,7 @@ def check_car_holdout(
             )
         )
 
-    # 4c. The braking limit's shape: the same question.
+    # 4c. The braking limit's shape: the same question, and the braking.
     if "S1_brake" in lay.columns:
         on, off = ("", "_brake") if sv.BRAKE_SHAPE_DEFAULT else ("_brake", "")
         term = (
@@ -730,19 +996,24 @@ def check_car_holdout(
                 S1_without=(f"S1{off}", "median"),
                 S3_with=(f"S3{on}", "median"),
                 S3_without=(f"S3{off}", "median"),
+                brake_g_with=(f"brake_g{on}", "median"),
+                brake_g_without=(f"brake_g{off}", "median"),
             )
             .reset_index()
         )
         lower = int((term["S1_with"] < term["S1_without"]).sum())
+        nearer = int((term["brake_g_with"] < term["brake_g_without"]).sum())
         rep.items.append(
             GateItem(
                 "The braking limit's shape as a term of the default",
                 None,
-                f"with it, leave-one-layout-out S1 is lower in {lower} of {len(term)} cells",
-                "in the default only if it does not raise the leave-one-layout-out error; "
+                f"with it, leave-one-layout-out S1 is lower in {lower} of {len(term)} cells and "
+                f"the braking nearer the logged lap's in {nearer} of {len(term)}",
+                "in the default only if it does not raise the leave-one-layout-out error and "
+                "brings the braking nearer the logged lap's (`brake_g`); "
                 + ("it is on" if sv.BRAKE_SHAPE_DEFAULT else "it is off"),
                 "With the car's own `brake_ellipse` against the diamond.\n\n"
-                + md_table(term, floats="{:.2f}"),
+                + md_table(term, floats="{:.3f}"),
             )
         )
 
@@ -834,13 +1105,19 @@ def check_car_holdout(
 
 __all__ = [
     "Layout",
+    "attainment",
+    "by_pace",
+    "braking_match",
     "car_only",
     "check_car_holdout",
     "convene",
+    "deceleration_g",
+    "fast_laps",
     "fold_car",
     "heat_errors",
     "inside",
     "lap_stats",
+    "pace_yardsticks",
     "run_folds",
     "score_laps",
     "verdict",

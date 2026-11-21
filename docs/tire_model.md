@@ -3156,6 +3156,220 @@ term named with its one statistic before it is run and scored once on
 laps not looked at; cant from the elevation model before any more
 braking terms.
 
+#### C6. Braking: how it is judged (2026-11-21)
+
+**The measure** (owner's decision, 2026-11-21: one plain number for how
+well the simulated braking matches the real braking). Wherever the
+logged lap slows by 0.2 g or more, the difference between the simulated
+and the logged deceleration at the same place on the track, as one RMS
+figure in g per lap (`car_holdout.braking_match`; deceleration from the
+change of V² over 16 m centred on each 2 m node,
+`car_holdout.deceleration_g`).
+
+**It is read at three levels of pace** (owner, 2026-11-21: "to make sure
+our solutions scale with pace"): on the laps above the 75th, the 90th
+and the 95th percentile of pace among the car's laps at the layout
+(`car_holdout.PACE_LEVELS`, `fast_laps`). The fast laps matter most and
+repeat best; three levels show whether the simulation holds as the pace
+rises. Percentiles and not a margin of lap time: the same share of the
+laps at every layout. Gate C3 scores the day folds (the car fitted
+without the lap's day, the lap driven at its own lap time), each figure
+the median over days of the day's median lap.
+
+**The yardstick is reality against itself** (`car_holdout.pace_yardsticks`):
+the same measure between the logged lap and the nearest three laps in
+lap time of the same set, from other days and from its own day.
+
+**The gate is a score, per car and circuit** (owner, 2026-11-21: "let's
+move away from the gate being a hard pass/fail, and treat it as
+attainment score, our goal is to maximize the number of passes"; "per
+circuit/car"). A cell is one car at one layout at one level of pace on
+one measure: speed round the lap (S1), the size of the end-of-straight
+and of the apex speed error, and the braking. It passes when the
+simulated lap is no further from the logged lap than a logged lap of
+another day is (`car_holdout.attainment`); a cell whose set holds one
+day's laps has nothing to be set against and is not scored. Gate C3
+reports the count and nothing in it is a pass or a fail any more: the
+verdict per car on S1, S2 and S3 over every quick lap and the top-speed
+band are reported beside it.
+
+**Today: 34 of 76 cells** (32 of the 108 cannot be scored). By measure:
+speed round the lap 8 of 19, end of straights 14 of 19, apex 10 of 19,
+braking 2 of 19. By level: P75 13 of 32, P90 9 of 24, P95 12 of 20.
+Passes of the levels scored:
+
+| car | layout | speed round the lap | end of straights | apex | braking |
+|---|---|---|---|---|---|
+| Inferno 86 | Fuji | 1 of 3 | 2 of 3 | 1 of 3 | 0 of 3 |
+| Inferno 86 | Motegi | 0 of 1 | 1 of 1 | 0 of 1 | 0 of 1 |
+| Inferno 86 | Sodegaura | 3 of 3 | 3 of 3 | 1 of 3 | 1 of 3 |
+| Inferno 86 | Tsukuba | not scored: its fast laps are one day's | | | |
+| KK-F | Fuji | 1 of 1 | 0 of 1 | 1 of 1 | 0 of 1 |
+| KK-F | Suzuka | 0 of 2 | 1 of 2 | 0 of 2 | 0 of 2 |
+| KK-F | Tsukuba | 1 of 3 | 3 of 3 | 3 of 3 | 0 of 3 |
+| KK-SII | Suzuka | 2 of 3 | 3 of 3 | 1 of 3 | 0 of 3 |
+| KK-SII | Tsukuba | 0 of 3 | 1 of 3 | 3 of 3 | 1 of 3 |
+
+(The KK-SII at Fuji has one day and no day fold.)
+
+**The braking point is gone** (owner, 2026-11-21: "get rid of the old
+gate, use the new metric"). The braking
+point (`brake_m`, where the simulated lap stops gaining speed less where
+the logged brake came on, ± 5 m, with `peak_m` beside it) is not in
+`car_holdout.py`: an 8 % error in the braking level moved it 2 m where
+8 % of power moved it 8 m and the driver's onset 17 m. The sections above
+that quote a braking point (C3, C4) are the record of what it read while
+it stood.
+
+Pooled over a car's layouts (the median over all its days), the braking
+reads:
+
+| car | level | laps / days | simulated against logged | two logged laps, other days | one day |
+|---|---|---|---|---|---|
+| Inferno 86 | P75 | 131 / 20 | 0.221 g | 0.205 g | 0.155 g |
+| | P90 | 54 / 12 | 0.230 | 0.197 | 0.155 |
+| | P95 | 27 / 10 | 0.233 | 0.205 | 0.149 |
+| KK-F | P75 | 75 / 10 | 0.293 | 0.214 | 0.167 |
+| | P90 | 30 / 8 | 0.288 | 0.170 | 0.170 |
+| | P95 | 16 / 5 | 0.254 | 0.159 | 0.198 |
+| KK-SII | P75 | 77 / 17 | 0.264 | 0.211 | 0.186 |
+| | P90 | 31 / 10 | 0.271 | 0.196 | 0.148 |
+| | P95 | 16 / 5 | 0.249 | 0.199 | 0.185 |
+
+Pooled, every car is over its yardstick at every level: the Inferno 86
+by 0.02–0.03 g, the KK-SII by 0.05–0.08 g, the KK-F by 0.08–0.12 g. Over every
+held-out lap, each paired with laps within 0.5 % of its lap time, the
+three read 0.22 / 0.27 / 0.28 g against 0.21 / 0.23 / 0.22 g: taken over
+all the laps the simulation looked about as close to a logged lap as a
+second logged lap is, and the fast laps show it is not.
+
+**The speed measures on the same laps and yardstick**, pooled over a
+car's layouts in the same way. Simulated against logged / two logged
+laps of other days; S2 and S3 as sizes:
+
+| car | level | S1 (m/s) | end of straights (m/s) | apex (m/s) |
+|---|---|---|---|---|
+| Inferno 86 | P75 | 0.95 / 1.17 | 0.27 / 0.39 | 0.25 / 0.29 |
+| | P90 | 0.90 / 0.99 | 0.22 / 0.37 | 0.33 / 0.24 |
+| | P95 | 0.95 / 1.03 | 0.24 / 0.31 | 0.45 / 0.28 |
+| KK-F | P75 | 1.20 / 1.18 | 0.26 / 0.45 | 0.17 / 0.33 |
+| | P90 | 1.19 / 1.08 | 0.23 / 0.43 | 0.23 / 0.40 |
+| | P95 | 1.18 / 0.97 | 0.25 / 0.68 | 0.09 / 0.38 |
+| KK-SII | P75 | 1.15 / 1.04 | 0.16 / 0.21 | 0.39 / 0.24 |
+| | P90 | 1.14 / 0.92 | 0.26 / 0.17 | 0.29 / 0.31 |
+| | P95 | 0.97 / 0.93 | 0.23 / 0.11 | 0.18 / 0.34 |
+
+- **Round the lap the Inferno 86 is nearer a logged lap than a second
+  logged lap is** at every level; the two formula cars are further, and
+  the KK-F by more as the pace rises (its error stays at 1.2 m/s while
+  two logged laps close from 1.18 to 0.97): it does not scale with pace.
+  Two logged laps of one day are 0.76–0.93 m/s apart; no car is there.
+- **Over every quick lap the picture was kinder**: 1.10 / 1.28 / 1.33
+  m/s against 1.31 / 1.38 / 1.31 between logged laps. The Inferno 86's
+  end-of-straight error (+0.56 m/s over every lap) is 0.27 by P75: it
+  belongs to slower laps on which the real car did not reach its speed.
+- **The apex and end-of-straight sizes do not settle** at any level
+  (the KK-F's end-of-straight yardstick runs 0.45, 0.43, 0.68): each is
+  a mean over a handful of straights or corners a lap.
+- **Above P95 there is nothing to score against.** At the 99th
+  percentile a layout's set is one to four laps of one day; where a
+  figure can be formed (the KK-F: 0.59 m/s from two laps) it means
+  nothing, and the Inferno 86's fastest lap at Tsukuba is 4.6 % clear
+  of its other days. P75 keeps 75–131 laps a car, P90 30–54 and P95
+  16–27; at P95 the formula cars rest on five days.
+
+**What it says of the braking limit's shape** (the term of C4, on since
+2026-11-16; gate C3's comparison on the layout folds, every held-out
+lap): with the shape the braking is further from the logged lap's in
+nine of ten cells (0.19–0.34 g against 0.17–0.28 g with the diamond;
+nearer only for the KK-F at Fuji), where S1 is lower in six of ten. The
+term was let in on S1 and the braking point; by this measure it does not
+earn its place. Nothing is changed on that account yet.
+
+**How to read the yardsticks.** Two logged laps each carry their own
+lap-to-lap variation, so a simulation that matched the driver's usual
+braking would read under the other-day figure; the one-day figure is
+about the best any simulation of this driver could do.
+
+**Laps are compared by position, and nothing is moved to line them up.**
+Braking at another place counts as much as braking at another strength.
+That makes the number feel a position error, measured as a fast logged
+lap against itself moved along the track: 1 m reads 0.02–0.03 g, 2 m
+0.04–0.05, 3 m 0.06–0.08, 5 m 0.10–0.13 (it adds to a real difference as
+the root of the sum of squares). A GPS offset moves a whole lap one way,
+so the shift it makes at each corner follows the corner's direction; one
+offset fitted per day comes out at 2.5–3 m and explains the corners'
+shifts beyond chance on the KK-F only (45 % against 18 %; 14–22 % against
+15–19 % on the other two), while the shifts themselves are 3.5–6 m rms.
+So drift is an upper 2.5–3 m, about 0.01 g on the other-day yardstick and
+a fifth to a half of its gap to the one-day one. Two logged laps of
+different days carry two offsets and a simulated lap against a logged
+one carries one. When two versions of the simulation are scored on the
+same laps the offset is the same for both: it sets how low the number
+can go, not which version is nearer.
+
+**What it does not say.** Why a lap differs (the car's limit or the
+driver's use of it), or whether the difference is in where the braking
+starts or how hard it is. A power error reaches it through the pace knob
+(below).
+
+**What softer braking does to it** (in sample, the lead's probe before
+the team: `mu_b` × 0.83 / 0.87 / 0.73 for the Inferno 86 / KK-F /
+KK-SII): 0.18 / 0.20 / 0.19 g on the fast laps against 0.23 / 0.27 /
+0.31 in sample for the default, nearer on 92–100 % of days. The measure
+answers to a braking change.
+
+**The team's first stage, as a record** (six members: the tyre model as
+consumer, the coaching use, the logs, validation on planted cases,
+physics, outside practice; a round of positions and a round of debate,
+thresholds first; the scripts were in the session's scratch). It
+proposed a set of four measures; the owner set it aside as too
+complicated and asked for the one above. What it measured stands:
+
+- **The simulation sheds 11–15 % more speed than the driver** over the
+  middle of a stop (between 20 % and 90 % of the speed shed: +0.151 /
+  +0.111 / +0.151 as a log ratio), on 98 % of days, and as much after
+  turn-in as before it. 57–63 % of a stop's energy is shed after
+  turn-in.
+- **The fitted `mu_b` is about right as a sustained level and the driver
+  is below it.** Over the hard straight part of big stops the best tenth
+  sit at 0.94–0.95 of it (the 0.5 s peak reads 1.04–1.10: a spike); over
+  all braking time the driver is at a median 0.82–0.84 of the limit and
+  the simulation at 1.00.
+- **The corners with a low level are corners where less is asked**: the
+  level follows the pedal pressure (R² 0.78–0.98 across corners), is
+  stable over days and repeats between cars (r = 0.94–0.99). Not grade,
+  and no downforce is shown (under 2 standard errors).
+- **Heat cannot judge braking.** The braking part of a tyre's heat is
+  the energy shed, whatever the level: it is 13–27 % of a front tyre's
+  heat and today's error in it is at most 0.004–0.006 bar; no heat
+  statistic moves beyond its day floor for a level wrong by 0.08. One
+  per cent of heat is 0.003–0.005 bar, not the 0.01 of C5. Braking does
+  not bear on the pace level at a layout the car has not run (Inferno 86
+  at Tsukuba: −0.106 whatever the braking).
+- **`brake_m` and the braking-zone speed error are not measures of
+  braking.** An 8 % level error moves `brake_m` by 2 m, 8 % of power by
+  8 m and the driver's onset by 17 m; the speed error in the braking
+  zones answers to power one for one.
+- **No measure at a lap's own u is clean of power.** The simulated car
+  brakes at `mu_b·u` and 8 % of power moves u by 4 %, so every ratio of
+  decelerations reads half a power error. Power has to be right first.
+- **A limit cannot be told from a cautious driver** in one driver's laps:
+  a driver 8 % under the limit in the right car reads as a car 8 % too
+  high. Only "not too low" can be shown. On the formula cars the
+  deceleration still rises with pedal pressure: their limit has not been
+  reached in the logs; the Inferno 86's has.
+- **The KK-F's brake channel is late** by 0.13 s (6 m) against the onset
+  of its deceleration. A "use" measured from the application inherits
+  it (the lead's 0.87 for that car).
+- **A shape statistic that needs no `mu_y`** (the physics member's: the
+  time-weighted p90 of deceleration over the stop's own peak, in bands of
+  lateral over the lap's own apex level) moves ± 0.054 for ± 0.2 of
+  `brake_ellipse` and under 0.007 for level, power or a cautious driver.
+  On hard stops it reads the logged edge fuller than the model by 0.028–
+  0.048 (± 0.020–0.024), beyond 2 standard errors on the KK-F only. Not
+  built.
+
 #### D1 (in part). The lap solver (`solver.py`, 2026-11-15)
 
 C2's remaining clauses and all of C3 need `simulate_lap` and `solve_u`,
