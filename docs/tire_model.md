@@ -3370,6 +3370,250 @@ complicated and asked for the one above. What it measured stands:
   0.048 (± 0.020–0.024), beyond 2 standard errors on the KK-F only. Not
   built.
 
+#### C7. The driver's braking use, and the committee that planned it (2026-11-21)
+
+**The question** (owner, 2026-11-21): "make a committee to plan how we
+can improve our simulation to increase our attainment scores and report
+the plan back". Seven seats (the score's arithmetic, braking, the
+corners, the drive, the pace knob, outside practice, a skeptic), a round
+of positions and a round of debate, every seat measuring on one pack of
+the gate's held-out traces with the gate's own scorer, thresholds
+written before the runs; nothing was built in the repository until the
+owner said "build it" to step 1.
+
+**The plan it reported.**
+
+| step | what | on the score | verdict |
+|---|---|---|---|
+| 1 | the driver's braking use, apart from the car's limit | 34 → 56 of 76 | built (below) |
+| 2 | apex speed at a given lap time | 7 to 15 cells in reach | to be investigated; no term on the table moves it |
+| 3 | the Inferno 86's power from 2025-11 | inside chance | real in the logs; not a step for the count |
+| 4 | the brake's onset (`BRAKE_ONSET_DEFAULT`) | −4 on top of step 1 | stays off until the drive is right |
+| — | the knob off braking; grip against speed; the car's own line; no shift time; the KK-SII through its gears | −3 to −10 | dropped |
+
+**Step 1 as built** (issue #312's split: the car's limits apart from how
+it is driven). The car's braking limit stays the car's (`grip.mu_b`,
+`grip.brake_ellipse`). The model gains a `driver` entry: `brake_use`,
+the level the driver brakes at as a share of `mu_b·u`, and
+`brake_use_ellipse`, the shape held under cornering in place of the
+limit's. A lap is braked at `brake_use · mu_b · u` (`SolverCar.brake_use`;
+the pace knob multiplies it like the limit, the kernel is untouched and a
+car without a `driver` is the old arithmetic to the last bit).
+`Drive.brake_use = False` brakes at the limit, for the comparison.
+
+*The reading* (`car_gate.set_use`, rule written before it was scored).
+From the logged speed of every dry build lap of the car, each simulated
+at its own lap time for its u: the nodes that slow by 0.2 g or more
+(the braking measure's own zone), 0.5 s or more into the stop (past the
+brake's build); per node the braking force (what slows the car less the
+drag and the grade) over `mu_b·u` times the load, against the lateral
+over `mu_y·u` times the load; the median of each per band of lateral 0.1
+wide from 0 to 0.9 (200 nodes or more); then `A·(1 − x) + B·√(1 − x²)` by
+least squares over the bands, the solver's own form: the level `A + B`
+and the shape `B / (A + B)`. The median and not a high percentile: this
+is what the driver does, where `car.braking_shape` reads what the car
+can. A lap's u depends on how it is braked, so the reading is repeated
+with the laps braked as read until the level moves by less than 0.015
+(each repeat moves it by a ninth of the one before: two readings, the
+second within 0.002 of where it settles). The convention for `mu_y` is
+set after it, and moves the share with `mu_y` so that every lap stays
+the same lap (`car_gate._with_mu_y`): softer braking takes lap time that
+the knob gives back, so `mu_y` rises by 2.8–3.8 %.
+
+| car | `brake_use` | level at u = 1 | held shape (the limit's) | `mu_y` (before) | read back from laps simulated with it |
+|---|---|---|---|---|---|
+| Inferno 86 | 0.80 | 0.76 g | 0.59 (0.69) | 1.160 (1.128) | −0.6 %, 0.59 |
+| KK-SII | 0.85 | 1.03 g | 0.28 (0.52) | 1.318 (1.270) | −0.1 %, 0.29 |
+| KK-F | 0.84 | 1.05 g | 0.47 (0.63) | 1.372 (1.334) | −0.1 %, 0.48 |
+
+Gate C2 carries the read-back as a check (within 2 % of the level and
+0.05 of the shape): the committee's first rule, a median at low lateral,
+read a planted level 1.4–5.9 % low and was replaced by this one.
+
+**Gate C3 with it: 56 of 76** (34 with the fold's car braked at its
+limit, `mu_y` set again: 25 cells won, 3 lost). The reading is made in
+every fold from the laps that are left.
+
+| measure | with the use | at the limit | won | lost |
+|---|---|---|---|---|
+| speed round the lap | 14 of 19 | 8 | 6 | 0 |
+| end of straights | 16 of 19 | 14 | 2 | 0 |
+| apex | 8 of 19 | 10 | 1 | 3 |
+| braking | 18 of 19 | 2 | 16 | 0 |
+
+By level: P75 23 of 32 (13), P90 18 of 24 (9), P95 15 of 20 (12).
+
+| car | layout | speed round the lap | end of straights | apex | braking |
+|---|---|---|---|---|---|
+| Inferno 86 | Fuji | 1 of 3 | 3 of 3 | 0 of 3 | 3 of 3 |
+| Inferno 86 | Motegi | 1 of 1 | 1 of 1 | 0 of 1 | 1 of 1 |
+| Inferno 86 | Sodegaura | 3 of 3 | 3 of 3 | 0 of 3 | 3 of 3 |
+| KK-F | Fuji | 1 of 1 | 1 of 1 | 0 of 1 | 1 of 1 |
+| KK-F | Suzuka | 2 of 2 | 1 of 2 | 0 of 2 | 2 of 2 |
+| KK-F | Tsukuba | 3 of 3 | 3 of 3 | 3 of 3 | 2 of 3 |
+| KK-SII | Suzuka | 3 of 3 | 3 of 3 | 2 of 3 | 3 of 3 |
+| KK-SII | Tsukuba | 0 of 3 | 1 of 3 | 3 of 3 | 3 of 3 |
+
+On the layout folds (the use read on the car's other layouts) S1 is
+lower in 7 of 10 cells and the braking nearer the logged lap's in 10 of
+10; the worst tyre's heat with the pace carried is 3.0 % against 3.7 %
+in the median (lower in 4 of 10, the differences 0.1–0.6 points), and at
+the lap's own time 2.1 % either way. The held shape against the diamond:
+S1 lower in 9 of 10, the braking nearer in 9 of 10 (with the limit's
+shape it was worse in 9 of 10, C6). The verdict per car, reported: the
+Inferno 86 inside on 30 of 31 days (29), the formula cars on every day.
+The low-power control keeps the fold's reading of the driver (a wrong
+power is planted, not another driver: the level in g at the reference
+pace is held, `convene(..., use=)`).
+
+**What the committee tested it against** (its own prototype, the level
+and shape applied after the convention; the counts are of the same 76
+cells):
+
+- *Chance.* The count moves by 2.0–2.7 cells under resampling of laps
+  and days (5–95 %: 27–36 on the old default); the difference of two
+  versions on the same laps has an sd of 1.7–3.9. A gain under about 5
+  cells is not told from noise. Step 1 is +22 today and +19.5 ± 3.7
+  resampled, above zero in every resample; its own count resampled is 51
+  (46–56), so 56 is the top of its range.
+- *A placebo.* A 40 m blur of the old trace moved 4 m earlier scores 44
+  (braking 14 of 19) with no change to the car. Step 1 beats it by 12
+  (above zero in 99 %), equally at the three levels, passes 15 cells it
+  does not, and the same blur on step 1's own traces loses 11.
+- *Planted wrong cars on the changed model.* Power × 0.93: 35, × 1.07:
+  32, × 0.85: 1, another car: 7 (by layout folds 32, 30, 3, 7).
+- *The level planted wrong.* × 0.9: 46; × 1.1: 51. The count tells a
+  level too low, not one too high; a plain scale of `mu_b` scores 54 at
+  × 0.77 and 51 at × 0.84 and cannot tell them apart, which is why the
+  level is read from the logs and not chosen by the count.
+- *Layout folds*: 54 against 31.
+- *The knob stays on braking.* The level fixed in g (not multiplied by
+  u) scores 48: 0 won, 8 lost, seven at P90 and P95. In the logs the
+  straight-line level rises 0.9 / 1.3 / 2.0 % per 1 % of u within a day.
+- *Heat at a layout the car has not run*: 5.3 % with the use applied
+  after the convention (u then sits 1.6–3.4 % high), 2.9 % with the
+  convention set under it; hence the order above.
+- *The shape's part is not shown.* The level alone scores 53, the level
+  and shape 56: inside chance.
+
+**What step 1 leaves wrong.** The simulated car is 0.5–0.85 m/s slow over
+the logged braking nodes (it was 0.2–0.45 m/s fast) and 0.06–0.10 g soft
+where the driver slows by 0.6 g or more: one level cannot be right on
+the hard stops and slow enough into the corner. It loses 0.15–0.48 s a
+lap through the braking nodes and takes it back in the corners: u is up
+3 % and the Inferno 86's apexes are over by 0.35–1.0 m/s at every level
+(0 of 7 apex cells, from 2 of 7). A level read as the one that sheds
+each stop's speed in the stop's own distance passes the same 56 cells
+and leaves the apexes where they are.
+
+**Step 2, open (issue #313): apex speed at a given lap time.** Of the 20 cells still
+failing 11 are apex cells, and it is the only area with more cells in
+reach than the noise (the logged lap's own apex windows put in: +11 apex
+and +3 speed cells). What was measured:
+
+- Within a day, per 1 % of lap time the logged apex speed rises
+  0.28–0.37 m/s and the simulated 0.34–0.41; the logged top speed
+  0.21–0.32 and the simulated 0.20–0.23: the knob puts too much of a
+  faster lap into the corners.
+- On the formula cars the apex error follows corner speed: 0.5–0.9 m/s
+  over under 22 m/s, 0.7 m/s under above 30 m/s (1.2–1.6 m/s between the
+  two, stable across days, levels and cars, untouched by step 1). On the
+  Inferno 86 after step 1 it is a level: every class over by 0.2–0.5 m/s.
+- Tried and not taken: grip rising with speed (0.6–1.2 standard errors
+  in the logs; 53 against 56 on step 1, its reading swinging between
+  layouts); curvature from the car's own fast laps (−10); the knob split
+  between braking and cornering in a measured ratio (53); the knob on the
+  exit drive.
+- Four Suzuka corners where the cars hold 1.40–1.61 against a level of
+  1.32–1.33 are not missing bank (the accelerometer reads at most
+  0.023 rad more lean than the elevation model, where 0.03–0.10 rad would
+  be needed): at two of them the lap's own curvature at its minimum
+  speed is 9–13 % under the track's peak. A track matter (the line
+  through linked corners), not a car term.
+
+**Step 3: the Inferno 86 is stronger in a straight line from 2025-11.**
+The day's full-throttle level over the first engine's curve at equal rpm
+(`car.day_levels`, in standard air) is 0.92–1.02 on the 18 days to
+2025-10-25 (median 0.993) and 1.01–1.07 on the 7 days from 2025-11-01
+(median 1.049): +4 to +7 % between 5,000 and 7,000 rpm and nothing from
+7,250 rpm; +5 % in 2nd and 3rd, +8 % in 4th, +10 % in 5th; speed per rpm
+in each gear unchanged (not tyre size or final drive). On top of step 1
+no reading of it wins a cell beyond chance (the day's own level 55, a
+level against temperature from other days 55, a period 54) and none
+repairs an apex cell, so it is not a step for the count; it is a
+powertrain period if the cause is the car's. The owner knows of no
+engine change (only the shift light, 2026-11-21). What the raw logs say
+(`IntakeAirT`, `AmbientTemp`, `MAP`, `Baro`, `Lambda`, `ECT`, `OilTemp`
+are on every Inferno 86 log; read at full throttle between 5,000 and
+7,000 rpm, 168 logs):
+
+- The intake air is the ambient air: it reads 0–2 °C above the car's own
+  ambient sensor at full throttle on every day. There is no heat soak
+  for a correction to use.
+- The level falls with temperature beyond the SAE correction: −2.7 ± 0.6
+  % per 10 °C alone (scatter 3.6 → 2.6 %), a step alone +6.1 ± 1.1 %
+  (2.4 %), both together +4.1 ± 1.4 % and −1.5 ± 0.6 % per 10 °C (2.2 %).
+  The days from 2025-11 are all cold (−5.5 to 9.5 °C), but the cold days
+  before it (−2, 4 and 7 °C) read 0.99–1.02, so temperature alone does
+  not give the step. The second engine alone: −4.0 ± 1.2 % per 10 °C
+  (6 days).
+- **The mixture changed in October 2025.** At full throttle the logged
+  lambda is 0.76–0.81, different from day to day, on every day to
+  2025-10-13 but one; on 2025-10-04 and from 2025-10-25 on every day it
+  reads 0.750–0.757 (0.750 on 12 of 16 days), the second engine's days
+  included: the channel at a floor or the fuelling on a fixed target. With the highest full-throttle rpm
+  rising from 7,410 to 7,440–7,650 from 2025-10-04, that is the mark of
+  an engine calibration change three weeks before the level steps.
+  Manifold pressure over barometric pressure, coolant and oil
+  temperature show no step.
+
+Asked with these readings, the owner answered on 2026-11-22 that nothing
+was changed on the car in that time: no calibration, no fuel. So no
+powertrain period is made from 2025-11 (a car is not split without a
+change to the car), and the two marks are read otherwise: the higher rpm
+from 2025-10-04 is the shift light, which is the driver's, and a lambda
+of 0.750 on 12 of 16 days is taken as the channel at its floor and not
+as the fuelling. The step in the level stands as measured and
+unexplained; part of it is the cold of those days (−1.5 ± 0.6 % per
+10 °C beyond the SAE correction).
+
+**Step 4: the onset stays off.** It is real in the logs (0.2–0.4 s, the
+same on fast laps as on all) but on top of step 1 it loses 4 cells (the
+tops are then 0.16–0.61 m/s short): most of what it repaired was the
+late start that step 1 now gives.
+
+**The test a further step is held to** (the skeptic's, adjusted in the
+debate): the rule and the expected cells written before the run, the
+value from the logs with the count at ± 10 % of it beside; day folds and
+layout folds; the gain above zero in 95 % of day resamples (about +5
+cells), or, for a step too small for the count to decide, its own
+statistic named beforehand with the count not below zero; a measure down
+by 2 or more needs a named cause; the placebo beaten, and a blur of the
+candidate's own traces must not gain; the planted wrong cars at least 10
+(power ± 7 %) and 20 (power × 0.85, another car) cells below; heat at an
+unseen layout no higher in the median and no fold worse by more than a
+point, measured with the convention set under the change; the reading
+returns a planted value within 2 %; nothing indexed by layout, corner or
+node and nothing lent by another car; the two forms of the solver
+identical.
+
+**Findings about the score** (not proposals: the owner has settled it).
+About 66 is the ceiling and not 76: the median logged lap of a layout's
+other days, with no car at all, scores 59–66. The braking measure rewards
+anything that lowers u (power × 1.07 is nearer in 19 of 19 braking
+cells). The apex measure is a signed mean over the apexes, so errors
+cancel in it, and it does not tell a power error of 7–10 %. In 9 cells
+the other-day yardstick is below the same-day one; 20 cells rest on two
+days; one lap removed flips 18 cells. The fitted GPS offset of a day is
+1.5–7 m (median 3 m) and costs no cell. The levels sort days (the
+Inferno 86's fastest laps are its cold days) as much as the driver's
+pace. Nothing published scores a simulation against the driver's own
+day-to-day variation (outside seat; Fambro et al. 2000 has ordinary
+drivers at about 75 % of the available friction in measured stops).
+
+**Cost.** Gate C3 reads the use in each of its 73 folds, two solves of
+every lap that is left: it takes about four minutes.
+
 #### D1 (in part). The lap solver (`solver.py`, 2026-11-15)
 
 C2's remaining clauses and all of C3 need `simulate_lap` and `solve_u`,

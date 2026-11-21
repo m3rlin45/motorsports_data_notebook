@@ -8,6 +8,11 @@
   layout's reference lap is the median over its days of the day's best
   build lap. ``ref_u`` keeps each layout's u (the median over its days)
   and its day sd.
+- **The driver's braking use** (:func:`set_use`, before the convention).
+  The car's braking limit is the car's; the level the driver brakes at
+  and the shape held under cornering are read from the logged
+  deceleration of the car's laps, each at its own u, and go into the
+  model's ``driver``. The laps are then braked as the driver brakes.
 - **In-sample speed** (:func:`lap_scores`): each build lap simulated at
   its own lap time (its own u), the RMS difference of speed at the track's
   nodes, beside the **day floor** (:func:`day_floor`): the same difference
@@ -51,9 +56,34 @@ SPEED_OVER_FLOOR_MAX = 0.4
 RECOVERY_POWER_MAX = 0.03
 RECOVERY_DRAG_MAX = 0.20
 RECOVERY_U = (0.97, 1.0, 1.03)
+#: The driver's braking use read back from laps simulated with it: the
+#: level within this share, the shape within this much.
+RECOVERY_USE_MAX = 0.02
+RECOVERY_USE_SHAPE_MAX = 0.05
 #: Three simulated laps a layout have few braking zones in a band of lateral.
 RECOVERY_BAND_MIN_ZONES = 5
 SIM_HZ = 25.0
+#: The driver's braking use is read on the nodes where the logged lap
+#: slows by this much (g) or more (the braking measure's own zone,
+#: :data:`~.car_holdout.BRAKE_MATCH_MIN_G`), this long (s) or more into
+#: the stop: past the brake's build.
+USE_MIN_G = 0.2
+USE_BUILD_S = 0.5
+#: The bands of lateral use (width, and how many from 0) the level is
+#: read in, and the nodes a band needs.
+USE_BAND = 0.1
+USE_BANDS = 9
+USE_BAND_MIN_NODES = 200
+#: A lap's u depends on how it is braked, so the reading is repeated at
+#: the u the laps have under it: until the level moves by less than
+#: ``USE_TOL``, at most ``USE_ROUNDS`` times. Each repeat moves the level
+#: by about a ninth of what the one before moved it (0.11–0.13 on the
+#: three cars), so a move under 0.015 leaves the reading within 0.002 of
+#: where it would settle: two readings from a car braked at its limit.
+USE_ROUNDS = 6
+USE_TOL = 0.015
+#: Deceleration from node speeds is the change of V² over this distance (m).
+DECEL_WINDOW_M = 16.0
 #: A simulated step is at full throttle when its tyre force is this share
 #: of what the engine can give at its speed.
 SIM_FULL_SHARE = 0.98
@@ -99,6 +129,9 @@ class Drive:
     brake_onset: bool | None = None
     #: Whether the laps are driven on the track's bank, where it has one.
     bank: bool = True
+    #: Whether the laps are braked as the driver brakes, where the model
+    #: carries the driver's use, or at the car's limit.
+    brake_use: bool = True
     _cache: dict = field(default_factory=dict, repr=False, compare=False)
 
     def car(self, raw_car: str = "", date: str = "", session_id: str = "") -> sv.SolverCar:
@@ -119,6 +152,7 @@ class Drive:
                 shift_loss=self.shift_loss,
                 brake_shape=self.brake_shape,
                 brake_onset=self.brake_onset,
+                brake_use=self.brake_use,
             )
             got = replace(
                 base,
@@ -146,7 +180,7 @@ class Drive:
     def but(self, **changes: object) -> "Drive":
         """The same with some fields changed."""
         kept: tuple[str, ...] = ("model", "air", "shifts", "gears", "power_scale", "drag_scale")
-        kept += ("corner_drag", "shift_loss", "brake_shape", "brake_onset", "bank")
+        kept += ("corner_drag", "shift_loss", "brake_shape", "brake_onset", "bank", "brake_use")
         return Drive(**{**{f: getattr(self, f) for f in kept}, **changes})  # type: ignore[arg-type]
 
 
@@ -232,14 +266,281 @@ def reference_u(
     return out
 
 
-def _with_mu_y(model: cm.CarModel, mu_y: float) -> cm.CarModel:
+def _with_mu_y(model: cm.CarModel, mu_y: float, *, hold_use: bool = False) -> cm.CarModel:
+    """The model with ``mu_y`` moved. The driver's braking level is a
+    share of ``mu_b·u`` and u goes as ``1 / mu_y``, so the share moves
+    with ``mu_y``: every lap is then the same lap (the same cornering and
+    braking in g, the same lateral use) at ``u`` over the ratio.
+    ``hold_use`` leaves the share as it is: for a level that was read at
+    the convention (u = 1 on the reference lap) and is to stay there."""
     out = cm.CarModel.from_json(model.to_json())
-    out.grip = {**model.grip, "mu_y": round(mu_y, 4)}
+    new = round(mu_y, 4)
+    out.grip = {**model.grip, "mu_y": new}
+    use = model.driver.get("brake_use")
+    if use is not None and model.grip.get("mu_y") and not hold_use:
+        out.driver = {**model.driver, "brake_use": float(use) * new / float(model.grip["mu_y"])}
     return out
 
 
+# ------------------------------------------------- the driver's braking use
+
+
+def deceleration_g(v: np.ndarray, ds: float, window_m: float = DECEL_WINDOW_M) -> np.ndarray:
+    """Deceleration along a closed lap (g, positive where the car slows)
+    from its speed at the track's nodes: the change of ``V²`` over
+    ``window_m`` centred on each node, ``−Δ(V²) / (2·Δs)``. The last axis
+    is the nodes."""
+    half = max(int(round(window_m / 2.0 / ds)), 1)
+    v2 = np.asarray(v, float) ** 2
+    drop = np.roll(v2, half, axis=-1) - np.roll(v2, -half, axis=-1)
+    return np.asarray(drop / (2.0 * 2 * half * ds) / G_MS2)
+
+
+def time_into_stop(slowing: np.ndarray, v: np.ndarray, ds: float) -> np.ndarray:
+    """Seconds since the run of ``slowing`` nodes a node is in began
+    (laps × nodes, the lap closed: a run may pass the start line); NaN
+    outside a run."""
+    slowing = np.asarray(slowing, bool)
+    reach = np.cumsum(ds / v, axis=-1) - ds / v  # the time at which each node is reached
+    lap = np.sum(ds / v, axis=-1, keepdims=True)
+    begins = slowing & ~np.roll(slowing, 1, axis=-1)
+    began = np.maximum.accumulate(np.where(begins, reach, -np.inf), axis=-1)
+    # a run that was under way at the start line began on the lap before
+    began = np.where(np.isfinite(began), began, began[..., -1:] - lap)
+    return np.asarray(np.where(slowing & np.isfinite(began), reach - began, np.nan))
+
+
+@dataclass
+class UseLaps:
+    """What the driver's braking use is read from at one layout: the laps
+    (``session_id, lap_num, date, raw_car, lap_time_s``) and their braking
+    nodes past the build (:data:`USE_MIN_G`, :data:`USE_BUILD_S`), in the
+    solver's terms less the car's numbers: per node the lap it is of
+    (``lap``, a row of ``frame``), the deceleration less the grade's over
+    the load (``slowing``), ``V²`` over the load (``v2``: times the lap's
+    drag coefficient it is the drag's part) and the tyres' lateral over
+    the load (``lat``). ``bank`` is whether the road was taken with its
+    bank (:func:`use_laps`)."""
+
+    frame: pd.DataFrame
+    lap: np.ndarray
+    slowing: np.ndarray
+    v2: np.ndarray
+    lat: np.ndarray
+    bank: bool = True
+
+    def keep(self, rows: np.ndarray) -> "UseLaps":
+        """The same with the laps where ``rows`` (a mask over ``frame``)
+        is true."""
+        rows = np.asarray(rows, bool)
+        new = np.cumsum(rows) - 1
+        nodes = rows[self.lap]
+        return UseLaps(
+            self.frame[rows].reset_index(drop=True),
+            new[self.lap[nodes]],
+            self.slowing[nodes],
+            self.v2[nodes],
+            self.lat[nodes],
+            self.bank,
+        )
+
+
+def use_laps(
+    track: trk.TrackModel, frame: pd.DataFrame, v_obs: np.ndarray, *, bank: bool = True
+) -> UseLaps:
+    """:class:`UseLaps` of a car's laps at a layout (``v_obs`` their
+    logged speed at the track's nodes, gaps filled here). The braking
+    force is what slows the car less the drag and the grade, as the
+    solver's braking law has it, over the load on the tyres; the lateral
+    is what the tyres hold on the road's bank (``bank=False``: on a flat
+    road, for a lap driven so)."""
+    profile = sv.Profile.from_track(track, bank=bank)
+    kap, grd, kv, cos, gsb = sv._road(profile)
+    if not len(frame):
+        none = np.zeros(0)
+        return UseLaps(frame.reset_index(drop=True), np.zeros(0, int), none, none, none, bank)
+    v = np.vstack([trk._fill_nan_periodic(np.asarray(row, float)) for row in v_obs])
+    decel = deceleration_g(v, profile.ds_m)
+    since = time_into_stop(decel >= USE_MIN_G, v, profile.ds_m)
+    load = G_MS2 * cos + v * v * kv
+    lap, node = np.nonzero(since >= USE_BUILD_S)
+    at = (lap, node)
+    return UseLaps(
+        frame.reset_index(drop=True),
+        lap,
+        ((decel * G_MS2 - G_MS2 * grd) / load)[at],
+        (v * v / load)[at],
+        (np.abs(v * v * kap - gsb) / load)[at],
+        bank,
+    )
+
+
+def read_use(braking: np.ndarray, lateral: np.ndarray) -> tuple[float, float, pd.DataFrame]:
+    """The driver's level and held shape from braking nodes: ``braking``
+    the braking force over the lap's braking limit (``mu_b·u`` times the
+    load), ``lateral`` the lateral over the lap's cornering limit.
+
+    Per band of lateral (:data:`USE_BAND` wide from 0, :data:`USE_BANDS`
+    of them, each with :data:`USE_BAND_MIN_NODES` nodes or more) the
+    median of each; then ``braking = A·(1 − x) + B·√(1 − x²)`` by least
+    squares over the bands, the solver's own form: a level ``A + B`` in a
+    straight line and ``B / (A + B)`` of the way from the diamond to the
+    ellipse (held to 0..1). Returns ``(level, shape, bands)``; NaN with
+    fewer than two bands. The median and not a high percentile: this is
+    what the driver does, where :func:`~.car.braking_shape` reads what
+    the car can."""
+    rows = []
+    for k in range(USE_BANDS):
+        inside = (lateral >= k * USE_BAND) & (lateral < (k + 1) * USE_BAND)
+        if int(inside.sum()) >= USE_BAND_MIN_NODES:
+            rows.append(
+                {
+                    "lateral": float(np.median(lateral[inside])),
+                    "braking": float(np.median(braking[inside])),
+                    "nodes": int(inside.sum()),
+                }
+            )
+    bands = pd.DataFrame(rows, columns=["lateral", "braking", "nodes"])
+    if len(bands) < 2:
+        return float("nan"), float("nan"), bands
+    x = bands["lateral"].to_numpy()
+    basis = np.column_stack([1.0 - x, np.sqrt(1.0 - x * x)])
+    (a, b), *_ = np.linalg.lstsq(basis, bands["braking"].to_numpy(), rcond=None)
+    level = float(a + b)
+    if not level > 0.0:
+        return float("nan"), float("nan"), bands
+    return level, float(np.clip(b / level, 0.0, 1.0)), bands
+
+
+def with_use(model: cm.CarModel, use: dict) -> cm.CarModel:
+    """The model with its ``driver`` replaced."""
+    out = cm.CarModel.from_json(model.to_json())
+    out.driver = dict(use)
+    return out
+
+
+def set_use(
+    who: Drive | cm.CarModel, tracks: dict[str, trk.TrackModel], laps: dict[str, UseLaps]
+) -> tuple[cm.CarModel, dict]:
+    """The model with the driver's braking use read from ``laps`` (per
+    layout, :func:`use_laps`) into its ``driver``, and the workings.
+
+    Each lap is simulated at its own lap time, which gives its u; its
+    braking nodes are then put over the car's limits at that u
+    (:func:`read_use`). How a lap is braked moves its u, so the reading is
+    repeated with the laps braked as read, until the level holds
+    (:data:`USE_TOL`). The level is a share of ``mu_b·u`` at the model's
+    ``mu_y``: set the convention after this (:func:`set_convention` moves
+    the share with ``mu_y``), not before. Without two bands of nodes the
+    ``driver`` is left empty and the laps are braked at the limit.
+
+    The workings: ``rounds`` (level and shape after each), ``bands`` (the
+    last reading's), ``laps`` and ``nodes``."""
+    drive = who if isinstance(who, Drive) else Drive(who)
+    model = with_use(drive.model, {})
+    guess: dict[str, np.ndarray] = {}
+    use: dict = {}
+    rounds: list[tuple[float, float]] = []
+    bands = pd.DataFrame()
+    count = {"laps": 0, "nodes": 0}
+    for _ in range(USE_ROUNDS):
+        driven = drive.but(model=with_use(model, use))
+        braking, lateral = [], []
+        count = {"laps": 0, "nodes": 0}
+        for layout, own in laps.items():
+            if layout not in tracks or not len(own.frame):
+                continue
+            recs = _records(own.frame)
+            cars = [_lap_car(driven, rec) for rec in recs]
+            got = sv.solve_laps(
+                sv.Profile.from_track(tracks[layout], bank=own.bank),
+                cars,
+                [float(rec["lap_time_s"]) for rec in recs],
+                guess=guess.get(layout, 1.0),
+            )
+            guess[layout] = np.where(got.ok, got.u, 1.0)
+            good = got.ok[own.lap]
+            at = own.lap[good]
+            drag = np.array([car.c_drag for car in cars])[at]
+            limit_b = (np.array([car.mu_b for car in cars]) * got.u)[at]
+            limit_y = (np.array([car.mu_y for car in cars]) * got.u)[at]
+            braking.append((own.slowing[good] - drag * own.v2[good]) / limit_b)
+            lateral.append(own.lat[good] / limit_y)
+            count["laps"] += int(got.ok.sum())
+            count["nodes"] += int(good.sum())
+        if not braking:
+            break
+        level, shape, bands = read_use(np.concatenate(braking), np.concatenate(lateral))
+        if not np.isfinite(level):
+            use = {}
+            break
+        moved = abs(level - float(use.get("brake_use", 1.0)))
+        use = {"brake_use": level, "brake_use_ellipse": shape}
+        rounds.append((level, shape))
+        if len(rounds) > 1 and moved < USE_TOL:
+            break
+    return with_use(model, use), {"rounds": rounds, "bands": bands, **count}
+
+
+def car_use_laps(
+    tables: smp.CarTables,
+    lap_time: pd.Series,
+    car: str,
+    tracks: dict[str, trk.TrackModel],
+    *,
+    bank: bool = True,
+) -> dict[str, UseLaps]:
+    """:func:`use_laps` of every dry build lap of ``car`` at each of
+    ``tracks`` (``lap_time``: seconds by ``(session_id, lap_num)``)."""
+    out: dict[str, UseLaps] = {}
+    for layout, track in tracks.items():
+        frame, v_obs = tables.lap_speeds(car, layout)
+        if frame.empty:
+            continue
+        keys = pd.MultiIndex.from_frame(frame[["session_id", "lap_num"]])
+        frame = frame.assign(lap_time_s=lap_time.reindex(keys).to_numpy())
+        timed = frame["lap_time_s"].notna().to_numpy()
+        out[layout] = use_laps(track, frame[timed], v_obs[timed], bank=bank)
+    return out
+
+
+def recover_use(
+    drive: Drive, tracks: dict[str, trk.TrackModel], laps: dict[str, UseLaps]
+) -> dict[str, float]:
+    """The reading put to its own test: the laps of ``laps`` simulated at
+    their lap times by a model that carries a braking use, and the use
+    read back from the simulated speeds as it is from the logged ones.
+    ``level`` and ``shape`` are the model's, ``level_back`` and
+    ``shape_back`` what comes back."""
+    planted = drive.model.driver
+    sims: dict[str, UseLaps] = {}
+    for layout, own in laps.items():
+        if layout not in tracks or not len(own.frame):
+            continue
+        recs = _records(own.frame)
+        got = sv.solve_laps(
+            sv.Profile.from_track(tracks[layout], bank=own.bank),
+            [_lap_car(drive, rec) for rec in recs],
+            [float(rec["lap_time_s"]) for rec in recs],
+        )
+        sims[layout] = use_laps(
+            tracks[layout], own.frame[got.ok], got.v_node_ms[got.ok], bank=own.bank
+        )
+    back = set_use(drive, tracks, sims)[0].driver
+    return {
+        "level": float(planted.get("brake_use", float("nan"))),
+        "level_back": float(back.get("brake_use", float("nan"))),
+        "shape": float(planted.get("brake_use_ellipse", float("nan"))),
+        "shape_back": float(back.get("brake_use_ellipse", float("nan"))),
+    }
+
+
 def set_convention(
-    who: Drive | cm.CarModel, tracks: dict[str, trk.TrackModel], best: pd.DataFrame
+    who: Drive | cm.CarModel,
+    tracks: dict[str, trk.TrackModel],
+    best: pd.DataFrame,
+    *,
+    hold_use: bool = False,
 ) -> tuple[cm.CarModel, dict[str, dict]]:
     """The model with ``mu_y`` moved to where the median over layouts of
     the reference u is 1, and ``ref_u`` filled; and the workings of
@@ -247,18 +548,24 @@ def set_convention(
     median over its days of the u of the day's best build lap, each lap
     driven with its day's powertrain, shift point and air (those of
     ``who``, a :class:`Drive`; a bare model is driven in standard air with
-    its default powertrain). ``mu_b`` is a measurement and stays."""
+    its default powertrain). ``mu_b`` is a measurement and stays. A
+    driver's braking use in the model moves with ``mu_y`` so that the
+    laps stay as they are (:func:`set_use` reads it before the
+    convention); ``hold_use`` keeps its share instead, for a use that was
+    read under a convention already (a planted wrong car that keeps the
+    fitted car's driver)."""
     drive = who if isinstance(who, Drive) else Drive(who)
     model = drive.model
     mu_y = float(model.grip["mu_y"])
     refs: dict[str, dict] = {}
     for _ in range(CONVENTION_ROUNDS):
-        refs = reference_u(drive.but(model=_with_mu_y(model, mu_y)), tracks, best)
+        moved = _with_mu_y(model, mu_y, hold_use=hold_use)
+        refs = reference_u(drive.but(model=moved), tracks, best)
         level = float(np.median([r["u_ref"] for r in refs.values()])) if refs else float("nan")
         if not np.isfinite(level) or abs(level - 1.0) < CONVENTION_TOL:
             break
         mu_y *= level
-    out = _with_mu_y(model, mu_y)
+    out = _with_mu_y(model, mu_y, hold_use=hold_use)
     out.ref_u = {
         k: [
             _rounded(r["median"], 4),
@@ -569,15 +876,36 @@ def check_car_fit(
     lap_time = rows.set_index(["session_id", "lap_num"])["lap_time_s"]
 
     models: dict[str, cm.CarModel] = {}
-    ref_rows, rec_rows, score_rows = [], [], []
+    ref_rows, rec_rows, score_rows, use_rows = [], [], [], []
+    use_bands: dict[str, pd.DataFrame] = {}
     for car_name in cars:
         best = day_best_laps(rows, car_name)
         own = {k: v for k, v in tracks.items() if k in set(best["layout_id"])}
         fitted, work = fits[car_name]
         drive = Drive(fitted, air=air, shifts=day_shifts(work), gears=day_gears(work))
-        model, refs = set_convention(drive, own, best)
+        # how the driver brakes, then the convention under it
+        braked = car_use_laps(tables, lap_time, car_name, own)
+        used, use_work = set_use(drive, own, braked)
+        model, refs = set_convention(drive.but(model=used), own, best)
         drive = drive.but(model=model)
         models[car_name] = model
+        if model.driver:
+            back = recover_use(drive, own, braked)
+            use_bands[car_name] = use_work["bands"]
+            use_rows.append(
+                {
+                    "car": car_name,
+                    "laps": use_work["laps"],
+                    "nodes": use_work["nodes"],
+                    "rounds": len(use_work["rounds"]),
+                    "brake_use": model.driver["brake_use"],
+                    "level_g": model.driver["brake_use"] * float(model.grip["mu_b"]),
+                    "held_shape": model.driver["brake_use_ellipse"],
+                    "limit_shape": float(model.grip.get("brake_ellipse") or 0.0),
+                    "use_back": back["level_back"] / back["level"],
+                    "shape_back": back["shape_back"],
+                }
+            )
         if cars_dir is not None:
             model.save(Path(cars_dir) / f"{car_name.replace(' ', '_')}.json")
         for layout, r in refs.items():
@@ -594,7 +922,8 @@ def check_car_fit(
         for name in model.power["engines"]:
             if model.power["engines"][name]["p_specific"] is None:
                 continue
-            got = recover(sv.SolverCar.from_model(model, engine=name), own)
+            # a known car is one driven at its limits
+            got = recover(sv.SolverCar.from_model(model, engine=name, brake_use=False), own)
             rec_rows.append(
                 {
                     "car": car_name,
@@ -642,6 +971,7 @@ def check_car_fit(
                 "mu_y": m.grip["mu_y"],
                 "apex_table_level": m.meta.get("mu_y_apex_table"),
                 "mu_b": m.grip["mu_b"],
+                "brake_use": m.driver.get("brake_use"),
             }
             for c, m in models.items()
         ]
@@ -668,6 +998,47 @@ def check_car_fit(
             + md_table(ref, floats="{:.4f}"),
         )
     )
+
+    # The driver's braking use.
+    use = pd.DataFrame(use_rows)
+    if len(use):
+        back_ok = bool(
+            ((use["use_back"] - 1.0).abs() <= RECOVERY_USE_MAX).all()
+            and ((use["shape_back"] - use["held_shape"]).abs() <= RECOVERY_USE_SHAPE_MAX).all()
+        )
+        rep.items.append(
+            GateItem(
+                "The driver's braking use",
+                back_ok,
+                "; ".join(
+                    f"{r['car']} {float(r['brake_use']):.2f} of mu_b "
+                    f"({float(r['level_g']):.2f} g at u = 1), shape "
+                    f"{float(r['held_shape']):.2f} (the limit's {float(r['limit_shape']):.2f}); "
+                    f"read back {float(r['use_back']) - 1:+.1%}, {float(r['shape_back']):.2f}"
+                    for r in use.to_dict("records")
+                ),
+                f"recorded; read back from laps simulated with it within {RECOVERY_USE_MAX:.0%} "
+                f"of the level and {RECOVERY_USE_SHAPE_MAX} of the shape",
+                "The car's braking limit (`mu_b`, `brake_ellipse`) is the car's. The laps are "
+                "braked as the driver brakes: at `brake_use` of `mu_b·u`, with the shape held "
+                "under cornering in place of the limit's (`driver` in the car's JSON; issue "
+                "#312). Read from the logged speed of every dry build lap, each at its own u: "
+                f"the nodes that slow by {USE_MIN_G} g or more, {USE_BUILD_S} s or more into the "
+                "stop; the braking force (what slows the car less drag and grade) over "
+                "`mu_b·u` times the load against the lateral over `mu_y·u` times the load; the "
+                f"median of each per band of lateral {USE_BAND} wide; then `A·(1 − x) + "
+                "B·√(1 − x²)` by least squares over the bands, the level `A + B` and the shape "
+                "`B / (A + B)`. Repeated at the u the laps have when braked so (`rounds`), then "
+                "the convention is set under it. `use_back`, `shape_back`: the same reading on "
+                "the same laps simulated with it.\n\n"
+                + md_table(use, floats="{:.3f}")
+                + "".join(
+                    f"\n\n{c}, the last reading's bands (before the convention):\n\n"
+                    + md_table(b, floats="{:.3f}")
+                    for c, b in use_bands.items()
+                ),
+            )
+        )
 
     # Recovery.
     rec = pd.DataFrame(rec_rows)
@@ -726,13 +1097,22 @@ __all__ = [
     "check_car_fit",
     "day_best_laps",
     "Drive",
+    "UseLaps",
+    "car_use_laps",
     "day_floor",
     "day_gears",
     "day_shifts",
     "lap_scores",
+    "deceleration_g",
+    "read_use",
     "recover",
+    "recover_use",
     "reference_u",
     "set_convention",
+    "set_use",
+    "time_into_stop",
+    "use_laps",
+    "with_use",
     "signals_from_sim",
     "simulated_tables",
 ]

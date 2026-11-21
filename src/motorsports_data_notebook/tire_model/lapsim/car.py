@@ -245,6 +245,11 @@ class CarModel:
     #: default engine.
     power: dict = field(default_factory=dict)
     wet: dict = field(default_factory=dict)  # grip_scale
+    #: How the car is driven, apart from its limits (#312): ``brake_use``
+    #: (the level the driver brakes at, as a share of ``mu_b``) and
+    #: ``brake_use_ellipse`` (the shape the driver holds under cornering), read from
+    #: the logs by :func:`.car_gate.set_use`. Empty: braked at the limit.
+    driver: dict = field(default_factory=dict)
     support: dict = field(default_factory=dict)  # table -> {v_min, v_max}
     ref_u: dict = field(default_factory=dict)  # layout -> [median, day_sd]
     meta: dict = field(default_factory=dict)
@@ -257,6 +262,7 @@ class CarModel:
             "grip": self.grip,
             "power": self.power,
             "wet": self.wet,
+            "driver": self.driver,
             "support": self.support,
             "ref_u": self.ref_u,
             "meta": self.meta,
