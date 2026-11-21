@@ -31,6 +31,8 @@ Segment C (#205), the car model:
 - :mod:`.car`: the car model read from those tables (C2).
 - :mod:`.car_gate`: gate C2 through the solver: the convention for
   ``mu_y`` with ``ref_u``, recovery of a known car, in-sample speed.
+- :mod:`.car_holdout`: the car on held-out days and layouts against two
+  planted wrong cars (C3).
 
 Segment D (#206), the solver:
 
