@@ -15,6 +15,7 @@ from motorsports_data_notebook.tire_model.lapsim import holdout as ho
 from motorsports_data_notebook.tire_model.lapsim import track as trk
 
 from ._synthetic import LAYOUT_ID, write_dataset
+from ._synthetic import write_model_json as _write_model_json
 
 SHARE = ShareParams(
     p_f=0.45,
@@ -33,17 +34,6 @@ def _oval(n=400, ds=2.0):
     kappa = np.where(((s > 100) & (s < 250)) | ((s > 500) & (s < 650)), 1 / 48.0, 0.0)
     speed = 30.0 - 10.0 * np.exp(-(((s - 175) / 80) ** 2)) - 10.0 * np.exp(-(((s - 575) / 80) ** 2))
     return kappa, speed, ds
-
-
-def _write_model_json(root, cars=("car",)):
-    model = {
-        "heat_input": {
-            "fitted_by_car": {c: {"g_transfer": 2.5} for c in cars},
-            "car_facts_by_car": {c: {"p_f": 0.45, "brake_bias_front": 0.6} for c in cars},
-        },
-        "car_aliases": {"alias": cars[0]},
-    }
-    (root / "tire_model.json").write_text(json.dumps(model))
 
 
 class TestHeatChain:

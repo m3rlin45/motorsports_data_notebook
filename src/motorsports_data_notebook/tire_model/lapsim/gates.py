@@ -485,7 +485,15 @@ def write_report(report: GateReport, out_dir: Path) -> Path:
     """Write the report as ``<out_dir>/<gate>_<slug>.md``; returns the path."""
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    slug = {"B1": "geometry", "B2": "track_truth", "B3": "track_holdout"}.get(report.gate, "report")
+    slug = {
+        "B1": "geometry",
+        "B2": "track_truth",
+        "B3": "track_holdout",
+        "C0": "frame",
+        "C1": "envelope_samples",
+        "C2": "car_fit",
+        "C3": "car_holdout",
+    }.get(report.gate, "report")
     path = out_dir / f"{report.gate}_{slug}.md"
     path.write_text(report.to_markdown())
     return path
