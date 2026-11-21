@@ -2377,6 +2377,148 @@ The KK-SII has rpm and no gear channel. Its gear is made from speed over
 rpm, which gives it the curve, the shift point and the gear sets above;
 the solver drives it on its one `p_specific` (see the rule above).
 
+| Check | Threshold | Measured | |
+|---|---|---|---|
+| Power agrees between layouts | each layout's own within 7 % of its powertrain's, at equal rpm | −4.7 to +2.3 % (Inferno 86, first engine), −2.2 to +2.0 % (second), −3.7 to +2.4 % (KK-SII), −2.2 to +0.8 % (KK-F) | pass |
+| Power at the wheels over published crank power per mass | 0.55–0.80, reported | Inferno 86 0.68 and 0.74 (at the placeholder mass), KK-SII 0.70 | reported |
+| Recovery on simulated laps | power within 3 %, `c_drag` within 20 % | power −0.5 to +1.8 %, drag −0.9 to −0.3 % on five powertrains | pass |
+| In-sample speed RMSE at each lap's own u | median over laps ≤ the cell's day floor + 0.4 m/s | 9 of 9 cells, 7 of them under their floor; the widest is the Inferno 86 at Sodegaura, 1.43 against 1.24 | pass |
+| `ref_u` per layout | recorded | u between a car's layouts: Inferno 86 6.1 %, KK-SII 6.6 %, KK-F 7.3 % | recorded |
+
+**`mu_y` is a convention** (`car_gate.set_convention`): the value at which
+the median over the car's layouts of the reference u is 1, a layout's
+reference u being the median over its days of the u of the day's best
+build lap, each lap driven with its own day's powertrain, shift point and
+air. It came out 9–10 % under the apex table's level on all three cars
+(11–14 % since C4, where the braking zones stopped costing the time
+the grip had to make up)
+(1.221 against 1.339, 1.511 against 1.668, 1.522 against 1.698): the
+table's level is a p90 of per-lap peaks, the upper edge of what the car
+did, and a lap driven at that level everywhere is a lap nobody drove.
+`mu_b` is a measurement and is not moved.
+
+**`ref_u`** (median over the layout's days; days; sd over them):
+
+| | Fuji | Motegi | Sodegaura | Suzuka | Tsukuba |
+|---|---|---|---|---|---|
+| Inferno 86 | 1.016 (10; 0.045) | 1.032 (2; 0.009) | 0.982 (16; 0.032) | | 0.973 (4; 0.097) |
+| KK-SII | 0.939 (1) | | | 1.002 (7; 0.019) | 0.999 (12; 0.025) |
+| KK-F | 0.973 (2; 0.003) | | | 1.000 (2; 0.019) | 1.044 (9; 0.030) |
+
+This is the number a lap time predicted for a layout the car has not run
+rests on (#202). With d ln T / d ln u of about −0.3, 6–7 % of u is 2 % of
+lap time. The KK-SII's two layouts with more than one day agree to 0.2 %
+(as in the review); what is left of its spread is Fuji, one day. Before
+the air was taken out the formula cars read 9.4–9.7 %, low at Fuji and
+high at Tsukuba together: Fuji is some 550 m up, the SAE factor there is
+1.03–1.10, and an engine making that much less power had been read as
+less grip.
+
+**Recovery** (`car_gate.recover`). Each powertrain is simulated on the
+car's layouts at u = 0.97, 1.00 and 1.03, at its own shift point; each
+lap is made a session by the definitions the logged ones use (25 Hz,
+accelerations as 0.5 s differences, full throttle where the engine is
+what limits, brakes on where the tyres slow the car, `gear` and `rpm`
+where the car has them) and put through C1's selection and C2's
+estimator. Returned over true:
+
+| | Power | Drag | `k_corner_drag` | Braking peak | Lateral level | Gears | Shift point |
+|---|---|---|---|---|---|---|---|
+| Inferno 86, first engine | −0.4 % | −0.9 % | 0.046 for 0.047 | −1.4 % | +2.2 % | exact | 7,171 for 7,290 |
+| Inferno 86, second engine | −0.2 % | −0.8 % | 0.045 for 0.047 | −1.4 % | +2.3 % | exact | 7,297 for 7,423 |
+| KK-SII | −0.2 % | −0.3 % | 0.016 for 0.032 | −3.6 % | +1.7 % | | |
+| KK-F | +1.8 % | −0.3 % | 0.016 for 0.025 | −3.8 % | +1.7 % | | |
+| KK-F-V2 | −0.5 % | −0.8 % | 0.021 for 0.025 | −4.0 % | +1.6 % | exact | 6,438 for 6,561 |
+
+The cornering-drag estimate comes back right for the Inferno 86 and
+0.004–0.016 low for the formula cars, so their own `k` is probably that
+much above what their tables give; it is not corrected. No speed slope
+of grip is estimated, so that clause of the issue has nothing to find.
+
+**In-sample speed** (`car_gate.lap_scores`): every dry build lap
+simulated at its own lap time with its day's powertrain, shift point and
+air; RMS difference of speed over the track's nodes, median over laps,
+beside the day floor (`car_gate.day_floor`: the same difference between
+two logged laps of the car at the layout, from different days and within
+0.5 % of lap time), m/s:
+
+| Car, layout | Laps, days | Simulated | Day floor | Over | One power, standard air (as first built) |
+|---|---|---|---|---|---|
+| Inferno 86, Fuji | 111, 10 | 1.26 | 1.46 | −0.20 | 1.57 |
+| Inferno 86, Motegi | 15, 2 | 1.07 | 1.29 | −0.21 | 1.16 |
+| Inferno 86, Sodegaura | 355, 16 | 1.43 | 1.24 | +0.19 | 1.54 |
+| Inferno 86, Tsukuba | 37, 4 | 1.34 | 1.53 | −0.19 | 1.37 |
+| KK-SII, Suzuka | 106, 7 | 1.48 | 1.61 | −0.13 | 1.53 |
+| KK-SII, Tsukuba | 193, 12 | 1.09 | 1.17 | −0.08 | 1.06 |
+| KK-SII, Fuji | 25, 1 | 1.44 | no pair | not scored | 1.59 |
+| KK-F, Fuji | 57, 2 | 1.33 | 1.86 | −0.52 | 1.40 |
+| KK-F, Suzuka | 41, 2 | 1.52 | 1.51 | +0.02 | 1.51 |
+| KK-F, Tsukuba | 189, 9 | 1.13 | 1.22 | −0.09 | 1.17 |
+
+The last column is the same clause with cornering drag on but one
+`p_specific` per car in standard air, the model as it stood before the
+powertrains (the KK-F's Tsukuba cell had 166 laps then, without the
+KK-F-V2's). The floors are higher than the review's 0.94–1.10 because a
+pair here is any two laps of like lap time on different days, not a
+selected few. No lap is outside what `solve_u` can reach; a build lap's u
+runs from 0.83 to 1.08 (5th and 95th percentile over the cells).
+
+**How cornering drag came into the default (2026-11-15).** As first
+built the solver had no cost of cornering at full throttle, and the gate
+failed one cell: the Inferno 86 at Sodegaura, 1.72 against a floor of
+1.24. Four things were tried there and on three other cells, each lap at
+its own u (m/s, one power per car, cornering drag off unless stated):
+
+| Variant | 86 Sodegaura | 86 Fuji | KK-F Tsukuba | KK-SII Suzuka |
+|---|---|---|---|---|
+| as first built | 1.725 | 1.756 | 1.287 | 1.713 |
+| cornering drag on (`k_corner_drag`) | 1.513 | 1.595 | 1.154 | 1.520 |
+| each day's own power level | 1.730 | 1.801 | 1.285 | 1.702 |
+| the layout's own braking peak | 1.772 | 1.819 | 1.286 | 1.715 |
+| vertical curvature off | 1.751 | 1.894 | 1.263 | 1.800 |
+
+Cornering drag lowered the error in ten of ten cells; vertical curvature
+is worth 0.09–0.14 m/s at Fuji and Suzuka and nothing on the flat
+layouts. The issue lets a term into the default only if it lowers the
+error on the top quarter of speeds and does not raise the
+leave-one-layout-out error; C3 measured both (lower in ten of ten cells,
+twice) and the owner asked for it to be tried. `solver.CORNER_DRAG_DEFAULT`
+is the one switch. "Each day's own power level" did not help then because
+it was a level read per speed bin, which mixes the engine with the gear
+the car was in; the powertrains, the shift point and the air are what
+that row was reaching for.
+
+**Beside the gate.**
+
+- **The numbers agree with the design review's where it measured the same
+  thing**: drag 2.7e-4 on the Inferno 86 (1.5–2.4e-4 at Fuji) and 6.2e-4
+  on the KK-SII (6.0e-4); `k` 0.047 and 0.032 (0.04–0.06 and 0.02–0.05);
+  the Inferno 86's braking peak 0.89 (0.90) with 13 % between layouts.
+- **What the day levels are now.** At equal rpm and in standard air the
+  Inferno 86's first engine has a day sd of 3.7 % over 26 days and its
+  second 2.4 % over 6; KK-SII 3.4 %, KK-F 2.4 %. Read per speed bin with
+  dry density only, the Inferno 86 had 6.0 % (the review: 5.6 %), which
+  was the engine, the final drive, the shift point and the air in one
+  number. What the correction leaves on the Inferno 86 still goes with
+  density (a slope of 0.67 in the logs, R² 0.46): hot days read low by
+  more than standard air accounts for.
+- **The KK-F carries more drag than the KK-SII** (6.6e-4 against 6.2e-4),
+  as its extra wing element says it should, and more power (133 against
+  124 W/kg).
+- **The KK-F-V2 is the KK-F with 12 % more power and nothing else
+  changed.** Its scale is 1.12 at equal rpm in standard air on its one
+  day (2026-11-13). Against the KK-F's day in the same air (2026-10-23,
+  density 1.212 against 1.215) the uncorrected ratio is 1.09 / 1.09 /
+  1.10 / 1.11 in the speed bins from 30, 35, 40 and 45 m/s: the same at
+  every speed, which is what power looks like. Speed per 1,000 rpm is the
+  same in every gear to 0.3 %, the revs used are the same, and apex
+  speeds and lateral peaks agree within 0.5 m/s and 0.06 g except at the
+  two fast corners, where the V2 is 1.0–1.4 m/s quicker. It is one day;
+  the KK-F's own days scatter by 2.4 %.
+- **Braking is the least stable number.** `mu_b` by layout: Inferno 86
+  0.86 (Sodegaura) to 0.99 (Fuji); KK-F 1.07 (Suzuka, two days) to 1.24
+  (Fuji, two days); KK-SII 1.15–1.17.
+
 #### D1 (in part). The lap solver (`solver.py`, 2026-11-15)
 
 C2's remaining clauses and all of C3 need `simulate_lap` and `solve_u`,
