@@ -3010,6 +3010,152 @@ in T1".
 shift time its S1 is higher on 12 of 19 days and on two of three
 layouts (S2 +0.29 to +0.40), so `solver.INFERRED_GEARS_DRIVE` stays off.
 
+#### C5. Review of the car model by seven reviewers (2026-11-16/17)
+
+Asked by the owner: are these models physically right, and accurate? An
+advocate, a physics critic, an estimation critic, a validation critic,
+the downstream consumer (tyre heat), a researcher in the logs and one of
+outside practice; two rounds, the second one deciding measurement each
+with its threshold written before the run. Nothing below changed the
+code; the scripts were in the session's scratch and are gone, so this is
+the record. "In sample" means the car fitted on every day and each lap
+driven at its own lap time.
+
+**1. The simulated lap brakes harder and corners softer than the car,
+and the pace knob hides it.** Logged straight-line deceleration is
+0.81–0.87 of simulated; the simulation is +0.85 to +2.4 m/s fast where
+the logged car brakes and −0.3 to −1.2 m/s slow on entry and mid-corner
+in all ten car-layout cells; 0.4–2.8 s of phase error sits behind a
+right lap time (in sample). In heat: lateral −0.5 to −3.0 %,
+longitudinal +0.7 to +6.0 %, in ten of ten cells.
+
+**2. `mu_b` is the stop the driver makes one time in ten; `mu_y` was
+already what is held.** Over 2,502 straight-line stops and 7,230 apexes
+on laps within 2 % of u = 1, deceleration is held at 0.80 / 0.80 / 0.78
+of `mu_b` (Inferno 86 / KK-SII / KK-F) and lateral at 0.87 / 0.89 / 0.89
+of the apex table's level, which is where the convention puts `mu_y`
+(0.89 / 0.86 / 0.86). The held ratio of braking to cornering is 0.64–0.65
+on all three cars; the solver runs 0.80–0.85. Braking use moves from day
+to day (sd 0.05–0.08 within a layout, range 0.68–0.94) and cornering use
+does not (0.01–0.02); the two do not move together.
+
+**3. Held out, a car with less braking beats the fitted one.** Car
+re-fitted per fold, laps paired: `mu_b` × 0.84 scores a lower S1 on 21
+of 31, 9 of 13 and 17 of 19 days. A car with drag +10 %, `mu_b` × 0.84
+and shape −0.2 is inside wherever the fitted car is (28 of 29, 12 of 13,
+18 of 19 folds). Drag +10 % and power −5 % are coin flips; power +5 %
+is told (22, 12, 18 days). `mu_y` against `mu_b` cancels exactly, power
+against drag, shift time and cornering drag nearly, `mu_b` against shape
+and onset nearly.
+
+**4. Handing the solver the measured braking use closes the braking
+bias only in the median** (in sample). Scaled by the stop's plateau over
+`mu_b` (0.88 / 0.85 / 0.78) the bias is within ± 0.5 m/s in 5 of 10
+cells with one number a car and 3 of 10 with the day's; entry stays at
+−0.5 m/s whatever the braking level. The use has to be measured against
+the limit the solver applies, `mu_b · u`: there the level that zeroes
+the bias is 0.83–0.93 in nine cells (read after the run, not fitted).
+
+**5. The gate could not fail a model on speed.** S1 against the floor
++ 0.4 m/s admits 1.3–2.0 m/s of error that repeats lap after lap; the
+model's is 0.40–1.13 m/s. "Both controls outside on every powered fold"
+is true by definition: power × 0.85 is inside on 16 of 31 Inferno 86 day
+folds. The verdict turns on S2 near ± 1.0 m/s ("the Inferno 86 passes
+with the onset" holds in 76 % of resamples).
+
+**6. S1 is not what the tyre model needs.** It explains 4 % of the
+per-tyre heat error; a signed speed error weighted by where lateral heat
+is made, with S2, explains 66 %. Worst-tyre heat bias is 2.3 % without
+the three C4 terms, 2.4 % with the braking shape and shift time, 2.6 %
+with the onset (worse in ten of ten cells). Everything contested in C4
+is worth under 1.2 % of heat; 1 m/s where lateral heat is made is 4.1 %.
+
+**7. One clean test, thresholds first** (134 wet build laps of the three
+cars and the SFJ's 51 laps, never scored before): repeatable speed error
+1.36 m/s without the C4 terms, 1.19 with shape and shift (−0.17
+[−0.20, −0.14]), 1.19 with the onset; worst-tyre heat 3.4 / 3.5 / 3.6 %.
+The gain is on the cars the terms were developed on (Inferno 86 wet
+−0.53, KK-SII wet −0.13 m/s); on the SFJ nothing moves. On speed alone
+the power × 0.85 Inferno 86 scores better than the fitted one in the
+wet; heat tells them apart in every group.
+
+**8. At a track the car has not run, the pace level is the error.**
+Leave-one-layout-out, per-tyre heat: 2.4 % with u from the lap's own
+time, 5.9 % with u carried from the car's other layouts (8 of 10 folds
+over 3 %; Inferno 86 1.0 → 7.1 %). The held-out layout wants a u of
+0.92–1.07 and that predicts every fold's shift within 0.3 %.
+
+**9. The per-corner factor is not the track's as a whole; banking is
+the part that is** (in sample, 13 shared limited corners between unlike
+cars). A factor from an unlike car removes −16 % of the corner-to-corner
+variance of apex-speed error (formula to Inferno 86: −58, −66 %);
+between the two formula cars +63 and +71 %. The part that repeats
+between unlike cars (r = +0.76, +0.87) goes with the elevation model's
+cross-slope (r = +0.68 to +0.78): mean +0.032 rad into a corner, 6.6 %
+of lateral grip, from 0.009 at Sodegaura to 0.059 at Tsukuba. The other
+part follows the car class's line. With cross-slope held the formula
+cars' grip still rises with V² (ClA 0.45 and 0.70 m²).
+
+**10. The onset** trims the speed peak and leaves the braking curve
+(its last node is still 10–14 m late; `peak_m` read its first); its top
+is 1.00 s wide where the logged one is 0.67 s; it changes no count in
+items 3 and 4.
+
+**11. Banking, as physics from the elevation model** (a third round,
+2026-11-17; thresholds first; a prototype pass outside the repository
+that matches the solver to 2e-6 m/s at zero bank). The bank at each 2 m
+node is the slope of a line through the 5 m mesh's heights from −5 to
++5 m across the reference line, ± 10 m mean along it, bridges and
+sections that are not a plane interpolated (202 nodes at Suzuka, 175
+under the crossover; 6 at Motegi). Its noise is 0.003–0.004 rad at Fuji,
+Sodegaura and Tsukuba, 0.010 at Motegi, 0.019 at Suzuka. Mean bank into
+the corners is 0.031–0.037 rad on four layouts and 0.011 at Sodegaura,
+the largest 0.08–0.10 rad. Against the accelerometer's reading of it,
+where the bank is large and there are four sessions or more, the slope
+is 0.92 and 0.97 (Inferno 86 at Fuji and Tsukuba), 0.99 (KK-F at
+Tsukuba), 0.74 (KK-SII at Suzuka), r = +0.62 to +0.80; Tsukuba's
+hairpins read 0.080 and 0.082 rad against 0.075–0.093 from two cars'
+sensors. In the lap, with the tyre's lateral `V²κ·cos − g·sin` and the
+load `g·cosθ·cos + V²κ·sin`, at full strength and `mu_y` set again:
+
+| | without | with the bank |
+|---|---|---|
+| heat at a layout the car has not run, u carried (worst tyre, median of 10 folds) | 5.9 % | 3.7 % (better in 6) |
+| corner-to-corner variance of apex-speed error removed | | 30 / 17 / 12 % |
+| reference u between layouts (sd) | 0.080 / 0.069 / 0.060 | 0.128 / 0.073 / 0.033 |
+| repeatable error, dry (layouts equal) | 0.781 m/s | 0.784 [−0.007, +0.010] |
+| repeatable error, wet laps | | −0.077 m/s [−0.091, −0.062] |
+| lateral heat, left against right | | +6 % (no) |
+
+(Inferno 86 / KK-SII / KK-F.) Half and one-and-a-half strength are both
+worse on the apex speeds, so nothing says the elevation model under- or
+over-reads. The Inferno 86's wider spread of u is Tsukuba alone (0.956
+to 0.901; its other three layouts close from 0.071 to 0.032): with the
+right bank the hairpins overshoot (KK-F +0.19 to +0.62 m/s) and the
+fast corners fall further behind (−1.02 to −1.62 m/s), which is the car
+or the driver and not the road. `mu_y` then sits 16 / 24 / 21 % under
+the apex table (9 / 16 / 8 % against the table in the tyre's frame).
+The reviewer's rule, set beforehand, puts the bank into the track model
+as a recorded array and leaves the solver term off; the elevation model
+loses crown and kerbs inside 5 m and reads the ground under a bridge,
+and #251's survey of Fuji is the truth to hold the 0.92 against.
+
+**Defects found:** `brake_ellipse` is estimated against the apex table's
+level and applied against `mu_y · u`, 11–16 % lower; there is no rolling
+resistance (the Inferno 86's drag area reads 0.62 m² against about
+0.53); `k_corner_drag` returns half its planted value on the KK-SII and
+has no limit in the gate; the committed recovery tests the onset only
+at zero.
+
+**What the reviewers ask for.** The car's limits apart from the
+driver's use of them, each measured; a gate that carries per-tyre heat
+(lateral and longitudinal apart) and the repeatable error by phase, with
+layouts weighted equally and paired controls a few per cent wrong;
+recovery on every parameter with noise and the real spread of pace; a
+term named with its one statistic before it is run and scored once on
+laps not looked at; cant from the elevation model before any more
+braking terms.
+
 #### D1 (in part). The lap solver (`solver.py`, 2026-11-15)
 
 C2's remaining clauses and all of C3 need `simulate_lap` and `solve_u`,
