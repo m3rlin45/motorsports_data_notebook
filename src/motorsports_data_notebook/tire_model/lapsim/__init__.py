@@ -28,4 +28,5 @@ Segment C (#205), the car model:
   reads of a ground-frame motion (C0).
 - :mod:`.samples`: what each car did on its build laps, as tables: full
   throttle, coast, braking zones and apexes (C1).
+- :mod:`.car`: the car model read from those tables (C2).
 """
