@@ -41,6 +41,7 @@ tire-etl = [
     "pydantic>=2.0.0,<3.0.0",
 ]
 tire-model = [
+    "numba>=0.61.0,<1.0.0",
     "scipy>=1.13.0,<2.0.0",
 ]
 

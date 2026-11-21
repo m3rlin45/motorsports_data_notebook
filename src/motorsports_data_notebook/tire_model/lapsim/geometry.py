@@ -74,6 +74,7 @@ from ...tire_etl.kinematics import (
 )
 from ...tire_etl.layouts import VENUES, Gate, GpsTrace, Layout, Venue, gate_crossings
 from ...tire_etl.paths import laps_dir, sessions_dir, timeseries_dir
+from . import _kernel
 
 logger = logging.getLogger(__name__)
 
@@ -191,13 +192,55 @@ def _robust_sd(r: np.ndarray) -> float:
     return float(1.4826 * np.median(np.abs(r - np.median(r))))
 
 
+def nan_median(a: np.ndarray, axis: int) -> np.ndarray:
+    """``np.nanmedian(a, axis=axis)`` of a 2-d array, every row or column
+    at once and to the last bit: numpy takes them one at a time in Python.
+
+    The values are sorted along the axis (NaN last), and each line's
+    median is the mean of the two middle ones of its own count of values.
+    A line of nothing but NaN is NaN, without numpy's warning.
+    """
+    a = np.asarray(a, dtype=float)
+    if a.ndim != 2 or a.shape[axis] == 0:
+        return np.asarray(np.nanmedian(a, axis=axis))
+    ordered = np.sort(a, axis=axis)
+    count = (~np.isnan(a)).sum(axis=axis)
+    low = np.expand_dims(np.maximum((count - 1) // 2, 0), axis)
+    high = np.expand_dims(np.minimum(count // 2, a.shape[axis] - 1), axis)
+    both = np.take_along_axis(ordered, low, axis) + np.take_along_axis(ordered, high, axis)
+    return np.asarray(both.squeeze(axis) / 2.0)
+
+
+def sorted_bounds(key: np.ndarray, query: np.ndarray, side: str = "left") -> np.ndarray:
+    """``np.searchsorted(key, query, side)`` for a query that is itself in
+    order (a clock against the same clock moved): compiled, one walk along
+    the two. Anything else goes to numpy."""
+    key, query = np.asarray(key), np.asarray(query)
+    ordered = (
+        _kernel.HAVE_NUMBA
+        and key.dtype == np.float64
+        and query.dtype == np.float64
+        and key.ndim == 1
+        and query.ndim == 1
+        and bool(np.all(key[1:] >= key[:-1]))
+        and bool(np.all(query[1:] >= query[:-1]))
+    )
+    if not ordered:
+        return np.asarray(np.searchsorted(key, query, side=side))  # type: ignore[call-overload]
+    return np.asarray(
+        _kernel.sorted_bounds(
+            np.ascontiguousarray(key), np.ascontiguousarray(query), side == "right"
+        )
+    )
+
+
 def nan_window_mean(x: np.ndarray, key: np.ndarray, half_width: float) -> np.ndarray:
     """Mean of the finite ``x`` whose ``key`` (sorted) lies within
     ``± half_width`` of each sample's own key; NaN where there is none."""
     x = np.asarray(x, float)
     fin = np.isfinite(x)
-    lo = np.searchsorted(key, key - half_width, side="left")
-    hi = np.searchsorted(key, key + half_width, side="right")
+    lo = sorted_bounds(key, key - half_width, "left")
+    hi = sorted_bounds(key, key + half_width, "right")
     cs = np.concatenate([[0.0], np.cumsum(np.where(fin, x, 0.0))])
     cn = np.concatenate([[0], np.cumsum(fin)])
     n = cn[hi] - cn[lo]
@@ -273,7 +316,7 @@ def at_offset(t: np.ndarray, x: np.ndarray, seg: np.ndarray, tau_s: float) -> np
     if n < 2:
         return np.full(n, np.nan)
     tq = t + tau_s
-    hi = np.clip(np.searchsorted(t, tq, side="left"), 1, n - 1)
+    hi = np.clip(sorted_bounds(t, tq, "left"), 1, n - 1)
     lo = hi - 1
     inside = (tq >= t[lo]) & (tq <= t[hi]) & (seg[lo] == seg[hi]) & (seg[lo] == seg)
     span = t[hi] - t[lo]
@@ -807,14 +850,27 @@ def gyro_scale(
     would turn into a scale error, goes to ``b``. NaN without enough
     samples or where the gyro has a gap in the lap.
     """
+    return gyro_scale_of(geom, *gyro_series(t_gyro, yaw_gyro_dps), t_start, t_end)
+
+
+def gyro_series(t_gyro: np.ndarray, yaw_gyro_dps: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """A session's gyro as :func:`gyro_scale_of` reads it: the finite
+    samples in time order, the rate in rad/s. Done once for a session; a
+    lap is then a slice of it."""
     tg = np.asarray(t_gyro, float)
     wg = np.asarray(yaw_gyro_dps, float)
     okg = np.isfinite(tg) & np.isfinite(wg)
     tg, wg = tg[okg], wg[okg]
+    order = np.argsort(tg, kind="stable")
+    return tg[order], np.radians(wg[order])
+
+
+def gyro_scale_of(
+    geom: SessionGeometry, tg: np.ndarray, wg: np.ndarray, t_start: float, t_end: float
+) -> float:
+    """:func:`gyro_scale` on a gyro already through :func:`gyro_series`."""
     if tg.size < GYRO_MIN_SAMPLES:
         return float("nan")
-    order = np.argsort(tg, kind="stable")
-    tg, wg = tg[order], np.radians(wg[order])
     i0, i1 = np.searchsorted(tg, [t_start, t_end])
     if i1 - i0 < GYRO_MIN_SAMPLES or tg[i0] - t_start > 0.5 or t_end - tg[i1 - 1] > 0.5:
         return float("nan")
@@ -1033,12 +1089,14 @@ def session_lap_rows(root: Path, session_id: str, layout_id: str) -> pd.DataFram
         tg, wg = channel_series(gyro, "yaw_rate_dps", "t_session_s")
         if tg.size >= GYRO_MIN_SAMPLES:
             order = np.argsort(tg, kind="stable")
-            tg, wg = tg[order], wg[order]
-            for i, row in rows.iterrows():
-                if row["matched"]:
-                    rows.at[i, "gyro_scale"] = gyro_scale(
-                        geom, tg, wg, float(row["t_start_s"]), float(row["t_end_s"])
-                    )
+            series = gyro_series(tg[order], wg[order])  # once; a lap is a slice of it
+            scale = rows["gyro_scale"].to_numpy(copy=True)
+            for i, (hit, a, b) in enumerate(
+                zip(rows["matched"], rows["t_start_s"], rows["t_end_s"])
+            ):
+                if hit:
+                    scale[i] = gyro_scale_of(geom, *series, float(a), float(b))
+            rows["gyro_scale"] = scale
     return rows
 
 
@@ -1174,6 +1232,8 @@ __all__ = [
     "doppler_course",
     "estimate_lag",
     "gyro_scale",
+    "gyro_scale_of",
+    "gyro_series",
     "lap_table",
     "lap_trace",
     "layout_gate",
@@ -1183,8 +1243,10 @@ __all__ = [
     "local_lat_lon",
     "local_xy",
     "match_laps",
+    "nan_median",
     "session_conditions",
     "session_geometry",
+    "sorted_bounds",
     "session_lap_rows",
     "wrap_angle",
 ]

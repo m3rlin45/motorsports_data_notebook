@@ -782,7 +782,7 @@ def check_track_truth(
             if n_imu < trk.MIN_BIN_LAPS or not np.isfinite(k_in).any():
                 continue
             with np.errstate(invalid="ignore"):
-                v = trk._fill_nan_periodic(np.nanmedian(proj.speed[rows][:, :-1], axis=0))
+                v = trk._fill_nan_periodic(geo.nan_median(proj.speed[rows][:, :-1], 0))
             # A car is compared on its own line: its laps' Doppler profile
             # against its laps' accelerometer. Against the pooled track the
             # difference would also hold the car's line, which is B3's.
@@ -824,7 +824,7 @@ def check_track_truth(
             a_in = corner_apexes(smooth, model.corners, ds)
         k_laps = lap_curvature(proj.course, ds, trk.KAPPA_WINDOW_M)
         with np.errstate(invalid="ignore"):
-            a_laps = np.nanmedian(corner_apexes(k_laps, model.corners, ds), axis=0)
+            a_laps = geo.nan_median(corner_apexes(k_laps, model.corners, ds), 0)
         for j, c in enumerate(model.corners):
             apex.append(
                 {
