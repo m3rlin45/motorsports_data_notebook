@@ -2234,6 +2234,149 @@ deceleration: Inferno 86 0.12 g from 30 to 60 m/s; KK-SII 0.18 / 0.21 /
 line with the brakes off is rare (3,006 fixes in all), so these rest on
 52–510 samples a bin.
 
+#### C2. The car model from the tables (`car.py`, `car_gate.py`, gate `check-car-fit`, 2026-11-15)
+
+**A car is a chassis with one or more powertrains, and how it is driven
+is not the car** (decided by the owner, 2026-11-15: "the shift light
+shouldn't make it a different car, we should have some way to adjust for
+level of aggression"; "we should have some way to share the car params
+but allow for power changes, to cover the KK-F-V2 and swap for the 86").
+
+- **The chassis** is what a car's raw cars share: drag, the cost of
+  cornering at full throttle, the braking peak, the lateral level, the
+  wet scale. It is read from all of their laps together.
+- **A powertrain** is an engine with its gearing: power at the wheels per
+  mass against rpm (in bins of 250 rpm), the speed per 1,000 rpm of each
+  gear, and one `p_specific` for a car whose logs have no rpm or no gear.
+  `car.FAMILY` and `car.POWERTRAINS` say which raw car and date is which:
+  the KK-F-V2 is a powertrain of the KK-F; the Inferno 86 has its first
+  engine to 2026-05-31 and its second from 2026-06-01 (replaced between
+  its sessions of 2026-04-06 and 2026-07-15, with a 4.1 final drive in
+  place of 4.3). Each powertrain after a car's first carries its `scale`,
+  its power over the first one's at equal rpm; one with too few samples
+  for a curve of its own (the KK-F-V2's single day) is the first one's
+  curve at that scale.
+- **The shift point is the driver's.** `shift_rpm` is read per day from
+  that day's logs (`car.shift_rpm_by_day`: the 99th percentile of
+  full-throttle rpm in the gears the car shifts up out of, the median over
+  those gears) and handed to the solver beside the pace knob. It reads
+  about 120 rpm under the rpm the change is made at, because the samples
+  next to a gear change are not in the table.
+- **A gear channel is made where the logger has none** (`car.with_gears`).
+  In one gear, speed over rpm is one number, so a day's values fall into
+  one tight cluster per gear; a sample takes the gear of the cluster
+  within 3 % of it. On the cars that log a gear the clusters are the
+  logged gears exactly (KK-F: 4.68 / 5.95 / 6.83 / 7.95 / 9.29 for gears
+  2 to 6); on the KK-SII 99.2 % of the full-throttle samples get a gear,
+  on the SFJ 98.2 %. Such a gear is numbered among the gears seen at full
+  throttle, not as the gearbox numbers them; the tyre's rolling
+  circumference would turn a cluster into an overall ratio
+  (`16.67 · C / k`, with `C` in metres and `k` the cluster in m/s per
+  1,000 rpm) and so into a gear number.
+- **The gear set is the day's setup, like the shift point**
+  (`car.gear_sets_by_day`, `car.complete_sets`). The KK-SII has
+  per-circuit gearing (the owner, 2026-11-15) and the logs show two sets:
+  4.47 / 5.49 / 6.53 / 7.72 m/s per 1,000 rpm on ten Tsukuba days from
+  2026-03-18 to 05-24, and 4.80 / 6.24 / 7.32 / 8.62 on nine days at Fuji
+  and Suzuka and on its first Tsukuba day, 2026-02-18 (the owner: "first
+  day at Tsukuba in the KK-SII was the Suzuka gears"). The SFJ ran three.
+  A day shows only the gears it used at full throttle, so each day is
+  completed from the other days that ran the same set, across the car's
+  powertrains: the KK-F-V2's one day, which shows three gears, has the
+  KK-F's five, while the Inferno 86's second engine, 5 % taller in every
+  gear, falls into a set of its own. The day's set goes to the solver
+  where the car is driven through its gears; a powertrain's own `gears`
+  are the set most of its days ran.
+- **A gear made from speed over rpm does not drive the car**
+  (`solver.INFERRED_GEARS_DRIVE`, off). Driven through its curve and the
+  day's gear set, the KK-SII's held-out speed trace was further out on 19
+  of 22 folds than on its one level (S1 +0.04 m/s in the median, +0.09 at
+  most) and the simulation 0.2–0.4 m/s faster over the top quarter of
+  speeds on 21 of them, where it was already fast on all but one; that
+  put 2026-05-24 at Tsukuba outside (1.52 against 1.44, floor 1.25). By
+  the rule cornering drag entered on, the curve stays out and the KK-SII
+  is driven on `p_specific` as before. The gears are not the cause: a
+  flat curve through the same gears gives the one level's numbers. The
+  candidate is the time lost in the shifts (D1 below), which the solver
+  does not have and the level, being lower than the curve over the rev
+  band, happens to make up for; not tested. Its gears still give the
+  gear sets, the shift point and the drag.
+- **The air is the day's.** `car.air_state` gives each session the density
+  of its moist air and the SAE J1349 factor from the hourly weather
+  (humidity out of the pressure, dry pressure and the square root of
+  temperature). A sample's power is brought to standard air (99 kPa dry,
+  25 °C, 1.157 kg/m³) before anything is pooled, drag is scaled with
+  density, and the solver is handed the session's air back.
+- `car_gate.Drive` turns a lap's keys into the car the solver drives: the
+  powertrain the raw car had that day, the day's shift point, the
+  session's air. Both gates drive every logged lap through it.
+
+How each number is read:
+
+- **Drag, from the same rpm in different gears** (`car.fit_drag_rpm`). At
+  one rpm an engine makes one power whatever gear it is in, so within a
+  day, a powertrain and an rpm bin, `a·V` falls with `V³` at the slope
+  `−c`. That needs nothing about the shape of the power curve and works
+  at every layout. The first estimator took the slope at the top of the
+  straight table of the layouts that reach 50 m/s, with the power as one
+  number over those bins: on simulated laps of the Inferno 86's first
+  engine, whose power falls off above 7,000 rpm, it read 42 % high. It
+  remains for a car without rpm (`car.fit_drag`) and is reported beside
+  the new one. Held within ± 30 % of a published value where there is
+  one (the Inferno 86: 2.4e-4 /m).
+- **`k_corner_drag`**: the median over full-throttle samples above 0.5 g
+  of lateral of `(a_straight − a) / lat²`, against the straight bin of
+  the same layout and powertrain: the engine gives `P/V − k·lat²`. In the
+  default solver since gate C3 first ran (below).
+- **`mu_b`**: the p90 over dry braking zones of the zone's p95 less the
+  drag at the speed of the peak; `n_brake` = 1.
+- **`wet.grip_scale`**: the median over layouts of wet over dry lateral
+  level.
+- **Day levels** (`car.day_levels`): the day's power over its
+  powertrain's curve at equal rpm, which the gear the car was in and the
+  rpm it was shifted at do not move.
+- **Mass** is published, not fitted: 495 kg (KK-SII) and 525 kg (KK-F),
+  the class minimum with driver. The Inferno 86's 1,350 kg is the mass
+  behind the review's drag prior and is a placeholder until the car's
+  weighed mass with driver is entered (`car.PUBLISHED`); nothing in the
+  solver uses mass, only the sanity band below.
+
+On the dataset through 2026-11-14, in standard air:
+
+| Chassis | Inferno 86 | KK-SII | KK-F (with the KK-F-V2) |
+|---|---|---|---|
+| `c_drag`, 1e-4 /m, across gears | 2.66 (2.30–3.23 by layout and engine) | 6.19 | 6.59 |
+| the same at the top of the table | 2.68, 2.54 (Fuji) | 6.13, 6.24 | 6.95, 7.82 |
+| `k_corner_drag`, /g | 0.047 | 0.032 | 0.025 |
+| `mu_b` (to 2026-11-15: over every zone) | 0.89 (0.86–0.99 by layout) | 1.16 (1.15–1.17) | 1.18 (1.07–1.24) |
+| `mu_b` (from C4: the zones braked in a straight line) | 0.95 | 1.21 | 1.25 |
+| `brake_ellipse` (C4) | 0.69 | 0.52 | 0.63 |
+| lateral level of the apex table | 1.34 | 1.67 | 1.70 |
+| `mu_y` by convention (to 2026-11-15) | 1.221 | 1.511 | 1.522 |
+| `mu_y` by convention (from C4) | 1.190 | 1.433 | 1.464 |
+| `wet.grip_scale` | 0.92 | 0.81 | 0.82 |
+
+| Powertrain | Days | `p_specific`, W/kg | Scale | Peak, W/kg at rpm | Shift point, rpm | Gears, m/s per 1,000 rpm |
+|---|---|---|---|---|---|---|
+| Inferno 86, first engine | 26 | 74.5 | | 79.8 at 7,000 | 7,290 (6,980–7,525 by day) | 3.43 / 4.87 / 6.21 / 7.64 / 10.00 |
+| Inferno 86, second engine | 6 | 81.0 | 1.08 | 85.6 at 7,250 | 7,423 (7,339–7,526) | 3.56 / 5.13 / 6.55 / 7.99 |
+| KK-F | 12 | 132.7 | | 136.1 at 6,250 | 6,481 (6,437–6,555) | 4.69 / 5.96 / 6.85 / 7.95 / 9.29 |
+| KK-F-V2 | 1 | 151.6 | 1.12 | the KK-F's curve × 1.12 | 6,561 | the KK-F's (its day shows 5.98 / 6.85 / 7.95) |
+| KK-SII | 19 | 124.4 | | 129.9 at 6,000 | 6,888 (6,544–6,936) | from speed over rpm: 4.47 / 5.49 / 6.53 / 7.72 (10 days), 4.80 / 6.24 / 7.32 / 8.62 (9 days) |
+
+Power against rpm (W/kg):
+
+| rpm | 5,000 | 5,500 | 6,000 | 6,500 | 7,000 | 7,250 | 7,500 |
+|---|---|---|---|---|---|---|---|
+| Inferno 86, first engine | 57.9 | 63.3 | 70.7 | 76.8 | 79.8 | 77.2 | 74.4 |
+| Inferno 86, second engine | | 71.0 | 76.6 | 83.7 | 85.4 | 85.6 | |
+| KK-F | 121.0 | 128.5 | 136.0 | 135.9 | | | |
+| KK-SII | 120.6 | 125.3 | 129.9 | 125.5 | | | |
+
+The KK-SII has rpm and no gear channel. Its gear is made from speed over
+rpm, which gives it the curve, the shift point and the gear sets above;
+the solver drives it on its one `p_specific` (see the rule above).
+
 ## 3. Test methodology
 
 ### 3.1 Two distinct validations
