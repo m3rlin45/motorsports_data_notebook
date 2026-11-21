@@ -111,6 +111,13 @@ class TestCheckGeometry:
         rep.items.append(gates.GateItem("c", False, "3"))
         assert not rep.passed
 
+    def test_a_gate_that_is_a_score_heads_its_report_with_it(self):
+        rep = gates.GateReport("C3", "t", [gates.GateItem("a", None, "1")], score="41 of 96")
+        text = rep.to_markdown()
+        assert "Attainment: 41 of 96" in text and "Overall:" not in text
+        assert rep.passed  # nothing in it is a pass or a fail
+        assert "Overall: pass" in gates.GateReport("B1", "t").to_markdown()
+
 
 class TestCli:
     def test_check_geometry_writes_the_report(self, root, tmp_path, capsys):

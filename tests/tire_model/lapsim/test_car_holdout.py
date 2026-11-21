@@ -65,7 +65,8 @@ class TestLapStats:
         layout, v = self._lap()
         got = ch.lap_stats(layout, v, v)
         assert got["S1"] == 0.0 and got["S2"] == 0.0 and got["S3"] == 0.0 and got["top"] == 0.0
-        assert set(got) == {"S1", "S2", "S3", "top"}
+        assert got["brake_g"] == 0.0
+        assert set(got) == {"S1", "S2", "S3", "brake_g", "top"}
 
     def test_a_faster_straight_and_a_slower_apex(self):
         layout, v = self._lap()
@@ -81,6 +82,137 @@ class TestLapStats:
         layout, v = self._lap()
         flat = np.full_like(v, 30.0)
         assert np.isnan(ch.lap_stats(layout, flat, flat)["S2"])
+
+
+def _stop_lap(n=600, ds=2.0, at=150, level=0.8, top=50.0, low=25.0):
+    """A closed lap that cruises at ``top``, brakes from node ``at`` at a
+    constant ``level`` (g) down to ``low``, and speeds up again at 0.3 g."""
+    g = 9.80665
+    v2 = np.full(n, top**2)
+    k = at
+    while v2[k - 1] - 2 * level * g * ds > low**2:
+        v2[k] = v2[k - 1] - 2 * level * g * ds
+        k += 1
+    v2[k:] = np.minimum(low**2 + 2 * 0.3 * g * ds * np.arange(n - k), top**2)
+    return np.sqrt(v2)
+
+
+class TestBrakingMatch:
+    DS = 2.0
+
+    def test_deceleration_is_the_drop_of_v_squared_over_distance(self):
+        v = _stop_lap(level=0.8)
+        a = ch.deceleration_g(v, self.DS)
+        assert a[170] == pytest.approx(0.8, abs=1e-9)  # well inside the stop
+        assert a[60] == pytest.approx(0.0, abs=1e-12)  # cruising
+        assert a[320] == pytest.approx(-0.3, abs=1e-9)  # gaining speed
+        # every lap of an array at once, along the last axis
+        both = ch.deceleration_g(np.vstack([v, _stop_lap(level=1.0)]), self.DS)
+        assert both.shape == (2, 600) and both[1, 170] == pytest.approx(1.0, abs=1e-9)
+
+    def test_the_same_braking_is_no_distance_and_a_harder_one_is_some(self):
+        logged = _stop_lap(level=0.8)
+        assert ch.braking_match(logged, logged, self.DS) == 0.0
+        # the same speed shed, harder and so later: 0.2 g over where both brake, 1 g where one does
+        harder = _stop_lap(level=1.0, at=150 + 30)
+        little = _stop_lap(level=0.85, at=150 + 9)
+        assert ch.braking_match(harder, logged, self.DS) > 0.2
+        assert (
+            0.0
+            < ch.braking_match(little, logged, self.DS)
+            < ch.braking_match(harder, logged, self.DS)
+        )
+
+    def test_braking_at_another_place_counts(self):
+        logged = _stop_lap()
+        moved = [ch.braking_match(np.roll(logged, k), logged, self.DS) for k in (1, 2, 4)]
+        assert 0.0 < moved[0] < moved[1] < moved[2]  # 2, 4 and 8 m later
+
+    def test_a_lap_without_braking_has_no_score_and_gaps_are_filled(self):
+        flat = np.full(600, 40.0)
+        assert np.isnan(ch.braking_match(flat, flat, self.DS))
+        logged = _stop_lap()
+        holed = logged.copy()
+        holed[[10, 11, 400]] = np.nan
+        assert ch.braking_match(logged, holed, self.DS) == pytest.approx(0.0, abs=1e-9)
+
+    def test_fast_laps_are_those_above_a_percentile_of_pace(self):
+        t = np.arange(60.0, 80.0)  # twenty laps a second apart
+        assert np.flatnonzero(ch.fast_laps(t, 90.0)).tolist() == [0, 1]
+        assert np.flatnonzero(ch.fast_laps(t, 75.0)).tolist() == [0, 1, 2, 3, 4]
+        assert ch.fast_laps(t[::-1], 90.0).tolist() == ch.fast_laps(t, 90.0).tolist()[::-1]
+        # rounded up: three laps keep one, eleven keep two, and a tie with the last is in
+        assert ch.fast_laps(np.array([61.0, 60.0, 62.0]), 90.0).tolist() == [False, True, False]
+        assert ch.fast_laps(np.arange(11.0), 90.0).sum() == 2
+        assert ch.fast_laps(np.array([60.0, 60.0, 61.0]), 95.0).tolist() == [True, True, False]
+        assert ch.fast_laps(np.zeros(0), 90.0).size == 0
+
+    def test_the_yardstick_is_other_logged_laps_of_the_same_level(self):
+        track = _oval_track()
+        layout = ch.Layout.of(track)
+        a = sv.simulate_lap(track, CAR).v_node_ms
+        laps = pd.DataFrame(
+            {
+                "date": ["d1", "d1", "d2", "d3", "d3", "d4"],
+                "lap_time_s": [60.0, 60.6, 60.3, 62.0, 62.1, 65.0],
+            }
+        )
+        v = np.vstack([a, a, np.roll(a, 2), np.roll(a, 3), np.roll(a, 5), np.roll(a, 9)])
+        got = ch.pace_yardsticks(layout, laps, v, levels=(50.0, 80.0))
+        # the fastest three of six at the 50th percentile, the fastest two at the 80th
+        assert got[got["level"] == 50.0]["lap"].tolist() == [0, 1, 2]
+        assert got[got["level"] == 80.0]["lap"].tolist() == [0, 2]
+        half = got[got["level"] == 50.0].set_index("lap")
+        # a lap is set against the other laps of its set whatever their lap times
+        assert half.loc[0, "brake_g_same_day"] == 0.0 and half.loc[0, "S1_same_day"] == 0.0
+        moved = ch.lap_stats(layout, np.roll(a, 2), a)
+        assert half.loc[0, "brake_g_other_day"] == pytest.approx(moved["brake_g"])
+        assert half.loc[0, "S1_other_day"] == pytest.approx(moved["S1"])
+        assert half.loc[0, "S3_other_day"] == pytest.approx(abs(moved["S3"]))  # a size
+        assert np.isnan(half.loc[2, "brake_g_same_day"])  # the only lap of its day in the set
+        # at the higher level the two laps left are of different days
+        top = got[got["level"] == 80.0].set_index("lap")
+        assert np.isnan(top.loc[0, "S1_same_day"]) and top.loc[0, "S1_other_day"] > 0.0
+
+    def test_by_pace_is_the_median_over_days_of_the_days_median(self):
+        keys = {"car": "c", "layout_id": "a", "lap_num": 1}
+        laps = pd.DataFrame(
+            [
+                {**keys, "session_id": s, "date": d, "S1": s1, "S2": s2, "S3": 0.2, "brake_g": 0.3}
+                for s, d, s1, s2 in (
+                    ("s1", "d1", 1.0, -0.4),
+                    ("s2", "d1", 2.0, 0.6),
+                    ("s3", "d2", 5.0, 0.1),
+                )
+            ]
+        )
+        yard = laps[["car", "layout_id", "session_id", "lap_num", "date"]].assign(level=90.0)
+        for k in ch.YARDSTICK_MEASURES:
+            yard[f"{k}_other_day"], yard[f"{k}_same_day"] = 1.5, 0.5
+        got = ch.by_pace(laps, yard).iloc[0]
+        assert (got["laps"], got["days"]) == (3, 2)
+        assert got["S1"] == pytest.approx(np.median([1.5, 5.0]))  # d1's median, then d2's
+        assert got["S2"] == pytest.approx(np.median([0.5, 0.1]))  # sizes: |−0.4| and |0.6|
+        assert got["S1_other_day"] == 1.5 and got["brake_g_same_day"] == 0.5
+        assert ch.by_pace(laps.iloc[:0], yard).empty
+
+    def test_attainment_counts_the_cells_no_further_than_a_second_logged_lap(self):
+        pace = pd.DataFrame(
+            [
+                # nearer than two logged laps on speed and braking, further at the apex,
+                # and nothing to set the end of the straights against
+                {"car": "c", "layout_id": "a", "level": 90.0, "laps": 8, "days": 3,
+                 "S1": 0.9, "S1_other_day": 1.0, "S1_same_day": 0.7,
+                 "S2": 0.3, "S2_other_day": np.nan, "S2_same_day": 0.2,
+                 "S3": 0.4, "S3_other_day": 0.3, "S3_same_day": 0.2,
+                 "brake_g": 0.2, "brake_g_other_day": 0.2, "brake_g_same_day": 0.15},
+            ]
+        )  # fmt: skip
+        got = ch.attainment(pace).set_index("measure")
+        assert got["scored"].to_dict() == {"S1": True, "S2": False, "S3": True, "brake_g": True}
+        assert got["passed"].to_dict() == {"S1": True, "S2": False, "S3": False, "brake_g": True}
+        assert got.loc["S3", "simulated"] == 0.4 and got.loc["S3", "other_day"] == 0.3
+        assert (got["laps"] == 8).all() and (got["days"] == 3).all()
 
 
 class TestScoreLaps:
@@ -131,7 +263,7 @@ class TestFolds:
     def test_the_gate_passes_the_car_and_catches_both_controls(self, monkeypatch):
         tables, rows, tracks = _sim_dataset(monkeypatch)
         other = _model(sv.SolverCar(mu_y=1.0, mu_b=0.8, p_specific=60.0, c_drag=2.0e-4))
-        folds, laps = ch.run_folds(tables, rows, tracks, "sim", other)
+        folds, laps, yard = ch.run_folds(tables, rows, tracks, "sim", other)
         assert set(folds["model"]) == set(ch.MODELS)
         assert set(folds["kind"]) == {"day", "layout"}
         assert len(folds[folds["model"] == "fit"]) == 2 + 6  # two layouts, three days at each
@@ -145,13 +277,26 @@ class TestFolds:
         # no drag at all is worse at the top of the speed range than the model's
         assert lay["top_0.0"].median() > lay["top_1.0"].median() + 0.3
         assert "S1_flat" not in lay  # no track has a bank
+        # every held-out lap has its braking beside what two logged laps differ by
+        held = laps[laps["kind"] == "day"]
+        assert held["brake_g"].notna().all() and held["brake_g"].median() < 0.05
+        # and the yardsticks: at each level the fastest of a layout's three laps
+        assert set(yard["level"]) == set(ch.PACE_LEVELS)
+        assert yard.groupby(["layout_id", "level"]).size().tolist() == [1] * 6
+        assert {"car", "session_id", "lap_num", "date", "S1_other_day", "brake_g_same_day"} <= set(
+            yard.columns
+        )
+        pace = ch.by_pace(held, yard)
+        assert len(pace) == 6 and pace["brake_g"].notna().all()  # two layouts, three levels
+        assert pace["brake_g_other_day"].isna().all()  # one lap a level: nothing to set it against
+        assert not ch.attainment(pace)["scored"].any()
         assert "h_fl" not in lay  # and no force shares were given
 
     def test_the_layout_folds_carry_the_flat_road_and_the_heat(self, monkeypatch):
         tables, rows, tracks = _sim_dataset(monkeypatch)
         # the laps were driven on a flat road; one of the tracks is then said to lean
         tracks["a"].bank = 0.06 * np.sign(tracks["a"].kappa_heat)
-        folds, laps = ch.run_folds(tables, rows, tracks, "sim", None, shares={"sim": SHARE})
+        folds, laps, yard = ch.run_folds(tables, rows, tracks, "sim", None, shares={"sim": SHARE})
         lay = laps[laps["kind"] == "layout"].set_index("layout_id")
         assert {"S1_flat", "S3_flat", "top_flat", "u_flat"} <= set(lay.columns)
         # held out, the leaning layout wants less of the grip than the flat one gave the car
@@ -171,7 +316,7 @@ class TestFolds:
 
     def test_without_shares_for_the_car_its_heat_is_not_scored(self, monkeypatch):
         tables, rows, tracks = _sim_dataset(monkeypatch)
-        _, laps = ch.run_folds(tables, rows, tracks, "sim", None, shares={"another": SHARE})
+        _, laps, _ = ch.run_folds(tables, rows, tracks, "sim", None, shares={"another": SHARE})
         assert "h_fl" not in laps.columns
 
 
@@ -192,6 +337,7 @@ def _folds(fit, low, other, floor=1.0, kinds=("day", "layout")):
                     "S1": s1,
                     "S2": s2,
                     "S3": s3,
+                    "brake_g": 0.2,
                     "u": 1.0,
                 }
             )
