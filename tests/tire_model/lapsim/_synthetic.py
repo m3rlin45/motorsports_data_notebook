@@ -77,6 +77,7 @@ def synthetic_session(
     slew: tuple[int, float] | None = None,
     accel_delay_s: float | None = None,
     accel_frame: tuple[float, float, float] = (1.0, 0.0, 0.0),
+    controls: bool = False,
     pace: float = 1.0,
     seed: int = 0,
 ) -> tuple[pd.DataFrame, dict]:
@@ -85,7 +86,11 @@ def synthetic_session(
     ``(lap_num, metres)``: a position excursion of that size, 0.6 s long, in
     the middle of the lap's second straight. ``accel_delay_s`` adds an
     accelerometer (``lat_g``, ``long_g``) that reports the true ground-frame
-    accelerations that much late. ``pace`` multiplies the lap time (1.1: a
+    accelerations that much late, as a sensor with ``accel_frame`` (lateral
+    slope, lateral zero, longitudinal zero) reads them. ``pace`` multiplies
+    the lap time. ``controls`` adds a pedal (``throttle_pct``: 100 wherever
+    the car gains speed), a ``brake_bar`` proportional to the deceleration
+    and a ``gear`` that changes at 30 m/s. (``pace`` 1.1: a
     wet session). Returns the per-sample frame
     (GPS and gyro columns on one 25 Hz clock) and the truth."""
     fine = 0.001
@@ -147,6 +152,11 @@ def synthetic_session(
         slope, lat_zero, long_zero = accel_frame
         frame["lat_g"] = slope * sign * v_acc * np.gradient(h_acc, t) / 9.80665 + lat_zero
         frame["long_g"] = np.gradient(v_acc, t) / 9.80665 + long_zero
+    if controls:
+        long_true = np.gradient(speed_at(s) / pace, t) / 9.80665
+        frame["throttle_pct"] = np.where(long_true > 0.02, 100.0, 0.0)
+        frame["brake_bar"] = 50.0 * np.maximum(-long_true, 0.0)
+        frame["gear"] = np.where(speed_at(s) / pace >= 30.0, 3.0, 2.0)
     crossings = np.interp(np.arange(n_laps + 1) * LENGTH_M, s_fine, t_fine)
     truth = {
         "t": t,

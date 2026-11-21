@@ -57,6 +57,10 @@ def main(argv: list[str] | None = None) -> int:
         "check-frame",
         help="Gate C0: the session frame record carries a ground-frame lap to the logged heat.",
     )
+    sub.add_parser(
+        "check-envelope-samples",
+        help="Gate C1: the car's sample tables (full throttle, coast, braking zones, apexes).",
+    )
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     root = args.dataset_root or default_dataset_root()
@@ -91,6 +95,12 @@ def main(argv: list[str] | None = None) -> int:
         from . import frame
 
         report = frame.check_frame(root, cache_dir=workspace / "cache")
+    elif args.cmd == "check-envelope-samples":
+        from . import samples
+
+        report = samples.check_envelope_samples(
+            root, cache_dir=workspace / "cache", tracks_dir=workspace / "tracks"
+        )
     else:  # pragma: no cover - argparse rejects unknown commands
         parser.error(f"unknown command {args.cmd}")
     path = gates.write_report(report, workspace / "reports")

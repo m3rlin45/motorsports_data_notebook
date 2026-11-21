@@ -2129,6 +2129,111 @@ Two things the gate turned up:
    frame's bandwidth. The SFJ has no TPMS, so nothing production fits is
    touched; it matters if SFJ laps are ever used as logged heat.
 
+#### C1. The car's sample tables (`samples.py`, gate `check-envelope-samples`, 2026-11-15)
+
+What each car did on its build laps, as tables to read; C2 takes the car
+model's numbers from them. Every sample is in the ground frame on the
+position clock and is projected onto the layout's track, so the track's
+grade comes out of every longitudinal value. The tables are cached in
+`workspace/lapsim/cache/car_tables/` and rebuilt when the dataset's files
+or a track change. (The issue names `car.py`; the tables are `samples.py`
+and `car.py` is kept for the model.)
+
+- **Populations.** Dry: B's build laps. Wet: B's wet build laps (sessions
+  labelled wet and off the dry pace, judged against each other). The
+  issue's text defined wet by the lateral level itself, under 0.90 of the
+  dry median; since B the wet basis exists on pace, and the level is what
+  the table measures.
+- **One rule for every throttle and brake channel.** The throttle is read
+  relative to the session's own closed and wide-open readings (1st and
+  99th percentile while moving); full is the top 5 % of that span. That
+  is 95 % on the Inferno 86's pedal, 93.6 % on the KK-SII's (it reads
+  −0.6 closed and 98.5 open), 80.1° on the KK-F's throttle angle (5.04°
+  closed, 84.0° open on all three loggers) and 50.8 % on the SFJ's
+  channel, which tops out at 53.5 %. A brake is on above 5 % of the
+  session's hardest application (99.5th percentile): 2.9–3.5 bar on the
+  Inferno 86, 1.4 bar on the KK-SII, 1.2 bar on the KK-F's SW4 sessions
+  and 1.8–1.9 in the ECU's counts on its two data loggers, so the 1.6 ×
+  between those scales needs no handling. Channels logged on change hold
+  their last value, for 2.5 s at most.
+- **Full-throttle table.** Fixes where the throttle has been full for
+  0.8 s and stays full for the 0.25 s the derivative still looks ahead,
+  with no gear change within 0.3 s where a gear is stored (the KK-F's
+  flat shifts; on the 0.5 s derivative a flat upshift is the step from
+  one gear's level to the next, 0.25 to 0.21 g at Fuji, with a dip of
+  about 0.01 g). Value:
+  `dV/dt + g·grade`. Samples under 0.15 g of lateral are the straight
+  table; the others are kept for the cost of cornering at full throttle.
+- **Coast table.** Throttle closed and brakes off for 0.3 s, in a
+  straight line: the lift-off deceleration. Needs both channels.
+- **Braking zones.** One row per application (releases under 0.2 s
+  merged, applications under 0.3 s dropped), from pressure where it is
+  logged and from `dV/dt < −0.3 g` where it is not (EK9, RX8): where it
+  began, the 95th percentile and median of `−(dV/dt + g·grade)`, the
+  lateral g at the peak. Drag is not removed here; C2 does that with the
+  speed stored beside it.
+- **Apex table.** Per lap and corner of the track's corner table: speed
+  at the track's apex, `V²κ` of the track there, the lap's own peak
+  ground-frame lateral in the corner and the accelerometer's. A corner
+  is grip-limited when the p90 of its laps' peaks is within 15 % of the
+  car's highest corner at the layout.
+
+Gate C1 on the dataset through 2026-11-14: 1,431 build laps (1,296 dry,
+135 wet) in 250 sessions give 1,131,368 full-throttle samples (502,945 in
+a straight line), 3,006 coast samples, 10,311 braking zones and 13,622
+apex rows.
+
+| Check | Threshold | Measured | |
+|---|---|---|---|
+| Every model car's cell has its tables | straight samples, braking zones, apex rows for ≥ 99 % of build laps (dry) | 10 of 10 cells; 1,106 of 1,106 laps | pass |
+| Cells under three days | listed, no vote in C3 | Inferno 86 Motegi (2); KK-F Fuji (2) and Suzuka (2); KK-SII Fuji (1); KK-F-V2 Tsukuba (1); every SFJ cell; RX8 | reported |
+| Channel coverage | reported | throttle and brake on every session of the Inferno 86 (98), KK-F (38), KK-F-V2 (3) and SFJ (18); KK-SII brake 66 of 66, throttle 63 (none usable on its three sessions of 2026-04-17); EK9 and RX8 neither | reported |
+| Lateral level, max / min across layouts with three days | reported (review: 1.06–1.12 and ≤ 1.03) | Inferno 86 1.061; KK-SII 1.007 | reported |
+
+**Straight tables** (median `dV/dt + g·grade` in g, by 5 m/s bin from the
+speed shown; bins with 50 samples):
+
+| Car, layout | 15 | 20 | 25 | 30 | 35 | 40 | 45 | 50 | 55 |
+|---|---|---|---|---|---|---|---|---|---|
+| Inferno 86, Fuji | 0.295 | 0.309 | 0.200 | 0.198 | 0.141 | 0.129 | 0.091 | 0.072 | 0.050 |
+| Inferno 86, Sodegaura | | 0.302 | 0.217 | 0.214 | 0.152 | 0.138 | 0.130 | | |
+| Inferno 86, Motegi | | | 0.219 | 0.217 | 0.158 | 0.140 | 0.107 | | |
+| Inferno 86, Tsukuba | | | 0.195 | 0.217 | 0.141 | 0.151 | | | |
+| KK-SII, Suzuka | | | 0.379 | 0.272 | 0.257 | 0.194 | 0.114 | 0.070 | 0.031 |
+| KK-SII, Tsukuba | | | 0.379 | 0.308 | 0.270 | 0.193 | 0.152 | | |
+| KK-SII, Fuji | | | | 0.293 | 0.228 | 0.165 | 0.111 | 0.045 | 0.014 |
+| KK-F, Tsukuba | | | 0.392 | 0.317 | 0.284 | 0.206 | 0.145 | | |
+| KK-F, Fuji | | | 0.433 | 0.293 | 0.250 | 0.186 | 0.121 | 0.042 | 0.023 |
+| KK-F, Suzuka | | | 0.418 | 0.277 | 0.265 | 0.226 | 0.120 | 0.059 | 0.025 |
+| KK-F-V2, Tsukuba | | | | 0.373 | 0.333 | 0.247 | 0.175 | 0.145 | |
+| SFJ, Fuji | | | | 0.323 | 0.257 | 0.195 | 0.135 | 0.066 | 0.023 |
+| SFJ, Motegi | | | 0.316 | 0.312 | 0.270 | 0.197 | 0.140 | 0.092 | |
+| SFJ, Suzuka | | | 0.428 | 0.354 | 0.291 | 0.230 | 0.139 | 0.086 | 0.038 |
+
+The Inferno 86's row is the gear staircase the review described (0.20 g at
+25–35 m/s, 0.14 at 35–45, 0.09 at 45–50). Only Fuji and Suzuka reach
+50 m/s, so only they can say anything about drag. The KK-F-V2 is 0.03–0.06
+g above the KK-F at every speed on its one day, which is the new intake.
+
+**Lateral level** (median over the grip-limited corners of the corner's
+p90; ground frame): Inferno 86 Tsukuba 1.374, Fuji 1.339, Motegi 1.315,
+Sodegaura 1.296; KK-SII Suzuka 1.674, Tsukuba 1.662, Fuji 1.656; KK-F Fuji
+1.720, Tsukuba 1.696, Suzuka 1.687; KK-F-V2 1.662; SFJ 1.44–1.50; EK9
+1.279; RX8 1.087 on 13 laps. Wet over dry on that statistic: KK-SII 0.71
+(Fuji) and 0.92 (Tsukuba, one day), KK-F 0.81 and 0.83, Inferno 86 0.90
+(Sodegaura) and 0.93 (Tsukuba), EK9 0.78 on one lap. The review's 0.79 was
+a median over sessions chosen by their grip; a p90 over the fast laps of
+wet sessions reads the driest of them.
+
+**Braking** (p90 over zones of the zone's p95, grade removed): Inferno 86
+0.89–1.04 g by layout, KK-SII 1.25–1.32, KK-F 1.20–1.39, KK-F-V2 1.25, SFJ
+1.00–1.17, EK9 0.89 (zones from `dV/dt`). 4.8–5.2 zones a lap at Tsukuba,
+7–10 at Fuji, Sodegaura and Motegi, 9–14 at Suzuka. **Lift-off**
+deceleration: Inferno 86 0.12 g from 30 to 60 m/s; KK-SII 0.18 / 0.21 /
+0.29 g at 30 / 40 / 50 m/s and KK-F 0.22 / 0.26 g at 40 / 50. Coasting in a straight
+line with the brakes off is rare (3,006 fixes in all), so these rest on
+52–510 samples a bin.
+
 ## 3. Test methodology
 
 ### 3.1 Two distinct validations
