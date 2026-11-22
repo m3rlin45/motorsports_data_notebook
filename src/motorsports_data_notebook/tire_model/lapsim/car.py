@@ -94,6 +94,22 @@ PUBLISHED: dict[str, dict] = {
     "KK-SII": {"mass_kg": 495.0, "crank_kw": 88.0, "c_drag_prior": None},
     "KK-F": {"mass_kg": 525.0, "crank_kw": None, "c_drag_prior": None},
 }
+#: Another driver's lap in a car's class, as an outside figure beside the
+#: car's own levels (issue #205's sanity band; reported, never fitted to):
+#: a dry Super FJ reference lap at Tsukuba from 2009 published by a logger
+#: maker (DigSpice, ``dig-spice.com/jp/rundata/``): its lap time, the 95th
+#: percentile of its lateral over 0.5 s (flat from 60 to 160 km/h) and its
+#: braking. The KK-SII is a Super FJ; the KK-F is an FJ1500 with one more
+#: wing element and has no such lap.
+CLASS_LAPS: dict[str, dict] = {
+    "KK-SII": {
+        "layout_id": "tsukuba_2000",
+        "what": "a Super FJ, another driver, 2009",
+        "lap_s": 59.9,
+        "lat_g": (1.51, 1.54),
+        "brake_g": 1.23,
+    },
+}
 #: Raw cars that are another car's chassis with a different powertrain.
 FAMILY: dict[str, str] = {"KK-F-V2": "KK-F"}
 #: A car's powertrains in the order they came: each is the one of a raw

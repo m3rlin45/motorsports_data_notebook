@@ -3731,6 +3731,75 @@ drivers at about 75 % of the available friction in measured stops).
 **Cost.** Gate C3 reads the use in each of its 73 folds, two solves of
 every lap that is left: it takes about four minutes.
 
+#### C8. What #205 still asked to be reported (2026-11-22)
+
+Eight reported items of #205 were never built. The owner took them one by
+one on 2026-11-22: three built, one moved, four struck.
+
+| item | verdict | why |
+|---|---|---|
+| the per-corner residual table | built (gate C3) | it tells the track's error from the car's, which is #313's question |
+| the era ladder | built (gate C2) | what changed on a car or in how it is driven shows as a step |
+| the formula cars' lateral against another driver's lap | built (gate C2) | the one outside figure beside the car's cornering limit |
+| the exceedance of the envelope | moved to #327 | there it is a bound: no use above 1 |
+| simulated top speed against the speed trap | struck | the end-of-straight measure and the top-speed band of gate C3 do it, held out |
+| the class's cross-circuit ratios and wet-over-dry lap time | struck | the review found it tells neither a wrong power nor a wrong car, and it needs record laps kept current |
+| wind along the main straight | struck | the end-of-straight measure passes 16 of 19 cells and hourly wind is coarse |
+| the masked-run comparison columns | struck | another day's logged lap, the same day's and the measured ceiling (about 66) are that yardstick now |
+
+**The apex speed corner by corner** (`car_holdout.corner_table`,
+`corner_agreement`; held out by day, the median over days of the day's
+median lap; the simulated lap's lowest speed in ± 20 m of the apex less
+the logged lap's). `S3` is the mean of these over a lap's corners, so
+errors of opposite sign cancel there and stand here.
+
+- **At Tsukuba the errors are the same on all three cars**: over its eight
+  corners the correlation between two cars' errors is +0.87 (Inferno 86 and
+  KK-F), +0.89 (Inferno 86 and KK-SII) and +0.89 (the two formula cars).
+  The two hairpins and the first corner are over on the formula cars (+0.2
+  to +0.9 m/s), the last corner under on every car (−1.05 to −1.34), the
+  third under on every car (−0.70 to −1.18). An error that unlike cars
+  share at the same corners is the track's: its bank or its line through
+  the corner, not the car and not the driver.
+- **At Suzuka the two formula cars agree** (+0.86 over 16 corners), which
+  says less, the cars being alike: corner 7 is −2.57 and −3.13 m/s and
+  corner 13 −1.49 and −2.59, in the linked corners the driver committee
+  put down to the line.
+- **At Fuji the Inferno 86 and the KK-F do not agree** (−0.27 over 10
+  corners): what is wrong there is not the track's alone.
+- The furthest single corner is the Inferno 86 at Motegi's corner 10,
+  +2.72 m/s on two days.
+
+**The era ladder** (`car_gate.era_ladder`): a car's days in order with the
+powertrain, the tyre compound where the day's sessions are labelled, the
+day's best build lap and its u, the day's full-throttle level and the
+driver's shift point. The u of a day's best lap runs from 0.794 to 1.086
+on the Inferno 86 over 32 days (0.794 and 0.881 are Tsukuba days of
+2025), 0.956 to 1.075 on the KK-SII over 20 and 0.953 to 1.025 on the
+KK-F over 13. On the Inferno 86 the days from 2025-11 at Fuji read
+1.07–1.09 against 0.98–1.05 before, beside the level's step
+(1.05–1.07 against 0.97–1.01): the ladder shows the step and, like
+everything read from a lap time, cannot say whether a day's u is its
+grip or its driving. The compound is labelled on 20 of the Inferno 86's
+32 days and on almost none of the formula cars'.
+
+**Another driver's lap in the class** (`car.CLASS_LAPS`,
+`car_gate.class_lap_rows`): one published dry reference lap of a Super
+FJ at Tsukuba from 2009, never fitted to.
+
+| at Tsukuba | the other driver's Super FJ | the KK-SII |
+|---|---|---|
+| lap time | 59.9 s | 60.2 s (best dry build lap) |
+| lateral | 1.51–1.54 g (95th percentile over 0.5 s) | 1.66 g (apex table: ground frame, the car's own line, the bank in it); `mu_y` by convention 1.318 |
+| braking | 1.23 g | 1.25 g (90th percentile of the zones' peaks, drag in); `mu_b` 1.21 |
+
+The lap time and the braking are the other driver's within 0.5 % and
+2 %. The apex table's lateral is 8–10 % above theirs, which is the frame
+(Tsukuba's hairpins lean 8 % into the turn) and the statistic (a 90th
+percentile of per-lap peaks); the driver committee's reading of the
+cornering limit in the tyres' frame (1.539 for the KK-SII at m = 20,
+`docs/lapsim_driver_model.md`) sits inside the other driver's band.
+
 #### D1 (in part). The lap solver (`solver.py`, 2026-11-15)
 
 C2's remaining clauses and all of C3 need `simulate_lap` and `solve_u`,
