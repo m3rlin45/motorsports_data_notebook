@@ -237,6 +237,76 @@ class TestScoreLaps:
         assert np.isnan(got["u"]) and np.isnan(got["S1"])
 
 
+class TestCorners:
+    def test_the_corners_are_in_the_order_of_the_apex_windows(self):
+        track = _oval_track(radius=60.0)
+        layout = ch.Layout.of(track)
+        frame = ch.corner_frame(layout)
+        assert list(frame["corner"]) == [1, 2]
+        assert frame["s_apex_m"].is_monotonic_increasing
+        assert frame["radius_m"].to_numpy() == pytest.approx([60.0, 60.0], rel=1e-6)
+        # each window holds its corner's apex
+        ds = track.ds_m
+        for nodes, s_apex in zip(layout.apex_nodes, frame["s_apex_m"]):
+            assert int(round(s_apex / ds)) % track.n in set(nodes.tolist())
+
+    def test_the_apex_errors_average_to_s3(self):
+        track = _oval_track()
+        layout = ch.Layout.of(track)
+        v = sv.simulate_lap(track, CAR).v_node_ms
+        sim = v.copy()
+        sim[layout.apex_nodes[0]] -= 1.0  # slow at the first corner only
+        err, low = ch.apex_errors(layout, sim, v)
+        assert err == pytest.approx([-1.0, 0.0], abs=1e-9)
+        assert low == pytest.approx([v[w].min() for w in layout.apex_nodes])
+        assert float(np.mean(err)) == pytest.approx(ch.lap_stats(layout, sim, v)["S3"])
+
+    def test_score_laps_carries_the_corners_on_request(self):
+        track = _oval_track()
+        layout = ch.Layout.of(track)
+        sim = sv.simulate_lap(track, CAR, 0.97)
+        laps = pd.DataFrame({"session_id": ["s"], "lap_num": [1], "lap_time_s": [sim.lap_time_s]})
+        plain = ch.score_laps(CAR, layout, laps, sim.v_node_ms[None, :])
+        assert not [c for c in plain.columns if c.startswith("apex_")]
+        got = ch.score_laps(CAR, layout, laps, sim.v_node_ms[None, :], corners=True).iloc[0]
+        assert abs(got["apex_1"]) < 1e-3 and abs(got["apex_2"]) < 1e-3
+        assert got["apex_v_1"] == pytest.approx(sim.v_node_ms[layout.apex_nodes[0]].min())
+
+    def test_the_table_is_the_median_over_days_of_the_days_median(self):
+        layout = ch.Layout.of(_oval_track())
+        laps = pd.DataFrame(
+            {
+                "car": "A",
+                "kind": ["day"] * 5 + ["layout"],
+                "layout_id": "oval",
+                "date": ["d1", "d1", "d1", "d2", "d3", "d1"],
+                "apex_1": [0.0, 1.0, 5.0, 3.0, -1.0, 99.0],
+                "apex_v_1": [20.0, 20.0, 20.0, 22.0, 24.0, 0.0],
+                "apex_2": [0.5] * 5 + [99.0],
+                "apex_v_2": [30.0] * 6,
+            }
+        )
+        table = ch.corner_table(laps, {"oval": layout})
+        first = table[table["corner"] == 1].iloc[0]
+        # days read 1.0, 3.0 and -1.0: the layout fold's lap is not in it
+        assert first["error_ms"] == pytest.approx(1.0) and first["days"] == 3
+        assert first["laps"] == 5 and first["v_apex_ms"] == pytest.approx(22.0)
+        assert table[table["corner"] == 2].iloc[0]["error_ms"] == pytest.approx(0.5)
+        assert ch.corner_table(laps.iloc[:0], {"oval": layout}).empty
+
+    def test_cars_agree_where_their_errors_repeat(self):
+        rows = []
+        for car, sign in (("A", 1.0), ("B", 1.0), ("C", -1.0)):
+            for k, e in enumerate([0.5, -0.2, 1.0, -0.7, 0.1]):
+                rows.append({"car": car, "layout_id": "x", "corner": k + 1, "error_ms": sign * e})
+        rows.append({"car": "A", "layout_id": "y", "corner": 1, "error_ms": 0.3})
+        rows.append({"car": "B", "layout_id": "y", "corner": 1, "error_ms": 0.3})
+        got = ch.corner_agreement(pd.DataFrame(rows)).set_index(["car_a", "car_b"])
+        assert got.loc[("A", "B"), "r"] == pytest.approx(1.0)
+        assert got.loc[("A", "C"), "r"] == pytest.approx(-1.0)
+        assert set(got["layout_id"]) == {"x"}  # one shared corner is no agreement
+
+
 class TestFolds:
     def test_without_and_car_only(self, monkeypatch):
         tables, rows, _ = _sim_dataset(monkeypatch)
