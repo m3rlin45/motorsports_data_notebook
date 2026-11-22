@@ -346,6 +346,112 @@ class TestBrakingUse:
         assert not limit.but(bank=False).brake_use  # and it is kept
 
 
+class TestEraLadder:
+    def test_a_cars_days_in_order_with_what_changed(self):
+        best = pd.DataFrame(
+            {
+                "layout_id": ["b", "a", "a"],
+                "date": ["2026-07-15", "2025-05-05", "2025-03-08"],
+                "lap_time_s": [126.4, 78.8, 77.2],
+                "raw_car": ["Inferno 86"] * 3,
+            }
+        )
+        refs = {
+            "a": {"by_day": {"2025-03-08": 1.008, "2025-05-05": 0.969}},
+            "b": {"by_day": {"2026-07-15": 1.003}},
+        }
+        days = pd.DataFrame(
+            {
+                "date": ["2025-03-08", "2026-07-15"],
+                "layout_id": ["a", "b"],
+                "level": [0.991, 0.982],
+                "shift_rpm": [7286.0, 7356.0],
+            }
+        )
+        compounds = {("Inferno 86", "a", "2025-05-05"): "RE-71RS"}
+        got = cg.era_ladder("Inferno 86", best, refs, days, compounds)
+        assert list(got["date"]) == ["2025-03-08", "2025-05-05", "2026-07-15"]
+        assert list(got["engine"]) == ["first engine", "first engine", "second engine"]
+        assert list(got["compound"]) == ["", "RE-71RS", ""]
+        assert list(got["u"]) == [1.008, 0.969, 1.003]
+        assert got["level"].iloc[0] == 0.991 and np.isnan(got["level"].iloc[1])
+        assert got["shift_rpm"].iloc[2] == 7356.0
+
+    def test_a_day_without_a_solved_lap_is_left_out(self):
+        best = pd.DataFrame({"layout_id": ["a"], "date": ["d"], "lap_time_s": [70.0]})
+        assert cg.era_ladder("X", best, {"a": {"by_day": {}}}, pd.DataFrame(), {}).empty
+
+    def test_a_dataset_without_labels_has_no_compounds(self, tmp_path):
+        rows = pd.DataFrame({"car": ["X"], "layout_id": ["a"], "date": ["d"], "session_id": ["s"]})
+        assert cg.day_compounds(tmp_path, rows) == {}
+
+
+class TestClassLap:
+    def test_the_other_drivers_lap_beside_the_cars_own(self, monkeypatch):
+        monkeypatch.setitem(
+            cm.CLASS_LAPS,
+            "X",
+            {
+                "layout_id": "a",
+                "what": "another",
+                "lap_s": 59.9,
+                "lat_g": (1.5, 1.6),
+                "brake_g": 1.2,
+            },
+        )
+        apex = pd.DataFrame(
+            {
+                "car": "X",
+                "layout_id": "a",
+                "basis": "dry",
+                "corner": [1] * 10 + [2] * 10,
+                "sign": 1,
+                "s_apex_m": [100.0] * 10 + [300.0] * 10,
+                "date": "d",
+                "v_apex_ms": 20.0,
+                "lat_doppler_g": [1.4] * 10 + [1.6] * 10,
+                "lat_track_g": 1.4,
+                "lat_accel_g": 1.4,
+            }
+        )
+        brake = pd.DataFrame(
+            {
+                "car": "X",
+                "layout_id": "a",
+                "basis": ["dry"] * 4 + ["wet"],
+                "decel_p95_g": [1.0, 1.1, 1.2, 1.3, 9.0],
+            }
+        )
+
+        class Tables:
+            pass
+
+        tables = Tables()
+        tables.apex, tables.brake = apex, brake
+        rows = pd.DataFrame(
+            {
+                "car": "X",
+                "layout_id": "a",
+                "basis": ["dry", "dry", "wet"],
+                "lap_time_s": [61.0, 60.2, 50.0],
+            }
+        )
+        got = cg.class_lap_rows(tables, rows, {"X": _model()}).iloc[0]
+        assert got["best_lap_s"] == 60.2 and got["class_lap_s"] == 59.9
+        assert got["apex_level_g"] == pytest.approx(1.5)  # the median of the two corners' p90
+        assert got["brake_p90_g"] == pytest.approx(np.quantile([1.0, 1.1, 1.2, 1.3], 0.9))
+        assert got["mu_b"] == _model().grip["mu_b"]
+
+    def test_a_car_without_such_a_lap_or_without_laps_there(self):
+        class Tables:
+            apex = pd.DataFrame()
+            brake = pd.DataFrame()
+
+        none = pd.DataFrame(columns=["car", "layout_id", "basis", "lap_time_s"])
+        assert cg.class_lap_rows(Tables(), none, {"KK-SII": _model()}).empty
+        assert cg.class_lap_rows(Tables(), none, {}).empty
+
+
 class TestInSample:
     def test_a_lap_the_model_drove_scores_zero_at_its_own_u(self):
         track = _oval_track()

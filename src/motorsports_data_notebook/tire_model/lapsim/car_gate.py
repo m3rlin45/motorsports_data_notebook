@@ -852,6 +852,120 @@ def day_gears(work: dict) -> dict[str, tuple[float, ...]]:
     return out
 
 
+def day_compounds(root: Path, rows: pd.DataFrame) -> dict[tuple[str, str, str], str]:
+    """``(car, layout_id, date) ->`` the tyre compound(s) the car's build
+    sessions of that day are labelled with (production's labels,
+    :func:`~..compounds.load_compound_labels`; joined by `` / `` where a
+    day has more than one, absent where it has none)."""
+    try:
+        from ..compounds import load_compound_labels
+
+        labels = load_compound_labels(Path(root))
+    except Exception:  # noqa: BLE001 - a dataset without labels has an era ladder without them
+        return {}
+    if labels.empty or "session_id" not in rows.columns:
+        return {}
+    of = dict(zip(labels["session_id"], labels["compound"]))
+    seen = rows[["car", "layout_id", "date", "session_id"]].drop_duplicates()
+    seen = seen.assign(compound=seen["session_id"].map(of)).dropna(subset=["compound"])
+    return {
+        (str(c), str(k), str(d)): " / ".join(sorted(set(g["compound"])))
+        for (c, k, d), g in seen.groupby(["car", "layout_id", "date"])
+    }
+
+
+def era_ladder(
+    car: str,
+    best: pd.DataFrame,
+    refs: dict[str, dict],
+    days: pd.DataFrame,
+    compounds: dict[tuple[str, str, str], str],
+) -> pd.DataFrame:
+    """A car's days in order: ``date, layout_id, engine`` (the powertrain
+    the raw car had that day), ``compound``, the day's best build lap
+    (``best_lap_s``), its pace knob (``u``, from ``refs`` of
+    :func:`set_convention`), the day's full-throttle level over its
+    powertrain's at equal rpm (``level``) and the driver's shift point
+    (``shift_rpm``), the last two from the fit's ``days``. What changed on
+    a car, or in how it was driven, shows as a step in a column."""
+    cols = ["car", "date", "layout_id", "engine", "compound", "best_lap_s", "u", "level"]
+    cols += ["shift_rpm"]
+    by_day = (
+        {(str(r["date"]), str(r["layout_id"])): r for r in days.to_dict("records")}
+        if len(days)
+        else {}
+    )
+    rows: list[dict] = []
+    for rec in best.to_dict("records"):
+        date, layout = str(rec["date"]), str(rec["layout_id"])
+        u = refs.get(layout, {}).get("by_day", {}).get(date)
+        if u is None:
+            continue
+        day = by_day.get((date, layout), {})
+        rows.append(
+            {
+                "car": car,
+                "date": date,
+                "layout_id": layout,
+                "engine": cm.powertrain_of(str(rec.get("raw_car") or car), date),
+                "compound": compounds.get((car, layout, date), ""),
+                "best_lap_s": float(rec["lap_time_s"]),
+                "u": float(u),
+                "level": float(day.get("level", float("nan"))),
+                "shift_rpm": float(day.get("shift_rpm", float("nan"))),
+            }
+        )
+    out = pd.DataFrame(rows, columns=cols)
+    return out.sort_values(["date", "layout_id"]).reset_index(drop=True)
+
+
+def class_lap_rows(
+    tables: smp.CarTables, rows: pd.DataFrame, models: dict[str, cm.CarModel]
+) -> pd.DataFrame:
+    """Another driver's lap in a car's class (:data:`~.car.CLASS_LAPS`)
+    beside what the car's own dry build laps hold at the same layout: the
+    best lap, the lateral level of the apex table (the median over the
+    grip-limited corners of the corner's 90th percentile, ground frame)
+    and the 90th percentile of the braking zones' peaks, with the model's
+    ``mu_y`` and ``mu_b``."""
+    out: list[dict] = []
+    level = smp.lateral_level(smp.apex_summary(tables.apex)) if len(tables.apex) else None
+    for car, lap in cm.CLASS_LAPS.items():
+        if car not in models:
+            continue
+        layout = lap["layout_id"]
+        own = rows[(rows["car"] == car) & (rows["layout_id"] == layout) & (rows["basis"] == "dry")]
+        if own.empty:
+            continue
+        lat = float("nan")
+        if level is not None and len(level):
+            got = level[
+                (level["car"] == car) & (level["layout_id"] == layout) & (level["basis"] == "dry")
+            ]
+            lat = float(got["level_g"].iloc[0]) if len(got) else float("nan")
+        zones = tables.brake
+        zones = zones[
+            (zones["car"] == car) & (zones["layout_id"] == layout) & (zones["basis"] == "dry")
+        ]
+        out.append(
+            {
+                "car": car,
+                "layout_id": layout,
+                "class_lap": lap["what"],
+                "class_lap_s": lap["lap_s"],
+                "best_lap_s": float(own["lap_time_s"].min()),
+                "class_lat_lo_g": lap["lat_g"][0],
+                "class_lat_hi_g": lap["lat_g"][1],
+                "apex_level_g": lat,
+                "mu_y": float(models[car].grip["mu_y"]),
+                "class_brake_g": lap["brake_g"],
+                "brake_p90_g": float(zones["decel_p95_g"].quantile(0.9)) if len(zones) else np.nan,
+                "mu_b": float(models[car].grip["mu_b"]),
+            }
+        )
+    return pd.DataFrame(out)
+
+
 def check_car_fit(
     root: Path,
     *,
@@ -878,6 +992,8 @@ def check_car_fit(
     models: dict[str, cm.CarModel] = {}
     ref_rows, rec_rows, score_rows, use_rows = [], [], [], []
     use_bands: dict[str, pd.DataFrame] = {}
+    ladders: list[pd.DataFrame] = []
+    compounds = day_compounds(root, rows)
     for car_name in cars:
         best = day_best_laps(rows, car_name)
         own = {k: v for k, v in tracks.items() if k in set(best["layout_id"])}
@@ -908,6 +1024,7 @@ def check_car_fit(
             )
         if cars_dir is not None:
             model.save(Path(cars_dir) / f"{car_name.replace(' ', '_')}.json")
+        ladders.append(era_ladder(car_name, best, refs, work["days"], compounds))
         for layout, r in refs.items():
             ref_rows.append(
                 {
@@ -998,6 +1115,57 @@ def check_car_fit(
             + md_table(ref, floats="{:.4f}"),
         )
     )
+
+    # The era ladder: each day's pace level, in order.
+    ladder = pd.concat(ladders, ignore_index=True) if ladders else pd.DataFrame()
+    if len(ladder):
+        rep.items.append(
+            GateItem(
+                "The era ladder: each day's pace level",
+                None,
+                "; ".join(
+                    f"{c} {len(g)} days, u {g['u'].min():.3f} to {g['u'].max():.3f}"
+                    for c, g in ladder.groupby("car", sort=False)
+                ),
+                "reported (issue #205)",
+                "A car's days in order. `u`: the pace knob of the day's best build lap, driven "
+                "with that day's powertrain, shift point and air (the same laps `ref_u` is the "
+                "median of); `level`: the day's full-throttle level over its powertrain's at "
+                "equal rpm, in standard air; `shift_rpm`: the driver's shift point that day; "
+                "`compound`: the tyre the day's sessions are labelled with, where they are. A "
+                "change to the car or to how it is driven shows as a step in a column: the "
+                "engine in `engine` and `level`, a shift light in `shift_rpm`, tyres in "
+                "`compound` and `u`. `u` holds the day's grip and the day's driving together; "
+                "the logs cannot split them.\n\n" + md_table(ladder, floats="{:.3f}"),
+            )
+        )
+
+    # Another driver's lap in the class.
+    outside = class_lap_rows(tables, rows, models)
+    if len(outside):
+        rep.items.append(
+            GateItem(
+                "Against another driver's lap in the class",
+                None,
+                "; ".join(
+                    f"{r['car']} at {r['layout_id']}: lap {float(r['best_lap_s']):.1f} s "
+                    f"({float(r['class_lap_s']):.1f}), lateral {float(r['apex_level_g']):.2f} g "
+                    f"({float(r['class_lat_lo_g']):.2f}–{float(r['class_lat_hi_g']):.2f}), "
+                    f"braking {float(r['brake_p90_g']):.2f} g ({float(r['class_brake_g']):.2f})"
+                    for r in outside.to_dict("records")
+                ),
+                "reported (issue #205); the other driver's figure in brackets",
+                "An outside figure, never fitted to: one published dry reference lap of a car "
+                "of the same class at the same layout (`class_lap`), with its lap time, the "
+                "95th percentile of its lateral over 0.5 s and its braking, beside this car's "
+                "best dry build lap, the lateral level of its apex table (`apex_level_g`: "
+                "ground frame, on the car's own line, so the road's bank is in it) and the "
+                "90th percentile of its braking zones' peaks (`brake_p90_g`: drag not taken "
+                "out), with the model's `mu_y` (a convention) and `mu_b`. The frames differ, so "
+                "this is a band to be near, not a number to match.\n\n"
+                + md_table(outside, floats="{:.3f}"),
+            )
+        )
 
     # The driver's braking use.
     use = pd.DataFrame(use_rows)
@@ -1103,7 +1271,10 @@ __all__ = [
     "day_gears",
     "day_shifts",
     "lap_scores",
+    "class_lap_rows",
+    "day_compounds",
     "deceleration_g",
+    "era_ladder",
     "read_use",
     "recover",
     "recover_use",

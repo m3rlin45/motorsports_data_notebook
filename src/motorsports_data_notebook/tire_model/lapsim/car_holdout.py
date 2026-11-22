@@ -233,12 +233,55 @@ def lap_stats(layout: Layout, v_sim: np.ndarray, v_obs: np.ndarray) -> dict:
     return out
 
 
-def score_laps(who: cg.Who, layout: Layout, laps: pd.DataFrame, v_obs: np.ndarray) -> pd.DataFrame:
+def apex_errors(
+    layout: Layout, v_sim: np.ndarray, v_obs: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Per corner of ``layout`` (in the order of its apex windows): the
+    simulated lap's lowest speed in the window less the logged lap's, and
+    the logged lap's lowest speed there (m/s). ``S3`` of
+    :func:`lap_stats` is the mean of the first."""
+    low = np.array([np.nanmin(v_obs[w]) for w in layout.apex_nodes], dtype=float)
+    sim = np.array([np.min(v_sim[w]) for w in layout.apex_nodes], dtype=float)
+    return sim - low, low
+
+
+def corner_frame(layout: Layout) -> pd.DataFrame:
+    """The layout's corners in the order of its apex windows: ``corner``
+    (1 for the first apex after the start line), ``s_apex_m``,
+    ``radius_m`` at the apex and ``sign`` (positive in a right turn)."""
+    track = layout.track
+    rows = sorted(
+        (
+            (
+                int(round(c["s_apex"] / track.ds_m)) % track.n,
+                float(c["s_apex"]),
+                float(1.0 / abs(c["kappa_apex"])) if c.get("kappa_apex") else float("nan"),
+                int(c.get("sign", 0)),
+            )
+            for c in track.corners
+        ),
+        key=lambda r: r[0],
+    )
+    return pd.DataFrame(
+        [
+            {"corner": k + 1, "s_apex_m": r[1], "radius_m": r[2], "sign": r[3]}
+            for k, r in enumerate(rows)
+        ],
+        columns=["corner", "s_apex_m", "radius_m", "sign"],
+    )
+
+
+def score_laps(
+    who: cg.Who, layout: Layout, laps: pd.DataFrame, v_obs: np.ndarray, *, corners: bool = False
+) -> pd.DataFrame:
     """:func:`lap_stats` of every lap of ``laps`` (``session_id, lap_num,
     lap_time_s``; ``v_obs`` its speed at the nodes) simulated at its own
     lap time, with ``u``: by one car, or by a :class:`~.car_gate.Drive`
     with each lap's own powertrain, shift point and air. A lap whose time
-    the car cannot do has NaN statistics."""
+    the car cannot do has NaN statistics. With ``corners`` the frame also
+    has, per corner k of :func:`corner_frame`, ``apex_<k>``
+    (:func:`apex_errors`) and ``apex_v_<k>`` (the logged lap's lowest
+    speed there)."""
     drive = cg.as_drive(who)
     profile = cg.profile_of(drive, layout.track)
     recs = cg._records(laps)
@@ -259,8 +302,75 @@ def score_laps(who: cg.Who, layout: Layout, laps: pd.DataFrame, v_obs: np.ndarra
         }
         if got.ok[i]:
             row.update(lap_stats(layout, got.v_node_ms[i], v_obs[i]))
+            if corners and layout.apex_nodes:
+                err, low = apex_errors(layout, got.v_node_ms[i], v_obs[i])
+                for k in range(len(err)):
+                    row[f"apex_{k + 1}"] = float(err[k])
+                    row[f"apex_v_{k + 1}"] = float(low[k])
         rows.append(row)
     return pd.DataFrame(rows)
+
+
+def corner_table(laps: pd.DataFrame, layouts: dict[str, Layout]) -> pd.DataFrame:
+    """The apex-speed error corner by corner, from the held-out laps of
+    the day folds (``laps`` of :func:`run_folds`, with the ``apex_<k>``
+    columns): per car, layout and corner, ``error_ms`` (simulated less
+    logged lowest speed, the median over days of the day's median lap, as
+    the gate reads a cell), ``v_apex_ms`` (the logged one, likewise),
+    ``laps`` and ``days``, with the corner's place and radius."""
+    cols = ["car", "layout_id", "corner", "s_apex_m", "radius_m", "sign"]
+    cols += ["laps", "days", "v_apex_ms", "error_ms"]
+    rows: list[dict] = []
+    held = laps[laps["kind"] == "day"] if len(laps) else laps
+    for (car, layout_id), cell in held.groupby(["car", "layout_id"]) if len(held) else []:
+        if layout_id not in layouts:
+            continue
+        for c in corner_frame(layouts[str(layout_id)]).to_dict("records"):
+            k = int(c["corner"])
+            if f"apex_{k}" not in cell.columns:
+                continue
+            got = cell[["date", f"apex_{k}", f"apex_v_{k}"]].dropna()
+            if got.empty:
+                continue
+            by_day = got.groupby("date")[[f"apex_{k}", f"apex_v_{k}"]].median()
+            rows.append(
+                {
+                    "car": car,
+                    "layout_id": layout_id,
+                    **c,
+                    "laps": int(len(got)),
+                    "days": int(len(by_day)),
+                    "v_apex_ms": float(by_day[f"apex_v_{k}"].median()),
+                    "error_ms": float(by_day[f"apex_{k}"].median()),
+                }
+            )
+    return pd.DataFrame(rows, columns=cols)
+
+
+def corner_agreement(table: pd.DataFrame, min_corners: int = 4) -> pd.DataFrame:
+    """Per layout and pair of cars: the correlation over the layout's
+    corners of their apex-speed errors (``r``) and the corners behind it.
+    An error that repeats between unlike cars is the track's (its bank,
+    its line through the corner), one that does not is the car's."""
+    rows: list[dict] = []
+    for layout_id, cell in table.groupby("layout_id") if len(table) else []:
+        wide = cell.pivot(index="corner", columns="car", values="error_ms")
+        names = list(wide.columns)
+        for i, a in enumerate(names):
+            for b in names[i + 1 :]:
+                both = wide[[a, b]].dropna()
+                if len(both) < min_corners:
+                    continue
+                rows.append(
+                    {
+                        "layout_id": layout_id,
+                        "car_a": a,
+                        "car_b": b,
+                        "corners": int(len(both)),
+                        "r": float(np.corrcoef(both[a], both[b])[0, 1]),
+                    }
+                )
+    return pd.DataFrame(rows, columns=["layout_id", "car_a", "car_b", "corners", "r"])
 
 
 def heat_errors(
@@ -501,7 +611,8 @@ def run_folds(
     ``folds`` has one row per fold and model (``fit``, ``low_power``,
     ``other_car``): ``kind`` (``day`` or ``layout``), ``layout_id``,
     ``date``, ``laps``, ``floor`` and the medians ``S1, S2, S3, brake_g``.
-    ``laps`` has the per-lap statistics of the fitted car, the same with
+    ``laps`` has the per-lap statistics of the fitted car with its
+    apex-speed error per corner (``apex_<k>``, :func:`score_laps`), the same with
     the suffix ``_limit`` for the fold's car braked at its limit (no
     driver's use, ``mu_y`` set again: the gate as it stood before the
     use), and its variants on the layout folds: ``S1_other`` and ``top_other`` (the
@@ -605,7 +716,7 @@ def run_folds(
             for name, driven in models.items():
                 if driven is None:
                     continue
-                scores = score_laps(driven, layout, held, v_held)
+                scores = score_laps(driven, layout, held, v_held, corners=name == "fit")
                 fold_rows.append(
                     {
                         **base,
@@ -1251,7 +1362,46 @@ def check_car_holdout(
             )
         )
 
-    # 5. Fold summaries.
+    # 5. The apex speed corner by corner.
+    by_corner = corner_table(laps, {k: Layout.of(v) for k, v in tracks.items()})
+    if len(by_corner):
+        agree = corner_agreement(by_corner)
+        worst = by_corner.reindex(by_corner["error_ms"].abs().sort_values(ascending=False).index)
+        rep.items.append(
+            GateItem(
+                "The apex speed corner by corner",
+                None,
+                "furthest: "
+                + "; ".join(
+                    f"{r.car} {r.layout_id} corner {r.corner} ({r.v_apex_ms:.0f} m/s) "
+                    f"{r.error_ms:+.2f}"
+                    for r in worst.head(5).itertuples()
+                )
+                + " m/s; between cars over a layout's corners: "
+                + (
+                    "; ".join(
+                        f"{r.layout_id} {r.car_a} / {r.car_b} r = {r.r:+.2f} ({r.corners})"
+                        for r in agree.itertuples()
+                    )
+                    if len(agree)
+                    else "no layout with two cars"
+                ),
+                "reported (issue #205: the per-corner residual table)",
+                "Held out by day: the simulated lap's lowest speed in ± "
+                f"{APEX_WINDOW_M:.0f} m of each apex less the logged lap's (`error_ms`; the "
+                "median over days of the day's median lap), with the logged one (`v_apex_ms`), "
+                "the corner's place on the lap and its radius. `S3` is the mean of these over "
+                "a lap's corners, so errors of opposite sign cancel in it and stand here. An "
+                "error that repeats between unlike cars at the same corners is the track's (its "
+                "bank, its line through the corner); one that does not is the car's or the "
+                "driver's.\n\n"
+                + md_table(by_corner, floats="{:.2f}")
+                + "\n\nThe correlation over a layout's corners of two cars' errors:\n\n"
+                + (md_table(agree, floats="{:.2f}") if len(agree) else "_none_"),
+            )
+        )
+
+    # 6. Fold summaries.
     summary = (
         folds.groupby(["car", "kind", "model"])
         .agg(
@@ -1284,7 +1434,11 @@ def check_car_holdout(
 
 __all__ = [
     "Layout",
+    "apex_errors",
     "attainment",
+    "corner_agreement",
+    "corner_frame",
+    "corner_table",
     "laps_left",
     "by_pace",
     "braking_match",
