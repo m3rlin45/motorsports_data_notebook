@@ -378,6 +378,29 @@ class TestSession:
         assert apex["lat_track_g"].median() == pytest.approx(20.0**2 / RADIUS_M / G, rel=0.05)
         assert 1.2 < apex["lat_doppler_g"].median() < 26.5**2 / RADIUS_M / G
         assert apex["lat_accel_g"].notna().all()
+        # each lap's own lateral at the nodes, row for row with its speed
+        speed, own = np.asarray(got["speed"]), np.asarray(got["lateral"])
+        assert own.shape == speed.shape == (len(got["speed_laps"]), track.n)
+        kappa = np.asarray(track.kappa_heat, float)
+        turning = np.abs(kappa) > 0.5 * np.nanmax(np.abs(kappa))
+        want = speed**2 * kappa / G  # a flat track: what the tyres hold is V²κ
+        assert np.nanmedian(np.abs(own - want)[:, turning]) < 0.05
+        assert (np.sign(own[:, turning]) == np.sign(kappa[turning])).mean() > 0.98
+
+    def test_a_lateral_row_belongs_to_its_speed_rows_lap(self, tmp_path):
+        root = _dataset(tmp_path)
+        track = smp.load_track(root, LAYOUT_ID)
+        sig = smp.session_signals(root, "2026-01-10_s0", LAYOUT_ID)
+        laps = smp.build_laps(geo.clean_lap_index(root))
+        s, _, lap_of = smp.track_position(sig, track, laps[laps["session_id"] == "2026-01-10_s0"])
+        lap_nums, v = smp.speed_on_track(sig, track, s, lap_of)
+        whole = smp.lateral_on_track(sig, track, s, lap_of, lap_nums)
+        # without one lap's lateral its row is empty and the others stay where they were
+        sig.lat_tyre = np.where(lap_of == lap_nums[1], np.nan, sig.lat_tyre_g)
+        holed = smp.lateral_on_track(sig, track, s, lap_of, lap_nums)
+        assert holed.shape == v.shape and np.isnan(holed[1]).all()
+        keep = [k for k in range(len(lap_nums)) if k != 1]
+        np.testing.assert_array_equal(holed[keep], whole[keep])
 
 
 class TestTablesAndGate:
@@ -390,6 +413,10 @@ class TestTablesAndGate:
         assert {"car", "date", "layout_id", "logger_id", "basis"} <= set(tables.throttle.columns)
         again = smp.car_tables(root, cache_dir=cache, tracks_dir=tmp_path / "tracks")
         pd.testing.assert_frame_equal(again.apex, tables.apex, check_dtype=False)
+        np.testing.assert_array_equal(again.lateral[LAYOUT_ID], tables.lateral[LAYOUT_ID])
+        own = tables.lap_laterals("car", LAYOUT_ID)
+        laps, v = tables.lap_speeds("car", LAYOUT_ID)
+        assert own is not None and own.shape == v.shape == (len(laps), v.shape[1])
         (cache / "car_tables" / "signature.txt").write_text("stale")
         rebuilt = smp.car_tables(root, cache_dir=cache, tracks_dir=tmp_path / "tracks")
         assert len(rebuilt.apex) == len(tables.apex)

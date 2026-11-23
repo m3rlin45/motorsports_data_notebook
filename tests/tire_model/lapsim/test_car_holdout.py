@@ -12,6 +12,7 @@ from motorsports_data_notebook.tire_model.lapsim import car as cm
 from motorsports_data_notebook.tire_model.lapsim import car_gate as cg
 from motorsports_data_notebook.tire_model.lapsim import car_holdout as ch
 from motorsports_data_notebook.tire_model.lapsim import solver as sv
+from motorsports_data_notebook.tire_model.lapsim import track as trk
 
 from .test_car_gate import CAR, _model, _oval_track
 from .test_holdout import SHARE
@@ -82,6 +83,117 @@ class TestLapStats:
         layout, v = self._lap()
         flat = np.full_like(v, 30.0)
         assert np.isnan(ch.lap_stats(layout, flat, flat)["S2"])
+
+
+class TestLateralHeatBySide:
+    """Gate D3 of #206: lateral heat simulated over logged, and by side."""
+
+    def _eight(self):
+        # a figure of eight: a right-hand arc and a shorter, wider left-hand one
+        ds, n_str = 2.0, 150
+        kappa = np.concatenate(
+            [np.zeros(n_str), np.full(90, 1 / 60.0), np.zeros(n_str), np.full(60, -1 / 90.0)]
+        )
+        track = replace(_oval_track(), kappa_heat=kappa, length_m=len(kappa) * ds)
+        for name in ("x_m", "y_m", "alt_m", "grade", "kappa_se", "kappa_v"):
+            setattr(track, name, np.zeros(len(kappa)))
+        track.n_laps = np.ones(len(kappa), dtype=int)
+        track.corners = trk.corner_table(kappa, ds)
+        return track
+
+    def test_the_laps_own_lateral_against_the_tracks(self):
+        track = self._eight()
+        layout = ch.Layout.of(track)
+        v = sv.simulate_lap(track, CAR, 0.95).v_node_ms
+        own = v * v * track.kappa_heat / sv.G_MS2  # the lap drove the track's line
+        same = ch.lap_stats(layout, v, v, lat_obs=own)
+        assert same["lat_heat"] == pytest.approx(0.0, abs=1e-9)
+        assert same["side"] == pytest.approx(0.0, abs=1e-9)
+        # the logged car held 10 % more in the right turns than the track's line has
+        more = np.where(track.kappa_heat > 0, 1.1, 1.0) * own
+        got = ch.lap_stats(layout, v, v, lat_obs=more)
+        assert got["side"] == pytest.approx(-np.log(1.1), abs=1e-6)
+        assert -np.log(1.1) < got["lat_heat"] < 0.0
+        # a mirrored track: the simulated lap loads the other side
+        mirrored = ch.lap_stats(layout, v, v, lat_obs=-own)
+        assert abs(mirrored["side"]) > 0.12 and mirrored["lat_heat"] == pytest.approx(0.0, abs=1e-9)
+        # which is twice the layout's own balance, so a layout with like sides hides a mirror
+        assert mirrored["side"] == pytest.approx(-2.0 * mirrored["balance"], abs=1e-9)
+        assert same["balance"] == pytest.approx(-mirrored["balance"], abs=1e-9)
+        assert "side" not in ch.lap_stats(layout, v, v)
+
+    def test_signed_cells_and_the_mirrors_reading(self):
+        laps = pd.DataFrame(
+            {
+                "car": "car",
+                "layout_id": ["a", "a", "a", "b"],
+                "date": ["d1", "d1", "d2", "d1"],
+                "lat_heat": [0.01, 0.03, -0.02, 0.0],
+                "side": [-0.02, -0.04, -0.01, 0.0],
+                "balance": [0.30, 0.32, 0.29, 0.02],
+            }
+        )
+        got = ch.side_signed(laps).set_index("layout_id")
+        assert got.loc["a", "lat_heat"] == pytest.approx(0.0)  # days 0.02 and -0.02
+        assert got.loc["a", "side"] == pytest.approx(-0.02)
+        assert got.loc["a", "mirror"] == pytest.approx(0.60) and bool(got.loc["a", "sees_mirror"])
+        assert not bool(got.loc["b", "sees_mirror"])
+
+    def test_side_heat_and_a_layout_that_turns_one_way(self):
+        v = np.full(100, 30.0)
+        lat = np.concatenate([np.full(50, 1.0), np.full(50, -0.5)])
+        right, left = ch.side_heat(v, lat, 2.0)
+        assert right == pytest.approx(15.0) and left == pytest.approx(7.5)
+        one_way = ch.moments((10.0, 0.0), (9.0, 0.0))
+        assert one_way["lat_heat"] == pytest.approx(np.log(10.0 / 9.0)) and np.isnan(
+            one_way["side"]
+        )
+
+    def test_two_logged_laps_each_with_its_own_lateral(self):
+        track = self._eight()
+        layout = ch.Layout.of(track)
+        laps = pd.DataFrame(
+            {"date": ["d1", "d1", "d2", "d2"], "lap_time_s": [60.0, 60.1, 60.05, 60.2]}
+        )
+        v = np.vstack([sv.simulate_lap(track, CAR, u).v_node_ms for u in (1.0, 0.99, 0.995, 0.98)])
+        lat = v * v * track.kappa_heat / sv.G_MS2
+        lat[2] *= np.where(track.kappa_heat > 0, 1.05, 1.0)  # a day that held more in the rights
+        yard = ch.pace_yardsticks(layout, laps, v, levels=(0.0,), lat_obs=lat)
+        assert {"lat_heat_other_day", "side_other_day", "side_same_day"} <= set(yard.columns)
+        first = yard[yard["lap"] == 0].iloc[0]
+        assert first["side_other_day"] > first["side_same_day"]
+        assert "side_other_day" not in ch.pace_yardsticks(layout, laps, v, levels=(0.0,)).columns
+
+    def test_as_cells_beside_another_days_lap(self):
+        laps = pd.DataFrame(
+            {
+                "car": "car",
+                "layout_id": "a",
+                "session_id": ["s1", "s2"],
+                "lap_num": [1, 1],
+                "lat_heat": [0.02, -0.03],
+                "side": [0.01, -0.05],
+            }
+        )
+        yard = pd.DataFrame(
+            {
+                "car": "car",
+                "layout_id": "a",
+                "session_id": ["s1", "s2"],
+                "lap_num": [1, 1],
+                "date": ["d1", "d2"],
+                "level": 90.0,
+                "lat_heat_other_day": [0.04, 0.04],
+                "lat_heat_same_day": [0.01, 0.01],
+                "side_other_day": [0.02, 0.02],
+                "side_same_day": [0.01, 0.01],
+            }
+        )
+        grid = ch.attainment(ch.by_pace(laps, yard, ch.MOMENT_MEASURES), ch.MOMENT_MEASURES)
+        cells = grid.set_index("measure")
+        assert cells.loc["lat_heat", "simulated"] == pytest.approx(0.025)  # sizes, not signs
+        assert bool(cells.loc["lat_heat", "passed"]) and not bool(cells.loc["side", "passed"])
+        assert ch.by_pace(laps.drop(columns=["side"]), yard, ch.MOMENT_MEASURES).empty
 
 
 def _stop_lap(n=600, ds=2.0, at=150, level=0.8, top=50.0, low=25.0):

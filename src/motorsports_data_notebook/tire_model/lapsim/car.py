@@ -274,6 +274,7 @@ def as_families(tables: smp.CarTables) -> smp.CarTables:
         apex=as_family(tables.apex),
         speed_laps=as_family(tables.speed_laps),
         speed=tables.speed,
+        lateral=tables.lateral,
     )
 
 
