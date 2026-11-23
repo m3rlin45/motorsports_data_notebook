@@ -3572,6 +3572,26 @@ faster than the best logged lap in every cell (thinnest the Inferno 86
 at Fuji, 0.80 %). A maximum or a 99th percentile rises as days are
 added (2–4 %) and reads the sensor; a 90th percentile reads the driver.
 
+**The owner's decisions on the committee's design (2026-11-23; #327,
+`docs/lapsim_driver_model.md`).** Seven were asked. (1) The uniform
+knob, one use of the limit the same everywhere, is accepted now; a
+direction by phase or corner is added only if the stint-level test finds
+one. (2) m = 20, with the levels at 10 and 50 reported beside it. (3) A
+dry day's level (about 2 %) is the driver's and goes into the knob; the
+air and the powertrain of the day stay the car's. (4) The drive out of a
+corner goes through the driven axle on all three cars; the committee's
+default was the Inferno 86 only, because the formula cars' reading is
+confounded, and that evidence stands as recorded. (5) The check on the
+car is the max driver against the best logged lap; the sum of the best
+segments is a diagnostic beside it. (6) A wet day's water level is
+solved from the target lap time with the driver at their typical wet
+use; there is no wetness input. (7) A target outside the logged range of
+pace is answered and flagged, not refused. Nothing of the design is
+built yet. Open and not the owner's: which curvature the limit is read
+on (the car's own path against the track's line; the gap is larger than
+the max driver's margins) and the plant of the limit's statistic, which
+comes before the first step is accepted.
+
 *What a faster lap is made of* (scratch, 2026-11-22; 1,124 dry build
 laps on 63 days; the within-day slope per 1 % of pace, that is a lap
 time 1 % shorter, ± the standard error over resampled days; one function

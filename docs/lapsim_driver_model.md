@@ -100,8 +100,31 @@ higher than has ever been attained so far".
 **What supersedes what.** This section replaces the split tabled above where they differ (the
 lateral level is now the composite limit of clause 1.1, not the apex table's 90th percentile;
 no cornering use is read as a constant, the knob is that use). Its clause 0 is the first thing
-to read: the knob it offers is narrower than the one asked for. **The design awaits the
-owner's decisions on the clauses marked [owner]; until then nothing here is built.**
+to read: the knob it offers is narrower than the one asked for. **The owner ruled on the
+clauses marked [owner] on 2026-11-23 (the table below); nothing here is built yet.**
+
+**The owner's decisions (2026-11-23).** Six follow the committee's default; the fourth does
+not.
+
+| # | decision | clause | ruling | the committee's default |
+|---|---|---|---|---|
+| 1 | The uniform knob measured from the new limit now, or today's knob until a stint-level test for a direction has been run | 0, 3.3 | **accepted now**; a direction is added only if the test of clause 3.3 finds one | accept now |
+| 2 | m: how rare a moment counts as the car's | 1.1 | **20**, with the levels at 10 and 50 reported beside it | 20 |
+| 3 | A dry day's level (about 2 %): the day's grip, or the driver's | 1.7 | **the driver's**: it goes into the knob | the driver's |
+| 4 | The driven-axle drive limit: the Inferno 86 only, or all three cars | 1.3 | **all three cars** | the Inferno 86 only |
+| 5 | "Higher than has ever been attained": than any lap, or than the sum of the best segments | 1.8 | **any lap**; the sum of the best segments stays a diagnostic | any lap |
+| 6 | A wet day's water level: solved from the target lap time, or a wetness input | 1.6 | **from the target lap time**, the driver held at their typical wet use | from the target lap time |
+| 7 | A target outside the logged range of pace: answered and flagged, or refused | 3.4 | **answered and flagged** | flagged |
+
+On the fourth: the committee's evidence on the formula cars stands as recorded (clause 1.3
+and the deciding test in section 8: their logged exit acceleration out of slow corners is as
+high as the whole car's grip allows, a reading the simulation's faster minimum confounds; the
+dynamicist withdrew "all three cars" as its own default). The term is built for all three and
+its cells are reported per car, held to clause 5.3 as the clause has it.
+
+Not the owner's to decide and still open: clause 1.9 (which curvature the level is read on;
+the gap is larger than the max driver's margins) and the plant of clause 5.4, which comes
+before step 1 is accepted.
 
 **Every number in this design is in sample**: read on the laps it describes, the car fitted on
 them, nothing held out unless a clause says so. Several rest on one car at one layout or on
@@ -159,7 +182,8 @@ split (front 0.53 on the Inferno 86, 0.42 on the formula cars: a stated input, n
 not fitted). **Built for the Inferno 86 and then held to clause 5.3** (two readings agree
 there, but it has had no heat check, no layout folds and no wrong-car test, and its convention
 was re-read on four folds of another car); not built for the formula cars until a test that is
-not confounded (rear wheel slip against the engine's ask, or a held-out run) **[owner]**. The
+not confounded (rear wheel slip against the engine's ask, or a held-out run) **[owner]**.
+*Ruled 2026-11-23: built for all three cars, against this default.* The
 static share leaves out the load moved rearwards under drive, so it understates the rear's
 grip (field reasoning).
 
