@@ -40,7 +40,8 @@ def _drive(v, i, kap, cos, kv, grd, gsb, ptab, inv_dv, mu, c, kc, g):  # type: i
     k = int(x)
     p = ptab[k] + (x - k) * (ptab[k + 1] - ptab[k])
     engine = p / v - kc * lat * lat / g
-    grip = math.sqrt(room) if room > 0.0 else 0.0
+    # the driven axle's share of what is left of the grip: the table's last entry
+    grip = ptab[ptab.shape[0] - 1] * math.sqrt(room) if room > 0.0 else 0.0
     tyre = engine if engine < grip else grip
     return tyre - c * v * v - g * grd[i]
 

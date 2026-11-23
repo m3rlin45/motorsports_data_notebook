@@ -529,6 +529,7 @@ def convene(
     bank: bool = True,
     laps: dict[str, cg.UseLaps] | None = None,
     use: dict | None = None,
+    driven_axle: bool | None = None,
 ) -> cg.Drive | None:
     """``model`` (as :func:`~.car.fit_car` returns it) as a
     :class:`~.car_gate.Drive` with its power scaled, the driver's braking
@@ -542,7 +543,8 @@ def convene(
     ``use`` (a ``driver`` as another model of the car carries it) as that
     driver brakes: the level in g at the typical use is held.
     ``bank=False`` has its laps, the reference laps among them, driven on
-    a flat road."""
+    a flat road, and ``driven_axle=False`` on the whole car's grip under
+    drive (None: the solver's default)."""
     need = (
         model.power["p_specific"],
         model.power["c_drag"],
@@ -558,6 +560,7 @@ def convene(
         gears=dict(gears or {}),
         power_scale=power_scale,
         bank=bank,
+        driven_axle=driven_axle,
     )
     left = {k: v for k, v in tracks.items() if k in set(best["layout_id"])}
     # the car's limit first: the driver's use is read as a share of it
@@ -750,6 +753,22 @@ def run_folds(
                 per_lap.insert(0, "car", car)
                 per_lap.insert(1, "kind", kind)
                 per_lap.insert(2, "layout_id", layout_id)
+                # the fold's car with the other drive rule (the whole car's grip
+                # where the default is the driven axle's share), its use read again
+                whole = convene(
+                    raw,
+                    tracks,
+                    best,
+                    air=air,
+                    shifts=shifts,
+                    gears=gears,
+                    laps=read,
+                    driven_axle=not sv.DRIVEN_AXLE_DEFAULT,
+                )
+                if whole is not None:
+                    other_drive = score_laps(whole, layout, held, v_held)
+                    for col in (*YARDSTICK_MEASURES, "u"):
+                        per_lap[f"{col}_axle"] = other_drive[col]
                 # the fold's car braked at its limit, mu_y set again
                 plain = convene(raw, tracks, best, air=air, shifts=shifts, gears=gears)
                 if plain is not None:
@@ -796,7 +815,12 @@ def run_folds(
                             per_lap[f"{col}_flat"] = on_flat[col]
                     # heat per tyre, at the lap's own time and with the pace carried
                     own_best = best_all[best_all["layout_id"] == layout_id]
-                    for who, tag in ((driven, ""), (level, "_flat"), (plain, "_limit")):
+                    for who, tag in (
+                        (driven, ""),
+                        (level, "_flat"),
+                        (plain, "_limit"),
+                        (whole, "_axle"),
+                    ):
                         if share is None or who is None:
                             continue
                         heat = heat_errors(who, layout, held, v_held, share, own_best)
@@ -1298,6 +1322,105 @@ def check_car_holdout(
                 "With the shape the laps are braked on (the driver's held one where the car "
                 "carries a braking use, else the limit's `brake_ellipse`) against the diamond."
                 "\n\n" + md_table(term, floats="{:.3f}"),
+            )
+        )
+
+    # 4c''. The driven axle: against the drive on the whole car's grip.
+    if "S1_axle" in laps.columns:
+        days = laps[laps["kind"] == "day"]
+        tally_text, change_table = "", ""
+        swap = {f"{k}_axle": k for k in YARDSTICK_MEASURES}
+        if len(days) and set(swap) <= set(days.columns):
+            cell = ["car", "layout_id", "level", "measure"]
+            here = attainment(by_pace(days, yardsticks))
+            there = attainment(
+                by_pace(
+                    days.drop(columns=list(YARDSTICK_MEASURES)).rename(columns=swap), yardsticks
+                )
+            )
+            both = here[here["scored"]].merge(
+                there[cell + ["simulated", "passed"]], on=cell, suffixes=("", "_other")
+            )
+            won = both["passed"] & ~both["passed_other"]
+            lost = ~both["passed"] & both["passed_other"]
+            per_car = (
+                both.assign(won=won, lost=lost)
+                .groupby("car", sort=False)
+                .agg(
+                    cells=("passed", "size"),
+                    passed=("passed", "sum"),
+                    other=("passed_other", "sum"),
+                    won=("won", "sum"),
+                    lost=("lost", "sum"),
+                )
+                .reset_index()
+            )
+            tally_text = (
+                f"{int(both['passed'].sum())} of {len(both)} cells with the default, "
+                f"{int(both['passed_other'].sum())} the other way: it wins {int(won.sum())} and "
+                f"loses {int(lost.sum())}; "
+            )
+            change_table = (
+                "\n\nBy car (`other`: the cells passed the other way):\n\n"
+                + md_table(per_car)
+                + "\n\nCells that change:\n\n"
+                + md_table(
+                    both[won | lost][cell + ["simulated", "simulated_other", "other_day"]].assign(
+                        change=np.where(won[won | lost], "won", "lost")
+                    ),
+                    floats="{:.3f}",
+                )
+            )
+        term = (
+            lay.groupby(["car", "layout_id"])
+            .agg(
+                laps=("S1", "count"),
+                S1_with=("S1", "median"),
+                S1_without=("S1_axle", "median"),
+                S2_with=("S2", "median"),
+                S2_without=("S2_axle", "median"),
+                S3_with=("S3", "median"),
+                S3_without=("S3_axle", "median"),
+                u_with=("u", "median"),
+                u_without=("u_axle", "median"),
+            )
+            .reset_index()
+        )
+        cells = [g for _, g in lay.groupby(["car", "layout_id"])]
+        for name, kind in (("heat", "h"), ("heat_carried", "hc")):
+            term[f"{name}_with"] = [worst_tyre(g, kind) for g in cells]
+            term[f"{name}_without"] = [worst_tyre(g, kind, "_axle") for g in cells]
+        lower = int((term["S1_with"] < term["S1_without"]).sum())
+        apex = int((term["S3_with"].abs() < term["S3_without"].abs()).sum())
+        measured = tally_text + (
+            f"leave-one-layout-out S1 is lower with the default in {lower} of {len(term)} cells "
+            f"and the apex speed nearer in {apex}"
+        )
+        if term["heat_carried_with"].notna().any():
+            measured += (
+                f"; worst-tyre heat with the pace carried "
+                f"{100 * float(term['heat_carried_with'].median()):.1f} % with the default, "
+                f"{100 * float(term['heat_carried_without'].median()):.1f} % the other way, and "
+                f"at the lap's own time {100 * float(term['heat_with'].median()):.1f} % against "
+                f"{100 * float(term['heat_without'].median()):.1f} %"
+            )
+        rep.items.append(
+            GateItem(
+                "Drive through the driven axle as a term of the default",
+                None,
+                measured,
+                "reported; it is "
+                + ("on" if sv.DRIVEN_AXLE_DEFAULT else "off")
+                + " for all three cars by the owner's decision of 2026-11-23 (issue #312; the "
+                "committee's default was the Inferno 86 only)",
+                "The grip left for drive is the driven axle's share of what the cornering "
+                "leaves (`grip.drive_share`: the rear's share of the static weight from "
+                "production's facts, 0.47 on the Inferno 86 and 0.58 on the formula cars, nothing "
+                "fitted) against the whole car's. Each way the fold's driver's use is read "
+                "again. `_with` is the default and `_without` the other rule."
+                + change_table
+                + "\n\nLeave-one-layout-out, medians over a cell's laps:\n\n"
+                + md_table(term, floats="{:.3f}"),
             )
         )
 
