@@ -36,6 +36,11 @@ Segment C (#205), the car model:
 
 Segment D (#206), the solver:
 
-- :mod:`.solver`: the quasi-steady-state lap solver and ``solve_u``, the
-  part of D1 that C's gates need.
+- :mod:`.solver`: the quasi-steady-state lap solver and ``solve_u``.
+- :mod:`.heat`: production's chain on a simulated lap (``sim_heat``).
+
+The car's limits and the driver (#312):
+
+- :mod:`.limits`: the car's cornering limit as the expected best of m
+  passes, and the best braking it has held.
 """
