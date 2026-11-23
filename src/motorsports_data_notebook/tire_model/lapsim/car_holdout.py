@@ -56,6 +56,7 @@ import pandas as pd
 
 from ...tire_etl.kinematics import G_MS2
 from ..heat_input import ShareParams
+from . import bank as bankmod
 from . import car as cm
 from . import car_gate as cg
 from . import geometry as geo
@@ -157,6 +158,63 @@ def fast_laps(lap_time_s: np.ndarray, percentile: float) -> np.ndarray:
 
 
 YARDSTICK_MEASURES = ("S1", "S2", "S3", "brake_g")
+#: Gate D3 of #206, in the same form: lap-mean lateral heat, simulated
+#: over logged, and the same for right turns less left turns (log ratios).
+MOMENT_MEASURES = ("lat_heat", "side")
+#: Measures that are signed and are compared by their size.
+SIZE_MEASURES = ("S2", "S3", *MOMENT_MEASURES)
+
+
+def side_heat(v: np.ndarray, lat_g: np.ndarray, ds: float) -> tuple[float, float]:
+    """``(right, left)``: the lap-mean of ``V·lat`` (G·m/s) over the lap's
+    time, from its speed and lateral at the track's nodes, for the
+    lateral into right turns and into left turns apart. The lateral is
+    what the tyres hold, positive in a right turn."""
+    dt = ds / np.maximum(v, 1.0)
+    lap = float(dt.sum())
+    right = float(np.sum(v * np.maximum(lat_g, 0.0) * dt) / lap)
+    left = float(np.sum(v * np.maximum(-lat_g, 0.0) * dt) / lap)
+    return right, left
+
+
+def moments(sim: tuple[float, float], obs: tuple[float, float]) -> dict:
+    """``lat_heat`` and ``side`` of :data:`MOMENT_MEASURES` from two laps'
+    :func:`side_heat`: the log of simulated over logged lateral heat, and
+    that of the right turns less that of the left turns (NaN on a layout
+    that turns one way only). Also ``balance``: the log of the logged
+    lap's right over its left. A mirrored track or a swapped sign reads a
+    ``side`` of minus twice that, so on a layout whose two sides carry
+    alike ``side`` cannot see one."""
+    total = math.log((sim[0] + sim[1]) / (obs[0] + obs[1])) if obs[0] + obs[1] > 0 else np.nan
+    if min(*sim, *obs) <= 0.0:
+        return {"lat_heat": total, "side": float("nan"), "balance": float("nan")}
+    return {
+        "lat_heat": total,
+        "side": math.log(sim[0] / obs[0]) - math.log(sim[1] / obs[1]),
+        "balance": math.log(obs[0] / obs[1]),
+    }
+
+
+#: A ``side`` this large is a sign or mirror defect (#206, gate D3).
+MIRROR_DEFECT = 0.12
+
+
+def side_signed(laps: pd.DataFrame) -> pd.DataFrame:
+    """Per car and layout, from the held-out laps of the day folds: the
+    signed ``lat_heat`` and ``side`` (the median over days of the day's
+    median lap), ``mirror`` (what a mirrored track would read as ``side``:
+    twice the size of the logged laps' ``balance``) and ``sees_mirror``
+    (that is :data:`MIRROR_DEFECT` or more)."""
+    cols = ["lat_heat", "side", "balance"]
+    if laps.empty or any(k not in laps.columns for k in cols):
+        return pd.DataFrame()
+    cell = ["car", "layout_id"]
+    days = laps.dropna(subset=["lat_heat"]).groupby(cell + ["date"], sort=False)[cols].median()
+    out = days.groupby(cell, sort=False)[cols].median()
+    out.insert(0, "days", days.groupby(cell, sort=False).size())
+    out["mirror"] = 2.0 * out.pop("balance").abs()
+    out["sees_mirror"] = out["mirror"] >= MIRROR_DEFECT
+    return out.reset_index()
 
 
 def pace_yardsticks(
@@ -164,6 +222,7 @@ def pace_yardsticks(
     laps: pd.DataFrame,
     v_obs: np.ndarray,
     levels: tuple[float, ...] = PACE_LEVELS,
+    lat_obs: np.ndarray | None = None,
 ) -> pd.DataFrame:
     """Reality against itself, at each level of pace: for every lap of a
     car at a layout (``date, lap_time_s``; ``v_obs`` its speed at the
@@ -177,7 +236,9 @@ def pace_yardsticks(
     time, from other days and from its own, of :func:`lap_stats` with the
     other lap standing where the simulated one would. ``S2`` and ``S3``
     are sizes (absolute values). NaN without a pair: at a high level a
-    layout's set may hold one day's laps only.
+    layout's set may hold one day's laps only. With ``lat_obs`` (the
+    laps' own lateral at the nodes) the :data:`MOMENT_MEASURES` have their
+    yardsticks too, each logged lap with its own lateral.
 
     Two logged laps each carry their own lap-to-lap variation, and two
     from different days two GPS position offsets where a simulated lap
@@ -187,6 +248,7 @@ def pace_yardsticks(
     t = laps["lap_time_s"].to_numpy(float)
     day = laps["date"].to_numpy()
     filled = [trk._fill_nan_periodic(np.asarray(v, float)) for v in v_obs]
+    measures = YARDSTICK_MEASURES + (MOMENT_MEASURES if lat_obs is not None else ())
     rows: list[dict] = []
     for level in levels:
         inset = fast_laps(t, level)
@@ -196,21 +258,42 @@ def pace_yardsticks(
             for tag, pool in (("other_day", day != day[i]), ("same_day", day == day[i])):
                 pick = np.flatnonzero(others & pool)
                 pick = pick[np.argsort(np.abs(t[pick] - t[i]))][: cg.FLOOR_PAIRS_PER_LAP]
-                stats = [lap_stats(layout, filled[j], filled[i]) for j in pick]
-                for k in YARDSTICK_MEASURES:
-                    vals = [abs(st[k]) for st in stats if np.isfinite(st[k])]
+                stats = [
+                    lap_stats(
+                        layout,
+                        filled[j],
+                        filled[i],
+                        lat_obs=None if lat_obs is None else lat_obs[i],
+                        lat_sim=None if lat_obs is None else lat_obs[j],
+                    )
+                    for j in pick
+                ]
+                for k in measures:
+                    vals = [abs(st[k]) for st in stats if np.isfinite(st.get(k, np.nan))]
                     row[f"{k}_{tag}"] = float(np.median(vals)) if vals else float("nan")
             rows.append(row)
-    cols = ["lap", "level"] + [
-        f"{k}_{tag}" for tag in ("other_day", "same_day") for k in YARDSTICK_MEASURES
-    ]
+    cols = ["lap", "level"] + [f"{k}_{tag}" for tag in ("other_day", "same_day") for k in measures]
     return pd.DataFrame(rows, columns=cols)
 
 
-def lap_stats(layout: Layout, v_sim: np.ndarray, v_obs: np.ndarray) -> dict:
+def lap_stats(
+    layout: Layout,
+    v_sim: np.ndarray,
+    v_obs: np.ndarray,
+    *,
+    lat_obs: np.ndarray | None = None,
+    lat_sim: np.ndarray | None = None,
+) -> dict:
     """``S1, S2, S3`` and ``brake_g`` of one lap (module docstring) and
     ``top``: the RMS difference over the nodes where the logged lap is in
-    its own top quarter of speed."""
+    its own top quarter of speed.
+
+    With ``lat_obs``, the logged lap's own lateral at the nodes (what its
+    tyres held), also :data:`MOMENT_MEASURES`: the simulated lap's
+    lateral heat over the logged lap's, and that by side. The simulated
+    lap's lateral is what the tyres hold on the track's curvature and
+    bank at its speed, unless ``lat_sim`` gives it (another logged lap
+    standing where the simulated one would)."""
     ds = layout.track.ds_m
     ok = np.isfinite(v_obs)
     out = {"S1": cg._rms((v_sim - v_obs)[ok]), "S2": np.nan, "S3": np.nan}
@@ -231,6 +314,20 @@ def lap_stats(layout: Layout, v_sim: np.ndarray, v_obs: np.ndarray) -> dict:
         tops.append(float(np.max(v_sim[nodes]) - np.nanmax(obs)))
     if tops:
         out["S2"] = float(np.mean(tops))
+    if lat_obs is not None and np.isfinite(lat_obs).any():
+        track = layout.track
+        held = lat_sim
+        if held is None:
+            banked = len(track.bank) == track.n
+            held = bankmod.tyre_lateral_g(
+                np.nan_to_num(np.asarray(track.kappa_heat, float)),
+                v_sim,
+                np.nan_to_num(np.asarray(track.bank, float)) if banked else None,
+            )
+        logged_v = trk._fill_nan_periodic(np.asarray(v_obs, float))
+        logged_lat = trk._fill_nan_periodic(np.asarray(lat_obs, float))
+        other_lat = trk._fill_nan_periodic(np.asarray(held, float))
+        out.update(moments(side_heat(v_sim, other_lat, ds), side_heat(logged_v, logged_lat, ds)))
     return out
 
 
@@ -273,7 +370,13 @@ def corner_frame(layout: Layout) -> pd.DataFrame:
 
 
 def score_laps(
-    who: cg.Who, layout: Layout, laps: pd.DataFrame, v_obs: np.ndarray, *, corners: bool = False
+    who: cg.Who,
+    layout: Layout,
+    laps: pd.DataFrame,
+    v_obs: np.ndarray,
+    *,
+    corners: bool = False,
+    lat_obs: np.ndarray | None = None,
 ) -> pd.DataFrame:
     """:func:`lap_stats` of every lap of ``laps`` (``session_id, lap_num,
     lap_time_s``; ``v_obs`` its speed at the nodes) simulated at its own
@@ -305,7 +408,14 @@ def score_laps(
             "top": np.nan,
         }
         if got.ok[i]:
-            row.update(lap_stats(layout, got.v_node_ms[i], v_obs[i]))
+            row.update(
+                lap_stats(
+                    layout,
+                    got.v_node_ms[i],
+                    v_obs[i],
+                    lat_obs=None if lat_obs is None else lat_obs[i],
+                )
+            )
             if corners and layout.apex_nodes:
                 err, low = apex_errors(layout, got.v_node_ms[i], v_obs[i])
                 for k in range(len(err)):
@@ -459,6 +569,7 @@ def car_only(tables: smp.CarTables, car: str) -> smp.CarTables:
         apex=_own(tables.apex),
         speed_laps=_own(tables.speed_laps),
         speed=tables.speed,
+        lateral=tables.lateral,
     )
 
 
@@ -482,6 +593,7 @@ def without(tables: smp.CarTables, layout_id: str, date: str | None = None) -> s
         apex=_keep(tables.apex),
         speed_laps=tables.speed_laps,
         speed=tables.speed,
+        lateral=tables.lateral,
     )
 
 
@@ -669,12 +781,13 @@ def run_folds(
     yard_rows: list[pd.DataFrame] = []
     for layout_id, layout in layouts.items():
         cell, v_cell = own.lap_speeds(car, layout_id)
+        lat_cell = own.lap_laterals(car, layout_id)
         if cell.empty:
             continue
         keys = pd.MultiIndex.from_frame(cell[["session_id", "lap_num"]])
         cell = cell.assign(lap_time_s=lap_time.reindex(keys).to_numpy())
         cell_floor = cg.day_floor(cell, v_cell)["floor"]
-        yard = pace_yardsticks(layout, cell, v_cell)
+        yard = pace_yardsticks(layout, cell, v_cell, lat_obs=lat_cell)
         keyed = cell.iloc[yard["lap"].to_numpy()][["session_id", "lap_num", "date"]]
         yard = pd.concat([keyed.reset_index(drop=True), yard.drop(columns="lap")], axis=1)
         yard.insert(0, "car", car)
@@ -688,6 +801,7 @@ def run_folds(
             held_mask = (cell["date"] == date).to_numpy() if date else np.ones(len(cell), bool)
             held = cell[held_mask].reset_index(drop=True)
             v_held = v_cell[held_mask]
+            lat_held = None if lat_cell is None else lat_cell[held_mask]
             if len(held) < MIN_FOLD_LAPS:
                 continue
             best = best_all[
@@ -733,7 +847,14 @@ def run_folds(
             for name, driven in models.items():
                 if driven is None:
                     continue
-                scores = score_laps(driven, layout, held, v_held, corners=name == "fit")
+                scores = score_laps(
+                    driven,
+                    layout,
+                    held,
+                    v_held,
+                    corners=name == "fit",
+                    lat_obs=lat_held if name == "fit" else None,
+                )
                 fold_rows.append(
                     {
                         **base,
@@ -840,20 +961,25 @@ def run_folds(
     return folds, laps, yardsticks
 
 
-def by_pace(laps: pd.DataFrame, yardsticks: pd.DataFrame) -> pd.DataFrame:
+def by_pace(
+    laps: pd.DataFrame,
+    yardsticks: pd.DataFrame,
+    measures: tuple[str, ...] = YARDSTICK_MEASURES,
+) -> pd.DataFrame:
     """The measures per car, layout and level of pace: held-out laps
     (``laps`` of :func:`run_folds`) joined to their yardsticks, as the
     median over days of the day's median lap. Columns: ``car, layout_id,
-    level, laps, days``, then per measure of :data:`YARDSTICK_MEASURES`
-    the simulated lap's (``S2`` and ``S3`` as sizes),
-    ``<measure>_other_day`` and ``<measure>_same_day``."""
-    if laps.empty or yardsticks.empty:
+    level, laps, days``, then per measure of ``measures`` the simulated
+    lap's (:data:`SIZE_MEASURES` as sizes), ``<measure>_other_day`` and
+    ``<measure>_same_day``."""
+    if laps.empty or yardsticks.empty or any(k not in laps.columns for k in measures):
         return pd.DataFrame()
     keys = ["car", "layout_id", "session_id", "lap_num"]
-    sim = laps[keys + list(YARDSTICK_MEASURES)].copy()
-    sim[["S2", "S3"]] = sim[["S2", "S3"]].abs()
+    sim = laps[keys + list(measures)].copy()
+    sized = [k for k in measures if k in SIZE_MEASURES]
+    sim[sized] = sim[sized].abs()
     both = yardsticks.merge(sim, on=keys, how="inner")
-    cols = [f"{k}{tag}" for k in YARDSTICK_MEASURES for tag in ("", "_other_day", "_same_day")]
+    cols = [f"{k}{tag}" for k in measures for tag in ("", "_other_day", "_same_day")]
     cell = ["car", "layout_id", "level"]
     days = both.groupby(cell + ["date"], sort=False)[cols].median()
     out = days.groupby(cell, sort=False)[cols].median()
@@ -868,10 +994,12 @@ MEASURE_NAMES = {
     "S2": "end of straights (m/s)",
     "S3": "apex (m/s)",
     "brake_g": "braking (g)",
+    "lat_heat": "lateral heat (log ratio)",
+    "side": "lateral heat, right less left (log ratio)",
 }
 
 
-def attainment(pace: pd.DataFrame) -> pd.DataFrame:
+def attainment(pace: pd.DataFrame, measures: tuple[str, ...] = YARDSTICK_MEASURES) -> pd.DataFrame:
     """The gate as a score (owner, 2026-11-21: not a hard pass or fail;
     the goal is to raise the number of passes). One row per car, layout,
     level of pace and measure (:func:`by_pace`): ``simulated``,
@@ -881,7 +1009,7 @@ def attainment(pace: pd.DataFrame) -> pd.DataFrame:
     logged lap than a logged lap of another day is."""
     rows = []
     for r in pace.to_dict("records"):
-        for k in YARDSTICK_MEASURES:
+        for k in measures:
             sim, other = float(r[k]), float(r[f"{k}_other_day"])
             scored = bool(np.isfinite(sim) and np.isfinite(other))
             rows.append(
@@ -1087,6 +1215,73 @@ def check_car_holdout(
     # 2. Against the logged lap, at three levels of pace: the gate's score.
     day_laps = laps[laps["kind"] == "day"]
     pace = by_pace(day_laps, yardsticks)
+
+    # Gate D3 of #206: lateral heat by side, in this gate's form.
+    by_side = by_pace(day_laps, yardsticks, MOMENT_MEASURES)
+    if len(by_side):
+        sides = attainment(by_side, MOMENT_MEASURES)
+        sides["level"] = [f"P{lv:g}" for lv in sides["level"]]
+        side_cells = sides[sides["scored"]]
+        side_tally = "; ".join(
+            f"{MEASURE_NAMES[str(k)]} {int(g['passed'].sum())} of {len(g)}"
+            for k, g in side_cells.groupby("measure", sort=False)
+        )
+        worst = side_cells.loc[side_cells["simulated"].idxmax()] if len(side_cells) else None
+        signed = side_signed(day_laps)
+        blind = signed[~signed["sees_mirror"]] if len(signed) else signed
+        blind_note = (
+            "; a mirrored track would read under "
+            f"{MIRROR_DEFECT:g} by side, and so not be seen, at "
+            + ", ".join(
+                f"{r['car']} {r['layout_id']} ({r['mirror']:.2f})" for r in blind.to_dict("records")
+            )
+            if len(blind)
+            else "; a mirrored track would read "
+            f"{signed['mirror'].min():.2f} or more by side at every layout"
+        )
+        rep.items.append(
+            GateItem(
+                "Lateral heat by side (gate D3 of #206)",
+                None,
+                f"{int(side_cells['passed'].sum())} of {len(side_cells)} cells; {side_tally}"
+                + (
+                    f"; furthest {worst['car']} at {worst['layout_id']} {worst['level']} "
+                    f"{worst['measure']} {worst['simulated']:.3f} (another day's lap "
+                    f"{worst['other_day']:.3f})"
+                    if worst is not None
+                    else ""
+                )
+                + blind_note,
+                "a score, in gate C3's form (owner, 2026-11-23): the simulated lap's lateral heat "
+                "is no further from the logged lap's than a logged lap of another day is; not "
+                "counted in the attainment above",
+                "`lat_heat`: the log of the simulated lap's lap-mean `V·|lat|` over the logged "
+                "lap's; `side`: the same for right turns less left turns. The simulated lap's "
+                "lateral is what the tyres hold on the track's curvature and bank at its speed; "
+                "the logged lap's is its own (the Doppler lateral on the road's bank, at the "
+                "track's nodes), so a wrong sign, a mirrored track or a curvature that is wrong on "
+                "one side shows here where a comparison on the track's curvature on both sides "
+                "would not. Held out by day, the median over days of the day's median lap, sizes "
+                "compared; `other_day` and `same_day` are the same two measures between two "
+                "logged laps, each with its own lateral. A `side` of 0.12 or more is a sign or "
+                "mirror defect; between 0.06 and 0.12 it points at the track's curvature by side "
+                "(#206).\n\n**Signed, and what a mirror would read.** Every held-out lap of "
+                "the day folds: `lat_heat` and `side` with their signs (above zero: the simulated "
+                "lap has more lateral heat; more of it in the right turns), and `mirror`: the "
+                "`side` a mirrored track or a swapped sign would read at this layout, twice the "
+                "log of the logged laps' right over left. Where the two sides of a layout carry "
+                "alike, `side` cannot see a mirror.\n\n"
+                + md_table(signed, floats="{:.3f}")
+                + "\n\n**By level of pace.**\n\n"
+                + md_table(
+                    sides[
+                        ["car", "layout_id", "level", "measure", "laps", "days", "simulated"]
+                        + ["other_day", "same_day", "scored", "passed"]
+                    ],
+                    floats="{:.3f}",
+                ),
+            )
+        )
     use_note = ""
     if len(pace):
         grid = attainment(pace)

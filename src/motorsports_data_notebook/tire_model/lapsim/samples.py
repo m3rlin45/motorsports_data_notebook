@@ -63,7 +63,7 @@ from .gates import GateItem, GateReport, md_table
 
 logger = logging.getLogger(__name__)
 
-TABLES_VERSION = 7
+TABLES_VERSION = 8
 TABLE_NAMES = ("sessions", "throttle", "coast", "brake", "apex")
 #: Cars the programme fits a model for; the others get tables where their
 #: channels allow and are listed.
@@ -692,6 +692,25 @@ def speed_on_track(
     return laps, (np.vstack(rows).astype(np.float32) if rows else np.zeros(shape, np.float32))
 
 
+def lateral_on_track(
+    sig: Signals, track: trk.TrackModel, s: np.ndarray, lap_of: np.ndarray, lap_nums: list[int]
+) -> np.ndarray:
+    """The own lateral of the laps ``lap_nums`` (those of
+    :func:`speed_on_track`, row for row) at the track's nodes (laps ×
+    nodes, g, positive in a right turn): what the tyres held
+    (``lat_tyre_g``, the lap's Doppler lateral on the road's bank), linear
+    in distance between its fixes; NaN for a lap with fewer than 50 fixes
+    that have one."""
+    out = np.full((len(lap_nums), track.n), np.nan, dtype=np.float32)
+    lat = sig.lat_tyre_g
+    usable = np.isfinite(s) & np.isfinite(sig.geom.speed) & np.isfinite(lat)
+    for row, lap_num in enumerate(lap_nums):
+        ok = usable & (lap_of == lap_num)
+        if ok.sum() >= 50:
+            out[row] = np.interp(track.s_m, s[ok], lat[ok], period=track.length_m)
+    return out
+
+
 def session_tables(
     root: Path,
     session_id: str,
@@ -722,6 +741,7 @@ def session_tables(
         tbl.insert(0, "session_id", session_id)
         tbl.insert(1, "basis", tbl["lap_num"].map(basis).astype(object))
     out["speed"] = v_grid  # type: ignore[assignment]
+    out["lateral"] = lateral_on_track(sig, track, s, lap_of, lap_nums)  # type: ignore[assignment]
     info = dict(sig.info)
     info["n_laps"] = int(len(np.unique(lap_of[lap_of >= 0])))
     out["sessions"] = pd.DataFrame([info])
@@ -747,6 +767,9 @@ class CarTables:
     speed_laps: pd.DataFrame = field(default_factory=pd.DataFrame)
     #: ``layout_id -> (laps × nodes)`` speed at the layout's track nodes.
     speed: dict[str, np.ndarray] = field(default_factory=dict)
+    #: The same laps' own lateral there, as the tyres held it (g, positive
+    #: in a right turn; version 8 on).
+    lateral: dict[str, np.ndarray] = field(default_factory=dict)
 
     def save(self, out_dir: Path, signature: str = "") -> None:
         out_dir = Path(out_dir)
@@ -755,6 +778,8 @@ class CarTables:
             getattr(self, name).to_parquet(out_dir / f"{name}.parquet", index=False)
         for layout, v in self.speed.items():
             np.save(out_dir / f"speed_{layout}.npy", v)
+        for layout, lat in self.lateral.items():
+            np.save(out_dir / f"lateral_{layout}.npy", lat)
         (out_dir / "signature.txt").write_text(signature)
 
     @classmethod
@@ -763,7 +788,10 @@ class CarTables:
         tables = {n: pd.read_parquet(out_dir / f"{n}.parquet") for n in TABLE_NAMES}
         laps = pd.read_parquet(out_dir / "speed_laps.parquet")
         speed = {f.stem[len("speed_") :]: np.load(f) for f in sorted(out_dir.glob("speed_*.npy"))}
-        return cls(**tables, speed_laps=laps, speed=speed)
+        lateral = {
+            f.stem[len("lateral_") :]: np.load(f) for f in sorted(out_dir.glob("lateral_*.npy"))
+        }
+        return cls(**tables, speed_laps=laps, speed=speed, lateral=lateral)
 
     def lap_speeds(
         self, car: str, layout_id: str, basis: str = "dry"
@@ -777,6 +805,17 @@ class CarTables:
             (laps["car"] == car) & (laps["layout_id"] == layout_id) & (laps["basis"] == basis)
         ]
         return own.reset_index(drop=True), self.speed[layout_id][own["row"].to_numpy()]
+
+    def lap_laterals(self, car: str, layout_id: str, basis: str = "dry") -> np.ndarray | None:
+        """The own lateral of the laps :meth:`lap_speeds` gives, in its
+        order (laps × nodes); None where the tables hold none."""
+        laps = self.speed_laps
+        if laps.empty or layout_id not in self.lateral:
+            return None
+        own = laps[
+            (laps["car"] == car) & (laps["layout_id"] == layout_id) & (laps["basis"] == basis)
+        ]
+        return np.asarray(self.lateral[layout_id][own["row"].to_numpy()])
 
 
 def build_laps(index: pd.DataFrame) -> pd.DataFrame:
@@ -836,6 +875,7 @@ def car_tables(
     clean = index[index["clean"]]
     parts: dict[str, list[pd.DataFrame]] = {name: [] for name in TABLE_NAMES + ("speed_laps",)}
     speed: dict[str, list[np.ndarray]] = {}
+    lateral: dict[str, list[np.ndarray]] = {}
     for sid, grp in rows.groupby("session_id", sort=True):
         first = grp.iloc[0]
         try:
@@ -854,6 +894,10 @@ def car_tables(
         layout = str(first["layout_id"])
         traces = speed.setdefault(layout, [])
         v_grid = got.pop("speed")
+        own_lat = np.asarray(got.pop("lateral"))
+        if own_lat.shape != np.asarray(v_grid).shape:
+            raise ValueError(f"{sid}: the lateral traces are not the speed traces' laps")
+        lateral.setdefault(layout, []).append(own_lat)
         got["speed_laps"]["row"] = sum(len(v) for v in traces) + np.arange(len(v_grid))
         traces.append(np.asarray(v_grid))
         for name, tbl in got.items():
@@ -866,6 +910,7 @@ def car_tables(
             for name, frames in parts.items()
         },
         speed={k: np.vstack(v) for k, v in speed.items() if v},
+        lateral={k: np.vstack(v) for k, v in lateral.items() if v},
     )
     if store is not None:
         tables.save(store, sig)

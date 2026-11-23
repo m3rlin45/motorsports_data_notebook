@@ -4490,8 +4490,71 @@ holds only if the table is made by the chain the observed side is read
 by. The rule for #206's table and #207's comparison is therefore one
 chain on both sides, whichever it is; the two are not interchangeable.
 
-**Still #206's**: the pace table and `outside_support`, lateral heat by
-side (D3) and the wet (D2).
+**Gate D3, lateral heat by side (2026-11-24; gate C3's report,
+`car_holdout.MOMENT_MEASURES`).** In gate C3's form by the owner's
+decision of 2026-11-23, and on gate C3's own folds: two more measures
+per held-out lap, each with a logged lap of another day beside it, at
+P75, P90 and P95 of pace; they are not counted in the 76 cells.
+`lat_heat` is the log of the simulated lap's lap-mean `V·|lat|` over the
+logged lap's, and `side` the same for right turns less left turns. The
+simulated lap's lateral is what the tyres hold on the track's curvature
+and bank at its speed; the logged lap's is **its own**, the Doppler
+lateral on the road's bank at the track's nodes, which the tables keep
+since version 8 (`CarTables.lateral`). So a wrong sign, a mirrored
+track or a curvature wrong on one side shows here, where gate C3's heat
+(the track's curvature on both sides) could not show it.
+
+| | cells no further than another day's lap | simulated, range over the scored cells | another day's lap |
+|---|---|---|---|
+| lateral heat | 10 of 19 | 0.006–0.032 | 0.007–0.028 |
+| right less left | 12 of 19 | 0.013–0.043 | 0.006–0.065 |
+
+22 of 38. With their signs, over every held-out lap of the day folds
+(the median over days of the day's median lap), and what a mirrored
+track or a swapped sign would read by side at the layout (twice the log
+of the logged laps' right over left):
+
+| car | layout | days | lateral heat | right less left | a mirror would read |
+|---|---|---|---|---|---|
+| Inferno 86 | Fuji | 10 | +0.003 | 0.000 | 1.27 |
+| Inferno 86 | Motegi | 2 | −0.040 | −0.029 | 0.69 |
+| Inferno 86 | Sodegaura | 16 | −0.007 | −0.015 | 1.20 |
+| Inferno 86 | Tsukuba | 3 | −0.005 | −0.028 | 1.70 |
+| KK-SII | Suzuka | 7 | −0.016 | −0.023 | 0.15 |
+| KK-SII | Tsukuba | 12 | −0.012 | −0.033 | 1.62 |
+| KK-F | Fuji | 2 | −0.014 | +0.014 | 1.29 |
+| KK-F | Suzuka | 2 | −0.014 | −0.012 | 0.17 |
+| KK-F | Tsukuba | 9 | −0.016 | −0.021 | 1.64 |
+
+- **No sign or mirror defect**, and the clause can see one at four of
+  the five layouts: a mirror would read 0.7 to 1.7 by side there against
+  the 0.043 at most that is read. **At Suzuka it is nearly blind**: the
+  figure of eight loads its two sides alike, so a mirror would read 0.15
+  to 0.17, hardly over the 0.12 that counts as a defect. Suzuka's sign
+  rests on the track's other checks (B2's corner drawings and by-side
+  curvature), not on this one. `lat_heat` does not move under a mirror at
+  all.
+- **The simulated lap has 0.5 to 1.6 % less lateral heat than the logged
+  lap** in eight of nine cells (4 % less on the Inferno 86's two days at
+  Motegi), where two logged laps of different days differ by 0.7 to
+  2.8 %: a small bias of one sign, inside the yardstick at the cars'
+  larger cells and not a defect by the rule of #206.
+- **Tsukuba leans the same way on all three cars**: the right turns
+  carry 2.1 to 3.3 % less of the simulated heat than of the logged
+  (−0.028, −0.033, −0.021). Three cars agreeing is the track and not a
+  car: its curvature by side, the direction B2 checked at the laps' own
+  speed (within 0.013 on 15 of 16 rows). Under the 0.06 at which #206
+  sends one to the per-corner table; recorded as the track's.
+- By the fixed limits this gate was first written with (0.03 on the
+  lateral heat, ± 0.06 by side) every scored cell but one would be
+  inside (the Inferno 86 at Motegi, 0.032 on four laps of two days).
+
+The lateral traces are the speed traces' laps row for row (built from
+the same lap list, shapes checked at the build), and gates C2 and C3
+are unchanged line for line by the tables' new version.
+
+**Still #206's**: the pace table and `outside_support`, and the wet
+(D2).
 
 **Batches, and speed.** The solver works on a batch of laps of one
 track, each with its own car and its own u (`solver.solve_laps`,
