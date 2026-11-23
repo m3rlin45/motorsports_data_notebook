@@ -806,7 +806,8 @@ def signals_from_sim(
     step = np.clip(np.searchsorted(t_node, np.mod(t, lap), side="right") - 1, 0, n - 1)
     tyre = sim.long_tyre_g[step] * G_MS2
     engine = car.power_at(sim.v_ms[step]) / sim.v_ms[step]
-    engine = engine - car.k_corner_drag * sim.lat_g[step] ** 2 * G_MS2
+    held = sim.lat_g if sim.lat_tyre_g is None else sim.lat_tyre_g  # as the solver costs it
+    engine = engine - car.k_corner_drag * held[step] ** 2 * G_MS2
     full = tyre >= SIM_FULL_SHARE * engine
     brake = np.maximum(-sim.long_tyre_g[step], 0.0)
     nan = np.full(len(t), np.nan)
@@ -920,6 +921,9 @@ def recover(car: sv.SolverCar, tracks: dict[str, trk.TrackModel]) -> dict:
         ]
         gear_ratio = float(np.max(np.abs(off))) if off else float("nan")
         shift = float(spec["shift_rpm"]) if spec["shift_rpm"] is not None else float("nan")
+    zones = tables.brake[tables.brake["basis"] == "dry"]
+    if cm.TYRES_FRAME_READS and "lat_peak_tyre_g" in zones.columns:
+        zones = zones.assign(lat_peak_g=zones["lat_peak_tyre_g"])  # as the fit reads them
     return {
         "p_ratio": p_ratio,
         "c_ratio": float(c) / car.c_drag if c is not None and car.c_drag > 0 else float("nan"),
@@ -930,10 +934,15 @@ def recover(car: sv.SolverCar, tracks: dict[str, trk.TrackModel]) -> dict:
         "k_true": car.k_corner_drag,
         "brake_ellipse": _rounded(
             cm.braking_shape(
-                tables.brake[tables.brake["basis"] == "dry"],
+                zones,
                 float(c) if c is not None else float("nan"),
                 float(model.grip["mu_b"] or float("nan")),
-                float(model.meta.get("mu_y_apex_table") or model.grip["mu_y"] or float("nan")),
+                float(
+                    model.meta.get("lat_level_braking")
+                    or model.meta.get("mu_y_apex_table")
+                    or model.grip["mu_y"]
+                    or float("nan")
+                ),
                 min_zones=RECOVERY_BAND_MIN_ZONES,
             )["brake_ellipse"],
             3,

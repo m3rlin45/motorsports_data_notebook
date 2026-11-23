@@ -4172,9 +4172,30 @@ unseen layout; it has not the day-resampled gain, the blur placebo or
 the planted wrong cars' distance, and it is on by the owner's decision,
 not by that test.
 
+**Stage 9, the fit reads its laterals in the tyres' frame**
+(`car.TYRES_FRAME_READS`). The cost of cornering at full throttle, the
+choice of the stops braked in a straight line and the braking limit's
+shape are read from the tables' `*_tyre_g` columns, and the lateral
+level the braking is set against is the apex table's in the same frame
+(`meta.lat_level_braking`). The solver applies all three to what the
+tyres hold, so that is the frame they are fitted in now.
+
+| | Inferno 86 | KK-SII | KK-F |
+|---|---|---|---|
+| `k_corner_drag`, /g | 0.047 → 0.050 | 0.032 → 0.034 | 0.025 → 0.027 |
+| `brake_ellipse` (the limit's shape) | 0.69 → 0.71 | 0.52 → 0.45 | 0.63 → 0.62 |
+| `mu_b` | 0.954 → 0.953 | 1.212 → 1.210 | 1.246 → 1.246 |
+| the lateral level the braking is read against | 1.339 → 1.293 | 1.668 → 1.622 | 1.698 → 1.645 |
+
+Gate C3: 60 of 76 against stage 7's 59 (one cell won, the KK-SII's apex
+speed at Suzuka at P75; none lost), worst-tyre heat 2.6 % carried and
+1.9 % at the lap's own time, unchanged; recovery on simulated laps
+passes as before. A change of one cell is nothing by the count; it is
+kept because it is the frame the solver uses, and it costs nothing.
+
 **What is left of issue #312**: the braking limit as the best of m
-stops from the held columns of stage 1 (stage 8), and `k_corner_drag`
-and the braking shape read in the tyres' frame (stage 9).
+stops (stage 8), which is built as a reading and not put into `mu_b`
+(below).
 
 #### D1 (in part). The lap solver (`solver.py`, 2026-11-15)
 

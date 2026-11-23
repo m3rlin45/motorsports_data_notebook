@@ -199,6 +199,12 @@ BRAKE_STRAIGHT_MIN_ZONES = 30
 BRAKE_BANDS = (0.3, 0.9)
 BRAKE_BAND_WIDTH = 0.1
 BRAKE_BAND_MIN_ZONES = 15
+#: Whether the fit reads its laterals in the tyres' frame (the tables'
+#: ``*_tyre_g`` columns, version 5 on) where a table has them: the cost of
+#: cornering at full throttle, the stops braked in a straight line and the
+#: braking limit's shape. The solver applies all three to what the tyres
+#: hold, so that is the frame they belong in (issue #312, stage 9).
+TYRES_FRAME_READS = True
 
 
 def drive_share(car: str) -> float | None:
@@ -1242,7 +1248,12 @@ def fit_car(
         return tbl[m]
 
     own_throttle = _own(fam.throttle)
-    throttle = with_gears(with_air(_only(own_throttle, slice(None), *_FIT_COLS), air))
+    tyres = TYRES_FRAME_READS
+    throttle = _only(own_throttle, slice(None), *_FIT_COLS)
+    if tyres and "lat_tyre_g" in own_throttle.columns and "lat_g" in throttle.columns:
+        # what the tyres hold on the road's bank, not the ground-frame lateral
+        throttle = throttle.assign(lat_g=own_throttle["lat_tyre_g"].to_numpy())
+    throttle = with_gears(with_air(throttle, air))
     if "engine" not in throttle.columns:
         throttle["engine"] = DEFAULT_ENGINE
     names = _engine_names(car, throttle)
@@ -1405,8 +1416,21 @@ def fit_car(
     # the lateral level the braking is read against is the apex table's:
     # mu_b from the zones braked in a straight line by it, and the limit's
     # shape from the others against the two, each at its 90th percentile
-    braking = braking_level(_own(fam.brake), c, mu_y)
-    shape = braking_shape(_own(fam.brake), c, braking["mu_b"], mu_y)
+    own_brake, lat_level = _own(fam.brake), mu_y
+    own_apex = _own(fam.apex, None)
+    if tyres and "lat_peak_tyre_g" in own_brake.columns and "lat_tyre_g" in own_apex.columns:
+        # the same reading in the tyres' frame: the zones' laterals and the
+        # level they are set against, both as the tyres hold them
+        own_brake = own_brake.assign(lat_peak_g=own_brake["lat_peak_tyre_g"])
+        in_frame = smp.lateral_level(
+            smp.apex_summary(own_apex.assign(lat_doppler_g=own_apex["lat_tyre_g"]))
+        )
+        in_frame = in_frame[in_frame["basis"] == "dry"]
+        voted = in_frame[in_frame["days"] >= MIN_VOTE_DAYS]
+        if len(in_frame):
+            lat_level = float((voted if len(voted) else in_frame)["level_g"].median())
+    braking = braking_level(own_brake, c, lat_level)
+    shape = braking_shape(own_brake, c, braking["mu_b"], lat_level)
     # the car's cornering limit: the best it has been shown to do (#312)
     limit = lim.car_limit(_own(fam.apex, None))
     braking["shape"] = shape
@@ -1471,6 +1495,7 @@ def fit_car(
             "mu_y_source": "apex table; provisional until the solver sets it (median ref_u = 1)",
             "c_drag_source": drag["source"],
             "limit": limit.to_json(),
+            "lat_level_braking": _round(lat_level, 4),
             "air": "standard (SAE J1349: 99 kPa dry, 25 C)",
             "fitted_from": {
                 "raw_cars": sorted(throttle["raw_car"].unique()) if len(throttle) else [],
