@@ -284,6 +284,7 @@ def score_laps(
     speed there)."""
     drive = cg.as_drive(who)
     profile = cg.profile_of(drive, layout.track)
+    typical = cg.typical_use(drive)
     recs = cg._records(laps)
     got = sv.solve_laps(
         profile,
@@ -293,7 +294,9 @@ def score_laps(
     rows = []
     for i in range(len(recs)):
         row = {
-            "u": float(got.u[i]),
+            # the pace against the car's typical use, and the use itself
+            "u": float(got.u[i]) / typical,
+            "use": float(got.u[i]),
             "S1": np.nan,
             "S2": np.nan,
             "S3": np.nan,
@@ -404,7 +407,9 @@ def heat_errors(
     got = sv.solve_laps(profile, cars, [float(rec["lap_time_s"]) for rec in recs])
     ref = cg.reference_u(drive, {track.layout_key: track}, best).get(track.layout_key, {})
     u_ref = float(ref.get("u_ref", float("nan")))
-    carried = sv.drive_laps(profile, cars, np.where(got.ok, got.u / u_ref, 1.0))
+    # the lap's pace against its layout's reference, at the car's typical use
+    typical = cg.typical_use(drive)
+    carried = sv.drive_laps(profile, cars, np.where(got.ok, got.u / u_ref * typical, typical))
     out = np.full((len(recs), 2 * len(ho.CORNERS)), np.nan)
     for i in range(len(recs)):
         if not got.ok[i]:
@@ -527,11 +532,14 @@ def convene(
     """``model`` (as :func:`~.car.fit_car` returns it) as a
     :class:`~.car_gate.Drive` with its power scaled, the driver's braking
     use read from ``laps`` (:func:`~.car_gate.set_use`) and ``mu_y`` then
-    set by the convention on ``best``; None when the model lacks power,
+    at the car's cornering limit, with the car's typical use of it read
+    on ``best`` (:func:`~.car_gate.set_limit`; the convention for a model
+    without a limit); None when the model lacks power,
     drag or braking, or no reference lap is left. Without ``laps`` the
-    laps are braked at the car's limit, or with ``use`` (a ``driver`` as
-    another model of the car carries it, read under its convention) as
-    that driver brakes: the level in g at the reference pace is held.
+    laps are braked at the car's limit at its typical use (``mu_b`` at
+    the reference pace, the knob moving it like the rest), or with
+    ``use`` (a ``driver`` as another model of the car carries it) as that
+    driver brakes: the level in g at the typical use is held.
     ``bank=False`` has its laps, the reference laps among them, driven on
     a flat road."""
     need = (
@@ -553,10 +561,13 @@ def convene(
     left = {k: v for k, v in tracks.items() if k in set(best["layout_id"])}
     if laps:
         drive = drive.but(model=cg.set_use(drive, left, laps)[0])
-    elif use:
-        drive = drive.but(model=cg.with_use(drive.model, use))
-    held = bool(use) and not laps
-    return drive.but(model=cg.set_convention(drive, left, best, hold_use=held)[0])
+    held = use if use and not laps else None
+    if not laps and not use and drive.model.grip.get("mu_y_limit") is not None:
+        # braked at the car's limit *at its typical use*, which is what "at
+        # the limit" was while the reference lap's knob was 1: a share of 1
+        # at a use of 1 would brake every logged lap below ``mu_b``
+        held = {"brake_use": 1.0, "use_ref": 1.0}
+    return drive.but(model=cg.set_limit(drive, left, best, hold=held)[0])
 
 
 def laps_left(
@@ -981,11 +992,46 @@ def check_car_holdout(
         f"{len(wide)} folds of {MIN_FOLD_LAPS}+ laps ({int((wide['kind'] == 'day').sum())} by "
         f"day, {int((wide['kind'] == 'layout').sum())} by layout), "
         f"{int(laps[laps['kind'] == 'day']['S1'].notna().sum())} held-out laps by day. Controls: "
-        f"`low_power` is the fold's own car with its power × {POWER_CONTROL} and mu_y raised to "
-        "hold the reference laps; `other_car` is "
+        f"`low_power` is the fold's own car with its power × {POWER_CONTROL}, the same limit "
+        "and the fitted car's braking level in g at its typical use; `other_car` is "
         + ", ".join(f"{v} for the {k}" for k, v in OTHER_CAR.items() if k in cars)
         + "."
     )
+
+    # 0. The use of the car's limit that the held-out laps solve to.
+    if "use" in laps.columns and laps["use"].notna().any():
+        got_use = laps[laps["use"].notna()]
+        over = (
+            got_use.assign(above=got_use["use"] > 1.0)
+            .groupby(["car", "kind"], sort=False)
+            .agg(
+                laps=("use", "size"),
+                above_1=("above", "sum"),
+                use_p05=("use", lambda x: float(x.quantile(0.05))),
+                use_median=("use", "median"),
+                use_p95=("use", lambda x: float(x.quantile(0.95))),
+                use_max=("use", "max"),
+            )
+            .reset_index()
+        )
+        rep.items.append(
+            GateItem(
+                "The driver's use of the car's limit on the held-out laps",
+                None,
+                "; ".join(
+                    f"{c}: {int(g['above_1'].sum())} of {int(g['laps'].sum())} laps above 1, "
+                    f"highest {g['use_max'].max():.3f}"
+                    for c, g in over.groupby("car", sort=False)
+                ),
+                "reported (#312): a use above 1 is a lap the fold's limit says the car cannot "
+                "corner hard enough for; the knob scales cornering and braking together, so "
+                "such a lap is driven above the limit, not capped",
+                "`use`: the solver's knob of a held-out lap, the share of the fold's own "
+                "cornering limit (`mu_y`, read without the fold) that its lap time takes; "
+                "q = −ln of it. `above_1`: the laps that need more than the limit.\n\n"
+                + md_table(over, floats="{:.3f}"),
+            )
+        )
 
     # 1. The verdict per car.
     results = by.groupby("car")["result"].first()

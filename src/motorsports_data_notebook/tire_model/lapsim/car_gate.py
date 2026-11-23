@@ -582,6 +582,88 @@ def set_convention(
     return out, refs
 
 
+def typical_use(who: Who) -> float:
+    """The car's typical use of its cornering limit: the median over the
+    layouts it was set on of the use of a day's best lap
+    (:func:`set_limit`). 1 for a car set by the convention, where that
+    lap's knob is 1 by definition, and for a bare solver's car."""
+    model = who.model if isinstance(who, Drive) else who
+    if not isinstance(model, cm.CarModel):
+        return 1.0
+    return float(model.meta.get("use_ref") or 1.0)
+
+
+def set_limit(
+    who: Drive | cm.CarModel,
+    tracks: dict[str, trk.TrackModel],
+    best: pd.DataFrame,
+    *,
+    hold: dict | None = None,
+) -> tuple[cm.CarModel, dict[str, dict]]:
+    """The model with ``mu_y`` at the car's cornering limit
+    (``grip.mu_y_limit``, :func:`~.limits.car_limit`), and the workings
+    of :func:`reference_u` there.
+
+    The limit is the car's and no pace moves it; the solver's knob u is
+    then the share of it the driver uses on a lap (q = −ln u), the same in
+    cornering and braking. ``ref_u`` keeps each layout's use (the median
+    over its days of the use of the day's best build lap) and
+    ``meta.use_ref`` their median over the layouts, the car's *typical
+    use*: what is carried to a layout the car has not run.
+
+    A driver's braking use in the model was read at the model's present
+    ``mu_y`` and is a share of ``mu_b`` times the use, so it moves with
+    ``mu_y`` and every lap stays the lap it was (:func:`_with_mu_y`).
+    ``hold`` is for a planted wrong car that keeps another model's driver
+    (that model's ``driver``, as this function left it): the braking
+    level in g at the typical use is held at that driver's, whatever the
+    wrong car's typical use turns out to be.
+
+    A model without a limit (no corner supports the statistic) is set by
+    the convention instead (:func:`set_convention`)."""
+    drive = who if isinstance(who, Drive) else Drive(who)
+    model = drive.model
+    limit = model.grip.get("mu_y_limit")
+    if limit is None or not np.isfinite(limit):
+        if hold:
+            kept = {k: v for k, v in hold.items() if k != "use_ref"}
+            drive = drive.but(model=with_use(model, kept))
+        return set_convention(drive, tracks, best, hold_use=bool(hold))
+    refs: dict[str, dict] = {}
+
+    def _typical(of: cm.CarModel) -> float:
+        nonlocal refs
+        refs = reference_u(drive.but(model=of), tracks, best)
+        return float(np.median([r["u_ref"] for r in refs.values()])) if refs else float("nan")
+
+    if hold and hold.get("brake_use") is not None:
+        level = float(hold["brake_use"]) * float(hold.get("use_ref") or 1.0)
+        out = with_use(_with_mu_y(model, float(limit), hold_use=True), dict(hold))
+        ref = float("nan")
+        for _ in range(CONVENTION_ROUNDS):
+            ref = _typical(out)
+            if not np.isfinite(ref) or ref <= 0.0:
+                break
+            share = level / ref
+            settled = abs(share / float(out.driver["brake_use"]) - 1.0) < CONVENTION_TOL
+            out.driver = {**out.driver, "brake_use": share}
+            if settled:
+                break
+    else:
+        out = _with_mu_y(model, float(limit))
+        ref = _typical(out)
+    out.ref_u = {k: [_rounded(r["median"], 4), _rounded(r["day_sd"], 4)] for k, r in refs.items()}
+    out.meta = {
+        **model.meta,
+        "mu_y_source": "the car's cornering limit: the expected best of m passes (limits.car_limit)",
+        "mu_y_apex_table": model.grip["mu_y"],
+        "use_ref": _rounded(ref, 5),
+    }
+    if out.driver:
+        out.driver = {**out.driver, "use_ref": _rounded(ref, 5)}
+    return out, refs
+
+
 def _rounded(v: float, nd: int) -> float | None:
     return None if not np.isfinite(v) else round(float(v), nd)
 
@@ -600,10 +682,13 @@ def lap_scores(
     """Each lap of ``laps`` (``lap_time_s`` beside its keys; ``v_obs`` its
     speed at the track's nodes) simulated at its own lap time, with its
     day's powertrain, shift point and air when ``who`` is a
-    :class:`Drive`: ``u``, ``status`` and ``speed_rmse`` (m/s over the
-    nodes)."""
+    :class:`Drive`: ``use`` (the lap's use of the car's limit, the
+    solver's knob), ``u`` (that over the car's typical use,
+    :func:`typical_use`: 1 is the car's reference pace), ``status`` and
+    ``speed_rmse`` (m/s over the nodes)."""
     drive = as_drive(who)
     profile = profile_of(drive, track)
+    typical = typical_use(drive)
     recs = _records(laps)
     got = sv.solve_laps(
         profile,
@@ -612,7 +697,8 @@ def lap_scores(
     )
     rows = [
         {
-            "u": float(u),
+            "u": float(u) / typical,
+            "use": float(u),
             "status": status,
             "speed_rmse": _rms(got.v_node_ms[i] - v_obs[i]) if status == "ok" else float("nan"),
         }
@@ -1252,11 +1338,23 @@ def check_car_fit(
         own = {k: v for k, v in tracks.items() if k in set(best["layout_id"])}
         fitted, work = fits[car_name]
         drive = Drive(fitted, air=air, shifts=day_shifts(work), gears=day_gears(work))
-        # how the driver brakes, then the convention under it
+        # how the driver brakes, then the car's limit under it: the knob is
+        # from here on the driver's use of that limit
         braked = car_use_laps(tables, lap_time, car_name, own)
         used, use_work = set_use(drive, own, braked)
-        model, refs = set_convention(drive.but(model=used), own, best)
+        model, uses = set_limit(drive.but(model=used), own, best)
         drive = drive.but(model=model)
+        typical = typical_use(model)
+        # the pace against the car's typical use, as the convention had it
+        refs = {
+            k: {
+                **r,
+                "use_ref": r["u_ref"],
+                "u_ref": r["u_ref"] / typical,
+                "by_day": {d: v / typical for d, v in r["by_day"].items()},
+            }
+            for k, r in uses.items()
+        }
         models[car_name] = model
         if model.driver:
             back = recover_use(drive, own, braked)
@@ -1287,8 +1385,10 @@ def check_car_fit(
                     "layout_id": layout,
                     "days": r["days"],
                     "ref_lap_s": r["lap_time_s"],
+                    "use": r["use_ref"],
+                    "q": -float(np.log(r["use_ref"])) if r["use_ref"] > 0 else float("nan"),
                     "u_ref": r["u_ref"],
-                    "u_day_sd": r["day_sd"],
+                    "u_day_sd": r["day_sd"] / typical,
                 }
             )
         for name in model.power["engines"]:
@@ -1342,8 +1442,16 @@ def check_car_fit(
                 "car": c,
                 "mu_y": m.grip["mu_y"],
                 "apex_table_level": m.meta.get("mu_y_apex_table"),
+                "typical_use": typical_use(m),
+                "q_typical": -float(np.log(typical_use(m))),
+                "at_typical_use": float(m.grip["mu_y"]) * typical_use(m),
                 "mu_b": m.grip["mu_b"],
                 "brake_use": m.driver.get("brake_use"),
+                "braking_at_typical_use": (
+                    float(m.driver["brake_use"]) * typical_use(m)
+                    if m.driver.get("brake_use") is not None
+                    else float("nan")
+                ),
             }
             for c, m in models.items()
         ]
@@ -1355,19 +1463,32 @@ def check_car_fit(
     )
     rep.items.append(
         GateItem(
-            "`mu_y` by convention, and `ref_u` per layout",
+            "`mu_y` is the car's limit; the driver's use of it per layout",
             None,
             "; ".join(
-                f"{r.car} mu_y {r.mu_y:.3f} (apex table {r.apex_table_level:.3f}), u between "
-                f"layouts {spread.get(r.car, float('nan')):.1%}"
+                f"{r.car} limit {r.mu_y:.3f}, typical use {r.typical_use:.3f} (q "
+                f"{r.q_typical:.3f}), u between layouts "
+                f"{spread.get(r.car, float('nan')):.1%}"
                 for r in mu.itertuples()
             ),
-            "the median over layouts of the reference lap's u is 1; recorded",
-            md_table(mu, floats="{:.3f}")
-            + "\n\n`u_ref`: the median over the layout's days of the u of the day's best "
-            "build lap, each driven with its day's powertrain, shift point and air; "
-            "`u_day_sd`: their sd; `ref_lap_s`: the median of those lap times.\n\n"
-            + md_table(ref, floats="{:.4f}"),
+            "recorded (#312: the pace knob is the driver's use of a limit that pace does not "
+            "move; owner, 2026-11-22)",
+            "`mu_y`: the car's cornering limit (`grip.mu_y_limit`, the item above); the "
+            "solver's knob is the share of it a lap uses, in cornering and braking alike, and "
+            "q = −ln of that. `typical_use`: the median over the car's layouts of the use of a "
+            "day's best build lap, which is what is carried to a layout the car has not run; "
+            "`at_typical_use`: the limit times it, the number the convention for `mu_y` used "
+            "to hold. `brake_use`: the driver's braking level as a share of `mu_b` at a use of "
+            "1 (it was read as a share of `mu_b` times the knob, so it rose as `mu_y` rose to "
+            "the limit and every lap stayed the lap it was); `braking_at_typical_use`: that "
+            "share at the typical use. A share near 1 leaves a lap faster than the typical "
+            "one no room to brake harder before it reaches the car's `mu_b`.\n\n"
+            + md_table(mu, floats="{:.3f}")
+            + "\n\n`use`: the median over the layout's days of the use of the day's best "
+            "build lap, each driven with its day's powertrain, shift point and air, and `q` "
+            "its −ln; `u_ref`: that over the car's typical use (1 is the car's reference "
+            "pace, as under the convention); `u_day_sd`: the sd over the days; `ref_lap_s`: "
+            "the median of those lap times.\n\n" + md_table(ref, floats="{:.4f}"),
         )
     )
 

@@ -227,6 +227,92 @@ class TestConvention:
         assert list(cg.day_best_laps(keyed, "car")["session_id"]) == ["b", "d"]
 
 
+class TestSetLimit:
+    """``mu_y`` at the car's limit, the knob the driver's use of it (#312)."""
+
+    USE = {"brake_use": 0.8, "brake_use_ellipse": 0.5}
+
+    def _best(self, tracks, car, us=(0.98, 1.0, 1.02)):
+        rows = []
+        for layout, track in tracks.items():
+            for k, u in enumerate(us):
+                rows.append(
+                    {"layout_id": layout, "date": f"d{k}", "lap_time_s": sv.lap_time(track, car, u)}
+                )
+        return pd.DataFrame(rows)
+
+    def test_mu_y_goes_to_the_limit_and_the_knob_is_the_use(self):
+        tracks = {"a": _oval_track("a"), "b": _oval_track("b", straight=500.0, radius=40.0)}
+        best = self._best(tracks, CAR)  # driven with 1.2 g of cornering at the reference
+        model = _model(mu_y=1.35)
+        model.grip["mu_y_limit"] = 1.5
+        got, refs = cg.set_limit(model, tracks, best)
+        assert got.grip["mu_y"] == 1.5 and got.grip["mu_b"] == 1.0
+        assert got.meta["mu_y_apex_table"] == 1.35 and "limit" in got.meta["mu_y_source"]
+        for layout in tracks:
+            # about 1.2 of 1.5; not exactly, for mu_b did not rise with mu_y and the
+            # knob lowers both
+            assert 0.79 < refs[layout]["u_ref"] < 0.83
+            assert got.ref_u[layout][0] == pytest.approx(refs[layout]["u_ref"], abs=1e-4)
+        assert got.meta["use_ref"] == pytest.approx(
+            np.median([r["u_ref"] for r in refs.values()]), abs=1e-5
+        )
+        assert cg.typical_use(got) == cg.typical_use(cg.Drive(got)) == got.meta["use_ref"]
+        assert cg.typical_use(CAR) == 1.0 and cg.typical_use(_model()) == 1.0
+
+    def test_every_lap_is_the_lap_it_was(self):
+        track = _oval_track()
+        model = _model()
+        model.driver = dict(self.USE)
+        car = sv.SolverCar.from_model(model)
+        best = self._best({"a": track}, car)
+        times = [sv.lap_time(track, car, u) for u in (0.93, 1.0, 1.04)]
+        was, _ = cg.set_convention(model, {"a": track}, best)
+        base = sv.solve_laps(track, sv.SolverCar.from_model(was), times)
+        for limit in (1.3, 1.5, 1.65):
+            raised = _model()
+            raised.driver = dict(self.USE)
+            raised.grip["mu_y_limit"] = limit
+            got, _ = cg.set_limit(raised, {"a": track}, best)
+            # the share of mu_b rises as mu_y does: the same braking in g at the same lap
+            assert got.driver["brake_use"] == pytest.approx(0.8 * limit / 1.2)
+            assert got.driver["brake_use_ellipse"] == 0.5
+            solved = sv.solve_laps(track, sv.SolverCar.from_model(got), times)
+            assert solved.v_node_ms == pytest.approx(base.v_node_ms, rel=1e-6)
+            assert solved.u * limit == pytest.approx(base.u * was.grip["mu_y"], rel=1e-6)
+            assert (solved.u < 1.0).all() and got.driver["use_ref"] == got.meta["use_ref"]
+
+    def test_a_wrong_car_keeps_the_fitted_drivers_braking_level(self):
+        track = _oval_track()
+        model = _model()
+        model.driver = dict(self.USE)
+        model.grip["mu_y_limit"] = 1.5
+        best = self._best({"a": track}, sv.SolverCar.from_model(model), us=(0.78, 0.8, 0.82))
+        fitted, _ = cg.set_limit(model, {"a": track}, best)
+        bare = _model()
+        bare.grip["mu_y_limit"] = 1.5
+        wrong, _ = cg.set_limit(
+            cg.Drive(bare, power_scale=0.85), {"a": track}, best, hold=fitted.driver
+        )
+        # less power: the laps want more of the limit, and the share of mu_b falls so
+        # that the braking in g at the typical use is the fitted driver's
+        assert wrong.meta["use_ref"] > fitted.meta["use_ref"] * 1.01
+        assert wrong.driver["brake_use"] * wrong.meta["use_ref"] == pytest.approx(
+            fitted.driver["brake_use"] * fitted.meta["use_ref"], rel=3e-3
+        )
+        assert wrong.driver["brake_use_ellipse"] == 0.5
+
+    def test_a_model_without_a_limit_is_set_by_the_convention(self):
+        track = _oval_track()
+        best = self._best({"a": track}, CAR)
+        got, refs = cg.set_limit(_model(mu_y=1.35), {"a": track}, best)
+        assert got.grip["mu_y"] == pytest.approx(1.2, abs=0.005)
+        assert refs["a"]["u_ref"] == pytest.approx(1.0, abs=0.005) and cg.typical_use(got) == 1.0
+        used = _model(mu_y=1.35)
+        held, _ = cg.set_limit(used, {"a": track}, best, hold={**self.USE, "use_ref": 0.8})
+        assert held.driver == self.USE  # the convention's own way of holding a use
+
+
 class TestBrakingUse:
     """How the driver brakes, read from speed traces at each lap's own u."""
 
@@ -657,7 +743,7 @@ class TestGate:
         names = [it.name for it in rep.items]
         for want in (
             "Power agrees between layouts",
-            "`mu_y` by convention, and `ref_u` per layout",
+            "`mu_y` is the car's limit; the driver's use of it per layout",
             "Recovery on simulated laps",
             "In-sample speed RMSE at each lap's own u",
         ):
