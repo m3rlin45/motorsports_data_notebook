@@ -55,6 +55,10 @@ fitted through a solver; the solver is the gate.
 - ``grip.mu_y``: a convention, since the pace knob absorbs the level
   (:func:`.car_gate.set_convention`, which also fills ``ref_u``);
   :func:`fit_car` alone leaves the apex table's level there.
+- ``grip.mu_y_limit``: the car's cornering limit as the best it has been
+  shown to do, the expected best of m passes through a corner
+  (:func:`.limits.car_limit`; ``meta.limit`` has its workings); None
+  where no corner supports it.
 - ``wet.grip_scale``: the wet population's lateral level over the dry one.
 
 **Air.** An engine makes less power in thin, hot or humid air and the car
@@ -79,6 +83,7 @@ import pyarrow.parquet as pq
 from ...tire_etl.kinematics import G_MS2
 from ...tire_etl.paths import weather_dir
 from . import geometry as geo
+from . import limits as lim
 from . import samples as smp
 from .gates import GateItem, GateReport, md_table
 
@@ -1384,6 +1389,8 @@ def fit_car(
     # shape from the others against the two, each at its 90th percentile
     braking = braking_level(_own(fam.brake), c, mu_y)
     shape = braking_shape(_own(fam.brake), c, braking["mu_b"], mu_y)
+    # the car's cornering limit: the best it has been shown to do (#312)
+    limit = lim.car_limit(_own(fam.apex, None))
     braking["shape"] = shape
     onset = brake_onset(_own(fam.brake))
     braking["onset"] = onset
@@ -1419,6 +1426,7 @@ def fit_car(
         mass_kg=facts.get("mass_kg"),
         grip={
             "mu_y": _round(mu_y, 4),
+            "mu_y_limit": _round(limit.level, 4),
             "mu_b": _round(braking["mu_b"], 4),
             "n_brake": 1.0,
             "brake_ellipse": _round(shape["brake_ellipse"], 3),
@@ -1443,6 +1451,7 @@ def fit_car(
         meta={
             "mu_y_source": "apex table; provisional until the solver sets it (median ref_u = 1)",
             "c_drag_source": drag["source"],
+            "limit": limit.to_json(),
             "air": "standard (SAE J1349: 99 kPa dry, 25 C)",
             "fitted_from": {
                 "raw_cars": sorted(throttle["raw_car"].unique()) if len(throttle) else [],
@@ -1464,6 +1473,7 @@ def fit_car(
         "corner_drag": cdrag,
         "braking": braking,
         "level": level,
+        "limit": limit,
         "days": days,
         "density": density,
         "bins": work_engines[default]["bins"],

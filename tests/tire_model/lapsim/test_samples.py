@@ -280,6 +280,10 @@ class TestApexRows:
         assert np.isnan(b["lat_accel_g"])
         # a flat road: the tyres hold what the ground frame reads, under the car's weight
         assert a["lat_tyre_g"] == pytest.approx(1.5) and a["load"] == pytest.approx(1.0)
+        # each sensor where the other peaks: the Doppler's spike is its own
+        assert a["lat_tyre_cross_g"] == pytest.approx(1.2)
+        assert a["lat_accel_cross_g"] == pytest.approx(1.1)
+        assert np.isnan(b["lat_tyre_cross_g"]) and np.isnan(b["lat_accel_cross_g"])
 
     def test_the_tyres_frame_and_the_load_at_a_banked_apex(self):
         track = self._track()
