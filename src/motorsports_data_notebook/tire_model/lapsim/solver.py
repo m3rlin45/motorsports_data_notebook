@@ -8,7 +8,10 @@ on a wet track and 1 otherwise):
 
 - cornering: ``V²|κ| ≤ μ_y G``, solved in closed form for V;
 - braking: ``|a_tyre| / (μ_b G) + V²|κ| / (μ_y G) ≤ 1`` (a diamond);
-- drive: ``a_tyre = min(P / V − k·lat², √((μ_y G)² − (V²κ)²))``; the
+- drive: ``a_tyre = min(P / V − k·lat², r·√((μ_y G)² − (V²κ)²))``; ``r``
+  is the share of the grip the driven axle has (``drive_share``: the
+  rear's share of the static weight on these rear-driven cars; 1 takes
+  the whole car's; issue #312), the
   engine's power is not scaled by the knob, and ``k`` is the cost of
   cornering at full throttle (``k_corner_drag``, on by default since
   gate C3). ``P`` is one number, or the engine's curve against rpm at the
@@ -114,6 +117,10 @@ U_TOL = 1e-7
 #: gate C3 (#205): the term lowers the leave-one-layout-out error and the
 #: error on the top quarter of speeds in ten of ten cells.
 CORNER_DRAG_DEFAULT = True
+#: Whether the drive out of a corner goes through the driven axle (a
+#: model's ``grip.drive_share``) or has the whole car's grip. On for all
+#: three cars by the owner's decision of 2026-11-23 (issue #312).
+DRIVEN_AXLE_DEFAULT = True
 #: Width of the bins of a model's power curve (:data:`.car.RPM_BIN`).
 CURVE_BIN_RPM = 250.0
 #: Step of the table of engine power against speed a lap is driven from.
@@ -253,6 +260,9 @@ class SolverCar:
     #: Seconds of drive lost in an upshift out of each gear (as ``gears``;
     #: nothing for the top one). Empty: shifts cost nothing.
     shift_s: tuple[float, ...] = ()
+    #: The share of what the cornering leaves of the grip that the driven
+    #: axle can put down as drive (1: all of it).
+    drive_share: float = 1.0
 
     @property
     def geared(self) -> bool:
@@ -347,6 +357,7 @@ class SolverCar:
         onset_s: float | None = None,
         brake_onset: bool | None = None,
         brake_use: bool = True,
+        driven_axle: bool | None = None,
     ) -> "SolverCar":
         """The solver's car from a model.
 
@@ -373,6 +384,10 @@ class SolverCar:
         (the model's ``driver``: the driver's level as a share of ``mu_b`` and
         the shape held under cornering, in place of the limit's) or at the car's limit;
         a model without a ``driver`` is braked at the limit either way.
+        ``driven_axle`` says whether the drive is held to the driven
+        axle's share of the grip (``grip.drive_share``; None:
+        :data:`DRIVEN_AXLE_DEFAULT`); a model without one drives on the
+        whole car's.
         """
         on = CORNER_DRAG_DEFAULT if corner_drag is None else corner_drag
         wet = model.wet.get("grip_scale")
@@ -425,6 +440,11 @@ class SolverCar:
                 else 0.0
             ),
             brake_use=float(use) if use is not None else 1.0,
+            drive_share=(
+                float(model.grip.get("drive_share") or 1.0)
+                if (DRIVEN_AXLE_DEFAULT if driven_axle is None else driven_axle)
+                else 1.0
+            ),
             onset_s=(
                 float(
                     onset_s
@@ -547,6 +567,10 @@ def _power_table(car: SolverCar) -> np.ndarray:
     for v_shift, dv in car.shift_bands():
         inside = np.minimum(grid + half, v_shift + dv) - np.maximum(grid - half, v_shift)
         table = table * (1.0 - SHIFT_BAND_SHARE * np.clip(inside / POWER_TABLE_DV, 0.0, 1.0))
+    # The last entry is not power: it is the driven axle's share of the
+    # grip, which the passes read from here so that it rides with the car
+    # (no speed reaches it: the grid ends 10 m/s over :data:`V_MAX_MS`).
+    table = np.append(table, car.drive_share)
     table.setflags(write=False)
     return table
 
@@ -943,7 +967,9 @@ def combined_use(sim: SimLap, profile: Profile, car: SolverCar, *, wet: bool = F
         braking = np.where(left > 0.0, -tyre / (a_b * left), lat / a_y)
     if car.brake_ellipse == 0.0:  # the diamond as a sum, as #206 writes it
         braking = -tyre / a_b + lat / a_y
-    return np.asarray(np.where(tyre < 0.0, braking, np.sqrt(tyre**2 + lat**2) / a_y))
+    # under drive the driven axle has ``drive_share`` of what the cornering leaves
+    driven = tyre / car.drive_share
+    return np.asarray(np.where(tyre < 0.0, braking, np.sqrt(driven**2 + lat**2) / a_y))
 
 
 __all__ = [

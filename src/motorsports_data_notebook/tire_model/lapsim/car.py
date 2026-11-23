@@ -58,6 +58,8 @@ fitted through a solver; the solver is the gate.
   there and fills ``ref_u`` with each layout's use of it, or, for a
   model without a limit, :func:`.car_gate.set_convention` its
   convention.
+- ``grip.drive_share``: the share of the grip the driven axle has
+  (:func:`drive_share`), which holds the drive out of a corner.
 - ``grip.mu_y_limit``: the car's cornering limit as the best it has been
   shown to do, the expected best of m passes through a corner
   (:func:`.limits.car_limit`; ``meta.limit`` has its workings); None
@@ -85,6 +87,8 @@ import pyarrow.parquet as pq
 
 from ...tire_etl.kinematics import G_MS2
 from ...tire_etl.paths import weather_dir
+from ..heat_input import CAR_FACTS
+from ..warmup_table import CAR_FIT_ALIASES
 from . import geometry as geo
 from . import limits as lim
 from . import samples as smp
@@ -195,6 +199,17 @@ BRAKE_STRAIGHT_MIN_ZONES = 30
 BRAKE_BANDS = (0.3, 0.9)
 BRAKE_BAND_WIDTH = 0.1
 BRAKE_BAND_MIN_ZONES = 15
+
+
+def drive_share(car: str) -> float | None:
+    """The share of the grip a car's driven axle has: the rear's share of
+    the static weight from production's facts (``heat_input.CAR_FACTS``,
+    through the car names production pools: 0.47 on the Inferno 86, 0.58
+    on the formula cars; a stated input, not weighed and not fitted).
+    None for a car production has no facts for. It leaves out the load
+    that moves rearwards under drive, so it understates the rear's grip."""
+    facts = CAR_FACTS.get(CAR_FIT_ALIASES.get(car, car))
+    return None if facts is None else round(1.0 - float(facts.p_f), 3)
 
 
 def family_of(raw_car: str) -> str:
@@ -1430,6 +1445,7 @@ def fit_car(
         grip={
             "mu_y": _round(mu_y, 4),
             "mu_y_limit": _round(limit.level, 4),
+            "drive_share": drive_share(car),
             "mu_b": _round(braking["mu_b"], 4),
             "n_brake": 1.0,
             "brake_ellipse": _round(shape["brake_ellipse"], 3),

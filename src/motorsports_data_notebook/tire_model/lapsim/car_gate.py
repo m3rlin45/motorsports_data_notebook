@@ -141,6 +141,8 @@ class Drive:
     #: Whether the laps are braked as the driver brakes, where the model
     #: carries the driver's use, or at the car's limit.
     brake_use: bool = True
+    #: Whether the drive goes through the driven axle (None: the default).
+    driven_axle: bool | None = None
     _cache: dict = field(default_factory=dict, repr=False, compare=False)
 
     def car(self, raw_car: str = "", date: str = "", session_id: str = "") -> sv.SolverCar:
@@ -162,6 +164,7 @@ class Drive:
                 brake_shape=self.brake_shape,
                 brake_onset=self.brake_onset,
                 brake_use=self.brake_use,
+                driven_axle=self.driven_axle,
             )
             got = replace(
                 base,
@@ -190,6 +193,7 @@ class Drive:
         """The same with some fields changed."""
         kept: tuple[str, ...] = ("model", "air", "shifts", "gears", "power_scale", "drag_scale")
         kept += ("corner_drag", "shift_loss", "brake_shape", "brake_onset", "bank", "brake_use")
+        kept += ("driven_axle",)
         return Drive(**{**{f: getattr(self, f) for f in kept}, **changes})  # type: ignore[arg-type]
 
 

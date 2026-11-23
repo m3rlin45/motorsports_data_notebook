@@ -4125,11 +4125,56 @@ use above 1. A lap is the same lap at any level of the limit: the level
 decides only what the numbers are called and how far the max driver is
 from them.
 
-**What is left of issue #312**: the driven axle in both forms of the
-solver (stage 7), the braking limit as the best of m stops from the
-held columns of stage 1 (stage 8), and `k_corner_drag` and the braking
-shape read in the tyres' frame (stage 9). Each changes simulated laps
-and is judged by the score.
+**Stage 7, drive out of a corner goes through the driven axle**
+(`SolverCar.drive_share`, `solver.DRIVEN_AXLE_DEFAULT`; the committee's
+clause 1.3; on for all three cars by the owner's decision of 2026-11-23,
+where the committee's default was the Inferno 86 only). The grip left
+for drive is `r·√((μ_y·G)² − lat²)`, r the rear's share of the static
+weight from production's facts (`car.drive_share`: 0.47 on the Inferno
+86, 0.58 on the formula cars; a stated input, not weighed, not fitted;
+it leaves out the load that moves rearwards under drive). The share
+rides in the last entry of the car's power table, so that neither form
+of the solver gains an argument; with a share of 1 both are the
+arithmetic they were, and with the term switched off every one of the
+1,102 held-out laps is identical to stage 5's to the last bit (largest
+difference 0.0 at every node). The two forms agree to the last bit with
+it on. The driver's use and the typical use are read with the term on.
+
+| | with the driven axle | the whole car's grip |
+|---|---|---|
+| score (day folds) | **59 of 76** | 56 |
+| by car: Inferno 86 / KK-SII / KK-F | 19 / 19 / 21 | 19 / 18 / 19 |
+| by measure: speed / end of straights / apex / braking | 17 / 16 / 8 / 18 | 14 / 16 / 8 / 18 |
+| layout folds: S1 lower with it | 8 of 10 cells | |
+| worst-tyre heat, pace carried to an unseen layout | 2.6 % | 3.0 % |
+| the same at the lap's own lap time | 1.9 % | 2.1 % |
+| typical use (Inferno 86 / KK-SII / KK-F) | 0.916 / 0.877 / 0.935 | 0.904 / 0.855 / 0.919 |
+| braking share of `mu_b` at a use of 1 | 0.87 / 0.97 / 0.90 | 0.886 / 0.990 / 0.914 |
+
+It wins five cells and loses two: the KK-SII's speed round the lap at
+Tsukuba at all three levels of pace and the KK-F's apex speed at Suzuka
+at P75 and P90, for the KK-SII's apex speed at Tsukuba at P75 and P90.
+Three cells is inside what the count moves by chance (about 5 are
+needed), so the count alone does not carry it; the heat at a layout
+the car has not run does fall (2.6 % against 3.0 %), and S1 is lower in
+eight of ten layout folds. The Inferno 86, where the committee thought
+the evidence strongest, changes no cell; the gains are on the formula
+cars, where the committee would not have built it. The exits are slower
+with it, so a lap at a given lap time takes more of the cornering limit:
+the typical use rises by 1–2 points, three of the Inferno 86's 518 laps
+on layout folds now solve to a use above 1 (the highest 1.007; none on
+a day fold, where the highest is 1.000), and the max driver's margin at
+Fuji falls to 0.67 % at m = 20 (0.24 % at the 5 % end, and 0.01 % with
+the limit read where the other sensor peaks: level with the best lap).
+Of the committee's test for a later term (clause 5.3) this run has the
+day and layout folds, the cells won and lost per car and the heat at an
+unseen layout; it has not the day-resampled gain, the blur placebo or
+the planted wrong cars' distance, and it is on by the owner's decision,
+not by that test.
+
+**What is left of issue #312**: the braking limit as the best of m
+stops from the held columns of stage 1 (stage 8), and `k_corner_drag`
+and the braking shape read in the tyres' frame (stage 9).
 
 #### D1 (in part). The lap solver (`solver.py`, 2026-11-15)
 

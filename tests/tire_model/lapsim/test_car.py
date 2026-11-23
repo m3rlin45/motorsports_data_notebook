@@ -704,6 +704,7 @@ class TestFit:
         assert model.grip == {
             "mu_y": pytest.approx(1.4),
             "mu_y_limit": None,  # an apex table without the tyres' frame has no passes
+            "drive_share": None,  # production has no facts for this car
             "mu_b": pytest.approx(0.96 - C_TRUE * 1600 / G, abs=0.01),
             "n_brake": 1.0,
             "brake_ellipse": None,  # the zones here have no lateral

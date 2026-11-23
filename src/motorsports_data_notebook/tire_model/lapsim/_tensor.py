@@ -116,11 +116,14 @@ class _Lanes:
         k = x.astype(np.int64)
         if self.table is not None:
             low, high = self.table[k], self.table[k + 1]
+            share = self.table[-1]
         else:
             low, high = self.ptabs[which, k], self.ptabs[which, k + 1]
+            share = self.ptabs[which, -1]
         p = low + (x - k) * (high - low)
         engine = p / v - kc * lat * lat / self.g
-        grip = np.sqrt(np.where(room > 0.0, room, 0.0))
+        # the driven axle's share of what is left of the grip: the table's last entry
+        grip = share * np.sqrt(np.where(room > 0.0, room, 0.0))
         return np.asarray(np.where(engine < grip, engine, grip) - c * v * v - g_grd)
 
     def brake(self, v: np.ndarray, i: int) -> np.ndarray:

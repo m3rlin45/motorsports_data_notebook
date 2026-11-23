@@ -444,8 +444,9 @@ class TestShiftTime:
         grid = np.arange(0.0, sv.V_MAX_MS + 10.0, sv.POWER_TABLE_DV)
         for shift_rpm in (7000.0, 7013.0, 6951.0):  # the edges fall anywhere between points
             car = replace(SHIFTING, shift_rpm=shift_rpm)
-            plain = sv._power_table(replace(car, shift_s=()))
-            share = 1.0 - sv._power_table(car)[1:] / plain[1:]
+            # the table's last entry is the driven axle's share, not power
+            plain = sv._power_table(replace(car, shift_s=()))[:-1]
+            share = 1.0 - sv._power_table(car)[1:-1] / plain[1:]
             width = np.sum(share) * sv.POWER_TABLE_DV / sv.SHIFT_BAND_SHARE
             assert width == pytest.approx(sum(dv for _, dv in car.shift_bands()), rel=1e-9)
             assert share.max() <= sv.SHIFT_BAND_SHARE + 1e-12 and grid.size == plain.size
@@ -516,6 +517,81 @@ class TestShiftTime:
         assert odd.shift_s == (0.35, 0.0)
         model.power["engines"]["e"]["shift_s"] = None
         assert sv.SolverCar.from_model(model, shift_loss=True).shift_s == ()
+
+
+class TestDrivenAxle:
+    """Drive out of a corner goes through the driven axle (#312)."""
+
+    @pytest.fixture(params=[True, False], ids=["compiled", "numpy"])
+    def form(self, request, monkeypatch):
+        if request.param and not sv._kernel.HAVE_NUMBA:
+            pytest.skip("numba is not installed")
+        monkeypatch.setattr(sv, "USE_COMPILED", request.param)
+        return request.param
+
+    def test_a_share_of_one_is_the_lap_as_it_was(self, form):
+        prof = _oval()
+        whole = sv.drive_laps(prof, replace(CAR, drive_share=1.0), np.array([0.9, 1.0]))
+        plain = sv.drive_laps(prof, CAR, np.array([0.9, 1.0]))
+        assert np.array_equal(whole.v_node_ms, plain.v_node_ms)
+        assert sv._power_table(CAR)[-1] == 1.0
+
+    def test_the_rear_axle_alone_cannot_take_all_the_engine_gives(self):
+        # more power than half the grip can put down: on the straights the car pulls
+        # at the driven axle's share of the grip, not at what the engine gives
+        car = replace(CAR, p_specific=400.0, c_drag=0.0, drive_share=0.5)
+        prof = _oval()
+        sim = sv.simulate_lap(prof, car, 1.0)
+        pulling = (np.abs(sim.lat_g) < 1e-9) & (sim.long_tyre_g > 0.0)
+        assert pulling.sum() > 50
+        assert sim.long_tyre_g[pulling] == pytest.approx(0.5 * car.mu_y, rel=1e-6)
+        use = sv.combined_use(sim, prof, car)
+        assert use[pulling] == pytest.approx(1.0, rel=1e-6)  # at its limit, by the axle's share
+        whole = sv.simulate_lap(prof, replace(car, drive_share=1.0), 1.0)
+        assert whole.long_tyre_g.max() > 1.1  # the whole car's grip takes it
+
+    def test_out_of_a_corner_the_car_is_slower(self, form):
+        prof = _oval()
+        car = replace(CAR, p_specific=200.0)
+        whole = sv.simulate_lap(prof, car, 1.0)
+        rear = sv.simulate_lap(prof, replace(car, drive_share=0.5), 1.0)
+        assert rear.lap_time_s > whole.lap_time_s
+        # the corner is the same but for the drag, which the rear alone now carries
+        assert rear.v_node_ms.min() == pytest.approx(whole.v_node_ms.min(), rel=1e-3)
+        assert (rear.v_node_ms <= whole.v_node_ms + 1e-9).all()
+        assert (sv.combined_use(rear, prof, replace(car, drive_share=0.5)) <= 1.005).all()
+
+    def test_the_two_forms_agree_to_the_last_bit(self, monkeypatch):
+        if not sv._kernel.HAVE_NUMBA:
+            pytest.skip("numba is not installed")
+        prof = _oval()
+        cars = [replace(CAR, p_specific=200.0, drive_share=r) for r in (0.47, 0.58, 1.0)]
+        times = [sv.lap_time(prof, c, 0.95) for c in cars]
+        out = {}
+        for compiled in (True, False):
+            monkeypatch.setattr(sv, "USE_COMPILED", compiled)
+            out[compiled] = sv.solve_laps(prof, cars, times)
+        assert np.array_equal(out[True].v_node_ms, out[False].v_node_ms)
+        assert np.array_equal(out[True].u, out[False].u)
+
+    def test_the_lap_time_still_falls_as_u_rises(self):
+        prof = _oval()
+        car = replace(CAR, p_specific=200.0, drive_share=0.5)
+        times = [sv.lap_time(prof, car, u) for u in np.arange(0.5, 1.5001, 0.05)]
+        assert (np.diff(times) < 0).all()
+
+    def test_from_a_model_unless_switched_off(self):
+        model = CarModel(
+            car="car",
+            raw_car="car",
+            mass_kg=None,
+            grip={"mu_y": 1.2, "mu_b": 1.0, "drive_share": 0.47},
+            power={"p_specific": 100.0, "c_drag": 3e-4},
+        )
+        assert sv.SolverCar.from_model(model).drive_share == 0.47
+        assert sv.SolverCar.from_model(model, driven_axle=False).drive_share == 1.0
+        del model.grip["drive_share"]
+        assert sv.SolverCar.from_model(model).drive_share == 1.0
 
 
 class TestGears:
