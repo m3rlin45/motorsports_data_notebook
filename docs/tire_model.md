@@ -3820,6 +3820,43 @@ percentile of per-lap peaks); the driver committee's reading of the
 cornering limit in the tyres' frame (1.539 for the KK-SII at m = 20,
 `docs/lapsim_driver_model.md`) sits inside the other driver's band.
 
+#### C9. The car's limits and the driver's use of them (issue #312, 2026-11-23)
+
+The build of the driver committee's design (`docs/lapsim_driver_model.md`)
+as the owner ruled on it on 2026-11-23, in the stages issue #312 sets
+out. Each stage's "must show" is recorded here.
+
+**Stage 0, the baseline.** Gates C2 and C3 at `a2d9952`, and every day
+fold's laps kept as solved (u and the speed at the track's nodes; 1,102
+laps in nine car and layout cells): 56 of 76.
+
+**Stage 1, the sample tables at version 5: columns added, none changed.**
+
+- The apex table has `lat_tyre_g`, the lap's own Doppler lateral as what
+  the tyres hold of it on the road's bank at the apex (`L·cos b − sin b`,
+  b the lean into the corner, the bank's median over ± 10 m;
+  `bank.to_tyres_frame`), and `load`, the load on the tyres there over
+  the weight at the apex speed (`cos θ·cos b + V²(κ_v + |κ|·sin b) / g`,
+  the same median; `bank.road_arrays`, the solver's own arrays). Lateral
+  over load is the share of the grip a pass used.
+- A braking zone has its *held part*: the fixes where the pressure is at
+  80 % or more of the zone's highest. Over it `decel_held_g` is the mean
+  deceleration (a level the car held, not a peak), `decel_held_accel_g`
+  the same from the accelerometer's longitudinal as the sensor reads it,
+  with `v_held_ms`, `lat_held_tyre_g` and `held_s`. They are the second
+  reading and the held level that the braking limit of stage 8 is read
+  from.
+- Full-throttle and coast samples and braking zones have their lateral
+  in the tyres' frame beside the ground-frame one (`lat_tyre_g`,
+  `lat_peak_tyre_g`, `lat_mean_tyre_g`).
+
+`k_corner_drag`, `brake_ellipse` and `mu_b` are still read from the
+ground-frame columns. Reading them in the tyres' frame changes simulated
+laps, so it is not part of a step whose test is that no lap changes; it
+is stage 9, judged by the score. Must show, and does: gate C2's report
+and the three car models are identical to the baseline's, byte for byte
+but for the time of the fit, and gate C3's report is identical.
+
 #### D1 (in part). The lap solver (`solver.py`, 2026-11-15)
 
 C2's remaining clauses and all of C3 need `simulate_lap` and `solve_u`,

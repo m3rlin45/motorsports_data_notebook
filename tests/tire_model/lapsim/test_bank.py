@@ -138,6 +138,32 @@ class TestTyreLateral:
         assert np.array_equal(bankmod.tyre_lateral_g(kappa, speed, np.zeros(3)), flat)
 
 
+class TestTyresFrame:
+    def test_a_measured_lateral_follows_the_same_rule(self):
+        kappa, speed = np.array([0.01, -0.01, 0.0]), np.full(3, 30.0)
+        left = np.array([0.05, 0.05, -0.02])
+        ground = speed**2 * kappa / bankmod.G_MS2
+        assert np.allclose(
+            bankmod.to_tyres_frame(ground, left), bankmod.tyre_lateral_g(kappa, speed, left)
+        )
+
+    def test_the_road_arrays_are_the_solvers(self):
+        from motorsports_data_notebook.tire_model.lapsim import solver as sv
+
+        track = _circle(right=False)
+        n = track.n
+        track.grade = np.linspace(-0.04, 0.04, n)
+        track.kappa_v = np.full(n, 2e-4)
+        flat = bankmod.road_arrays(track)
+        _, _, kv, cos, _ = sv._road(sv.Profile.from_track(track))
+        assert not flat[0].any() and np.array_equal(flat[1], cos) and np.array_equal(flat[2], kv)
+        track.bank = np.linspace(-0.06, 0.06, n)
+        left, cos_b, kv_b = bankmod.road_arrays(track)
+        _, _, kv, cos, _ = sv._road(sv.Profile.from_track(track))
+        assert np.array_equal(left, track.bank)
+        assert np.array_equal(cos_b, cos) and np.array_equal(kv_b, kv)
+
+
 class TestOnTheTrack:
     def test_attach_and_round_trip(self, tmp_path):
         track = _circle()
