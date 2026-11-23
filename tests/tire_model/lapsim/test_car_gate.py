@@ -313,6 +313,51 @@ class TestSetLimit:
         assert held.driver == self.USE  # the convention's own way of holding a use
 
 
+class TestAtLimitAndMaxDriver:
+    def test_the_use_is_read_as_a_share_of_the_limit(self):
+        model = _model(mu_y=1.35)
+        assert cg.at_limit(model) is model  # no limit: nothing to move to
+        model.grip["mu_y_limit"] = 1.5
+        raised = cg.at_limit(model)
+        assert raised.grip["mu_y"] == 1.5 and raised.meta["mu_y_apex_table"] == 1.35
+        track = _oval_track()
+        best = pd.DataFrame(
+            {"layout_id": "a", "date": ["d1"], "lap_time_s": [sv.lap_time(track, CAR, 1.0)]}
+        )
+        got, _ = cg.set_limit(raised, {"a": track}, best)
+        assert got.grip["mu_y"] == 1.5 and got.meta["mu_y_apex_table"] == 1.35  # still the table's
+
+    def test_the_max_driver_against_the_best_lap(self):
+        track = _oval_track()
+        model = _model()
+        model.driver = {"brake_use": 0.8, "brake_use_ellipse": 0.5}
+        drive = cg.Drive(model)
+        car = sv.SolverCar.from_model(model)
+        laps = pd.DataFrame(
+            {
+                "layout_id": ["a", "a", "b"],
+                "date": ["d1", "d2", "d1"],
+                "lap_time_s": [sv.lap_time(track, car, u) for u in (0.9, 0.95, 0.9)],
+            }
+        )
+        levels = {"m20": 1.2, "low": 1.0, "none": float("nan")}
+        rows = cg.max_driver_rows("car", drive, {"a": track}, laps, levels, ("b",))
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["best_lap_s"] == pytest.approx(laps["lap_time_s"][1]) and row["date"] == "d2"
+        assert row["borrowed"] and "none" not in row
+        # every use at 1 and the brakes at the car's limit: faster than a lap at 0.95 of it
+        at_limit = sv.lap_time(track, sv.SolverCar.from_model(model, brake_use=False), 1.0)
+        assert row["m20"] == pytest.approx(at_limit / row["best_lap_s"] - 1.0, abs=1e-9)
+        assert row["m20"] < 0.0 < row["low"]  # a limit under what the lap used is slower
+        assert (
+            cg.max_driver_rows(
+                "car", drive, {"a": track}, laps[laps["layout_id"] == "b"], levels, ()
+            )
+            == []
+        )
+
+
 class TestBrakingUse:
     """How the driver brakes, read from speed traces at each lap's own u."""
 

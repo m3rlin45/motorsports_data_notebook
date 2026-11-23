@@ -559,6 +559,8 @@ def convene(
         bank=bank,
     )
     left = {k: v for k, v in tracks.items() if k in set(best["layout_id"])}
+    # the car's limit first: the driver's use is read as a share of it
+    drive = drive.but(model=cg.at_limit(drive.model))
     if laps:
         drive = drive.but(model=cg.set_use(drive, left, laps)[0])
     held = use if use and not laps else None

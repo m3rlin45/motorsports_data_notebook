@@ -4036,6 +4036,63 @@ the car's braking limit, with the driver's held shape. The committee's
 has under 2 % of room on this car, 9 % on the KK-F and 12 % on the
 Inferno 86, until stage 8 reads `mu_b` as the best of m stops.
 
+**Stage 5, the driver's braking use read against the limit**
+(`car_gate.at_limit`; the committee's clause 2.1). The car is put at
+its limit first and the use is read there, as a share of the limit the
+laps are driven on; there is no reading "before the convention" any
+more, because there is no convention to move it afterwards. It comes
+out 0.886 / 0.990 / 0.914 of `mu_b` at a use of 1 (0.885 / 0.989 /
+0.914 by stage 4's arithmetic), the held shape 0.59 / 0.28 / 0.47 as
+before, and read back from laps simulated with it within 0.4 %. Against
+the baseline: the braking level in g within 0.17 % on every lap (1.5 %
+allowed by clause 5.1), node speeds within 0.045 m/s (0.002–0.009 rms),
+56 of 76 with the same verdict in every cell, heat 3.0 % carried and
+2.1 % at the lap's own time.
+
+**Stage 6, the max driver against the best logged lap**
+(`car_gate.max_driver_rows`, gate C2; the committee's clause 1.8, "the
+owner's plain number"). The lap with every use at 1 and the driver's
+habits off: the car at its cornering limit and at `mu_b` on the limit's
+own shape, with the powertrain, shift point, gears and air of the best
+lap's day, on the track's line. Lap time against the car's best logged
+dry build lap:
+
+| car, layout | m = 10 | m = 20 | m = 50 | m = 20, 5 % end | m = 20, read where the other sensor peaks |
+|---|---|---|---|---|---|
+| Inferno 86, Fuji | −0.42 % | −0.90 % | −1.19 % | −0.48 % | −0.28 % |
+| Inferno 86, Motegi (borrowed) | −1.44 | −1.86 | −2.12 | −1.50 | −1.31 |
+| Inferno 86, Sodegaura | −2.02 | −2.60 | −2.94 | −2.10 | −1.84 |
+| Inferno 86, Tsukuba (borrowed) | −2.90 | −3.38 | −3.68 | −2.96 | −2.74 |
+| KK-SII, Fuji (borrowed) | −4.48 | −4.82 | −5.52 | −4.45 | −4.59 |
+| KK-SII, Suzuka | −2.09 | −2.46 | −3.18 | −2.06 | −2.21 |
+| KK-SII, Tsukuba | −3.80 | −4.22 | −5.08 | −3.77 | −3.93 |
+| KK-F, Fuji (borrowed) | −2.94 | −3.16 | −3.43 | −2.89 | −2.76 |
+| KK-F, Suzuka (borrowed) | −2.00 | −2.23 | −2.54 | −1.93 | −1.79 |
+| KK-F, Tsukuba | −2.27 | −2.53 | −2.87 | −2.20 | −2.04 |
+
+Faster in ten of ten cells at every m, at the 5 % end of the day
+bootstrap, and with the limit read where the other sensor peaks: the
+owner's check passes whichever reading is ruled the car's. The thin
+cell is the committee's, the Inferno 86 at Fuji: 0.90 % at m = 20 (the
+committee had 0.80 %), 0.48 % at the 5 % end (0.44 %), and 0.28 % on the
+cross reading, which is the one the plant of stage 3 reads as the
+nearer to a planted car. With the car cornering at the driver's typical
+use and braking at the limit the same lap is 1.4 % *slower* than the
+best lap for the Inferno 86 at Fuji and the KK-SII at Suzuka, and from
+1.4 % faster to 0.3 % slower in the other eight cells: the margin is
+the cornering limit's. Not built: the sum of the expected
+best of m segment times (the diagnostic beside it), and the level read
+on the track's line instead of the car's own path (clause 1.9, open:
+the track's curvature reads 3–4 % under the car's own at the formula
+cars' apexes, so their margins above are larger than that reading would
+give).
+
+**What is left of issue #312**: the driven axle in both forms of the
+solver (stage 7), the braking limit as the best of m stops from the
+held columns of stage 1 (stage 8), and `k_corner_drag` and the braking
+shape read in the tyres' frame (stage 9). Each changes simulated laps
+and is judged by the score.
+
 #### D1 (in part). The lap solver (`solver.py`, 2026-11-15)
 
 C2's remaining clauses and all of C3 need `simulate_lap` and `solve_u`,
