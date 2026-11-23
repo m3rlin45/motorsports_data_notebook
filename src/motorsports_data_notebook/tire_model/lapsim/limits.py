@@ -39,12 +39,14 @@ the level into the car.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
 from scipy.special import gammaln
 
+from ...tire_etl.kinematics import G_MS2
 from . import samples as smp
 
 #: How rare a moment counts as the car's: the best of this many passes
@@ -61,6 +63,18 @@ BOOT_RESAMPLES = 300
 BOOT_SEED = 7
 
 CORNER = ["layout_id", "corner"]
+#: Stops that begin within this of each other along the track are at one
+#: stopping place.
+PLACE_GAP_M = 60.0
+#: A stop's held part counts from this long.
+HELD_MIN_S = 0.4
+#: A stop is in a straight line with under this share of the car's
+#: lateral level held sideways.
+STRAIGHT_SHARE = 0.2
+#: A stopping place is braked at the limit when its 90th percentile is
+#: within this of the highest of the car's places at the layout (as a
+#: corner is grip-limited, :data:`~.samples.GRIP_LIMITED_SHARE`).
+PLACE_LIMITED_SHARE = smp.GRIP_LIMITED_SHARE
 
 
 def expected_best(x: np.ndarray, m: int) -> float:
@@ -134,6 +148,55 @@ def passes(apex: pd.DataFrame, *, one_sensor: bool = False, cross: bool = False)
         a["y"] = 0.5 * (a["x1"] + a["x2"])
     a = a[a.groupby([*CORNER, "date"])["y"].transform("size") >= CELL_MIN_PASSES]
     return a[cols].reset_index(drop=True)
+
+
+def stops(
+    brake: pd.DataFrame, c_drag: float, lat_level: float, *, one_sensor: bool = False
+) -> pd.DataFrame:
+    """The stops of one car's dry braking zones as the braking limit's
+    statistic takes them, in the shape of :func:`passes` (``corner`` is
+    the stopping place).
+
+    A stop counts when its *held part* (the pressure at 80 % or more of
+    the zone's highest; the tables' ``*held*`` columns) lasts
+    :data:`HELD_MIN_S` and is in a straight line (:data:`STRAIGHT_SHARE`
+    of ``lat_level``). Its two readings are the mean deceleration over
+    the held part from the GPS speed and from the accelerometer (put on
+    the GPS's scale per session), each less the drag at the held part's
+    speed (``c_drag``). Stops that begin within :data:`PLACE_GAP_M` of
+    each other are one place, and the places kept are those braked at the
+    limit (:data:`PLACE_LIMITED_SHARE`)."""
+    need = {"decel_held_g", "decel_held_accel_g", "v_held_ms", "lat_held_tyre_g", "held_s"}
+    need |= {"s_on_m", "basis", "session_id", "date", "layout_id"}
+    cols = [*CORNER, "date", "session_id", "x1", "x2", "y"]
+    ok_level = np.isfinite(lat_level) and lat_level > 0.0
+    if brake.empty or not need.issubset(brake.columns) or not ok_level:
+        return pd.DataFrame(columns=cols)
+    b = brake[brake["basis"] == "dry"]
+    b = b[(b["held_s"] >= HELD_MIN_S) & (b["lat_held_tyre_g"] < STRAIGHT_SHARE * lat_level)]
+    drag = (c_drag if np.isfinite(c_drag) else 0.0) * b["v_held_ms"] ** 2 / G_MS2
+    b = b.assign(r1=b["decel_held_g"] - drag, r2=np.nan)
+    if not one_sensor:
+        b = b[b["decel_held_accel_g"].notna()]
+        scale = (b["decel_held_accel_g"] / b["decel_held_g"]).groupby(b["session_id"])
+        b = b.assign(r2=b["decel_held_accel_g"] / scale.transform("median") - drag.reindex(b.index))
+        b = b[b["r2"] > MIN_READING_G]
+    b = b[b["r1"] > MIN_READING_G].copy()
+    if b.empty:
+        return pd.DataFrame(columns=cols)
+    place = pd.Series(0, index=b.index)
+    for _, grp in b.groupby("layout_id"):
+        at = np.sort(grp["s_on_m"].unique())
+        number = dict(zip(at, np.concatenate([[0], np.cumsum(np.diff(at) > PLACE_GAP_M)])))
+        place.loc[grp.index] = grp["s_on_m"].map(number).to_numpy()
+    b["corner"] = place.astype(int)
+    high = b.groupby(CORNER)["r1"].transform(lambda x: x.quantile(0.9))
+    b = b[high >= PLACE_LIMITED_SHARE * high.groupby(b["layout_id"]).transform("max")].copy()
+    b["x1"] = np.log(b["r1"])
+    b["x2"] = np.nan if one_sensor else np.log(b["r2"])
+    b["y"] = b["x1"] if one_sensor else 0.5 * (b["x1"] + b["x2"])
+    b = b[b.groupby([*CORNER, "date"])["y"].transform("size") >= CELL_MIN_PASSES]
+    return b[cols].reset_index(drop=True)
 
 
 def _corner_stat(
@@ -271,9 +334,54 @@ def car_limit(
     for that many resamples of the car's days for ``lo`` and ``hi``.
     ``cross`` reads each sensor where the other peaks (:func:`passes`);
     it has no one-sensor form."""
+    return _limit(
+        lambda single: passes(apex, one_sensor=single, cross=cross),
+        m,
+        singles=(False,) if cross else (False, True),
+        boot=boot,
+        seed=seed,
+        correct=correct,
+    )
+
+
+def braking_best(
+    brake: pd.DataFrame,
+    c_drag: float,
+    lat_level: float,
+    m: int = M_DEFAULT,
+    *,
+    boot: int = 0,
+    seed: int = BOOT_SEED,
+) -> Limit:
+    """The best braking the car has been shown to hold (the driver
+    committee's clause 1.2): :func:`car_limit`'s statistic on
+    :func:`stops`, the expected best of ``m`` stops per stopping place,
+    the median over the places with enough of them. ``corners`` and
+    ``by_corner`` of the result are stopping places."""
+    return _limit(
+        lambda single: stops(brake, c_drag, lat_level, one_sensor=single),
+        m,
+        singles=(False, True),
+        boot=boot,
+        seed=seed,
+        correct=True,
+    )
+
+
+def _limit(
+    frame: Callable[[bool], pd.DataFrame],
+    m: int,
+    *,
+    singles: tuple[bool, ...],
+    boot: int,
+    seed: int,
+    correct: bool,
+) -> Limit:
+    """:class:`Limit` of the passes ``frame(one_sensor)`` gives, on two
+    readings where a corner supports ``m`` with them, else on one."""
     cols = [*CORNER, "n", "raw", "level", "sd", "sd_noise", "supports"]
-    for single in (False,) if cross else (False, True):
-        got = passes(apex, one_sensor=single, cross=cross)
+    for single in singles:
+        got = frame(single)
         pieces = _pieces(got)
         rows = _corner_rows(pieces, m, correct and not single)
         level, raw = _median_level(rows)
@@ -315,8 +423,10 @@ __all__ = [
     "MIN_READING_G",
     "SUPPORT_FACTOR",
     "best_of_normal",
+    "braking_best",
     "car_limit",
     "corner_levels",
     "expected_best",
     "passes",
+    "stops",
 ]

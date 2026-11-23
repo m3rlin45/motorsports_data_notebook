@@ -1431,6 +1431,7 @@ def check_car_fit(
     models: dict[str, cm.CarModel] = {}
     ref_rows, rec_rows, score_rows, use_rows = [], [], [], []
     lim_rows: list[dict] = []
+    stop_rows: list[dict] = []
     planted: list[dict] = []
     max_rows: list[dict] = []
     use_bands: dict[str, pd.DataFrame] = {}
@@ -1479,6 +1480,31 @@ def check_car_fit(
         if cars_dir is not None:
             model.save(Path(cars_dir) / f"{car_name.replace(' ', '_')}.json")
         ladders.append(era_ladder(car_name, best, refs, work["days"], compounds))
+        own_brake = tables.brake[tables.brake["car"] == car_name]
+        for m in lim.M_REPORTED:
+            best_b = lim.braking_best(
+                own_brake,
+                float(model.power["c_drag"]),
+                float(model.meta.get("lat_level_braking") or float("nan")),
+                m,
+                boot=lim.BOOT_RESAMPLES if m == lim.M_DEFAULT else 0,
+            )
+            stop_rows.append(
+                {
+                    "car": car_name,
+                    "m": m,
+                    "best": best_b.level,
+                    "p05": best_b.lo,
+                    "p95": best_b.hi,
+                    "as_read": best_b.raw,
+                    "places": best_b.corners,
+                    "stops": best_b.passes,
+                    "one_sensor": best_b.one_sensor,
+                    "stands_on": ", ".join(best_b.layouts),
+                    "mu_b": float(model.grip["mu_b"]),
+                    "best_over_mu_b": best_b.level / float(model.grip["mu_b"]),
+                }
+            )
         car_limits = limit_rows(car_name, tables.apex[tables.apex["car"] == car_name], sorted(own))
         lim_rows += car_limits
         planted += plant_rows(
@@ -1696,6 +1722,36 @@ def check_car_fit(
                 "holds its lateral through the whole of a corner, a driven pass rises to a peak) "
                 "its figures overstate the logged cars', and what the logs bound is that the "
                 "truth lies between the two readings.\n\n" + md_table(plants, floats="{:.4f}"),
+            )
+        )
+
+    # The braking limit read as the cornering limit is: a reading, beside mu_b.
+    stopped = pd.DataFrame(stop_rows)
+    if len(stopped) and stopped["best"].notna().any():
+        stops_at = stopped[stopped["m"] == lim.M_DEFAULT]
+        rep.items.append(
+            GateItem(
+                "The best braking the car has held: the expected best of m stops",
+                None,
+                "; ".join(
+                    f"{r.car} {r.best:.3f} on {r.places} places ({r.best_over_mu_b:.2f} of mu_b "
+                    f"{r.mu_b:.3f})" + (" (GPS alone)" if r.one_sensor else "")
+                    for r in stops_at.itertuples()
+                ),
+                "reported (#312, the committee's clause 1.2); `mu_b` stays the 90th percentile of "
+                "the stops' peaks until the owner rules",
+                "Per stopping place (stops that begin within "
+                f"{lim.PLACE_GAP_M:.0f} m of each other), every dry day pooled, the expected best "
+                "of m stops of the deceleration *held* over the part of the stop with the "
+                "pressure at 80 % or more of its highest, in a straight line, less the drag: read "
+                "by the GPS speed and by the accelerometer (put on the GPS's scale per session), "
+                "their geometric mean with the independent noise taken out; the median over the "
+                "places braked at the limit with 2·m stops or more (`limits.braking_best`). "
+                "`best_over_mu_b` sets it against the model's `mu_b`, which is a 90th percentile "
+                "of the stops' *peaks*: a level held is under a peak, so the reading the "
+                "committee asked for comes out at or under the number it was to replace, and "
+                "replacing `mu_b` with it would lower the car's braking limit. It is therefore "
+                "reported and not used.\n\n" + md_table(stopped, floats="{:.3f}"),
             )
         )
 

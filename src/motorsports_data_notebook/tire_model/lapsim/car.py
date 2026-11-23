@@ -1433,6 +1433,9 @@ def fit_car(
     shape = braking_shape(own_brake, c, braking["mu_b"], lat_level)
     # the car's cornering limit: the best it has been shown to do (#312)
     limit = lim.car_limit(_own(fam.apex, None))
+    # and the best braking it has been shown to hold: a reading beside
+    # ``mu_b``, which stays the stops' peak level
+    braking["best"] = lim.braking_best(_own(fam.brake), c, lat_level)
     braking["shape"] = shape
     onset = brake_onset(_own(fam.brake))
     braking["onset"] = onset
@@ -1496,6 +1499,7 @@ def fit_car(
             "c_drag_source": drag["source"],
             "limit": limit.to_json(),
             "lat_level_braking": _round(lat_level, 4),
+            "braking_best": braking["best"].to_json(),
             "air": "standard (SAE J1349: 99 kPa dry, 25 C)",
             "fitted_from": {
                 "raw_cars": sorted(throttle["raw_car"].unique()) if len(throttle) else [],
