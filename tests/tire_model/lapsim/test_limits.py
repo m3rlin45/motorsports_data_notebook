@@ -217,3 +217,62 @@ class TestCarLimit:
         assert got.hi - got.lo < 0.05
         again = lim.car_limit(self._car(), 20, boot=60)
         assert (got.lo, got.hi) == (again.lo, again.hi)  # seeded
+
+
+def _brake(n=120, *, accel=True, seed=0):
+    """Braking zones at three places of one layout: two braked hard, one a dab."""
+    rng = np.random.default_rng(seed)
+    rows = []
+    for place, (s_on, level) in enumerate(((100.0, 1.0), (800.0, 1.05), (1500.0, 0.6))):
+        day = np.arange(n) % 10
+        held = level * np.exp(rng.normal(0.0, 0.03, n))
+        rows.append(
+            pd.DataFrame(
+                {
+                    "session_id": [f"s{d}" for d in day],
+                    "car": "car",
+                    "date": [f"2026-01-{d + 1:02d}" for d in day],
+                    "layout_id": "a",
+                    "basis": "dry",
+                    "lap_num": np.arange(n),
+                    "s_on_m": s_on + rng.uniform(-10.0, 10.0, n),
+                    "held_s": 0.8,
+                    "decel_held_g": held + 0.05,  # with 0.05 g of drag at 40 m/s
+                    "decel_held_accel_g": (held + 0.05) * 1.1 if accel else np.nan,
+                    "v_held_ms": 40.0,
+                    "lat_held_tyre_g": 0.1,
+                }
+            )
+        )
+    return pd.concat(rows, ignore_index=True)
+
+
+C_DRAG = 0.05 * 9.80665 / 40.0**2
+
+
+class TestBrakingBest:
+    def test_stops_held_in_a_straight_line_at_the_places_braked_hard(self):
+        brake = _brake()
+        brake.loc[0, "held_s"] = 0.2  # too short to be a level held
+        brake.loc[1, "lat_held_tyre_g"] = 0.5  # braked while cornering
+        brake.loc[2, "basis"] = "wet"
+        got = lim.stops(brake, C_DRAG, 1.3)
+        assert set(got["corner"]) == {0, 1}  # the dab's place is not braked at the limit
+        assert len(got) == 240 - 3
+        # the drag out, and the accelerometer on the GPS's scale for its session
+        first = brake.iloc[3]
+        assert np.exp(got["x1"]).iloc[0] == pytest.approx(first["decel_held_g"] - 0.05)
+        assert np.allclose(got["x2"], got["x1"])
+
+    def test_the_expected_best_of_m_stops_over_the_places(self):
+        got = lim.braking_best(_brake(), C_DRAG, 1.3, 20)
+        assert got.found and not got.one_sensor and got.corners == 2 and got.passes == 240
+        assert 1.05 < got.level < 1.15  # above each place's typical stop, under its best
+        alone = lim.braking_best(_brake(accel=False), C_DRAG, 1.3, 20)
+        assert alone.found and alone.one_sensor
+        assert alone.level == pytest.approx(got.level, rel=1e-9)  # the same stops, no noise
+
+    def test_nothing_without_the_held_columns_or_a_level(self):
+        assert not lim.braking_best(_brake().drop(columns=["held_s"]), C_DRAG, 1.3).found
+        assert not lim.braking_best(_brake(), C_DRAG, float("nan")).found
+        assert lim.stops(pd.DataFrame(), C_DRAG, 1.3).empty

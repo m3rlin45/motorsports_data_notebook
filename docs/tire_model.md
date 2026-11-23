@@ -4193,9 +4193,72 @@ speed at Suzuka at P75; none lost), worst-tyre heat 2.6 % carried and
 passes as before. A change of one cell is nothing by the count; it is
 kept because it is the frame the solver uses, and it costs nothing.
 
-**What is left of issue #312**: the braking limit as the best of m
-stops (stage 8), which is built as a reading and not put into `mu_b`
-(below).
+**Stage 8, the best braking the car has held** (`limits.braking_best`,
+gate C2; the committee's clause 1.2), **built as a reading and not put
+into `mu_b`.** Per stopping place (stops that begin within 60 m of each
+other), every dry day pooled: the expected best of m stops of the
+deceleration *held* over the part of the stop with the pressure at 80 %
+or more of its highest (0.4 s or more, in a straight line), less the
+drag, read by the GPS speed and by the accelerometer (put on the GPS's
+scale per session), with the independent noise taken out; the median
+over the places braked at the limit (within 15 % of the layout's
+highest, as a corner is grip-limited) with 2m stops or more.
+
+| | Inferno 86 | KK-SII | KK-F |
+|---|---|---|---|
+| best of 20 stops [5 %, 95 %] | 0.944 [0.905, 0.969] | 1.210 [1.198, 1.225] | 1.099 [1.042, 1.119] |
+| places it stands on | 5 (Fuji, Sodegaura) | 4 (Suzuka, Tsukuba) | 3 (Tsukuba) |
+| `mu_b` today (90th percentile of the stops' peaks) | 0.953 | 1.210 | 1.246 |
+| the reading over `mu_b` | 0.99 | 1.00 | 0.88 |
+
+The reading the committee asked for comes out at or under the number
+it was to replace: a level held is under a peak, and the expected best
+of twenty held levels is about what a 90th percentile of peaks already
+was. On the KK-F, whose two readings exist at Tsukuba only, it is 12 %
+under (its Fuji stops, on the GPS alone, hold 1.26–1.28). Putting it
+into `mu_b` would *lower* the car's braking limit, which is not what
+"the best the car has been shown to do" was for, and it would take the
+KK-F's driver above the limit at a use of 1 (a share of 1.02). So
+`mu_b` stays as it is and the reading is reported beside it
+(`meta.braking_best`). It would not move a simulated lap either way:
+the laps are braked as the driver brakes, and that level in g is read
+from the logs whatever `mu_b` is called. What it would move is the max
+driver, the comparison arm braked at the limit, and the room the knob's
+end lap has. Whether the car's braking limit is this reading, today's
+peaks, or per layout (the Inferno 86 holds about 0.92–0.95 at Sodegaura
+and 1.03–1.05 at Fuji) is the owner's.
+
+**Issue #312 after the nine stages.** Built: the tables in both frames,
+the cornering limit and its two readings, the knob as the driver's use,
+the uses read against the limit, the max driver, the driven axle on all
+three cars, the fit in the tyres' frame, the braking reading. The score
+went from 56 to 60 of 76 (the driven axle +3, the tyres' frame +1; the
+limit, the knob and the uses changed no lap) and the heat at a layout
+the car has not run from 3.0 % to 2.6 %. For the owner: which reading
+is the cornering limit (own peaks or cross), and what the braking limit
+is. Not built: the sum of the expected best of m segment times beside
+the max driver; the level read on the track's line (clause 1.9); a cap
+for a use above 1.
+
+As the stages stand together (gates C2 and C3 at the last commit):
+
+| | Inferno 86 | KK-SII | KK-F |
+|---|---|---|---|
+| the cornering limit `mu_y` (own peaks, m = 20) | 1.283 | 1.541 | 1.493 |
+| typical use (q) | 0.918 (0.085) | 0.878 (0.130) | 0.936 (0.067) |
+| the driver's braking share of `mu_b` at a use of 1 | 0.87 | 0.97 | 0.90 |
+| drive share (the rear's) | 0.47 | 0.58 | 0.58 |
+
+The max driver against the best logged lap, with the driven axle and
+the tyres' frame in: faster in ten of ten cells at m = 20 and at its
+5 % end, thinnest the Inferno 86 at Fuji at 0.60 % (0.17 % at the 5 %
+end, 0.10 % at m = 10); with the limit read where the other sensor
+peaks, nine of ten: at Fuji the Inferno 86's max driver is then 0.05 %
+*slower* than its best lap, so the owner's check fails on that reading
+in that cell. The other nine cells are faster by 0.9 to 4.2 % on it.
+Five of the 2,231 held-out laps solve to a use above 1, all the Inferno
+86's (three on layout folds, two on day folds; the highest 1.009): they
+are driven that far above the limit, not capped.
 
 #### D1 (in part). The lap solver (`solver.py`, 2026-11-15)
 
