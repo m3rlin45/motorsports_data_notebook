@@ -4446,10 +4446,52 @@ track swaps them to 1e-12; halving the step moves the heat by under
 10 Hz). `heat.bin_1s(..., phase_s=)` moves the bins' edges, to measure
 what their phase is worth.
 
-**Still #206's**: the parity of the chain with production's per-lap
-heat on logged laps, the smoothing of #207 E0 against it, the pace
-table and `outside_support`, lateral heat by side (D3) and the wet
-(D2).
+**Gate D1 on logged laps (`heat_gate.py`, `lapsim check-heat-chain`,
+2026-11-24).** The chain of `heat.py` counts a lap's seconds from the
+lap's start; production bins a whole stint on its rolling clock and sums
+a lap from the stint's bins. On a stint of one lap the two give the same
+bins to 1e-6 (a unit test against `statespace._bin_stint`). On the
+1,906 laps in 182 stints that production fits, from the samples
+production bins and with its fitted shares (1,782 laps have a heat from
+both sides), with the limits written into the gate before the run:
+
+| | formula cars | Inferno 86 | limit |
+|---|---|---|---|
+| a lap's heat over production's, mean size of the log ratio, worst tyre | 0.0052 | 0.0040 | 0.01 |
+| its mean (signed), any tyre | ±0.0001 | ±0.0002 | |
+| the same per stint (the stint's mean), mean size, worst tyre | 0.0017 | 0.0008 | 0.003 |
+| the bins' edges half a second back: 90th percentile of what a lap's heat moves, worst tyre | 0.0111 | 0.0058 | 0.02 |
+
+**Pass.** A lap's heat by this chain is production's on average to
+0.02 % and lap by lap to 0.4–0.5 %, and what is left is the phase of
+the bins: moving the edges half a second moves a lap by about as much
+(0.1–0.5 % in the mean, 1.1 % at the 90th percentile on the formula
+cars' front right). The twelve laps that hold a discarded
+window come back with no heat from either side.
+
+*The 0.5 s smoothing of issue #207's E0, measured and not adopted
+here.* #207 would smooth the lateral and the longitudinal over 0.5 s
+before the positive parts are taken, on both sides of a comparison.
+This chain does not, as production does not. A lap's heat as this
+chain has it over the same lap smoothed first:
+
+| | four-tyre range |
+|---|---|
+| logged laps, accelerometer (1,370) | +0.7 to +1.3 % |
+| logged laps, GPS-derived (401 of the formula cars) | +2.8 to +4.8 % |
+| simulated laps at each car's typical use (ten cells) | +0.6 to +1.0 % in the mean, 1.3 % at most on a tyre |
+
+So the two chains are 0.6 to 1.3 % apart on a simulated lap and as far
+on an accelerometer's, and several per cent on a GPS-derived series
+(its noise passes through the positive parts, which is what the
+smoothing is for). #207's gate E1 asks a simulated lap put through the
+observed side's chain to return the table's heat within 0.002: that
+holds only if the table is made by the chain the observed side is read
+by. The rule for #206's table and #207's comparison is therefore one
+chain on both sides, whichever it is; the two are not interchangeable.
+
+**Still #206's**: the pace table and `outside_support`, lateral heat by
+side (D3) and the wet (D2).
 
 **Batches, and speed.** The solver works on a batch of laps of one
 track, each with its own car and its own u (`solver.solve_laps`,
