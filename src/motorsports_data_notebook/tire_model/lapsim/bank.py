@@ -261,6 +261,35 @@ def tyre_lateral_g(
     return np.asarray(lat * np.cos(lean) - np.sin(lean))
 
 
+def to_tyres_frame(lat_g: np.ndarray | float, left_rad: np.ndarray | float) -> np.ndarray:
+    """A measured ground-frame lateral (g, positive in a right turn) as
+    what the tyres hold on a road whose left side is higher by
+    ``left_rad``: ``L·cos b − sin b``, the same rule as
+    :func:`tyre_lateral_g`. With the lateral taken positive into its own
+    corner, hand the lean into that corner instead."""
+    lean = np.asarray(left_rad, float)
+    return np.asarray(np.asarray(lat_g, float) * np.cos(lean) - np.sin(lean))
+
+
+def road_arrays(track: "TrackModel") -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """``(left, cos, kv)`` at the nodes of ``track``: its bank (rad,
+    positive where the left side is higher; zeros on a track without
+    one), and the two arrays the load on the tyres is made of, ``cos θ·cos
+    b`` and ``κ_v + |κ|·sin b`` with b the lean into the turn. The load
+    over the weight at the speed V is ``cos + V²·kv / g``, as the solver's
+    passes have it (:func:`~.solver._road`)."""
+    n = track.n
+    kappa = np.abs(np.nan_to_num(np.asarray(track.kappa_heat, float)))
+    grade = np.nan_to_num(np.asarray(track.grade, float))
+    kv = np.nan_to_num(np.asarray(track.kappa_v, float)) if len(track.kappa_v) == n else np.zeros(n)
+    cos = 1.0 / np.sqrt(1.0 + grade**2)
+    if len(track.bank) != n:
+        return np.zeros(n), cos, kv
+    left = np.nan_to_num(np.asarray(track.bank, float))
+    lean = into_turn(left, np.nan_to_num(np.asarray(track.kappa_heat, float)))
+    return left, cos * np.cos(lean), kv + kappa * np.sin(lean)
+
+
 def attach(track: "TrackModel", ground: Ground | None) -> RoadBank | None:
     """Give ``track`` its bank from ``ground`` (``bank``, ``bank_flag`` and
     ``meta["bank"]``) and return it; a track the model does not read, or
@@ -285,7 +314,9 @@ __all__ = [
     "cross_sections",
     "into_turn",
     "notch_zones",
+    "road_arrays",
     "road_bank",
+    "to_tyres_frame",
     "tyre_lateral_g",
     "zone_nodes",
 ]

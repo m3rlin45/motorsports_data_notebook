@@ -102,6 +102,12 @@ class TestThrottleSamples:
         got = smp.throttle_samples(sig, *_where())
         assert (got["straight"] == (got["t_s"] < 250 * DT)).all()
         assert (~got["straight"]).sum() > 100
+        # the tyres' frame beside the ground frame: the same on a flat road
+        assert np.array_equal(got["lat_tyre_g"], got["lat_g"])
+        sig.lat_tyre = lat * 0.9
+        banked = smp.throttle_samples(sig, *_where())
+        assert banked["lat_tyre_g"].max() == pytest.approx(0.54)
+        assert np.array_equal(banked["straight"], got["straight"])  # still by the ground frame
 
     def test_a_flat_shift_is_cut_out_by_the_gear(self):
         n = 500
@@ -201,6 +207,34 @@ class TestBrakeZones:
         got = smp.brake_zones(sig, *_where())
         assert set(got["source"]) == {"decel"} and got["brake_max"].isna().all()
 
+    def test_the_held_part_of_a_stop_and_its_second_reading(self):
+        sig = self._sig()
+        sig.brake[100:110] = 10.0  # building: under 80 % of the 20 it reaches
+        sig.long_acc = np.where(sig.brake_on, -0.9, np.nan)  # the accelerometer's own scale
+        sig.long_acc[400:450] = np.nan  # the second stop is not IMU-sourced
+        sig.lat_tyre = np.full(500, 0.2)
+        got = smp.brake_zones(sig, *_where(grade=0.05))
+        first, second = got.iloc[0], got.iloc[1]
+        held = np.r_[110:150, 153:175]  # the fixes at 80 % of the pressure or more
+        assert first["held_s"] == pytest.approx(len(held) * DT)
+        assert first["decel_held_g"] == pytest.approx(np.mean(-(sig.long_g[held] + 0.05)))
+        assert first["decel_held_accel_g"] == pytest.approx(0.9)  # as the sensor reads it
+        assert first["v_held_ms"] == pytest.approx(np.mean(sig.geom.speed[held]))
+        assert first["lat_held_tyre_g"] == pytest.approx(0.2)
+        assert first["lat_peak_tyre_g"] == pytest.approx(0.2)
+        assert first["lat_mean_tyre_g"] == pytest.approx(0.2)
+        assert second["decel_held_g"] == pytest.approx(0.75) and np.isnan(
+            second["decel_held_accel_g"]
+        )
+
+    def test_no_held_part_without_a_pressure_channel_and_the_flat_road(self):
+        sig = self._sig()
+        flat = smp.brake_zones(sig, *_where())
+        assert flat.iloc[0]["lat_peak_tyre_g"] == pytest.approx(flat.iloc[0]["lat_peak_g"])
+        sig.info["brake_channel"] = ""
+        bare = smp.brake_zones(sig, *_where())
+        assert bare[["held_s", "decel_held_g", "decel_held_accel_g"]].isna().all().all()
+
 
 class TestApexRows:
     def _track(self):
@@ -244,6 +278,40 @@ class TestApexRows:
         assert a["lat_accel_g"] == pytest.approx(1.1)
         assert b["lat_doppler_g"] == pytest.approx(0.9)  # from both ends of the lap
         assert np.isnan(b["lat_accel_g"])
+        # a flat road: the tyres hold what the ground frame reads, under the car's weight
+        assert a["lat_tyre_g"] == pytest.approx(1.5) and a["load"] == pytest.approx(1.0)
+
+    def test_the_tyres_frame_and_the_load_at_a_banked_apex(self):
+        track = self._track()
+        n = track.n
+        track.kappa_heat = np.where((track.s_m >= 100) & (track.s_m <= 300), -0.02, 0.0)
+        track.grade = np.full(n, 0.03)
+        track.kappa_v = np.full(n, 1e-4)
+        track.bank = np.full(n, -0.05)  # the right side higher: into the left corner
+        track.bank[(track.s_m > 195) & (track.s_m < 205)] = -0.5  # a spike the median leaves out
+        s, _, lap_of = _where()
+        lat = np.where((s >= 100) & (s <= 300), -1.2, 0.0)
+        speed = np.full(500, 25.0)
+        got = smp.apex_rows(_signals(lat_g=lat, speed=speed), track, s, lap_of)
+        a = got.iloc[0]
+        # leaning into the corner by 0.05 rad, the road carries part of the cornering
+        assert a["lat_tyre_g"] == pytest.approx(1.2 * math.cos(0.05) - math.sin(0.05))
+        cos = math.cos(0.05) / math.sqrt(1 + 0.03**2)
+        assert a["load"] == pytest.approx(cos + 25.0**2 * (1e-4 + 0.02 * math.sin(0.05)) / G)
+
+    def test_a_sessions_lateral_in_the_tyres_frame(self):
+        track = self._track()
+        track.bank = np.full(track.n, 0.04)  # the left side higher
+        s, _, _ = _where()
+        s[:10] = np.nan  # before the first lap
+        lat = np.full(500, 0.8)
+        got = smp.in_tyres_frame(_signals(lat_g=lat), track, s)
+        assert got[100] == pytest.approx(0.8 * math.cos(0.04) - math.sin(0.04))  # a right turn
+        assert got[0] == pytest.approx(0.8)
+        left = smp.in_tyres_frame(_signals(lat_g=-lat), track, s)
+        assert left[100] == pytest.approx(-(0.8 * math.cos(0.04) + math.sin(0.04)))
+        track.bank = np.zeros(0)
+        assert np.array_equal(smp.in_tyres_frame(_signals(lat_g=lat), track, s), lat)
 
 
 def _dataset(tmp_path, **kwargs):

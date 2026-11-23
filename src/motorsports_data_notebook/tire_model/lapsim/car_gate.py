@@ -743,6 +743,7 @@ def simulated_tables(
         for k, u in enumerate(RECOVERY_U):
             sim = sv.simulate_lap(profile, car, u)
             sig, s, grade, lap_of = signals_from_sim(sim, profile, car)
+            sig.lat_tyre = smp.in_tyres_frame(sig, track, s)
             got = {
                 "throttle": smp.throttle_samples(sig, s, grade, lap_of),
                 "coast": smp.coast_samples(sig, s, grade, lap_of),

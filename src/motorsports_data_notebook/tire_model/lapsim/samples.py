@@ -3,7 +3,11 @@
 What each car did on its build laps, as tables a person can read; the car
 model (C2) takes its numbers from them. Everything is in the ground frame
 on the position clock (:mod:`.frame`), and every sample knows where on the
-layout's track it is, so the track's grade can be taken out.
+layout's track it is, so the track's grade can be taken out. Since
+version 5 the laterals are also kept in the tyres' frame, beside the
+ground-frame ones (``*_tyre_g``: what the tyres hold on the road's bank,
+:func:`~.bank.to_tyres_frame`; the same number on a track without a
+bank), and an apex has the ``load`` on the tyres there (#312).
 
 - **Full throttle** (``throttle``): the fixes where the throttle has been
   wide open for :data:`FULL_HELD_S` and stays so for the rest of the
@@ -51,6 +55,7 @@ import pandas as pd
 from ...tire_etl import dataset
 from ...tire_etl.aggregates import channel_series
 from ...tire_etl.kinematics import G_MS2
+from . import bank as bankmod
 from . import frame as frm
 from . import geometry as geo
 from . import track as trk
@@ -58,7 +63,7 @@ from .gates import GateItem, GateReport, md_table
 
 logger = logging.getLogger(__name__)
 
-TABLES_VERSION = 4
+TABLES_VERSION = 5
 TABLE_NAMES = ("sessions", "throttle", "coast", "brake", "apex")
 #: Cars the programme fits a model for; the others get tables where their
 #: channels allow and are listed.
@@ -97,6 +102,11 @@ BIN_MIN_SAMPLES = 50
 GRIP_LIMITED_SHARE = 0.85
 MIN_VOTE_DAYS = 3
 APEX_COVER_MIN = 0.99
+#: The road at an apex (its bank, the load on the tyres) is the median
+#: over this far either side of it.
+APEX_ROAD_M = 10.0
+#: A stop's held part needs this many fixes.
+HELD_MIN_FIXES = 3
 
 
 # ------------------------------------------------------------------ helpers
@@ -187,6 +197,15 @@ class Signals:
     rpm: np.ndarray
     lat_acc: np.ndarray  # accelerometer lateral over 0.5 s on this clock; NaN unless IMU
     info: dict  # the session's row of the ``sessions`` table
+    #: The accelerometer's longitudinal, as ``lat_acc``; None: not read.
+    long_acc: np.ndarray | None = None
+    #: ``lat_g`` in the tyres' frame, once the session is laid on a track
+    #: (:func:`in_tyres_frame`); None: as ``lat_g`` (a flat road).
+    lat_tyre: np.ndarray | None = None
+
+    @property
+    def lat_tyre_g(self) -> np.ndarray:
+        return self.lat_g if self.lat_tyre is None else self.lat_tyre
 
 
 def session_signals(
@@ -248,6 +267,7 @@ def session_signals(
     info.update(has_gear=bool(np.isfinite(gear).any()), has_rpm=bool(np.isfinite(rpm).any()))
 
     lat_acc = np.full(n, np.nan)
+    long_acc = np.full(n, np.nan)
     record = frm.FrameRecord(session_id=session_id)
     inertial = frm.load_inertial(root, session_id)
     if inertial is not None and inertial.is_imu.any():
@@ -256,8 +276,9 @@ def session_signals(
         )
         record = frm.session_frame(geom, inertial, laps)
         if np.isfinite(record.accel_delay_s):
-            acc, _, is_imu = frm._accel_on_position_clock(geom, inertial, record.accel_delay_s)
+            acc, lng, is_imu = frm._accel_on_position_clock(geom, inertial, record.accel_delay_s)
             lat_acc = np.where(is_imu, acc, np.nan)
+            long_acc = np.where(is_imu, lng, np.nan)
     info.update(
         has_accel=bool(np.isfinite(lat_acc).any()),
         accel_delay_s=record.accel_delay_s,
@@ -276,7 +297,20 @@ def session_signals(
         rpm=rpm,
         lat_acc=lat_acc,
         info=info,
+        long_acc=long_acc,
     )
+
+
+def in_tyres_frame(sig: Signals, track: trk.TrackModel, s: np.ndarray) -> np.ndarray:
+    """The session's ground-frame lateral as what the tyres hold on the
+    road's bank at each fix's place on ``track`` (``s`` from
+    :func:`track_position`); ``lat_g`` itself where the track has no bank
+    or the fix is on no lap."""
+    left = bankmod.road_arrays(track)[0]
+    at = np.zeros(len(s))
+    ok = np.isfinite(s)
+    at[ok] = np.interp(s[ok], track.s_m, left, period=track.length_m)
+    return bankmod.to_tyres_frame(sig.lat_g, at)
 
 
 def track_position(
@@ -378,6 +412,7 @@ def _sample_frame(
     )
     if straight:
         out["straight"] = np.abs(out["lat_g"].to_numpy()) < STRAIGHT_LAT_G
+    out["lat_tyre_g"] = _f32(sig.lat_tyre_g[pick])
     return out
 
 
@@ -399,6 +434,13 @@ BRAKE_COLUMNS = [
     "brake_max",
     "lift_s",
     "build_s",
+    "lat_peak_tyre_g",
+    "lat_mean_tyre_g",
+    "held_s",
+    "decel_held_g",
+    "decel_held_accel_g",
+    "v_held_ms",
+    "lat_held_tyre_g",
 ]
 
 
@@ -417,6 +459,18 @@ def brake_zones(sig: Signals, s: np.ndarray, grade: np.ndarray, lap_of: np.ndarr
     application (NaN when that is over :data:`LIFT_MAX_S` before: not a
     stop from full throttle) and ``build_s`` the time from the application
     to :data:`BRAKE_BUILD_SHARE` of the zone's highest pressure.
+
+    ``lat_peak_tyre_g`` and ``lat_mean_tyre_g`` are the two laterals in
+    the tyres' frame. The ``*held*`` columns are over the *held part* of
+    the stop, the fixes where the pressure is at
+    :data:`BRAKE_BUILD_SHARE` or more of the zone's highest (NaN without a
+    pressure channel or with fewer than :data:`HELD_MIN_FIXES` of them):
+    ``held_s`` its time, ``decel_held_g`` the mean deceleration there (a
+    level the car held, not a peak), ``decel_held_accel_g`` the same from
+    the accelerometer's longitudinal as the sensor reads it (it reads the
+    slope with the deceleration, as ``decel_held_g`` has it taken out;
+    NaN unless every fix is IMU-sourced), ``v_held_ms`` the mean speed
+    and ``lat_held_tyre_g`` the mean lateral in the tyres' frame.
     """
     t = sig.geom.t
     v = sig.geom.speed
@@ -434,6 +488,9 @@ def brake_zones(sig: Signals, s: np.ndarray, grade: np.ndarray, lap_of: np.ndarr
     with np.errstate(invalid="ignore"):
         decel = -(sig.long_g + grade)
         lat_abs = np.abs(sig.lat_g)
+        tyre_abs = np.abs(sig.lat_tyre_g)
+    long_acc = sig.long_acc if sig.long_acc is not None else np.full(len(t), np.nan)
+    period = float(np.median(np.diff(t))) if len(t) > 1 else float("nan")
     rows: list[dict] = []
     for first, last in runs(merged):
         if lap_of[first] < 0 or t[last] - t[first] < ZONE_MIN_S:
@@ -459,6 +516,28 @@ def brake_zones(sig: Signals, s: np.ndarray, grade: np.ndarray, lap_of: np.ndarr
             most = np.flatnonzero(pressure >= BRAKE_BUILD_SHARE * np.nanmax(pressure))
             if most.size:
                 build = float(t[first + most[0]] - t[first])
+        held = {
+            "held_s": np.nan,
+            "decel_held_g": np.nan,
+            "decel_held_accel_g": np.nan,
+            "v_held_ms": np.nan,
+            "lat_held_tyre_g": np.nan,
+        }
+        if source == "pressure":
+            part = first + np.flatnonzero(
+                (sig.brake[sl] >= BRAKE_BUILD_SHARE * np.nanmax(sig.brake[sl])) & np.isfinite(d)
+            )
+            if part.size >= HELD_MIN_FIXES:
+                acc = long_acc[part]
+                held = {
+                    "held_s": float(part.size * period),
+                    "decel_held_g": float(np.mean(decel[part])),
+                    "decel_held_accel_g": (
+                        float(-np.mean(acc)) if np.isfinite(acc).all() else np.nan
+                    ),
+                    "v_held_ms": float(np.mean(v[part])),
+                    "lat_held_tyre_g": float(np.nanmean(tyre_abs[part])),
+                }
         rows.append(
             {
                 "lap_num": int(lap_of[first]),
@@ -478,6 +557,9 @@ def brake_zones(sig: Signals, s: np.ndarray, grade: np.ndarray, lap_of: np.ndarr
                 "brake_max": float(np.nanmax(sig.brake[sl])) if source == "pressure" else np.nan,
                 "lift_s": lift,
                 "build_s": build,
+                "lat_peak_tyre_g": float(tyre_abs[peak]),
+                "lat_mean_tyre_g": float(np.nanmean(tyre_abs[sl])),
+                **held,
             }
         )
     return pd.DataFrame(rows, columns=BRAKE_COLUMNS)
@@ -493,6 +575,8 @@ APEX_COLUMNS = [
     "lat_track_g",
     "lat_doppler_g",
     "lat_accel_g",
+    "lat_tyre_g",
+    "load",
 ]
 
 
@@ -509,9 +593,22 @@ def apex_rows(
     0.5 s on the position clock; NaN on a lap that is not IMU-sourced
     throughout the corner). A corner that spans the start/finish line is
     read from both ends of the lap.
+
+    ``lat_tyre_g`` is ``lat_doppler_g`` in the tyres' frame: what the
+    tyres hold of it on the road's bank at the apex (the bank's median
+    over ± :data:`APEX_ROAD_M`). ``load`` is the load on the tyres there
+    over the car's weight at the apex speed, ``cos θ·cos b + V²(κ_v +
+    |κ|·sin b) / g`` (the same median): the lateral over it is the share
+    of the grip the pass used.
     """
     length = track.length_m
     v = sig.geom.speed
+    left, cos, kv = bankmod.road_arrays(track)
+    reach = max(int(round(APEX_ROAD_M / track.ds_m)), 0)
+    road: list[tuple[float, np.ndarray, np.ndarray]] = []
+    for corner in track.corners:
+        near = (int(round(corner["s_apex"] / track.ds_m)) + np.arange(-reach, reach + 1)) % track.n
+        road.append((float(np.median(left[near])), cos[near], kv[near]))
     rows: list[dict] = []
     for lap_num in np.unique(lap_of[lap_of >= 0]):
         in_lap = lap_of == lap_num
@@ -526,6 +623,8 @@ def apex_rows(
             off = np.abs(np.mod(s[idx] - s_apex + length / 2.0, length) - length / 2.0)
             at = idx[int(np.argmin(off))]
             acc = sign * sig.lat_acc[idx]
+            doppler = float(np.max(sign * sig.lat_g[idx]))
+            bank_left, cos_near, kv_near = road[k]
             rows.append(
                 {
                     "lap_num": int(lap_num),
@@ -535,8 +634,11 @@ def apex_rows(
                     "v_apex_ms": float(v[at]),
                     "v_min_ms": float(np.min(v[idx])),
                     "lat_track_g": float(v[at] ** 2 * abs(corner["kappa_apex"]) / G_MS2),
-                    "lat_doppler_g": float(np.max(sign * sig.lat_g[idx])),
+                    "lat_doppler_g": doppler,
                     "lat_accel_g": float(np.max(acc)) if np.isfinite(acc).all() else np.nan,
+                    # positive into the corner, so the lean into it
+                    "lat_tyre_g": float(bankmod.to_tyres_frame(doppler, sign * bank_left)),
+                    "load": float(np.median(cos_near + v[at] ** 2 * kv_near / G_MS2)),
                 }
             )
     return pd.DataFrame(rows, columns=APEX_COLUMNS)
@@ -577,6 +679,7 @@ def session_tables(
     if sig is None:
         return None
     s, grade, lap_of = track_position(sig, track, laps)
+    sig.lat_tyre = in_tyres_frame(sig, track, s)
     basis = dict(zip(laps["lap_num"].astype(int), laps["basis"]))
     out = {
         "throttle": throttle_samples(sig, s, grade, lap_of),
@@ -1098,6 +1201,7 @@ __all__ = [
     "held_after",
     "held_for",
     "hold_last",
+    "in_tyres_frame",
     "lateral_level",
     "load_track",
     "runs",
