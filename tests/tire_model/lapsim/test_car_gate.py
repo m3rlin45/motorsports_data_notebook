@@ -12,6 +12,7 @@ import pytest
 from motorsports_data_notebook.tire_model.lapsim import car as cm
 from motorsports_data_notebook.tire_model.lapsim import car_gate as cg
 from motorsports_data_notebook.tire_model.lapsim import geometry as geo
+from motorsports_data_notebook.tire_model.lapsim import limits as lim
 from motorsports_data_notebook.tire_model.lapsim import samples as smp
 from motorsports_data_notebook.tire_model.lapsim import solver as sv
 from motorsports_data_notebook.tire_model.lapsim import track as trk
@@ -559,6 +560,80 @@ class TestRecovery:
         assert set(tables.apex["corner"]) == {0, 1}
         assert len(tables.brake) == 2 * len(cg.RECOVERY_U)
         assert (tables.throttle["a_g"] > 0).all()
+
+
+class TestPlantedLimit:
+    """The cornering limit's statistic on a car whose limit is known."""
+
+    def _plant(self, **kw):
+        track = _oval_track(straight=300.0)
+        args = dict(use=0.9, sd_pass=0.04, noise_g=0.0, days=6, laps=10, m=10)
+        args.update(kw)
+        return cg.plant_limit(CAR, track, **args)
+
+    def test_without_noise_the_statistic_reads_the_planted_passes(self):
+        got = self._plant()
+        assert got["limit"] == CAR.mu_y and got["corners"] == 2 and got["passes"] == 120
+        assert got["truth"] < got["limit"]  # a typical use of 0.9 and a spread of 4 %
+        # the table builder alone: a corner's largest lateral over the load at its apex
+        assert got["clean"] == pytest.approx(got["truth"], rel=0.01)
+        assert got["level"] == pytest.approx(got["clean"], rel=1e-6)
+        assert got["cross"] == pytest.approx(got["clean"], rel=0.005)
+        assert got["sd_noise"] == pytest.approx(0.0, abs=1e-9)
+
+    def test_noise_inside_the_window_raises_a_sensors_own_peak(self):
+        got = self._plant(noise_g=0.04, seed=1)
+        assert got["raw"] > got["clean"] * 1.01  # the largest of noisy fixes
+        assert got["level"] < got["raw"]  # the correction takes the spread's part out
+        assert got["level"] > got["truth"] * 1.01  # and leaves what the maximum adds
+        # read where the other sensor peaks, the noise chooses nothing for itself
+        assert abs(got["cross"] / got["truth"] - 1.0) < abs(got["level"] / got["truth"] - 1.0)
+        assert got["sd_noise"] > 0.005
+
+    def test_a_capped_top_and_mistakes(self):
+        capped = self._plant(top="capped")
+        assert capped["truth"] == pytest.approx(
+            CAR.mu_y, rel=2e-3
+        )  # the passes pile up at the limit
+        slow = self._plant(top="mistakes", seed=2)
+        assert slow["truth"] < CAR.mu_y
+        with pytest.raises(ValueError):
+            self._plant(top="flat")
+
+    def test_an_error_the_readings_share_is_not_removed(self):
+        apart = self._plant(noise_g=0.02, seed=3)
+        shared = self._plant(noise_g=0.02, sd_shared=0.03, seed=3)
+        assert shared["level"] > apart["level"] and shared["cross"] > apart["cross"]
+
+    def test_the_gates_rows(self):
+        track = _oval_track(straight=300.0)
+        model = _model()
+        got = lim.Limit(
+            1.2,
+            1.21,
+            20,
+            corners=2,
+            by_corner=pd.DataFrame(
+                {
+                    "layout_id": ["oval", "oval"],
+                    "corner": [0, 1],
+                    "n": [60, 60],
+                    "sd": [0.045, 0.045],
+                    "sd_noise": [0.012, 0.012],
+                    "supports": [True, True],
+                }
+            ),
+        )
+        rows = pd.DataFrame(cg.plant_rows("car", model, got, {"oval": track}))
+        assert list(rows["top"]) == [t for t in cg.PLANT_TOPS for _ in range(2)]
+        assert set(rows["shared_sd"]) == {0.0, cg.PLANT_SHARED_SD}
+        assert (rows["limit"] == 1.2).all()  # the car's own limit is what is planted
+        # the noise is set so that the plant shows the statistic what the logs show it
+        bell = rows[(rows["top"] == "bell") & (rows["shared_sd"] == 0.0)].iloc[0]
+        assert bell["noise_found"] == pytest.approx(0.012, rel=0.25)
+        assert bell["level"] > bell["cross"]
+        assert cg.plant_rows("car", model, replace(got, one_sensor=True), {"oval": track}) == []
+        assert cg.plant_rows("car", model, got, {}) == []
 
 
 class TestGate:

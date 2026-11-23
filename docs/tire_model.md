@@ -3857,6 +3857,117 @@ is stage 9, judged by the score. Must show, and does: gate C2's report
 and the three car models are identical to the baseline's, byte for byte
 but for the time of the fit, and gate C3's report is identical.
 
+**Stage 2, the cornering limit's statistic** (`limits.py`; the driver
+committee's clause 1.1, written out in issue #312 because the
+committee's probes were scratch). A pass is one dry build lap through
+one grip-limited corner. It has two readings of the lateral the tyres
+hold over the load on them: the Doppler's (`lat_tyre_g / load`) and the
+accelerometer's, put on the Doppler's scale for its session (an
+accelerometer reads less than the tyres hold by the body's roll). The
+pass's value is their geometric mean. Per corner, every dry day pooled,
+the level is the expected largest of m passes drawn from its n without
+replacement, `Σ w_i·x_(i)` with `w_i = C(i−1, m−1) / C(n, m)`
+(`limits.expected_best`); the car's level is the median over the
+corners with 2m passes or more, every layout together. m = 20 by the
+owner's decision. The model keeps it as `grip.mu_y_limit`, with its
+workings in `meta.limit`; the solver does not use it until stage 4, and
+every fold of gate C3 reads its own (the fit is handed the tables
+without the fold).
+
+The committee's uncorrected figures come back exactly from the
+package's tables (1.261 / 1.481 / 1.525 at m = 10, 1.287 / 1.496 /
+1.549 at m = 20, 1.304 / 1.516 / 1.602 at m = 50; Inferno 86 / KK-F /
+KK-SII), and so does their table of which corners support which m. The
+noise correction is this build's own (the committee's was applied by
+hand: +0.73 / +0.28 / +0.66 % at m = 20): the independent noise left in
+the two-reading mean has a quarter of the variance of the two readings'
+difference within a corner and day, and a corner's passes are drawn
+towards its mean by the noise-free share of their spread. It takes
+0.34 / 0.21 / 0.55 % off. As gate C2 reports it:
+
+| | Inferno 86 | KK-SII | KK-F |
+|---|---|---|---|
+| level, m = 20 [5 %, 95 % of a day bootstrap] | 1.283 [1.261, 1.285] | 1.541 [1.514, 1.551] | 1.493 [1.475, 1.511] |
+| m = 10 / m = 50 | 1.257 / 1.299 | 1.516 / 1.593 | 1.478 / 1.512 |
+| supporting corners at m = 20 | 15 (Fuji, Sodegaura) | 14 (Suzuka, Tsukuba) | 5 (Tsukuba) |
+| layouts that borrow the level | Motegi, Tsukuba | Fuji | Fuji, Suzuka |
+| the same, each sensor read where the other peaks | 1.249 | 1.524 | 1.466 |
+| on the Doppler alone, uncorrected | 1.312 | 1.584 | 1.614 |
+| the convention's `mu_y` (what the solver uses today) | 1.160 | 1.318 | 1.372 |
+
+A car or a fold with no corner that supports m on two readings is read
+on the Doppler alone and says so (`one_sensor`); that reads 2–3 % high
+where both exist, and 8 % on the KK-F, whose Doppler-only corners are at
+Fuji and Suzuka on its other loggers. The KK-F's fold without Tsukuba is
+such a fold.
+
+**Stage 3, the statistic on a planted car** (`car_gate.plant_limit`,
+gate C2; the committee's clause 5.4: "nobody has run that plant for
+this statistic; it comes before step 1 is accepted"). The rule was
+written on #312 before the run: on every top, the level read is within
+1 % of the expected best of m of the planted passes and no more than
+1 % above the planted limit. **It fails, on every car and every top,
+and the statistic was not changed to pass.**
+
+A car with the logged car's limit is driven for 12 days of 10 laps on
+the layout most of its supporting corners are at, each corner pass at
+its own use of the limit (the lap is driven at the limit on the track
+with that corner's curvature divided by its use, which is the same
+lap), through the package's own table builder, with noise added to both
+readings' series *before* the corner's largest value is taken. The
+passes' spread is the car's own, and the noise is set so that the
+statistic finds in the plant the noise it finds in the logs (0.013 /
+0.016 / 0.010 in the two-reading mean, which takes 0.032 / 0.046 /
+0.031 g per reading, smoothed over 0.5 s as the readings are). Against
+the expected best of 20 of the planted passes:
+
+| top of a corner's passes | Inferno 86 | KK-SII | KK-F |
+|---|---|---|---|
+| bell-shaped: the committee's reading (each sensor's own peak) | +1.8 % | +2.0 % | +2.2 % |
+| capped at the limit | +3.5 % | +3.6 % | +2.7 % |
+| bell-shaped with slow mistakes in 2 % of passes | +2.8 % | +3.0 % | +2.2 % |
+| bell-shaped: each sensor read where the other peaks | −0.9 % | −0.7 % | −0.1 % |
+| capped, read so | +1.5 % | +1.0 % | +1.0 % |
+| with mistakes, read so | −0.6 % | −0.7 % | −0.4 % |
+| the table builder alone, no noise | −0.5 to +0.6 % | −0.5 to +0.3 % | −0.2 to +0.2 % |
+
+The cause is one the limits seat named and did not measure: a reading
+is the *largest* value of a corner's fixes, and the largest of noisy
+fixes is raised by the noise, on both sensors alike. That is a shift of
+every pass, not a spread, so no correction built on the spread of the
+two readings' difference can see it; the correction takes off the 0.3
+to 0.6 % it was built for and leaves the rest. The logs show the same
+thing directly: over 5,429 passes a sensor's own peak sits above its
+value at the fix where the *other* sensor peaks by 3.9 % and 3.1 %
+(Doppler and accelerometer, Inferno 86), 3.0 % and 2.4 % (KK-SII) and
+1.4 % and 1.1 % (KK-F), and the two sensors' difference is fix-to-fix
+(sd 2.1–3.1 % on a corner's plateau, 0.91–0.94 correlated from one fix
+to the next) far more than pass-to-pass (0.6–1.1 %).
+
+Reading each sensor where the other one peaks is a choice the sensor's
+own noise has no part in. It is kept in the apex table (tables
+version 6: `lat_tyre_cross_g`, `lat_accel_cross_g`) and reported beside
+the committee's reading by `limits.car_limit(..., cross=True)`. On the
+plant it is within 1 % on a bell-shaped top and with mistakes, and
+1.0–1.5 % high on a capped one (the mean of two readings still has
+noise, and a top with no spread of its own has nothing to hide it in);
+it reads low where the two peaks are apart on a corner that is not
+flat. An error the two readings share by day and corner (2.5 % planted,
+one draw of twelve days) adds 1.3–2.9 % to either reading on the
+Inferno 86 and the KK-F and 0.3–1.4 % on the KK-SII, as the design says
+it must: no reading removes it.
+
+What this means and what it does not. The level the committee signed
+(1.278 / 1.539 / 1.492) is not a floor under the car's limit: at the
+logs' noise it reads about 2 % above the best the planted car showed,
+and 3 % above a limit the driver reaches. Read where the other sensor
+peaks, the cars are at 1.249 / 1.524 / 1.466. Which reading is the
+car's limit is the owner's to rule: the default stays the committee's
+until then, gate C2 shows the failed check, and nothing in the stages
+that follow depends on the choice except the max driver's margins
+(stage 6): with the knob solved from a lap time, a simulated lap is the
+same lap at any level of the limit.
+
 #### D1 (in part). The lap solver (`solver.py`, 2026-11-15)
 
 C2's remaining clauses and all of C3 need `simulate_lap` and `solve_u`,

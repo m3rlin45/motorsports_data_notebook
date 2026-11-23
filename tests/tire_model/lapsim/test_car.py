@@ -703,6 +703,7 @@ class TestFit:
         assert model.power["k_corner_drag"] == pytest.approx(0.04, abs=0.003)
         assert model.grip == {
             "mu_y": pytest.approx(1.4),
+            "mu_y_limit": None,  # an apex table without the tyres' frame has no passes
             "mu_b": pytest.approx(0.96 - C_TRUE * 1600 / G, abs=0.01),
             "n_brake": 1.0,
             "brake_ellipse": None,  # the zones here have no lateral
@@ -710,6 +711,7 @@ class TestFit:
         }
         assert model.wet["grip_scale"] == pytest.approx(0.8)
         assert model.support["straight"] == {"v_min": 25.0, "v_max": 60.0}
+        assert model.meta["limit"]["level"] is None and not work["limit"].found
         assert model.ref_u == {} and "provisional" in model.meta["mu_y_source"]
         assert set(work) >= {"drag", "engines", "days", "density", "braking"}
         back = cm.CarModel.load(model.save(tmp_path / "car.json"))

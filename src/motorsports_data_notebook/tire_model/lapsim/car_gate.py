@@ -40,6 +40,7 @@ from ...tire_etl.kinematics import G_MS2
 from . import car as cm
 from . import frame as frm
 from . import geometry as geo
+from . import limits as lim
 from . import samples as smp
 from . import solver as sv
 from . import track as trk
@@ -830,6 +831,255 @@ def recover(car: sv.SolverCar, tracks: dict[str, trk.TrackModel]) -> dict:
     }
 
 
+# ------------------------------------------- the limit's statistic on a plant
+
+#: The plant of the cornering limit's statistic (clause 5.4 of the driver
+#: committee's design): days and laps a day, the tops of a corner's
+#: passes, and the rule it is held to.
+PLANT_DAYS = 12
+PLANT_LAPS = 10
+PLANT_TOPS = ("bell", "capped", "mistakes")
+#: A capped top: the driver's typical use sits this close under the limit.
+PLANT_CAPPED_USE = 0.97
+#: Slow-side mistakes: this share of passes, this many spreads down.
+PLANT_MISTAKE_SHARE = 0.02
+PLANT_MISTAKE_SDS = 3.0
+#: The level read must be within this of the expected best of m of the
+#: planted passes, and no more than this above the planted limit.
+PLANT_MAX_OFF = 0.01
+
+
+def _smooth_noise(rng: np.random.Generator, n: int, sd: float) -> np.ndarray:
+    """Noise of standard deviation ``sd`` as a series smoothed over
+    :data:`~.frame.GROUND_SMOOTH_S` at :data:`SIM_HZ` has it: neighbouring
+    fixes share most of it, so the largest of a corner's fixes is raised
+    by less than white noise would raise it."""
+    if sd <= 0.0:
+        return np.zeros(n)
+    width = max(int(round(frm.GROUND_SMOOTH_S * SIM_HZ)), 1)
+    raw = rng.normal(0.0, 1.0, n + width - 1)
+    out = np.convolve(raw, np.ones(width) / width, mode="valid")
+    return np.asarray(out / out.std() * sd)
+
+
+def plant_limit(
+    car: sv.SolverCar,
+    track: trk.TrackModel,
+    *,
+    top: str = "bell",
+    use: float = 0.90,
+    sd_pass: float = 0.04,
+    sd_shared: float = 0.0,
+    noise_g: float = 0.03,
+    accel_scale: float = 0.93,
+    days: int = PLANT_DAYS,
+    laps: int = PLANT_LAPS,
+    m: int = lim.M_DEFAULT,
+    seed: int = 0,
+) -> dict:
+    """The cornering limit's statistic put to a car whose limit is known.
+
+    ``car`` (its ``mu_y`` the planted limit) is driven round ``track`` for
+    ``days`` × ``laps`` laps. On each lap every corner is taken at its own
+    use of the limit, drawn about ``use`` with the spread ``sd_pass`` (in
+    logs): the lap is driven at the limit on the track with that corner's
+    curvature divided by its use, which is the same lap. ``top`` is the
+    shape of the top of a corner's passes: ``bell`` (as drawn), ``capped``
+    (drawn about :data:`PLANT_CAPPED_USE` and cut off at the limit) or
+    ``mistakes`` (``bell`` with :data:`PLANT_MISTAKE_SHARE` of the passes
+    :data:`PLANT_MISTAKE_SDS` spreads slower). Each lap goes through the
+    package's own table builder (:func:`signals_from_sim`,
+    :func:`~.samples.apex_rows`) twice: as driven, and with noise of
+    ``noise_g`` added to each of the two readings' series *before* the
+    corner's largest value is taken, the accelerometer reading
+    ``accel_scale`` of what the tyres hold. ``sd_shared`` is an error the
+    two readings share, one per corner and day (the line, a kerb).
+
+    Returns the planted ``limit``; ``truth``, the expected best of m of
+    the planted passes (limit × use) by the statistic's own rule;
+    ``clean``, the statistic on the tables without noise (what the table
+    builder alone does to it); ``raw`` and ``level``, the statistic on the
+    noisy tables before and after its noise correction; ``cross``, the
+    same with each sensor read where the other peaks; ``sd_noise``, the
+    noise it found in the two-reading mean; and ``corners`` and
+    ``passes``."""
+    if top not in PLANT_TOPS:
+        raise ValueError(f"top must be one of {PLANT_TOPS}")
+    rng = np.random.default_rng(seed)
+    profile = sv.Profile.from_track(track)
+    n = profile.n
+    s_node = np.arange(n) * profile.ds_m
+    spans = []
+    for corner in track.corners:
+        a, b = float(corner["s_in"]), float(corner["s_out"])
+        spans.append((s_node >= a) & (s_node <= b) if a <= b else (s_node >= a) | (s_node <= b))
+    k_corners = len(spans)
+    centre = np.log(PLANT_CAPPED_USE if top == "capped" else use)
+    shared = rng.normal(0.0, sd_shared, (days, k_corners)) if sd_shared > 0.0 else None
+    rows: dict[str, list[pd.DataFrame]] = {"clean": [], "noisy": []}
+    uses = []
+    for day in range(days):
+        for lap in range(laps):
+            logw = centre + rng.normal(0.0, sd_pass, k_corners)
+            if top == "capped":
+                logw = np.minimum(logw, 0.0)
+            elif top == "mistakes":
+                logw -= PLANT_MISTAKE_SDS * sd_pass * (rng.random(k_corners) < PLANT_MISTAKE_SHARE)
+            w = np.exp(logw)
+            kappa = profile.kappa.copy()
+            for k, span in enumerate(spans):
+                kappa[span] = profile.kappa[span] / w[k]
+            sim = sv.simulate_lap(replace(profile, kappa=kappa), car, 1.0)
+            sig, s, _, lap_of = signals_from_sim(sim, profile, car)
+            tyre = smp.in_tyres_frame(sig, track, s)
+            for name in ("clean", "noisy"):
+                with_noise = name == "noisy"
+                sd = noise_g if with_noise else 0.0
+                one = replace(sig, lat_g=sig.lat_g + _smooth_noise(rng, len(s), sd))
+                one.lat_acc = accel_scale * tyre + _smooth_noise(rng, len(s), sd)
+                got = smp.apex_rows(one, track, s, lap_of)
+                if with_noise and shared is not None:
+                    scale = np.exp(shared[day, got["corner"].to_numpy()])
+                    for col in (
+                        "lat_doppler_g",
+                        "lat_accel_g",
+                        "lat_tyre_g",
+                        "lat_tyre_cross_g",
+                        "lat_accel_cross_g",
+                    ):
+                        got[col] = got[col] * scale
+                got.insert(0, "session_id", f"plant_{day}")
+                got.insert(1, "car", "plant")
+                got.insert(2, "date", f"2000-01-{day + 1:02d}")
+                got.insert(3, "layout_id", track.layout_key)
+                got.insert(4, "basis", "dry")
+                got["lap_num"] = day * laps + lap
+                rows[name].append(got)
+            uses.append(w)
+    noisy_rows = pd.concat(rows["noisy"], ignore_index=True)
+    read = lim.car_limit(noisy_rows, m)
+    crossed = lim.car_limit(noisy_rows, m, cross=True)
+    bare = lim.car_limit(pd.concat(rows["clean"], ignore_index=True), m, correct=False)
+    own = read.by_corner[read.by_corner["supports"]] if read.found else pd.DataFrame()
+    w_all = np.vstack(uses)
+    truth = float("nan")
+    if len(own):
+        truth = float(
+            np.median([lim.expected_best(car.mu_y * w_all[:, int(k)], m) for k in own["corner"]])
+        )
+    return {
+        "limit": float(car.mu_y),
+        "truth": truth,
+        "clean": bare.raw,
+        "raw": read.raw,
+        "level": read.level,
+        "cross": crossed.level,
+        "sd_noise": float(own["sd_noise"].median()) if len(own) else float("nan"),
+        "sd": float(own["sd"].median()) if len(own) else float("nan"),
+        "corners": read.corners,
+        "passes": read.passes,
+    }
+
+
+#: The plant in the gate: the error the two readings share, by day and
+#: corner (the whole of the committee's day-and-corner spread taken as
+#: shared error: an upper size).
+PLANT_SHARED_SD = 0.025
+
+
+def limit_rows(car: str, apex: pd.DataFrame, layouts: list[str]) -> list[dict]:
+    """The car's cornering limit at each m of :data:`~.limits.M_REPORTED`
+    for the gate's table: the level with its day bootstrap, what it
+    stands on, the layouts that borrow it, and beside it the same passes
+    read where the other sensor peaks (``cross``) and on the Doppler
+    alone (``doppler``)."""
+    rows = []
+    for m in lim.M_REPORTED:
+        got = lim.car_limit(apex, m, boot=lim.BOOT_RESAMPLES)
+        cross = lim.car_limit(apex, m, cross=True)
+        alone = lim.car_limit(apex.assign(lat_accel_g=np.nan), m)
+        rows.append(
+            {
+                "car": car,
+                "m": m,
+                "level": got.level,
+                "p05": got.lo,
+                "p95": got.hi,
+                "as_read": got.raw,
+                "corners": got.corners,
+                "passes": got.passes,
+                "one_sensor": got.one_sensor,
+                "stands_on": ", ".join(got.layouts),
+                "borrowed_by": ", ".join(k for k in layouts if k not in got.layouts),
+                "cross": cross.level,
+                "doppler": alone.level,
+            }
+        )
+    return rows
+
+
+def plant_rows(
+    car_name: str, model: cm.CarModel, limit: lim.Limit, tracks: dict[str, trk.TrackModel]
+) -> list[dict]:
+    """:func:`plant_limit` for a car as the logs have it: its limit
+    planted, on the layout most of its supporting corners are at, the
+    passes' typical use and spread as read from its own corners, and the
+    sensors' noise set so that the statistic finds in the plant the noise
+    it finds in the logs. One row per top, without and with an error the
+    two readings share (:data:`PLANT_SHARED_SD`)."""
+    own = limit.by_corner[limit.by_corner["supports"]]
+    if not limit.found or limit.one_sensor or own.empty:
+        return []
+    layout = str(own["layout_id"].value_counts().idxmax())
+    if layout not in tracks:
+        return []
+    at = own[own["layout_id"] == layout]
+    noise_logs = float(at["sd_noise"].median())
+    sd_pass = float(np.sqrt(max(float(at["sd"].median()) ** 2 - noise_logs**2, 0.0)))
+    # a corner's typical pass over its expected best: that far under the level
+    use = float(np.exp(-lim.best_of_normal(limit.m) * sd_pass))
+    car = replace(
+        sv.SolverCar.from_model(model, brake_use=False), mu_y=float(limit.level), shift_s=()
+    )
+    noise_g = noise_logs * float(np.sqrt(2.0)) * float(limit.level) * use
+    for _ in range(2):  # the noise found goes with the noise planted
+        found = plant_limit(car, tracks[layout], use=use, sd_pass=sd_pass, noise_g=noise_g)
+        if np.isfinite(found["sd_noise"]) and found["sd_noise"] > 0.0:
+            noise_g *= noise_logs / found["sd_noise"]
+    rows = []
+    for top in PLANT_TOPS:
+        for shared in (0.0, PLANT_SHARED_SD):
+            got = plant_limit(
+                car,
+                tracks[layout],
+                top=top,
+                use=use,
+                sd_pass=sd_pass,
+                sd_shared=shared,
+                noise_g=noise_g,
+            )
+            rows.append(
+                {
+                    "car": car_name,
+                    "layout_id": layout,
+                    "top": top,
+                    "shared_sd": shared,
+                    "limit": got["limit"],
+                    "truth": got["truth"],
+                    "no_noise": got["clean"] / got["truth"] - 1.0,
+                    "as_read": got["raw"] / got["truth"] - 1.0,
+                    "level": got["level"] / got["truth"] - 1.0,
+                    "cross": got["cross"] / got["truth"] - 1.0,
+                    "level_over_limit": got["level"] / got["limit"] - 1.0,
+                    "cross_over_limit": got["cross"] / got["limit"] - 1.0,
+                    "noise_logs": noise_logs,
+                    "noise_found": got["sd_noise"],
+                    "noise_g": noise_g,
+                }
+            )
+    return rows
+
+
 # ------------------------------------------------------------------ the gate
 
 
@@ -992,6 +1242,8 @@ def check_car_fit(
 
     models: dict[str, cm.CarModel] = {}
     ref_rows, rec_rows, score_rows, use_rows = [], [], [], []
+    lim_rows: list[dict] = []
+    planted: list[dict] = []
     use_bands: dict[str, pd.DataFrame] = {}
     ladders: list[pd.DataFrame] = []
     compounds = day_compounds(root, rows)
@@ -1026,6 +1278,8 @@ def check_car_fit(
         if cars_dir is not None:
             model.save(Path(cars_dir) / f"{car_name.replace(' ', '_')}.json")
         ladders.append(era_ladder(car_name, best, refs, work["days"], compounds))
+        lim_rows += limit_rows(car_name, tables.apex[tables.apex["car"] == car_name], sorted(own))
+        planted += plant_rows(car_name, model, work["limit"], own)
         for layout, r in refs.items():
             ref_rows.append(
                 {
@@ -1116,6 +1370,78 @@ def check_car_fit(
             + md_table(ref, floats="{:.4f}"),
         )
     )
+
+    # The car's cornering limit as its best moments, and the statistic on a plant.
+    limits = pd.DataFrame(lim_rows)
+    if len(limits):
+        main = limits[limits["m"] == lim.M_DEFAULT]
+        rep.items.append(
+            GateItem(
+                "The car's cornering limit: the expected best of m passes through a corner",
+                None,
+                "; ".join(
+                    f"{r.car} {r.level:.3f} [{r.p05:.3f}, {r.p95:.3f}] on {r.corners} corners"
+                    + (" (the Doppler alone)" if r.one_sensor else "")
+                    for r in main.itertuples()
+                ),
+                f"reported (#312; m = {lim.M_DEFAULT} by the owner's decision of 2026-11-23): "
+                "the best the car has been shown to do, a floor under its true limit",
+                "Per corner, every dry day pooled, the expected largest of m passes of the "
+                "lateral the tyres hold over the load on them, each pass read by the Doppler and "
+                "by the accelerometer (put on the Doppler's scale per session) and taken as "
+                "their geometric mean, with the independent noise of the two taken out; then the "
+                f"median over the grip-limited corners with {lim.SUPPORT_FACTOR}·m passes or "
+                "more (`.limits`). `level`: that; `p05`, `p95`: the ends of a bootstrap over the "
+                "car's days; `as_read`: before the noise is taken out; `stands_on`: the layouts "
+                "with a supporting corner, and `borrowed_by` those that take the car's level "
+                "without one. `cross`: the same statistic with each sensor read where the "
+                "*other* one peaks, which its own noise has no part in choosing (the plant below "
+                "says what each reading is worth); `doppler`: on the Doppler alone, uncorrected, "
+                "as a car or a fold without two readings is read. The model keeps `level` at "
+                f"m = {lim.M_DEFAULT} as `grip.mu_y_limit`; the solver does not use it yet.\n\n"
+                + md_table(limits, floats="{:.3f}"),
+            )
+        )
+    plants = pd.DataFrame(planted)
+    if len(plants):
+        bare = plants[plants["shared_sd"] == 0.0]
+        off = bare.groupby("car")["level"].agg(lambda x: float(x.abs().max()))
+        over = bare.groupby("car")["level_over_limit"].max()
+        cross_off = bare.groupby("car")["cross"].agg(lambda x: float(x.abs().max()))
+        plant_ok = bool((off <= PLANT_MAX_OFF).all() and (over <= PLANT_MAX_OFF).all())
+        rep.items.append(
+            GateItem(
+                "The limit's statistic on a planted car (the committee's clause 5.4)",
+                plant_ok,
+                "; ".join(
+                    f"{c} off by up to {off[c]:.1%} (read where the other sensor peaks: "
+                    f"{cross_off[c]:.1%})"
+                    for c in off.index
+                ),
+                f"within {PLANT_MAX_OFF:.0%} of the expected best of m of the planted passes, "
+                f"and no more than {PLANT_MAX_OFF:.0%} above the planted limit, on every top "
+                "without a shared error (the rule written on #312 before the run)",
+                "Each car's limit planted on the layout most of its supporting corners are at: "
+                f"{PLANT_DAYS} days of {PLANT_LAPS} laps, every corner pass at its own use of "
+                "the limit (the lap is driven at the limit on the track with that corner's "
+                "curvature divided by its use), through the package's own table builder, with "
+                "noise added to both readings' series before the corner's largest value is "
+                "taken. The passes' spread is the car's own; the noise is set so that the "
+                "statistic finds in the plant what it finds in the logs (`noise_found` against "
+                "`noise_logs`; `noise_g` is what that takes per reading). Tops: `bell` (the "
+                f"passes drawn about a typical use), `capped` (drawn about {PLANT_CAPPED_USE} "
+                f"and cut off at the limit), `mistakes` (`bell` with {PLANT_MISTAKE_SHARE:.0%} "
+                f"of the passes {PLANT_MISTAKE_SDS:g} spreads slower). `shared_sd`: an error the "
+                "two readings share by day and corner, which no reading can remove. Against "
+                "`truth` (the expected best of m of the planted passes): `no_noise`, what the "
+                "table builder alone does; `as_read` and `level`, the statistic before and "
+                "after its noise correction; `cross`, the same with each sensor read where the "
+                "other peaks. `*_over_limit` are against the planted limit itself. The "
+                "correction takes out the spread the noise adds; it cannot take out what the "
+                "noise adds to the *largest* value of a corner's fixes, which is why `level` "
+                "reads high.\n\n" + md_table(plants, floats="{:.4f}"),
+            )
+        )
 
     # The era ladder: each day's pace level, in order.
     ladder = pd.concat(ladders, ignore_index=True) if ladders else pd.DataFrame()

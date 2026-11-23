@@ -4,7 +4,7 @@ What each car did on its build laps, as tables a person can read; the car
 model (C2) takes its numbers from them. Everything is in the ground frame
 on the position clock (:mod:`.frame`), and every sample knows where on the
 layout's track it is, so the track's grade can be taken out. Since
-version 5 the laterals are also kept in the tyres' frame, beside the
+version 5 (6 with an apex's cross readings) the laterals are also kept in the tyres' frame, beside the
 ground-frame ones (``*_tyre_g``: what the tyres hold on the road's bank,
 :func:`~.bank.to_tyres_frame`; the same number on a track without a
 bank), and an apex has the ``load`` on the tyres there (#312).
@@ -63,7 +63,7 @@ from .gates import GateItem, GateReport, md_table
 
 logger = logging.getLogger(__name__)
 
-TABLES_VERSION = 5
+TABLES_VERSION = 6
 TABLE_NAMES = ("sessions", "throttle", "coast", "brake", "apex")
 #: Cars the programme fits a model for; the others get tables where their
 #: channels allow and are listed.
@@ -577,6 +577,8 @@ APEX_COLUMNS = [
     "lat_accel_g",
     "lat_tyre_g",
     "load",
+    "lat_tyre_cross_g",
+    "lat_accel_cross_g",
 ]
 
 
@@ -600,6 +602,14 @@ def apex_rows(
     over the car's weight at the apex speed, ``cos θ·cos b + V²(κ_v +
     |κ|·sin b) / g`` (the same median): the lateral over it is the share
     of the grip the pass used.
+
+    The largest value of a noisy series is raised by its own noise, so
+    each sensor is also read where the *other* one peaks, a choice its
+    own noise has no part in: ``lat_tyre_cross_g`` is the Doppler's
+    lateral (tyres' frame) at the fix of the accelerometer's largest
+    value, and ``lat_accel_cross_g`` the accelerometer's at the fix of
+    the Doppler's (both NaN without the accelerometer). They read low
+    where the two peaks are apart on a corner that is not flat.
     """
     length = track.length_m
     v = sig.geom.speed
@@ -623,8 +633,15 @@ def apex_rows(
             off = np.abs(np.mod(s[idx] - s_apex + length / 2.0, length) - length / 2.0)
             at = idx[int(np.argmin(off))]
             acc = sign * sig.lat_acc[idx]
-            doppler = float(np.max(sign * sig.lat_g[idx]))
+            own = sign * sig.lat_g[idx]
+            doppler = float(np.max(own))
             bank_left, cos_near, kv_near = road[k]
+            both = bool(np.isfinite(acc).all())
+            tyre_cross = (
+                float(bankmod.to_tyres_frame(own[int(np.argmax(acc))], sign * bank_left))
+                if both
+                else np.nan
+            )
             rows.append(
                 {
                     "lap_num": int(lap_num),
@@ -635,10 +652,12 @@ def apex_rows(
                     "v_min_ms": float(np.min(v[idx])),
                     "lat_track_g": float(v[at] ** 2 * abs(corner["kappa_apex"]) / G_MS2),
                     "lat_doppler_g": doppler,
-                    "lat_accel_g": float(np.max(acc)) if np.isfinite(acc).all() else np.nan,
+                    "lat_accel_g": float(np.max(acc)) if both else np.nan,
                     # positive into the corner, so the lean into it
                     "lat_tyre_g": float(bankmod.to_tyres_frame(doppler, sign * bank_left)),
                     "load": float(np.median(cos_near + v[at] ** 2 * kv_near / G_MS2)),
+                    "lat_tyre_cross_g": tyre_cross,
+                    "lat_accel_cross_g": float(acc[int(np.argmax(own))]) if both else np.nan,
                 }
             )
     return pd.DataFrame(rows, columns=APEX_COLUMNS)
