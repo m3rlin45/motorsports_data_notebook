@@ -3968,6 +3968,74 @@ that follow depends on the choice except the max driver's margins
 (stage 6): with the knob solved from a lap time, a simulated lap is the
 same lap at any level of the limit.
 
+**Stage 4, `mu_y` is the car's limit and the knob is the driver's use
+of it** (`car_gate.set_limit`; the committee's clauses 3.1 and 5.1; the
+owner's ruling of 2026-11-22 that the pace knob is the driver's and not
+a scale on the grip). The convention for `mu_y` is gone from the cars
+the gates set: `mu_y` is `grip.mu_y_limit`, which no pace moves, and
+the solver's knob u is the share of it a lap uses, in cornering and in
+braking alike (q = −ln u). The kernel is untouched. A layout's
+reference is the median use of its day-best laps, and the median of
+those over the car's layouts is the car's *typical use*
+(`meta.use_ref`, `car_gate.typical_use`): it is what is carried to a
+layout the car has not run, where the convention carried "u = 1".
+Reports keep `u` as the pace against the typical use, so that their
+columns read as before, and gain `use` and `q`.
+
+| | Inferno 86 | KK-SII | KK-F |
+|---|---|---|---|
+| the limit, `mu_y` | 1.283 | 1.541 | 1.493 |
+| typical use (q) | 0.904 (0.101) | 0.855 (0.156) | 0.919 (0.085) |
+| limit × typical use: the convention's `mu_y` | 1.160 | 1.318 | 1.372 |
+| the driver's braking as a share of `mu_b` at a use of 1 | 0.885 | 0.989 | 0.914 |
+| the same at the typical use: the share as it was read | 0.800 | 0.846 | 0.840 |
+| use on held-out laps, P05 / median / P95 / highest (day folds) | 0.80 / 0.86 / 0.94 / 0.99 | 0.78 / 0.83 / 0.89 / 0.92 | 0.83 / 0.88 / 0.92 / 0.95 |
+
+The braking use was read as a share of `mu_b` times the knob, so it
+rises as `mu_y` rises to the limit and every lap stays the lap it was
+(`car_gate._with_mu_y`); it is not read again in this stage. Must show,
+and does, against the baseline's 1,102 held-out laps solved in nine car
+and layout cells:
+
+- every lap has the baseline's speed at every node within 0.00004 m/s
+  (the largest difference over all laps and nodes; identical to the
+  solver's tolerance, not bitwise: the kernel is handed a different
+  `mu_y` and solves a different u for the same product);
+- limit × use equals the baseline's `mu_y` × u, and the braking level
+  in g equals the baseline's, to six figures on every lap;
+- the score is 56 of 76, the same verdict in every one of the 108
+  cells, the largest change in a cell's figure 4e-7;
+- worst-tyre heat with the pace carried to a layout the car has not run
+  is 3.0 %, and 2.1 % at the lap's own time, as before;
+- no held-out lap needs a use above 1 (0 of 2,231 laps over the day and
+  layout folds; the highest is 0.998, the Inferno 86 on a layout fold).
+  So nothing was built for q below 0: the kernel's knob scales
+  cornering and braking together, a cap on one would need a change to
+  it, and no logged lap asks for it.
+
+Two things the stage showed that the design did not say.
+
+*A car braked "at its limit" is not the same car under the two
+meanings.* Under the convention the reference lap had u = 1, so a car
+with no driver's braking use braked at `mu_b` at the reference pace.
+With `mu_y` at the limit the same car has a use of 0.86–0.92 on that
+lap and brakes at `mu_b` times it: the uniform knob lowers the braking
+with the cornering, which is a braking use by another name. The
+comparison arm "braked at the car's limit" of gate C3 would have read
+49 of 76 for it where it read 34. The arm is kept as it was (`mu_b` at
+the typical use: `car_holdout.convene` holds a share of 1 at the
+typical use, which is a share above 1 at a use of 1), so that "what the
+driver's braking use is worth" still compares the same two cars. The
+max driver (stage 6) is the other thing "at the limit" can mean: every
+use at 1.
+
+*The KK-SII has no room left in its braking.* Its share is 0.989 of
+`mu_b` at a use of 1: a lap at the car's cornering limit would brake at
+the car's braking limit, with the driver's held shape. The committee's
+"knob's end lap" (clause 3.1: the braking use rising to 1 below q = 0)
+has under 2 % of room on this car, 9 % on the KK-F and 12 % on the
+Inferno 86, until stage 8 reads `mu_b` as the best of m stops.
+
 #### D1 (in part). The lap solver (`solver.py`, 2026-11-15)
 
 C2's remaining clauses and all of C3 need `simulate_lap` and `solve_u`,
