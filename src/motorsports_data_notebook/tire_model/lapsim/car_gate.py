@@ -582,6 +582,23 @@ def set_convention(
     return out, refs
 
 
+def at_limit(model: cm.CarModel) -> cm.CarModel:
+    """The model with ``mu_y`` at the car's cornering limit and the apex
+    table's level kept in ``meta.mu_y_apex_table`` (the braking level and
+    shape were read against it); the model itself where it has no limit.
+    The driver's braking use is read after this (:func:`set_use`), as a
+    share of the limit the laps are driven on."""
+    limit = model.grip.get("mu_y_limit")
+    if limit is None or not np.isfinite(limit):
+        return model
+    out = _with_mu_y(model, float(limit))
+    out.meta = {
+        **model.meta,
+        "mu_y_apex_table": model.meta.get("mu_y_apex_table", model.grip["mu_y"]),
+    }
+    return out
+
+
 def typical_use(who: Who) -> float:
     """The car's typical use of its cornering limit: the median over the
     layouts it was set on of the use of a day's best lap
@@ -656,7 +673,7 @@ def set_limit(
     out.meta = {
         **model.meta,
         "mu_y_source": "the car's cornering limit: the expected best of m passes (limits.car_limit)",
-        "mu_y_apex_table": model.grip["mu_y"],
+        "mu_y_apex_table": model.meta.get("mu_y_apex_table", model.grip["mu_y"]),
         "use_ref": _rounded(ref, 5),
     }
     if out.driver:
@@ -1166,6 +1183,50 @@ def plant_rows(
     return rows
 
 
+def max_driver_rows(
+    car_name: str,
+    drive: Drive,
+    tracks: dict[str, trk.TrackModel],
+    laps: pd.DataFrame,
+    levels: dict[str, float],
+    stands_on: tuple[str, ...],
+) -> list[dict]:
+    """The max driver against the car's best logged lap at each layout
+    (the committee's clause 1.8): the lap with every use at 1 and the
+    driver's habits off (braked at the car's limit, on the limit's own
+    shape), driven with the powertrain, shift point, gears and air of the
+    best lap's day. ``laps`` are the car's dry build laps
+    (``layout_id, date, lap_time_s`` and the keys a :class:`Drive`
+    reads); ``levels`` names the cornering limits to drive it at. A row
+    per layout: the best lap, and per level the max driver's lap time
+    over it less 1 (negative: faster). ``borrowed`` marks a layout the
+    limit does not stand on."""
+    rows = []
+    limit_car = drive.but(brake_use=False)
+    for layout, track in tracks.items():
+        own = laps[laps["layout_id"] == layout]
+        if own.empty or not own["lap_time_s"].notna().any():
+            continue
+        rec = _records(own.loc[[own["lap_time_s"].idxmin()]])[0]
+        base = _lap_car(limit_car, rec)
+        names = [k for k, v in levels.items() if v is not None and np.isfinite(v)]
+        if not names:
+            continue
+        cars = [replace(base, mu_y=float(levels[k])) for k in names]
+        got = sv.drive_laps(profile_of(drive, track), cars, np.ones(len(cars)))
+        row = {
+            "car": car_name,
+            "layout_id": layout,
+            "best_lap_s": float(rec["lap_time_s"]),
+            "date": str(rec.get("date", "")),
+            "borrowed": layout not in stands_on,
+        }
+        for name, t in zip(names, got.lap_time_s):
+            row[name] = float(t) / float(rec["lap_time_s"]) - 1.0
+        rows.append(row)
+    return rows
+
+
 # ------------------------------------------------------------------ the gate
 
 
@@ -1330,6 +1391,7 @@ def check_car_fit(
     ref_rows, rec_rows, score_rows, use_rows = [], [], [], []
     lim_rows: list[dict] = []
     planted: list[dict] = []
+    max_rows: list[dict] = []
     use_bands: dict[str, pd.DataFrame] = {}
     ladders: list[pd.DataFrame] = []
     compounds = day_compounds(root, rows)
@@ -1341,7 +1403,7 @@ def check_car_fit(
         # how the driver brakes, then the car's limit under it: the knob is
         # from here on the driver's use of that limit
         braked = car_use_laps(tables, lap_time, car_name, own)
-        used, use_work = set_use(drive, own, braked)
+        used, use_work = set_use(drive.but(model=at_limit(fitted)), own, braked)
         model, uses = set_limit(drive.but(model=used), own, best)
         drive = drive.but(model=model)
         typical = typical_use(model)
@@ -1376,8 +1438,19 @@ def check_car_fit(
         if cars_dir is not None:
             model.save(Path(cars_dir) / f"{car_name.replace(' ', '_')}.json")
         ladders.append(era_ladder(car_name, best, refs, work["days"], compounds))
-        lim_rows += limit_rows(car_name, tables.apex[tables.apex["car"] == car_name], sorted(own))
+        car_limits = limit_rows(car_name, tables.apex[tables.apex["car"] == car_name], sorted(own))
+        lim_rows += car_limits
         planted += plant_rows(car_name, model, work["limit"], own)
+        by_m = {int(r["m"]): r for r in car_limits}
+        at_m = by_m.get(lim.M_DEFAULT, {})
+        levels = {f"m{m}": by_m[m]["level"] for m in lim.M_REPORTED if m in by_m}
+        levels[f"m{lim.M_DEFAULT}_p05"] = at_m.get("p05", float("nan"))
+        levels[f"m{lim.M_DEFAULT}_cross"] = at_m.get("cross", float("nan"))
+        levels["typical_use"] = float(model.grip["mu_y"]) * typical
+        own_laps = rows[(rows["car"] == car_name) & (rows["basis"] == "dry")]
+        max_rows += max_driver_rows(
+            car_name, drive, own, own_laps, levels, tuple(work["limit"].layouts)
+        )
         for layout, r in refs.items():
             ref_rows.append(
                 {
@@ -1561,6 +1634,39 @@ def check_car_fit(
                 "correction takes out the spread the noise adds; it cannot take out what the "
                 "noise adds to the *largest* value of a corner's fixes, which is why `level` "
                 "reads high.\n\n" + md_table(plants, floats="{:.4f}"),
+            )
+        )
+
+    # The max driver against the best logged lap: the owner's check on the car.
+    maxed = pd.DataFrame(max_rows)
+    key = f"m{lim.M_DEFAULT}"
+    if len(maxed) and key in maxed.columns:
+        thin = maxed.loc[maxed[key].idxmax()]
+        end = f"{key}_p05"
+        rep.items.append(
+            GateItem(
+                "The max driver against the best logged lap (the committee's clause 1.8)",
+                bool((maxed[key] < 0.0).all()),
+                f"faster in {int((maxed[key] < 0.0).sum())} of {len(maxed)} cells at m = "
+                f"{lim.M_DEFAULT} ({int((maxed[end] < 0.0).sum())} at the 5 % end of the day "
+                f"bootstrap); thinnest {thin['car']} at {thin['layout_id']}, {thin[key]:+.2%}",
+                "the lap with every use at 1 is faster than the car's best logged lap at every "
+                "layout (owner, 2026-11-23: any lap; the sum of the best segments is a "
+                "diagnostic and is not built)",
+                "The max driver: the car at its cornering limit and at its braking limit on the "
+                "limit's own shape (the driver's braking use off), with the powertrain, shift "
+                "point, gears and air of the best lap's day, on the track's line. Its lap time "
+                "over the best logged dry build lap, less 1 (negative: faster), with the "
+                f"cornering limit at m = 10, 20 and 50 (`m10`, `m20`, `m50`), at the 5 % end of "
+                f"the day bootstrap (`{end}`) and read where the other sensor peaks "
+                f"(`{key}_cross`, which the plant above reads as the nearer to a planted car). "
+                "`typical_use`: the same car cornering at the driver's typical use, braking at "
+                "the limit: how much of the margin is the cornering limit's. `borrowed`: the "
+                "layout has no corner the limit stands on. The limit is read on the car's own "
+                "path and spent here on the track's line (clause 1.9, open): on the formula cars "
+                "the track's curvature reads 3–4 % under the car's own at the apexes, so their "
+                "margins are larger than a level read on the track's line would give.\n\n"
+                + md_table(maxed, floats="{:.4f}"),
             )
         )
 
