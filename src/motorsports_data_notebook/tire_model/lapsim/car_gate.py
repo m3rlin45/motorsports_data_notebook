@@ -1514,7 +1514,9 @@ def check_car_fit(
         at_m = by_m.get(lim.M_DEFAULT, {})
         levels = {f"m{m}": by_m[m]["level"] for m in lim.M_REPORTED if m in by_m}
         levels[f"m{lim.M_DEFAULT}_p05"] = at_m.get("p05", float("nan"))
-        levels[f"m{lim.M_DEFAULT}_cross"] = at_m.get("cross", float("nan"))
+        for m in lim.M_REPORTED:
+            if m in by_m:
+                levels[f"m{m}_cross"] = by_m[m]["cross"]
         levels["typical_use"] = float(model.grip["mu_y"]) * typical
         own_laps = rows[(rows["car"] == car_name) & (rows["basis"] == "dry")]
         max_rows += max_driver_rows(
@@ -1681,7 +1683,7 @@ def check_car_fit(
         rep.items.append(
             GateItem(
                 "The limit's statistic on a planted car (the committee's clause 5.4)",
-                (plant_ok or None) if not like_logs else plant_ok,
+                plant_ok if like_logs else None,
                 "; ".join(
                     f"{c} off by up to {off[c]:.1%} (read where the other sensor peaks: "
                     f"{cross_off[c]:.1%}); own peaks over cross {bell.loc[c, 'own_over_cross']:.1%} "
@@ -1777,7 +1779,8 @@ def check_car_fit(
                 "over the best logged dry build lap, less 1 (negative: faster), with the "
                 f"cornering limit at m = 10, 20 and 50 (`m10`, `m20`, `m50`), at the 5 % end of "
                 f"the day bootstrap (`{end}`) and read where the other sensor peaks "
-                f"(`{key}_cross`, which the plant above reads as the nearer to a planted car). "
+                f"(`m10_cross`, `{key}_cross`, `m50_cross`; the plant above reads that reading as the "
+                "nearer to a planted car, and overstates). "
                 "`typical_use`: the same car cornering at the driver's typical use, braking at "
                 "the limit: how much of the margin is the cornering limit's. `borrowed`: the "
                 "layout has no corner the limit stands on. The limit is read on the car's own "
@@ -1852,7 +1855,7 @@ def check_car_fit(
                 back_ok,
                 "; ".join(
                     f"{r['car']} {float(r['brake_use']):.2f} of mu_b "
-                    f"({float(r['level_g']):.2f} g at u = 1), shape "
+                    f"({float(r['level_g']):.2f} g at a use of 1), shape "
                     f"{float(r['held_shape']):.2f} (the limit's {float(r['limit_shape']):.2f}); "
                     f"read back {float(r['use_back']) - 1:+.1%}, {float(r['shape_back']):.2f}"
                     for r in use.to_dict("records")
