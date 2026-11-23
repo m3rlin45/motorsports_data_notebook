@@ -6,8 +6,9 @@ ends on, it sits beside the track (in the pit lane and on the exit road)
 until it merges with where the build laps drive. The **join** is the
 distance along the lap at which an out-lap comes inside the band the
 build laps occupy and stays inside it; the **rolling time** is how long
-the car had been moving by then. A layout's figures are the medians over
-its out-laps from the pit.
+the car had been moving by then and the **join speed** how fast it was
+going there. A layout's figures are the medians over its out-laps from
+the pit.
 """
 
 from __future__ import annotations
@@ -45,8 +46,8 @@ def join_of_outlap(
     y: np.ndarray,
     speed: np.ndarray,
     band: tuple[np.ndarray, np.ndarray] | None = None,
-) -> tuple[float, float] | None:
-    """``(s_join_m, rolling_s)`` of one out-lap given as samples up to the
+) -> tuple[float, float, float] | None:
+    """``(s_join_m, rolling_s, v_join_ms)`` of one out-lap given as samples up to the
     line it ends on; None when it never leaves the build laps' band (it
     did not start in the pit lane) or never settles inside it. ``band`` is
     :func:`build_band` of the build, for a caller with many out-laps."""
@@ -80,13 +81,14 @@ def join_of_outlap(
             j = i + 1
             if j >= len(s) or t[j] <= t_first:
                 return None
-            return float(s[j] % length), float(t[j] - t_first)
+            return float(s[j] % length), float(t[j] - t_first), float(speed[j])
     return None
 
 
 def pit_exit(root: Path, build: trk.TrackBuild, *, max_outlaps: int = 60) -> dict:
     """The layout's pit-exit join: ``{"s_join_m", "s_join_p10_m",
-    "s_join_p90_m", "rolling_s", "rolling_p10_s", "rolling_p90_s", "n"}``
+    "s_join_p90_m", "rolling_s", "rolling_p10_s", "rolling_p90_s",
+    "v_join_ms", "v_join_p10_ms", "v_join_p90_ms", "n"}``
     over its out-laps from the pit (the dataset's ``outlap_from_pit``), at
     most ``max_outlaps`` of them, the latest first; ``n`` is 0 when none
     could be read."""
@@ -101,7 +103,7 @@ def pit_exit(root: Path, build: trk.TrackBuild, *, max_outlaps: int = 60) -> dic
         & laps["outlap_from_pit"].fillna(False).astype(bool)
         & laps["session_id"].astype(str).isin(here)
     ].sort_values("session_id", ascending=False)
-    joins: list[tuple[float, float]] = []
+    joins: list[tuple[float, float, float]] = []
     band = build_band(build)  # the same for every out-lap
     for sid, grp in out.groupby("session_id", sort=False):
         if len(joins) >= max_outlaps:
@@ -129,6 +131,7 @@ def pit_exit(root: Path, build: trk.TrackBuild, *, max_outlaps: int = 60) -> dic
         return {"n": 0}
     s_join = np.array([j[0] for j in joins])
     roll = np.array([j[1] for j in joins])
+    v_join = np.array([j[2] for j in joins])
     return {
         "s_join_m": float(np.median(s_join)),
         "s_join_p10_m": float(np.percentile(s_join, 10)),
@@ -136,6 +139,9 @@ def pit_exit(root: Path, build: trk.TrackBuild, *, max_outlaps: int = 60) -> dic
         "rolling_s": float(np.median(roll)),
         "rolling_p10_s": float(np.percentile(roll, 10)),
         "rolling_p90_s": float(np.percentile(roll, 90)),
+        "v_join_ms": float(np.median(v_join)),
+        "v_join_p10_ms": float(np.percentile(v_join, 10)),
+        "v_join_p90_ms": float(np.percentile(v_join, 90)),
         "n": int(len(joins)),
     }
 

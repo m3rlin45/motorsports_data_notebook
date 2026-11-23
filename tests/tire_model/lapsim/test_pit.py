@@ -49,7 +49,8 @@ class TestPitJoin:
         t, x, y, speed = _outlap(join_s=180.0)
         hit = pit.join_of_outlap(b, t, x, y, speed)
         assert hit is not None
-        s_join, rolling = hit
+        s_join, rolling, v_join = hit
+        assert v_join in (12.0, 25.0)  # the out-lap's own speed where it joins
         # inside the build laps' band (about 1 m) near the end of the 40 m merge
         assert 140.0 < s_join < 185.0
         assert rolling == pytest.approx((250.0 + s_join) / 12.0, rel=0.05)

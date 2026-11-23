@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 from dataclasses import replace
 
@@ -832,3 +833,31 @@ class TestGate:
         assert saved.ref_u and "median over layouts" in saved.meta["mu_y_source"]
         assert saved.driver == {}  # a dozen laps: too few braking nodes to read the driver
         assert list(saved.ref_u.values())[0][0] == pytest.approx(1.0, abs=0.01)
+        # the car's logged range of use at the layout, which a pace table's support is
+        (layout,) = saved.meta["use_range"]
+        ranged = saved.meta["use_range"][layout]
+        assert ranged["laps"] == 12 and ranged["days"] == 3
+        assert ranged["min"] <= ranged["median"] <= ranged["max"]
+
+        from motorsports_data_notebook.tire_model.lapsim import pace, pace_gate
+
+        table_rep = pace_gate.check_pace_table(
+            tmp_path,
+            tracks_dir=tmp_path / "tracks",
+            cars_dir=tmp_path / "cars",
+            out_dir=tmp_path / "pace",
+        )
+        assert table_rep.gate == "D1T"
+        named = {it.name: it for it in table_rep.items}
+        # a 27 s lap is 27 one-second bins: the interpolation is a little over the gate's 1 %
+        heat_item = named["Interpolated per-tyre heat against a direct solve"]
+        assert float(heat_item.measured.split()[0]) < 0.02
+        assert named["The use read off the table against a direct solve"].passed
+        saved_table = json.loads((tmp_path / "pace" / f"car__{layout}.json").read_text())
+        track = pace_gate.load_tracks(tmp_path / "tracks")[layout]
+        back = pace.from_dict(saved_table, saved, track)
+        assert back.support["use_min"] == ranged["min"] and "at this layout" in back.support["from"]
+        empty = pace_gate.check_pace_table(
+            tmp_path, tracks_dir=tmp_path / "none", cars_dir=tmp_path / "cars"
+        )
+        assert not empty.passed

@@ -1228,6 +1228,30 @@ def check_car_holdout(
         )
         worst = side_cells.loc[side_cells["simulated"].idxmax()] if len(side_cells) else None
         signed = side_signed(day_laps)
+        # the same at a layout the car was not fitted on
+        lay_laps = laps[laps["kind"] == "layout"]
+        lay_sides = attainment(by_pace(lay_laps, yardsticks, MOMENT_MEASURES), MOMENT_MEASURES)
+        lay_cells = lay_sides[lay_sides["scored"]] if len(lay_sides) else lay_sides
+        lay_note, lay_detail = "", ""
+        if len(lay_cells):
+            lay_sides["level"] = [f"P{lv:g}" for lv in lay_sides["level"]]
+            lay_note = (
+                f"; held out by layout {int(lay_cells['passed'].sum())} of {len(lay_cells)} "
+                f"(furthest {lay_cells['simulated'].max():.3f})"
+            )
+            lay_detail = (
+                "\n\n**Held out by layout** (the car fitted without the layout; signed, then "
+                "by level of pace).\n\n"
+                + md_table(side_signed(lay_laps), floats="{:.3f}")
+                + "\n\n"
+                + md_table(
+                    lay_sides[
+                        ["car", "layout_id", "level", "measure", "laps", "days", "simulated"]
+                        + ["other_day", "same_day", "scored", "passed"]
+                    ],
+                    floats="{:.3f}",
+                )
+            )
         blind = signed[~signed["sees_mirror"]] if len(signed) else signed
         blind_note = (
             "; a mirrored track would read under "
@@ -1251,6 +1275,7 @@ def check_car_holdout(
                     if worst is not None
                     else ""
                 )
+                + lay_note
                 + blind_note,
                 "a score, in gate C3's form (owner, 2026-11-23): the simulated lap's lateral heat "
                 "is no further from the logged lap's than a logged lap of another day is; not "
@@ -1279,7 +1304,8 @@ def check_car_holdout(
                         + ["other_day", "same_day", "scored", "passed"]
                     ],
                     floats="{:.3f}",
-                ),
+                )
+                + lay_detail,
             )
         )
     use_note = ""

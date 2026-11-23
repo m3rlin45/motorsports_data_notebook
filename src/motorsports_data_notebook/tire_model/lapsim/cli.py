@@ -71,6 +71,11 @@ def main(argv: list[str] | None = None) -> int:
         "own per-lap heat, holes, the phase of the bins and the 0.5 s smoothing.",
     )
     sub.add_parser(
+        "check-pace-table",
+        help="Gate D1, the pace table: every model car at every layout with a track, held to "
+        "a direct solve at twenty lap times; the tables go to workspace/lapsim/pace/.",
+    )
+    sub.add_parser(
         "check-car-holdout",
         help="Gate C3: the car on held-out days and layouts, against two planted wrong cars.",
     )
@@ -137,6 +142,15 @@ def main(argv: list[str] | None = None) -> int:
             cache_dir=workspace / "cache",
             tracks_dir=workspace / "tracks",
             cars_dir=workspace / "cars",
+        )
+    elif args.cmd == "check-pace-table":
+        from . import pace_gate
+
+        report = pace_gate.check_pace_table(
+            root,
+            tracks_dir=workspace / "tracks",
+            cars_dir=workspace / "cars",
+            out_dir=workspace / "pace",
         )
     else:  # pragma: no cover - argparse rejects unknown commands
         parser.error(f"unknown command {args.cmd}")

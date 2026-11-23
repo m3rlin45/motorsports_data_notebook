@@ -657,7 +657,14 @@ def simulate_lap(
     when given).
     """
     profile = track if isinstance(track, Profile) else Profile.from_track(track)
-    v = _passes(profile, car, u, wet, v_start, v_end)
+    return lap_from_nodes(profile, car, _passes(profile, car, u, wet, v_start, v_end), u)
+
+
+def lap_from_nodes(profile: Profile, car: SolverCar, v: np.ndarray, u: float) -> SimLap:
+    """The :class:`SimLap` of a lap given by its speed at the profile's
+    nodes (one row of :func:`drive_laps` or :func:`solve_laps`): what
+    :func:`simulate_lap` makes of the same speeds, step for step."""
+    v = np.asarray(v, dtype=float)
     n = profile.n
     if profile.closed:
         nxt = np.roll(np.arange(n), -1)
