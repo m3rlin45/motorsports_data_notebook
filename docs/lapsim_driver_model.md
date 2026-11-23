@@ -101,7 +101,8 @@ higher than has ever been attained so far".
 lateral level is now the composite limit of clause 1.1, not the apex table's 90th percentile;
 no cornering use is read as a constant, the knob is that use). Its clause 0 is the first thing
 to read: the knob it offers is narrower than the one asked for. **The owner ruled on the
-clauses marked [owner] on 2026-11-23 (the table below); nothing here is built yet.**
+clauses marked [owner] on 2026-11-23 (the table below). Step 1 of section 6 was built the same
+day (issue #312; `docs/tire_model.md` §2.12 C9 has what it showed); the rest is not built.**
 
 **The owner's decisions (2026-11-23).** Six follow the committee's default; the fourth does
 not.
