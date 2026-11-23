@@ -38,6 +38,12 @@ Segment D (#206), the solver:
 
 - :mod:`.solver`: the quasi-steady-state lap solver and ``solve_u``.
 - :mod:`.heat`: production's chain on a simulated lap (``sim_heat``).
+- :mod:`.heat_gate`: that chain against production's own per-lap heat on
+  logged laps (gate D1).
+- :mod:`.pace`: the pace table, a car's laps at a layout from a slow use
+  of its limit to the max driver's, with the out-lap from the pit join;
+  :mod:`.pace_gate` holds it to a direct solve (gate D1).
+- :mod:`.car_holdout` also carries gate D3: lateral heat by side.
 
 The car's limits and the driver (#312):
 

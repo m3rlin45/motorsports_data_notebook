@@ -4537,24 +4537,151 @@ of the logged laps' right over left):
 - **The simulated lap has 0.5 to 1.6 % less lateral heat than the logged
   lap** in eight of nine cells (4 % less on the Inferno 86's two days at
   Motegi), where two logged laps of different days differ by 0.7 to
-  2.8 %: a small bias of one sign, inside the yardstick at the cars'
-  larger cells and not a defect by the rule of #206.
-- **Tsukuba leans the same way on all three cars**: the right turns
-  carry 2.1 to 3.3 % less of the simulated heat than of the logged
-  (−0.028, −0.033, −0.021). Three cars agreeing is the track and not a
-  car: its curvature by side, the direction B2 checked at the laps' own
-  speed (within 0.013 on 15 of 16 rows). Under the 0.06 at which #206
-  sends one to the per-corner table; recorded as the track's.
+  2.8 %. **Most of it is the logged lap's lateral on the straights.** On
+  the nodes where the track's line asks under 0.05 g (14 to 45 % of a
+  lap) the logged laps carry 1.1 to 4.8 % of their lateral heat and the
+  track's line at the same speed 0.5 to 2.5 %: an excess of 0.6 to 1.0 %
+  of the lap's lateral heat at seven of ten cells (1.6 % on the KK-SII
+  at Fuji, 2.4 % on the Inferno 86 at Motegi). It is the noise of the
+  Doppler lateral passing through the absolute value, with whatever the
+  car really weaves, and a simulated lap has neither. In the turning
+  nodes the track's line at the lap's own speed is within 1 % of the
+  logged lateral heat (−2.1 % at Motegi). Two logged laps both carry
+  the excess, so the yardstick does not, and the simulated lap is scored
+  against a bar that is stricter than it looks by about this 1 %: the
+  10 of 19 on `lat_heat` is read with that in mind. Not a defect by the
+  rule of #206, and not corrected: production's chain is given the
+  logged lateral as it is.
+- **The simulated lap leans to the left turns nearly everywhere**: the
+  right turns carry less of the simulated heat than of the logged in
+  seven of nine cells (−0.012 to −0.033; Tsukuba −0.028, −0.033, −0.021
+  on the three cars). That it has one sign at four of five layouts
+  means three cars agreeing at Tsukuba does not make it Tsukuba's
+  curvature: it is a lean common to the layouts, cause not known
+  (candidates not tested: the laps' own Doppler lateral against the
+  track's median curvature, which B2 found within 0.013 by side on 15 of
+  16 rows; the side the bank is read on). Under the 0.06 at which #206
+  sends one to the per-corner table; recorded as open.
 - By the fixed limits this gate was first written with (0.03 on the
   lateral heat, ± 0.06 by side) every scored cell but one would be
   inside (the Inferno 86 at Motegi, 0.032 on four laps of two days).
+
+**Held out by layout** (the car fitted without the layout, the same
+two measures and yardsticks): 21 of 38 cells, the furthest 0.044, and
+the signed figures within 0.005 of the day folds' at the cells with
+more than a few days (the KK-SII's one day at Fuji, which only a layout
+fold can score: −0.042 in lateral heat). What the car is fitted on
+hardly moves these two measures: they are of the track and of the lap's
+speed, as the gate was meant to be.
 
 The lateral traces are the speed traces' laps row for row (built from
 the same lap list, shapes checked at the build), and gates C2 and C3
 are unchanged line for line by the tables' new version.
 
-**Still #206's**: the pace table and `outside_support`, and the wet
-(D2).
+**Gate D1, the pace table (`pace.py`, `pace_gate.py`, `lapsim
+check-pace-table`, 2026-11-24).** A car's laps at a layout over the
+whole range of pace, for whoever needs the heat of a lap of a given lap
+time without a solver (#207, #208, the calculators). As built it differs
+from the table #206 first specified in the four ways its note of
+2026-11-23 asked for:
+
+- **The axis is the driver's use of the car's limit**, `q = −ln(use)`:
+  twelve laps evenly in q from a use of 0.40 to a use of 1, driven as
+  one batch. The lap at a use of 1 is the knob's lap at q = 0, braked as
+  the driver brakes; it is **not the max driver's lap** (clause 3.1 of
+  the driver committee's design: every use at 1 and the driver's habits
+  off), which is 0.3 to 0.9 s faster at these layouts and is kept beside
+  the table (`max_driver_lap_s`).
+- **It holds laps, not heat.** Each knot is kept as its speed at the
+  track's nodes. Per-tyre heat is defined by the force shares of the fit
+  in hand (#208: leaving a cell out moves the same laps' heat by up to
+  11 % per tyre), so `PaceTable.heat(lap_time, shares)` splits the lap
+  with the caller's shares, through gate D1's chain unless the caller
+  gives another (the smoothed chain of #207's E0 is E's to settle).
+  Between the knots heat and use are read log-log against lap time.
+- **It says what it assumes of the car** (`PaceTable.assumes`). A lap
+  that has not been driven has no day, so: the car's latest powertrain
+  unless one is named; that powertrain's own shift point and gears;
+  standard air; braked as the driver brakes; the road's bank; dry. This
+  was #206's to settle without the owner. The KK-SII's per-circuit
+  gearing is flagged in its tables and changes nothing in them: its gear
+  is inferred, so it is driven on one specific power.
+- **A target lap time gets one of three answers.** `ok`;
+  `outside_support`, answered and flagged (owner, 2026-11-23): its use
+  lies outside the car's logged range, or it is slower than the table's
+  slow end and is read off the last two knots; `no_solution`: it is
+  faster than the lap at a use of 1, and the table gives no heat, with
+  that lap's time and the max driver's beside it. A target between those
+  two is one the committee's knob would answer (below q = 0 the
+  cornering use stays at 1 and the braking use rises); the kernel scales
+  the two together, so until that cap is built such a target goes
+  unanswered. None of the cars' 1,129 dry build laps falls there. The
+  logged range is the use of every dry build
+  lap of the car at the layout, each driven with its own day's car
+  (`car_gate.use_range`, saved by gate C2 as the model's
+  `meta.use_range`); at a layout the car has not run it is the car's
+  range over the layouts it has, and the table says so. The kernel's
+  knob is untouched: the cap of the committee's clause 3.1 (cornering
+  held at 1 while braking rises) is still open on #206.
+
+*The out-lap.* Each knot also has the part of a lap from the pit exit's
+join to the line, begun at the speed the logged out-laps have at the
+join and driven at the knot's use; the car is driven on round the lap,
+so it reaches the line as a lap that goes on. Gate B2 now keeps the join
+speed beside the join's place and the rolling time (`meta.pit`):
+
+| layout | join (m) | speed at the join (m/s; 10th–90th) | rolling before it (s) | out-laps |
+|---|---|---|---|---|
+| Fuji | 752 | 21.0 (9.5–31.4) | 44 | 48 |
+| Motegi | 240 | 19.3 (15.9–23.1) | 29 | 29 |
+| Sodegaura | 328 | 23.5 (13.8–29.6) | 40 | 60 |
+| Suzuka | 641 | 30.6 (23.4–36.9) | 26 | 34 |
+| Tsukuba | 215 | 19.4 (15.8–24.2) | 16 | 60 |
+
+*The gate*, with #206's limit (1 %) written in before the run: fifteen
+tables (three cars at five layouts, five of them at a layout the car has
+not run), each held at twenty lap times evenly between its ends to the
+lap solved directly at that lap time with the table's own car, under two
+sets of shares (the car's and another car's).
+
+| | worst of the fifteen tables | limit |
+|---|---|---|
+| per-tyre heat, table over direct solve (size of the log ratio) | 0.0088 (KK-SII, Tsukuba) | 0.01 |
+| the use read off the table | 0.0013 | 0.01 |
+| the out-lap's time and per-tyre heat | 0.0089 (KK-SII, Sodegaura) | 0.01 |
+
+**Pass**, with little room, and more knots would not buy much. Nine
+knots give 1.18 %, twelve 0.89 %, sixteen 0.58 %, about as one over the
+number of knots and not as a smooth curve's error falls. Solved directly
+every 0.05 s over 3 s of lap time, a tyre's heat is jagged about its
+trend by up to 0.36 % (0.18 % rms; the KK-SII's front right at Tsukuba)
+and 0.19 % at Fuji, the jag repeating every 1.5 to 2 s of lap time: it
+is the one-second bins of the heat chain sliding along the lap as the
+lap time changes, the phase effect gate D1 measured on logged laps, and
+it is in the knots and in the direct solve alike. It is largest on the
+shortest laps (58 to 67 s, where the gate's worst tables are). So
+perhaps half of the 0.9 % is a floor that belongs to the chain and not
+to the table. A table of nine nodes, as the calculators interpolate
+today (#208), would not hold 1 %.
+
+*Reported.* (1) **The powertrain a table assumes is worth up to 2.8 % of
+a tyre's heat** at one lap time (the median logged lap of each layout):
+the first engine of the Inferno 86, or the KK-F before its new intake,
+needs 2–6 % more use for the same lap time; a rear tyre gets up to
+2.8 % less heat and a front up to 1.3 % more. A table is therefore per
+powertrain, and F's per-fold tables must be built with the powertrain of
+the laps they are read against. (2) Of the cars' 1,129 dry build laps
+read through their layout's table, none is faster than the lap at a use
+of 1 (nor than the max driver's), and 78 are flagged outside the support. The support is each lap's
+use with its own day's car, and the table's car is the latest powertrain
+in standard air, which does the same lap time at another use; 30 of the
+78 are the Inferno 86 at Fuji, where both engines ran. The cause was not
+separated lap by lap. A consumer that knows a lap's day should build the
+table for that day's powertrain.
+
+**Still #206's**: the wet (D2), with the pace table's wet entry; the
+cap for a use above 1; what brings a table's heat to production's
+sensor-frame heat where the two must meet (#255).
 
 **Batches, and speed.** The solver works on a batch of laps of one
 track, each with its own car and its own u (`solver.solve_laps`,

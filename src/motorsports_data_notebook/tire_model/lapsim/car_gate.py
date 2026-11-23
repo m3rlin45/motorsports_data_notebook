@@ -279,6 +279,44 @@ def reference_u(
     return out
 
 
+def use_range(who: Who, tracks: dict[str, trk.TrackModel], rows: pd.DataFrame, car: str) -> dict:
+    """The range of the knob over the dry build laps of ``car``, per
+    layout: ``{"min", "p05", "median", "p95", "max", "laps", "days"}`` of
+    the use each lap solves to, driven with its own day's powertrain,
+    shift point, gear set and air (one batch a layout). It is the car's
+    logged range of pace: what a pace table's ``support`` is, and where a
+    target lap time is ``outside_support`` (#206; owner, 2026-11-23: a
+    target outside it is answered and flagged)."""
+    drive = as_drive(who)
+    own = rows[(rows["car"] == car) & (rows["basis"] == "dry")]
+    out: dict[str, dict] = {}
+    for layout, grp in own.groupby("layout_id"):
+        if layout not in tracks:
+            continue
+        recs = _records(grp)
+        got = sv.solve_laps(
+            profile_of(drive, tracks[str(layout)]),
+            [_lap_car(drive, row) for row in recs],
+            [float(row["lap_time_s"]) for row in recs],
+            guess=typical_use(who),
+        )
+        use = np.asarray(got.u, float)[np.asarray(got.ok, bool)]
+        use = use[np.isfinite(use)]
+        if use.size == 0:
+            continue
+        lo, mid, hi = np.percentile(use, [5.0, 50.0, 95.0])
+        out[str(layout)] = {
+            "min": float(use.min()),
+            "p05": float(lo),
+            "median": float(mid),
+            "p95": float(hi),
+            "max": float(use.max()),
+            "laps": int(use.size),
+            "days": int(grp["date"].nunique()) if "date" in grp.columns else 0,
+        }
+    return out
+
+
 def _with_mu_y(model: cm.CarModel, mu_y: float, *, hold_use: bool = False) -> cm.CarModel:
     """The model with ``mu_y`` moved. The driver's braking level is a
     share of ``mu_b·u`` and u goes as ``1 / mu_y``, so the share moves
@@ -1487,6 +1525,18 @@ def check_car_fit(
         braked = car_use_laps(tables, lap_time, car_name, own)
         used, use_work = set_use(drive.but(model=at_limit(fitted)), own, braked)
         model, uses = set_limit(drive.but(model=used), own, best)
+        # the car's logged range of pace per layout: a pace table's support (#206)
+        ranges = use_range(drive.but(model=model), own, rows, car_name)
+        model = replace(
+            model,
+            meta={
+                **model.meta,
+                "use_range": {
+                    k: {f: _rounded(v, 5) if isinstance(v, float) else v for f, v in r.items()}
+                    for k, r in ranges.items()
+                },
+            },
+        )
         drive = drive.but(model=model)
         typical = typical_use(model)
         # the pace against the car's typical use, as the convention had it
