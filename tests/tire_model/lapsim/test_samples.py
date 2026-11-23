@@ -300,6 +300,9 @@ class TestApexRows:
         a = got.iloc[0]
         # leaning into the corner by 0.05 rad, the road carries part of the cornering
         assert a["lat_tyre_g"] == pytest.approx(1.2 * math.cos(0.05) - math.sin(0.05))
+        # the same pass on the track's line: the track's curvature at the lap's apex speed
+        on_line = 25.0**2 * 0.02 / G
+        assert a["lat_track_tyre_g"] == pytest.approx(on_line * math.cos(0.05) - math.sin(0.05))
         cos = math.cos(0.05) / math.sqrt(1 + 0.03**2)
         assert a["load"] == pytest.approx(cos + 25.0**2 * (1e-4 + 0.02 * math.sin(0.05)) / G)
 

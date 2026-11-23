@@ -123,7 +123,14 @@ high as the whole car's grip allows, a reading the simulation's faster minimum c
 dynamicist withdrew "all three cars" as its own default). The term is built for all three and
 its cells are reported per car, held to clause 5.3 as the clause has it.
 
-Not the owner's to decide and still open: clause 1.9 (which curvature the level is read on;
+**Two further rulings, 2026-11-24**, on what the build of step 1 put to the owner
+(`docs/tire_model.md` §2.12 C9): the cornering limit is read on each sensor's own peak (the
+reading of clause 1.1 as built, on which alone the max driver is faster than every best lap; it
+may read high by up to its gap to the reading taken where the other sensor peaks, 1.1–2.7 %);
+and `mu_b` stays the 90th percentile of the stops' peaks, the best of m stops of clause 1.2
+being reported beside it and not used, because it comes out at or under `mu_b`.
+
+Not the owner's to decide and, when the rulings of 2026-11-23 were made, still open (since settled by the build: C9): clause 1.9 (which curvature the level is read on;
 the gap is larger than the max driver's margins) and the plant of clause 5.4, which comes
 before step 1 is accepted.
 

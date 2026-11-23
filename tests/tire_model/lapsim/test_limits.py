@@ -50,6 +50,7 @@ def _apex(
             "lat_tyre_g": tyre,
             "load": load,
             # where the other sensor peaks, each reads 2 % under its own peak
+            "lat_track_tyre_g": tyre * 0.96,  # the track's line reads under the car's own path
             "lat_tyre_cross_g": tyre * 0.98,
             "lat_accel_cross_g": x2 * load * accel_scale * 0.98 if accel else np.nan,
         }
@@ -128,6 +129,14 @@ class TestPasses:
         assert np.allclose(cross["x2"], cross["x1"])
         assert lim.passes(_apex(values), cross=True, one_sensor=True).empty
         assert lim.passes(_apex(values).drop(columns=["lat_tyre_cross_g"]), cross=True).empty
+
+    def test_read_on_the_tracks_line(self):
+        values = np.linspace(1.1, 1.3, 60)
+        line = lim.passes(_apex(values), track=True)
+        assert np.allclose(line["x1"], np.log(values * 0.96)) and line["x2"].isna().all()
+        got = lim.car_limit(_apex(np.full(60, 1.2)), 20, track=True)
+        assert got.found and got.one_sensor and got.level == pytest.approx(1.2 * 0.96)
+        assert lim.passes(_apex(values).drop(columns=["lat_track_tyre_g"]), track=True).empty
 
     def test_a_table_without_the_tyres_frame_has_none(self):
         assert lim.passes(_apex(np.full(60, 1.2)).drop(columns=["load"])).empty

@@ -1117,13 +1117,15 @@ def limit_rows(car: str, apex: pd.DataFrame, layouts: list[str]) -> list[dict]:
     """The car's cornering limit at each m of :data:`~.limits.M_REPORTED`
     for the gate's table: the level with its day bootstrap, what it
     stands on, the layouts that borrow it, and beside it the same passes
-    read where the other sensor peaks (``cross``) and on the Doppler
-    alone (``doppler``)."""
+    read where the other sensor peaks (``cross``), on the Doppler alone
+    (``doppler``) and on the track's line in place of the car's own path
+    (``track_line``)."""
     rows = []
     for m in lim.M_REPORTED:
         got = lim.car_limit(apex, m, boot=lim.BOOT_RESAMPLES)
         cross = lim.car_limit(apex, m, cross=True)
         alone = lim.car_limit(apex.assign(lat_accel_g=np.nan), m)
+        line = lim.car_limit(apex, m, track=True)
         rows.append(
             {
                 "car": car,
@@ -1139,6 +1141,7 @@ def limit_rows(car: str, apex: pd.DataFrame, layouts: list[str]) -> list[dict]:
                 "borrowed_by": ", ".join(k for k in layouts if k not in got.layouts),
                 "cross": cross.level,
                 "doppler": alone.level,
+                "track_line": line.level,
             }
         )
     return rows
@@ -1224,6 +1227,34 @@ def plant_rows(
     return rows
 
 
+def best_segments(track: trk.TrackModel, v: np.ndarray, m: int) -> tuple[float, float]:
+    """A car's laps at a layout put together from their best parts:
+    ``(stitched, fastest)`` in seconds, both from the laps' speed at the
+    track's nodes (``v``, laps × nodes).
+
+    The lap is cut half-way between each pair of neighbouring apexes
+    (on the straights, where a lap that gives time in one part does not
+    take it back in the next), and per part the expected best of ``m``
+    laps is taken, as the cornering limit takes the expected best of m
+    passes (a plain best of every lap is a minimum many times over and
+    reads fast). ``stitched`` is the sum over the parts and ``fastest``
+    the quickest whole lap by the same clock. NaN with fewer than ``m``
+    laps or no corner."""
+    n = track.n
+    apexes = sorted({int(round(c["s_apex"] / track.ds_m)) % n for c in track.corners})
+    if len(v) < m or not apexes:
+        return float("nan"), float("nan")
+    speed = np.vstack([trk._fill_nan_periodic(np.asarray(row, float)) for row in v])
+    step = track.ds_m / (0.5 * (speed + np.roll(speed, -1, axis=1)))  # seconds per node step
+    ahead = apexes[1:] + [apexes[0] + n]
+    cuts = sorted(((a + b) // 2) % n for a, b in zip(apexes, ahead))
+    part = np.searchsorted(cuts, np.arange(n), side="right") % len(cuts)
+    stitched = 0.0
+    for k in range(len(cuts)):
+        stitched -= lim.expected_best(-step[:, part == k].sum(axis=1), m)
+    return float(stitched), float(step.sum(axis=1).min())
+
+
 def max_driver_rows(
     car_name: str,
     drive: Drive,
@@ -1231,6 +1262,8 @@ def max_driver_rows(
     laps: pd.DataFrame,
     levels: dict[str, float],
     stands_on: tuple[str, ...],
+    traces: dict[str, np.ndarray] | None = None,
+    m: int = lim.M_DEFAULT,
 ) -> list[dict]:
     """The max driver against the car's best logged lap at each layout
     (the committee's clause 1.8): the lap with every use at 1 and the
@@ -1241,7 +1274,11 @@ def max_driver_rows(
     reads); ``levels`` names the cornering limits to drive it at. A row
     per layout: the best lap, and per level the max driver's lap time
     over it less 1 (negative: faster). ``borrowed`` marks a layout the
-    limit does not stand on."""
+    limit does not stand on. With ``traces`` (per layout the car's laps'
+    speed at the track's nodes) ``stitched`` is the lap put together from
+    the expected best of ``m`` laps in each of its parts
+    (:func:`best_segments`), over the fastest whole lap less 1: a
+    diagnostic beside the best lap, not the check."""
     rows = []
     limit_car = drive.but(brake_use=False)
     for layout, track in tracks.items():
@@ -1264,6 +1301,9 @@ def max_driver_rows(
         }
         for name, t in zip(names, got.lap_time_s):
             row[name] = float(t) / float(rec["lap_time_s"]) - 1.0
+        if traces is not None and layout in traces:
+            stitched, fastest = best_segments(track, traces[layout], m)
+            row["stitched"] = stitched / fastest - 1.0 if fastest > 0 else float("nan")
         rows.append(row)
     return rows
 
@@ -1517,10 +1557,17 @@ def check_car_fit(
         for m in lim.M_REPORTED:
             if m in by_m:
                 levels[f"m{m}_cross"] = by_m[m]["cross"]
+        levels[f"m{lim.M_DEFAULT}_track"] = at_m.get("track_line", float("nan"))
         levels["typical_use"] = float(model.grip["mu_y"]) * typical
         own_laps = rows[(rows["car"] == car_name) & (rows["basis"] == "dry")]
         max_rows += max_driver_rows(
-            car_name, drive, own, own_laps, levels, tuple(work["limit"].layouts)
+            car_name,
+            drive,
+            own,
+            own_laps,
+            levels,
+            tuple(work["limit"].layouts),
+            traces={k: tables.lap_speeds(car_name, k)[1] for k in own},
         )
         for layout, r in refs.items():
             ref_rows.append(
@@ -1649,8 +1696,9 @@ def check_car_fit(
                     + (" (the Doppler alone)" if r.one_sensor else "")
                     for r in main.itertuples()
                 ),
-                f"reported (#312; m = {lim.M_DEFAULT} by the owner's decision of 2026-11-23): "
-                "the best the car has been shown to do, a floor under its true limit",
+                f"reported (#312; m = {lim.M_DEFAULT} by the owner's decision of 2026-11-23, and "
+                "each sensor's own peak by the owner's decision of 2026-11-24): the best the car "
+                "has been shown to do",
                 "Per corner, every dry day pooled, the expected largest of m passes of the "
                 "lateral the tyres hold over the load on them, each pass read by the Doppler and "
                 "by the accelerometer (put on the Doppler's scale per session) and taken as "
@@ -1661,9 +1709,12 @@ def check_car_fit(
                 "with a supporting corner, and `borrowed_by` those that take the car's level "
                 "without one. `cross`: the same statistic with each sensor read where the "
                 "*other* one peaks, which its own noise has no part in choosing (the plant below "
-                "says what each reading is worth); `doppler`: on the Doppler alone, uncorrected, "
-                "as a car or a fold without two readings is read. The model keeps `level` at "
-                f"m = {lim.M_DEFAULT} as `grip.mu_y_limit`; the solver does not use it yet.\n\n"
+                "says what each reading is worth; the owner kept the own peaks, on which alone "
+                "the max driver is faster than every best lap, knowing they may read up to the "
+                "gap between the two high); `doppler`: on the Doppler alone, uncorrected, as a "
+                "car or a fold without two readings is read; `track_line`: on the track's line "
+                "in place of the car's own path, one reading. The model keeps `level` at "
+                f"m = {lim.M_DEFAULT} as `grip.mu_y_limit`, and it is the solver's `mu_y`.\n\n"
                 + md_table(limits, floats="{:.3f}"),
             )
         )
@@ -1741,7 +1792,7 @@ def check_car_fit(
                     for r in stops_at.itertuples()
                 ),
                 "reported (#312, the committee's clause 1.2); `mu_b` stays the 90th percentile of "
-                "the stops' peaks until the owner rules",
+                "the stops' peaks by the owner's decision of 2026-11-24",
                 "Per stopping place (stops that begin within "
                 f"{lim.PLACE_GAP_M:.0f} m of each other), every dry day pooled, the expected best "
                 "of m stops of the deceleration *held* over the part of the stop with the "
@@ -1771,8 +1822,8 @@ def check_car_fit(
                 f"{lim.M_DEFAULT} ({int((maxed[end] < 0.0).sum())} at the 5 % end of the day "
                 f"bootstrap); thinnest {thin['car']} at {thin['layout_id']}, {thin[key]:+.2%}",
                 "the lap with every use at 1 is faster than the car's best logged lap at every "
-                "layout (owner, 2026-11-23: any lap; the sum of the best segments is a "
-                "diagnostic and is not built)",
+                "layout (owner, 2026-11-23: any lap; the lap stitched from its best parts is a "
+                "diagnostic beside it)",
                 "The max driver: the car at its cornering limit and at its braking limit on the "
                 "limit's own shape (the driver's braking use off), with the powertrain, shift "
                 "point, gears and air of the best lap's day, on the track's line. Its lap time "
@@ -1784,10 +1835,14 @@ def check_car_fit(
                 "`typical_use`: the same car cornering at the driver's typical use, braking at "
                 "the limit: how much of the margin is the cornering limit's. `borrowed`: the "
                 "layout has no corner the limit stands on. The limit is read on the car's own "
-                "path and spent here on the track's line (clause 1.9, open): on the formula cars "
-                "the track's curvature reads 3–4 % under the car's own at the apexes, so their "
-                "margins are larger than a level read on the track's line would give.\n\n"
-                + md_table(maxed, floats="{:.4f}"),
+                "path and spent here on the track's line (clause 1.9): "
+                f"`{key}_track` is the max driver with the limit read on the track's line "
+                "instead (`track_line` of the limit's item: the track's curvature at the apex at "
+                "the lap's speed there, one reading). `stitched`: the lap put together from the "
+                f"expected best of {lim.M_DEFAULT} laps in each of its parts (cut half-way "
+                "between apexes; no noise is taken out of the timing), over the fastest whole "
+                "lap less 1: the diagnostic beside the check, which the max driver should also "
+                "be faster than and need not be.\n\n" + md_table(maxed, floats="{:.4f}"),
             )
         )
 

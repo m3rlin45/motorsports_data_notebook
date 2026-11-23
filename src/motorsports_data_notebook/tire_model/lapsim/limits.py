@@ -103,7 +103,9 @@ def best_of_normal(m: int) -> float:
     return float(np.sum(z * m * np.clip(cdf, 0.0, 1.0) ** (m - 1) * pdf) * (z[1] - z[0]))
 
 
-def passes(apex: pd.DataFrame, *, one_sensor: bool = False, cross: bool = False) -> pd.DataFrame:
+def passes(
+    apex: pd.DataFrame, *, one_sensor: bool = False, cross: bool = False, track: bool = False
+) -> pd.DataFrame:
     """The passes of one car's dry apex table as the statistic takes them:
     the rows at its grip-limited corners with the readings it needs,
     ``x1`` and ``x2`` the logs of the two readings over the load (``x2``
@@ -115,10 +117,16 @@ def passes(apex: pd.DataFrame, *, one_sensor: bool = False, cross: bool = False)
     ``cross`` it is the sensor's value where the other one peaks
     (``lat_tyre_cross_g``, ``lat_accel_cross_g``): the first is raised by
     the sensor's own noise, the second is not and reads low where the
-    peaks are apart (:func:`~.samples.apex_rows`)."""
+    peaks are apart (:func:`~.samples.apex_rows`). With ``track`` the
+    one reading is the pass on the *track's* line (``lat_track_tyre_g``:
+    the track's curvature at the apex at the lap's speed there), which
+    is what the solver spends the limit on; it is a single reading."""
     need = {"lat_tyre_g", "load", "lat_doppler_g", "lat_accel_g", "basis", "session_id", "date"}
     if cross:
         need |= {"lat_tyre_cross_g", "lat_accel_cross_g"}
+    if track:
+        need |= {"lat_track_tyre_g"}
+        one_sensor = True
     cols = [*CORNER, "date", "session_id", "x1", "x2", "y"]
     if apex.empty or not need.issubset(apex.columns) or (cross and one_sensor):
         return pd.DataFrame(columns=cols)
@@ -134,6 +142,9 @@ def passes(apex: pd.DataFrame, *, one_sensor: bool = False, cross: bool = False)
     )
     if cross:
         ok &= (a[tyre] > MIN_READING_G) & (a[accel] > MIN_READING_G)
+    if track:
+        tyre = "lat_track_tyre_g"
+        ok &= a[tyre] > MIN_READING_G
     a = a[ok].copy()
     if a.empty:
         return pd.DataFrame(columns=cols)
@@ -327,17 +338,19 @@ def car_limit(
     seed: int = BOOT_SEED,
     correct: bool = True,
     cross: bool = False,
+    track: bool = False,
 ) -> Limit:
     """The cornering limit of the one car whose apex table ``apex`` is
     (:class:`Limit`). Read on two readings where a corner supports ``m``
     with them, else on the Doppler alone (``one_sensor``). ``boot`` asks
     for that many resamples of the car's days for ``lo`` and ``hi``.
     ``cross`` reads each sensor where the other peaks (:func:`passes`);
-    it has no one-sensor form."""
+    it has no one-sensor form. ``track`` reads the passes on the track's
+    line, a single reading."""
     return _limit(
-        lambda single: passes(apex, one_sensor=single, cross=cross),
+        lambda single: passes(apex, one_sensor=single, cross=cross, track=track),
         m,
-        singles=(False,) if cross else (False, True),
+        singles=(True,) if track else (False,) if cross else (False, True),
         boot=boot,
         seed=seed,
         correct=correct,
