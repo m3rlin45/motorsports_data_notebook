@@ -3877,6 +3877,19 @@ bias over the top quarter of speeds in gate C3 (+0.56 m/s by day), and
 the KK-F, which loses nothing, has none (+0.04). The KK-SII loses about
 0.1 s in its two upper shifts.
 
+**How D2 and D3 are judged (owner's decision, 2026-11-23).** #206
+writes its two gates on logged laps as fixed limits on laps within
+1.02 × the session best: D3 as lap-mean `V·|lat|` simulated over logged
+within 0.03 and right turns minus left within ± 0.06, D2 as the wet
+elasticities within 0.3. They take gate C3's form instead (C6, C7): the
+same measures, each with a logged lap of another day beside it, at P75,
+P90 and P95 of pace, a cell passing when the simulated lap is no
+further from the logged lap than a logged lap of another day is. The
+fixed limits are superseded as what passes; the unit tests of gate D1
+keep their tolerances. Neither gate is built: D3 can be measured now,
+and D2 is rewritten against the driver committee's wet clause once the
+car's limits and the knob of that design are built (#312, #206).
+
 **Still #206's**: the outside reference ovals (the issue gives their lap
 times, 35.7254 / 36.5213 / 36.0337 s, but not their geometry), the
 heat-chain parity with production's per-lap heat, the pace table, the
