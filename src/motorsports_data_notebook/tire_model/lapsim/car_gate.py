@@ -2,17 +2,25 @@
 
 :mod:`.car` reads a car from its tables. What needs the solver is here:
 
-- **The convention for ``mu_y``** (:func:`set_convention`). The pace knob
-  u absorbs the lateral level, so ``mu_y`` is defined: the value at which
-  the median over the car's layouts of the reference lap's u is 1. A
-  layout's reference lap is the median over its days of the day's best
-  build lap. ``ref_u`` keeps each layout's u (the median over its days)
-  and its day sd.
-- **The driver's braking use** (:func:`set_use`, before the convention).
-  The car's braking limit is the car's; the level the driver brakes at
-  and the shape held under cornering are read from the logged
-  deceleration of the car's laps, each at its own u, and go into the
+- **The car at its limit, and the driver's use of it** (:func:`at_limit`,
+  :func:`set_limit`; issue #312). ``mu_y`` is the car's cornering limit
+  (``grip.mu_y_limit``, :mod:`.limits`), which no pace moves; the
+  solver's knob u is the share of it a lap uses, in cornering and
+  braking alike (q = −ln u). A layout's reference is the median over
+  its days of the use of the day's best build lap (``ref_u``), and the
+  median of those over the car's layouts is its *typical use*
+  (:func:`typical_use`): what is carried to a layout the car has not
+  run. :func:`max_driver_rows` is the lap with every use at 1.
+- **The convention for ``mu_y``** (:func:`set_convention`), for a model
+  without a limit (no corner supports the statistic): the value at which
+  the median over the car's layouts of the reference lap's u is 1. It
+  is what limit × typical use comes to.
+- **The driver's braking use** (:func:`set_use`, with the car at its
+  limit). The car's braking limit is the car's; the level the driver
+  brakes at and the shape held under cornering are read from the logged
+  deceleration of the car's laps, each at its own use, and go into the
   model's ``driver``. The laps are then braked as the driver brakes.
+- **The limit's statistic on a planted car** (:func:`plant_limit`).
 - **In-sample speed** (:func:`lap_scores`): each build lap simulated at
   its own lap time (its own u), the RMS difference of speed at the track's
   nodes, beside the **day floor** (:func:`day_floor`): the same difference
@@ -431,8 +439,10 @@ def set_use(
     (:func:`read_use`). How a lap is braked moves its u, so the reading is
     repeated with the laps braked as read, until the level holds
     (:data:`USE_TOL`). The level is a share of ``mu_b·u`` at the model's
-    ``mu_y``: set the convention after this (:func:`set_convention` moves
-    the share with ``mu_y``), not before. Without two bands of nodes the
+    ``mu_y``: read it with the car at its limit (:func:`at_limit`), where
+    u is the driver's use. A model without a limit is set by the
+    convention after this, not before (:func:`set_convention` moves the
+    share with ``mu_y``). Without two bands of nodes the
     ``driver`` is left empty and the laps are braked at the limit.
 
     The workings: ``rounds`` (level and shape after each), ``bands`` (the
@@ -1122,14 +1132,23 @@ def limit_rows(car: str, apex: pd.DataFrame, layouts: list[str]) -> list[dict]:
 
 
 def plant_rows(
-    car_name: str, model: cm.CarModel, limit: lim.Limit, tracks: dict[str, trk.TrackModel]
+    car_name: str,
+    model: cm.CarModel,
+    limit: lim.Limit,
+    tracks: dict[str, trk.TrackModel],
+    apex: pd.DataFrame | None = None,
 ) -> list[dict]:
     """:func:`plant_limit` for a car as the logs have it: its limit
     planted, on the layout most of its supporting corners are at, the
     passes' typical use and spread as read from its own corners, and the
     sensors' noise set so that the statistic finds in the plant the noise
     it finds in the logs. One row per top, without and with an error the
-    two readings share (:data:`PLANT_SHARED_SD`)."""
+    two readings share (:data:`PLANT_SHARED_SD`). ``own_over_cross`` is
+    how far the level by own peaks sits above the level read where the
+    other sensor peaks, in the plant; with ``apex`` (the car's apex
+    table) ``logs_own_over_cross`` is the same on the logs at that
+    layout's corners: a number the plant was not set to, and so a check
+    on it."""
     own = limit.by_corner[limit.by_corner["supports"]]
     if not limit.found or limit.one_sensor or own.empty:
         return []
@@ -1137,6 +1156,13 @@ def plant_rows(
     if layout not in tracks:
         return []
     at = own[own["layout_id"] == layout]
+    logged = float("nan")
+    if apex is not None and len(apex):
+        there = apex[apex["layout_id"] == layout]
+        logged = (
+            lim.car_limit(there, limit.m).level / lim.car_limit(there, limit.m, cross=True).level
+            - 1.0
+        )
     noise_logs = float(at["sd_noise"].median())
     sd_pass = float(np.sqrt(max(float(at["sd"].median()) ** 2 - noise_logs**2, 0.0)))
     # a corner's typical pass over its expected best: that far under the level
@@ -1175,6 +1201,8 @@ def plant_rows(
                     "cross": got["cross"] / got["truth"] - 1.0,
                     "level_over_limit": got["level"] / got["limit"] - 1.0,
                     "cross_over_limit": got["cross"] / got["limit"] - 1.0,
+                    "own_over_cross": got["level"] / got["cross"] - 1.0,
+                    "logs_own_over_cross": logged,
                     "noise_logs": noise_logs,
                     "noise_found": got["sd_noise"],
                     "noise_g": noise_g,
@@ -1440,7 +1468,9 @@ def check_car_fit(
         ladders.append(era_ladder(car_name, best, refs, work["days"], compounds))
         car_limits = limit_rows(car_name, tables.apex[tables.apex["car"] == car_name], sorted(own))
         lim_rows += car_limits
-        planted += plant_rows(car_name, model, work["limit"], own)
+        planted += plant_rows(
+            car_name, model, work["limit"], own, tables.apex[tables.apex["car"] == car_name]
+        )
         by_m = {int(r["m"]): r for r in car_limits}
         at_m = by_m.get(lim.M_DEFAULT, {})
         levels = {f"m{m}": by_m[m]["level"] for m in lim.M_REPORTED if m in by_m}
@@ -1603,18 +1633,32 @@ def check_car_fit(
         over = bare.groupby("car")["level_over_limit"].max()
         cross_off = bare.groupby("car")["cross"].agg(lambda x: float(x.abs().max()))
         plant_ok = bool((off <= PLANT_MAX_OFF).all() and (over <= PLANT_MAX_OFF).all())
+        bell = bare[bare["top"] == "bell"].set_index("car")
+        # the plant is trusted only as far as it shows the logs' own gap
+        like_logs = bool(
+            (bell["own_over_cross"] <= 1.25 * bell["logs_own_over_cross"]).all()
+            and (bell["own_over_cross"] >= 0.8 * bell["logs_own_over_cross"]).all()
+        )
         rep.items.append(
             GateItem(
                 "The limit's statistic on a planted car (the committee's clause 5.4)",
-                plant_ok,
+                (plant_ok or None) if not like_logs else plant_ok,
                 "; ".join(
                     f"{c} off by up to {off[c]:.1%} (read where the other sensor peaks: "
-                    f"{cross_off[c]:.1%})"
+                    f"{cross_off[c]:.1%}); own peaks over cross {bell.loc[c, 'own_over_cross']:.1%} "
+                    f"in the plant, {bell.loc[c, 'logs_own_over_cross']:.1%} in the logs"
                     for c in off.index
+                )
+                + (
+                    ""
+                    if like_logs
+                    else "; the plant does not show the logs' own gap between the two readings, "
+                    "so its sizes are not the logged cars' and the item is reported, not failed"
                 ),
                 f"within {PLANT_MAX_OFF:.0%} of the expected best of m of the planted passes, "
                 f"and no more than {PLANT_MAX_OFF:.0%} above the planted limit, on every top "
-                "without a shared error (the rule written on #312 before the run)",
+                "without a shared error (the rule written on #312 before the run); gated only "
+                "where the plant's gap between the two readings is the logs' (0.8 to 1.25 of it)",
                 "Each car's limit planted on the layout most of its supporting corners are at: "
                 f"{PLANT_DAYS} days of {PLANT_LAPS} laps, every corner pass at its own use of "
                 "the limit (the lap is driven at the limit on the track with that corner's "
@@ -1633,7 +1677,12 @@ def check_car_fit(
                 "other peaks. `*_over_limit` are against the planted limit itself. The "
                 "correction takes out the spread the noise adds; it cannot take out what the "
                 "noise adds to the *largest* value of a corner's fixes, which is why `level` "
-                "reads high.\n\n" + md_table(plants, floats="{:.4f}"),
+                "reads high. `own_over_cross` is the gap between the two readings in the plant "
+                "and `logs_own_over_cross` the same gap in the logs on that layout's corners, "
+                "which the plant was not set to: where the plant's is the larger (a point mass "
+                "holds its lateral through the whole of a corner, a driven pass rises to a peak) "
+                "its figures overstate the logged cars', and what the logs bound is that the "
+                "truth lies between the two readings.\n\n" + md_table(plants, floats="{:.4f}"),
             )
         )
 

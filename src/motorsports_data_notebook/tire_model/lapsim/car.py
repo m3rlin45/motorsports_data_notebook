@@ -52,9 +52,12 @@ fitted through a solver; the solver is the gate.
   from the diamond towards the ellipse (:func:`braking_shape`).
 - ``grip.onset_s``: the time between drive and full braking where a stop
   begins (:func:`brake_onset`); the driver's on this car, not the tyre's.
-- ``grip.mu_y``: a convention, since the pace knob absorbs the level
-  (:func:`.car_gate.set_convention`, which also fills ``ref_u``);
-  :func:`fit_car` alone leaves the apex table's level there.
+- ``grip.mu_y``: what the solver corners on. :func:`fit_car` alone
+  leaves the apex table's level there (the braking level and shape are
+  read against it); :func:`.car_gate.set_limit` puts the car's limit
+  there and fills ``ref_u`` with each layout's use of it, or, for a
+  model without a limit, :func:`.car_gate.set_convention` its
+  convention.
 - ``grip.mu_y_limit``: the car's cornering limit as the best it has been
   shown to do, the expected best of m passes through a corner
   (:func:`.limits.car_limit`; ``meta.limit`` has its workings); None

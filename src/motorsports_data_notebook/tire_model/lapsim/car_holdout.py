@@ -4,9 +4,10 @@ gate tell it from a wrong car's? (lap simulation segment C3, issue #205)
 **Folds.** Leave-one-day-out per layout, and leave-one-layout-out: the
 car is read from its tables without the held-out laps (:func:`fold_car`),
 the driver's braking use read from the speed traces that are left
-(:func:`~.car_gate.set_use`), ``mu_y`` set by the convention on what is
-left, and every held-out build
-lap is simulated at its own lap time, its own u, with the powertrain the
+(:func:`~.car_gate.set_use`) with the car at its own cornering limit
+(``mu_y``, read without the held-out laps: :func:`~.car_gate.set_limit`),
+and every held-out build
+lap is simulated at its own lap time, its own use of that limit, with the powertrain the
 car had that day, the driver's shift point of the day and the session's
 air (:class:`~.car_gate.Drive`). The shift point of a held-out day comes
 from that day's own logs: it is the driver's, like the lap time.
@@ -25,9 +26,9 @@ from that day's own logs: it is the driver's, like the lap time.
   (:func:`pace_yardsticks`).
 
 **Controls** through the same folds: (a) the fold's own car with
-``p_specific × 0.85`` and ``mu_y`` raised by the convention until the
-reference laps are matched again, braked as the fold's fitted car is
-(its driver's level in g at the reference pace); (b) another car's
+``p_specific × 0.85`` and the same limit, so that its laps use more of
+it, braked as the fold's fitted car is
+(its driver's level in g at the typical use); (b) another car's
 parameter set, its driver's use with it. A lap
 time alone cannot tell either from the car, because u is solved from it.
 
