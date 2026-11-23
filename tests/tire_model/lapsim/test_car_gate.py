@@ -358,6 +358,41 @@ class TestAtLimitAndMaxDriver:
         )
 
 
+class TestBestSegments:
+    def test_a_lap_stitched_from_the_expected_best_of_its_parts(self):
+        track = _oval_track()
+        fast = sv.simulate_lap(track, CAR, 1.0).v_node_ms
+        nodes = np.arange(track.n)
+        apexes = [int(round(c["s_apex"] / track.ds_m)) for c in track.corners]
+        laps = []
+        for k in range(40):  # every lap loses time round one apex or round the other
+            near = np.abs(nodes - apexes[k % 2]) <= 40
+            laps.append(np.where(near, 0.9 * fast, fast))
+        stitched, fastest = cg.best_segments(track, np.vstack(laps), 5)
+        whole = float(np.sum(track.ds_m / (0.5 * (fast + np.roll(fast, -1)))))
+        assert fastest > whole * 1.002  # no lap was fast everywhere
+        assert whole <= stitched < fastest  # its best parts together nearly are
+        assert stitched == pytest.approx(whole, rel=2e-3)
+        same = np.vstack([fast] * 10)
+        both = cg.best_segments(track, same, 5)
+        assert both[0] == pytest.approx(both[1], rel=1e-12)
+        assert np.isnan(cg.best_segments(track, same[:3], 5)[0])
+
+    def test_beside_the_max_driver(self):
+        track = _oval_track()
+        model = _model()
+        car = sv.SolverCar.from_model(model)
+        laps = pd.DataFrame(
+            {"layout_id": "a", "date": ["d1"], "lap_time_s": [sv.lap_time(track, car, 0.95)]}
+        )
+        traces = {"a": np.vstack([sv.simulate_lap(track, car, 0.95).v_node_ms] * 25)}
+        rows = cg.max_driver_rows(
+            "car", cg.Drive(model), {"a": track}, laps, {"m20": 1.2}, ("a",), traces=traces
+        )
+        assert rows[0]["stitched"] == pytest.approx(0.0, abs=1e-9)  # every lap the same lap
+        assert rows[0]["m20"] < 0.0 and not rows[0]["borrowed"]
+
+
 class TestBrakingUse:
     """How the driver brakes, read from speed traces at each lap's own u."""
 

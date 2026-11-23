@@ -4,7 +4,7 @@ What each car did on its build laps, as tables a person can read; the car
 model (C2) takes its numbers from them. Everything is in the ground frame
 on the position clock (:mod:`.frame`), and every sample knows where on the
 layout's track it is, so the track's grade can be taken out. Since
-version 5 (6 with an apex's cross readings) the laterals are also kept in the tyres' frame, beside the
+version 5 (6 with an apex's cross readings, 7 with the track's line) the laterals are also kept in the tyres' frame, beside the
 ground-frame ones (``*_tyre_g``: what the tyres hold on the road's bank,
 :func:`~.bank.to_tyres_frame`; the same number on a track without a
 bank), and an apex has the ``load`` on the tyres there (#312).
@@ -63,7 +63,7 @@ from .gates import GateItem, GateReport, md_table
 
 logger = logging.getLogger(__name__)
 
-TABLES_VERSION = 6
+TABLES_VERSION = 7
 TABLE_NAMES = ("sessions", "throttle", "coast", "brake", "apex")
 #: Cars the programme fits a model for; the others get tables where their
 #: channels allow and are listed.
@@ -579,6 +579,7 @@ APEX_COLUMNS = [
     "load",
     "lat_tyre_cross_g",
     "lat_accel_cross_g",
+    "lat_track_tyre_g",
 ]
 
 
@@ -610,6 +611,9 @@ def apex_rows(
     value, and ``lat_accel_cross_g`` the accelerometer's at the fix of
     the Doppler's (both NaN without the accelerometer). They read low
     where the two peaks are apart on a corner that is not flat.
+    ``lat_track_tyre_g`` is ``lat_track_g`` in the tyres' frame: the pass
+    as the solver would have it, on the track's line and not the lap's
+    own path.
     """
     length = track.length_m
     v = sig.geom.speed
@@ -658,6 +662,12 @@ def apex_rows(
                     "load": float(np.median(cos_near + v[at] ** 2 * kv_near / G_MS2)),
                     "lat_tyre_cross_g": tyre_cross,
                     "lat_accel_cross_g": float(acc[int(np.argmax(own))]) if both else np.nan,
+                    # the pass on the track's line: V²|κ| of the track at its apex
+                    "lat_track_tyre_g": float(
+                        bankmod.to_tyres_frame(
+                            v[at] ** 2 * abs(corner["kappa_apex"]) / G_MS2, sign * bank_left
+                        )
+                    ),
                 }
             )
     return pd.DataFrame(rows, columns=APEX_COLUMNS)

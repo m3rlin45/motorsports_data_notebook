@@ -4277,6 +4277,53 @@ Five of the 2,231 held-out laps solve to a use above 1, all the Inferno
 86's (three on layout folds, two on day folds; the highest 1.009): they
 are driven that far above the limit, not capped.
 
+**The owner's two rulings, 2026-11-24, and what closed the issue.**
+
+1. *The cornering limit is read on each sensor's own peak* (the
+   committee's reading; `grip.mu_y_limit` as built). It is the reading
+   on which the max driver is faster than every best logged lap, which
+   is the owner's own test of a limit; it may read high by up to the
+   gap to the cross reading (2.7 / 1.1 / 1.8 %), and is labelled so.
+   The cross reading stays in the tables and in gate C2 beside it.
+2. *`mu_b` stays the 90th percentile of the stops' peaks.* The best of m
+   stops of a held deceleration is reported beside it and not used: it
+   would lower the braking limit. The braking shape is therefore not
+   read by that statistic either.
+
+Two things stage 6 had left were then built (tables version 7,
+`limits.car_limit(..., track=True)`, `car_gate.best_segments`):
+
+*The level read on the track's line* (the committee's clause 1.9, which
+was open): the same statistic on the pass as the solver would have it,
+the track's curvature at the apex at the lap's speed there, in the
+tyres' frame; one reading, so nothing is taken out for noise. At m = 20
+it reads 1.282 / 1.534 / 1.510 against 1.283 / 1.541 / 1.493 on the
+car's own path: within 1.1 %, not the 3–4 % that a pass-by-pass
+comparison of the two curvatures gave the committee (the expected best
+of twenty passes is set by the top of a corner's passes, where the two
+differ less than they do in the middle). The max driver at that level
+is faster than the best logged lap in ten of ten cells, by 0.59 % for
+the Inferno 86 at Fuji (0.60 % on the car's own path) and 2.0 to 4.3 %
+on the formula cars. So the clause's worry does not arise, and the
+level stays on the car's own path, where it has two readings.
+
+*The lap stitched from its best parts* (the diagnostic of the owner's
+ruling 5): the lap cut half-way between apexes, and per part the
+expected best of 20 laps, as the limit takes the expected best of 20
+passes; no noise is taken out of the timing. Against the fastest whole
+lap it is 0.4 % faster for the Inferno 86 at Fuji and Tsukuba and 0.4 %
+*slower* at Sodegaura (355 laps: the expected best of twenty is not the
+best of all), 0.2 to 1.2 % faster for the KK-SII and 0.3 to 1.3 % for
+the KK-F. The max driver is faster than the stitched lap in all nine
+cells that have twenty laps (by 0.2 % for the Inferno 86 at Fuji, the
+thinnest again, and by 0.7 to 3.4 % elsewhere).
+
+Left out of #312, on purpose: a cap for a use above 1 (five laps of
+2,231 reach 1.009; it needs a change to the kernel and belongs with the
+calculator's contract, #206); the committee's full test for the driven
+axle (it is on by the owner's decision); the braking shape by the best
+of m stops (it goes with `mu_b`, which stays).
+
 #### D1 (in part). The lap solver (`solver.py`, 2026-11-15)
 
 C2's remaining clauses and all of C3 need `simulate_lap` and `solve_u`,
