@@ -66,6 +66,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Gate C2: the car model from the sample tables, and through the solver.",
     )
     sub.add_parser(
+        "check-heat-chain",
+        help="Gate D1 on logged laps: production's heat chain on a lap against production's "
+        "own per-lap heat, holes, the phase of the bins and the 0.5 s smoothing.",
+    )
+    sub.add_parser(
         "check-car-holdout",
         help="Gate C3: the car on held-out days and layouts, against two planted wrong cars.",
     )
@@ -123,6 +128,15 @@ def main(argv: list[str] | None = None) -> int:
 
         report = car_holdout.check_car_holdout(
             root, cache_dir=workspace / "cache", tracks_dir=workspace / "tracks"
+        )
+    elif args.cmd == "check-heat-chain":
+        from . import heat_gate
+
+        report = heat_gate.check_heat_chain(
+            root,
+            cache_dir=workspace / "cache",
+            tracks_dir=workspace / "tracks",
+            cars_dir=workspace / "cars",
         )
     else:  # pragma: no cover - argparse rejects unknown commands
         parser.error(f"unknown command {args.cmd}")
