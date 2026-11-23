@@ -53,9 +53,13 @@ Output is per step, not per node: a step's mean speed times its time is
 its length exactly, so distance, time and the closed-lap identity
 (``Σ V·long·dt = 0``) hold to rounding.
 
-Not here yet (#206): the outside reference ovals, the heat-chain parity
-with production's per-lap heat, the pace table, and the gear table as a
-reported variant.
+The outside reference of #206's gate D1 (two stadium ovals lapped by an
+ODE reference and a closed form) is in the tests: the solver reproduces
+"ellipse both sides" to 0.03 % at 2 m and 0.001 % at 0.25 m with
+``brake_ellipse = 1`` and ``drive_share = μ_x / μ_y``. Production's heat
+chain on a simulated lap is :func:`.heat.sim_heat`.
+
+Not here yet (#206): the pace table and the ``outside_support`` status.
 """
 
 from __future__ import annotations

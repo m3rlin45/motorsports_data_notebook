@@ -16,10 +16,14 @@ are binned alike: the phase of the bins moves a lap's heat by 0.5–1.8 %.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from ..heat_input import DEFAULT_G_CLIP, ShareParams, share_heat_rate
+
+if TYPE_CHECKING:
+    from .solver import SimLap
 
 CORNERS = ("fl", "fr", "rl", "rr")
 #: A lap whose samples leave more than this share of its seconds empty has
@@ -56,6 +60,7 @@ def bin_1s(
     t_end: float,
     *,
     g_clip: float = DEFAULT_G_CLIP,
+    phase_s: float = 0.0,
 ) -> LapBins:
     """The samples with ``t_start ≤ t < t_end`` as 1 s means.
 
@@ -63,15 +68,20 @@ def bin_1s(
     series on an irregular clock is not re-weighted by its time steps). A
     sample with a non-finite speed or acceleration is left out; it is not
     counted as zero. Accelerations are clipped to ``± g_clip``.
+
+    ``phase_s`` (0 to 1) moves the bins' edges that far back: the first
+    bin is then the lap's first ``1 − phase_s`` seconds. It is there to
+    measure what the phase of the bins is worth; production's bins start
+    where its stint's rolling clock does.
     """
     t = np.asarray(t, float)
     v = np.asarray(v, float)
     lat = np.asarray(lat_g, float)
     lng = np.asarray(long_g, float)
     lap_time = float(t_end - t_start)
-    n = max(int(np.ceil(lap_time - 1e-9)), 1)
+    n = max(int(np.ceil(lap_time + phase_s - 1e-9)), 1)
     keep = (t >= t_start) & (t < t_end) & np.isfinite(v) & np.isfinite(lat) & np.isfinite(lng)
-    b = np.clip(np.floor(t[keep] - t_start).astype(np.int64), 0, n - 1)
+    b = np.clip(np.floor(t[keep] - t_start + phase_s).astype(np.int64), 0, n - 1)
     lat = np.clip(lat[keep], -g_clip, g_clip)
     lng = np.clip(lng[keep], -g_clip, g_clip)
     cnt = np.bincount(b, minlength=n).astype(float)
@@ -80,7 +90,8 @@ def bin_1s(
         return np.asarray(np.bincount(b, weights=x, minlength=n) / np.maximum(cnt, 1.0))
 
     dur = np.ones(n)
-    dur[-1] = lap_time - (n - 1)
+    dur[-1] = lap_time + phase_s - (n - 1)
+    dur[0] -= phase_s
     return LapBins(
         dur_s=np.where(cnt > 0, dur, 0.0),
         v_ms=_mean(v[keep]),
@@ -134,4 +145,44 @@ def series_heat(
     return lap_heat(bin_1s(t, v, lat_g, long_g, t_start, t_end), share)
 
 
-__all__ = ["CORNERS", "COVERAGE_MIN", "LapBins", "bin_1s", "lap_heat", "series_heat"]
+#: A simulated lap is put on a clock this fine before it is binned, so
+#: that a bin's mean is a mean over time (its steps are even in distance).
+SIM_SERIES_HZ = 100.0
+
+
+def sim_series(
+    sim: "SimLap", *, hz: float = SIM_SERIES_HZ
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """A simulated lap as ``(t, v, lat_g, long_g)`` on an even clock from
+    the lap's start: at each instant the values of the step the car is
+    in. The lateral is what the tyres hold (``lat_tyre_g``; the
+    ground-frame ``lat_g`` on a flat road) and the longitudinal what an
+    accelerometer reads (``long_sf_g``: ``dV/dt`` and the grade), which
+    are the two production's chain is given by a car with a sound
+    sensor."""
+    t = (np.arange(int(np.floor(sim.lap_time_s * hz))) + 0.5) / hz
+    ends = np.cumsum(sim.dt_s)
+    step = np.minimum(np.searchsorted(ends, t, side="right"), len(ends) - 1)
+    lat = sim.lat_g if sim.lat_tyre_g is None else sim.lat_tyre_g
+    return t, sim.v_ms[step], lat[step], sim.long_sf_g[step]
+
+
+def sim_heat(sim: "SimLap", share: ShareParams, *, hz: float = SIM_SERIES_HZ) -> np.ndarray:
+    """Production's chain on a simulated lap: lap-mean heat rate per tyre
+    (``fl, fr, rl, rr``; G·m/s), the seconds counted from the lap's
+    start (:func:`sim_series`, :func:`bin_1s`, :func:`lap_heat`)."""
+    t, v, lat, lng = sim_series(sim, hz=hz)
+    return lap_heat(bin_1s(t, v, lat, lng, 0.0, sim.lap_time_s), share)
+
+
+__all__ = [
+    "CORNERS",
+    "COVERAGE_MIN",
+    "LapBins",
+    "SIM_SERIES_HZ",
+    "bin_1s",
+    "lap_heat",
+    "series_heat",
+    "sim_heat",
+    "sim_series",
+]

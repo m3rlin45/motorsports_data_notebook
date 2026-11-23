@@ -99,10 +99,151 @@ class TestClosedForms:
         flat = sv.corner_speed_limit(sv.Profile.flat(np.full(n, 1 / 50.0), 2.0), 1.2)
         assert (lim < flat).all()
 
+    def test_a_downhill_helix_is_held_at_the_root_of_the_combined_rule(self):
+        # a constant radius going down: the car brakes all the way round to hold its
+        # speed, with what the cornering leaves of the grip, the drag helping
+        n, kappa, grade = 400, 1 / 50.0, -0.08
+        prof = sv.Profile(2.0, np.full(n, kappa), np.full(n, grade), np.zeros(n))
+        load = G / math.sqrt(1.0 + grade**2)
+
+        def net(v, shape):  # what is left to speed the car up, braked at the limit
+            used = v * v * kappa / (CAR.mu_y * load)
+            left = (1.0 - shape) * (1.0 - used) + shape * math.sqrt(1.0 - used * used)
+            return -CAR.mu_b * load * left - CAR.c_drag * v * v - G * grade
+
+        for shape in (0.0, 0.6):
+            lo, hi = 1.0, math.sqrt(CAR.mu_y * load / kappa)
+            for _ in range(80):
+                mid = 0.5 * (lo + hi)
+                lo, hi = (mid, hi) if net(mid, shape) < 0.0 else (lo, mid)
+            assert lo < math.sqrt(CAR.mu_y * load / kappa) - 0.02  # under the cornering limit
+            sim = sv.simulate_lap(prof, replace(CAR, brake_ellipse=shape), 1.0)
+            assert sim.v_node_ms == pytest.approx(lo, rel=1e-4)
+
+    def test_the_engines_work_is_the_tyres_work_at_full_throttle(self):
+        sim = sv.simulate_lap(_straight(1000.0), CAR, v_start=20.0)
+        tyres = float(np.sum(sim.long_tyre_g * G * sim.v_ms * sim.dt_s))
+        engine = CAR.p_specific * float(sim.dt_s.sum())
+        assert tyres == pytest.approx(engine, rel=1e-4)
+        # and it went into speed and drag
+        gained = 0.5 * (sim.v_node_ms[-1] ** 2 - sim.v_node_ms[0] ** 2)
+        drag = float(np.sum(CAR.c_drag * sim.v_ms**3 * sim.dt_s))
+        assert gained + drag == pytest.approx(engine, rel=1e-4)
+
     def test_a_straight_has_no_cornering_limit(self):
         assert sv.corner_speed_limit(sv.Profile.flat(np.zeros(5), 2.0), 1.2) == pytest.approx(
             sv.V_MAX_MS
         )
+
+
+#: The outside reference of #206's review: two stadium ovals with arcs of
+#: radius 160/π m and 400 m straights, one with a curvature step (1,120 m)
+#: and one with 40 m clothoid ramps (1,200 m), lapped by a point mass with
+#: μ_y 1.2, μ_x 1.0, 100 W/kg and c = 3.36e-4 /m at g = 9.81. The lap
+#: times are an ODE reference's and a closed form's, not this solver's.
+REF_RADIUS = 160.0 / math.pi
+#: On a flat road g enters only with the grip: the reference's g against
+#: the solver's is a factor on μ.
+REF_G = 9.81 / G
+REF_CAR = sv.SolverCar(mu_y=1.2 * REF_G, mu_b=1.0 * REF_G, p_specific=100.0, c_drag=3.36e-4)
+#: "Ellipse both sides": braking and drive each within the ellipse with
+#: μ_x along the car: the braking limit's shape at the ellipse, and the
+#: drive at μ_x / μ_y of what the cornering leaves of the grip.
+REF_ELLIPSE = replace(REF_CAR, brake_ellipse=1.0, drive_share=1.0 / 1.2)
+#: "Diamond on braking only": the drive held by the engine alone.
+REF_POWER_ONLY = replace(REF_CAR, drive_share=1.0e6)
+
+
+def _reference_oval(ds, ramp):
+    return _oval(ds, straight=400.0, radius=REF_RADIUS, ramp=ramp)
+
+
+class TestReferenceOvals:
+    """Gate D1's outside reference (issue #206)."""
+
+    def test_the_ovals_are_the_reviews(self):
+        assert _reference_oval(2.0, 0.0).length_m == pytest.approx(1120.0)
+        clothoid = _reference_oval(2.0, 40.0)
+        assert clothoid.length_m == pytest.approx(1200.0)
+        assert np.sum(clothoid.kappa) * 2.0 == pytest.approx(2.0 * math.pi)  # it closes
+
+    def test_ellipse_both_sides_on_the_clothoid_oval(self):
+        # 35.7254 s; +0.032 % at 2 m and +0.0009 % at 0.25 m
+        assert sv.lap_time(_reference_oval(2.0, 40.0), REF_ELLIPSE, 1.0) == pytest.approx(
+            35.7254, rel=4e-4
+        )
+        assert sv.lap_time(_reference_oval(0.25, 40.0), REF_ELLIPSE, 1.0) == pytest.approx(
+            35.7254, rel=5e-5
+        )
+
+    def test_ellipse_on_the_stepped_oval(self):
+        # 35.1056 s; −0.004 % at 2 m
+        assert sv.lap_time(_reference_oval(2.0, 0.0), REF_ELLIPSE, 1.0) == pytest.approx(
+            35.1056, rel=1e-4
+        )
+        assert sv.lap_time(_reference_oval(0.25, 0.0), REF_ELLIPSE, 1.0) == pytest.approx(
+            35.1056, rel=5e-5
+        )
+
+    def test_the_error_falls_with_the_step(self):
+        off = [
+            abs(sv.lap_time(_reference_oval(ds, 40.0), REF_ELLIPSE, 1.0) / 35.7254 - 1.0)
+            for ds in (2.0, 1.0, 0.5)
+        ]
+        assert off[1] < 0.5 * off[0] and off[2] < 0.5 * off[1]
+
+    def test_braking_on_the_diamond_with_the_drive_by_power_alone(self):
+        # what the review's "the rule above" figures were computed with: 36.0337 s on
+        # the clothoid oval and 35.1036 s on the stepped one
+        assert sv.lap_time(_reference_oval(0.25, 40.0), REF_POWER_ONLY, 1.0) == pytest.approx(
+            36.0337, rel=2e-4
+        )
+        prof = _reference_oval(0.25, 0.0)
+        sim = sv.simulate_lap(prof, REF_POWER_ONLY, 1.0)
+        assert sim.lap_time_s == pytest.approx(35.1036, rel=2e-4)
+        # the straight after the arc, by the closed form with drag: speed 100, 200 and
+        # 300 m on, the peak and where the braking begins
+        v = sim.v_node_ms[: int(400.0 / 0.25)]
+        at = [float(v[int(s / 0.25)]) for s in (100.0, 200.0, 300.0)]
+        assert at == pytest.approx([34.7066, 40.4806, 44.5657], abs=0.03)
+        assert float(v.max()) == pytest.approx(45.528, abs=0.01)
+        assert 0.25 * int(np.argmax(v)) == pytest.approx(328.184, abs=0.5)
+
+    def test_the_rule_as_written_holds_the_drive_within_the_grip(self):
+        # the issue's rule (braking on the diamond, drive within the circle of the
+        # grip) has no reference of its own: the review's 36.0337 s is with the drive
+        # by power alone. On the stepped oval the two are the same lap; on the
+        # clothoid one the grip holds the drive on the way out of each corner
+        assert sv.lap_time(_reference_oval(2.0, 0.0), REF_CAR, 1.0) == pytest.approx(
+            35.1036, rel=1e-4
+        )
+        written = sv.lap_time(_reference_oval(0.25, 40.0), REF_CAR, 1.0)
+        assert 36.0337 * 1.0005 < written < 36.5213  # under "diamond both sides"
+        assert written == pytest.approx(36.0787, abs=0.002)  # the solver's own figure
+
+    def test_an_outside_solver_on_the_same_ovals(self):
+        # TUM's trajectory_planning_helpers; skipped where it is absent or does not import
+        tph = pytest.importorskip("trajectory_planning_helpers")
+        g = 9.81
+        mass = 1000.0
+        for ramp in (0.0, 40.0):
+            prof = _reference_oval(1.0, ramp)
+            ggv = np.array([[0.0, 1.0 * g, 1.2 * g], [100.0, 1.0 * g, 1.2 * g]])
+            engine = np.array([[v, 100.0 / max(v, 1.0)] for v in np.arange(0.0, 101.0, 0.5)])
+            vx = tph.calc_vel_profile.calc_vel_profile(
+                ggv=ggv,
+                kappa=prof.kappa,
+                el_lengths=np.full(prof.n, 1.0),
+                closed=True,
+                filt_window=None,
+                dyn_model_exp=2.0,
+                drag_coeff=3.36e-4 * mass,
+                m_veh=mass,
+                ax_max_machines=engine,
+                v_max=100.0,
+            )
+            theirs = float(np.sum(1.0 / (0.5 * (vx + np.roll(vx, -1)))))
+            assert sv.lap_time(prof, REF_ELLIPSE, 1.0) == pytest.approx(theirs, rel=1e-3)
 
 
 class TestClosedLap:

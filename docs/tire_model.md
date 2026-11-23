@@ -4394,11 +4394,62 @@ keep their tolerances. Neither gate is built: D3 can be measured now,
 and D2 is rewritten against the driver committee's wet clause once the
 car's limits and the knob of that design are built (#312, #206).
 
-**Still #206's**: the outside reference ovals (the issue gives their lap
-times, 35.7254 / 36.5213 / 36.0337 s, but not their geometry), the
-heat-chain parity with production's per-lap heat, the pace table, the
-`outside_support` status and the gear table (shift dips: C4; the bank:
-B2b).
+**The outside reference of gate D1 (2026-11-24; `TestReferenceOvals`).**
+Two stadium ovals with arcs of radius 160/π m and 400 m straights, one
+with a curvature step (1,120 m) and one with 40 m clothoid ramps
+(1,200 m), lapped by a point mass (μ_y 1.2, μ_x 1.0, 100 W/kg, c =
+3.36e-4 /m, g = 9.81; on a flat road g enters only with the grip, so
+the reference's g is a factor on μ in the tests). The lap times are an
+ODE reference's and a closed form's, from #206's review.
+
+| lap | reference | the solver, 2 m | 0.25 m |
+|---|---|---|---|
+| clothoid oval, ellipse both sides | 35.7254 s | +0.032 % | +0.0009 % |
+| stepped oval, ellipse | 35.1056 s | −0.004 % | −0.0004 % |
+| stepped oval, braking on the diamond | 35.1036 s | −0.0003 % (the rule as written) | +0.004 % |
+| clothoid oval, braking on the diamond and the drive by power alone | 36.0337 s | | +0.013 % |
+| clothoid oval, the rule as written (the drive within the circle of the grip) | none | 36.0887 s | 36.0787 s |
+
+"Ellipse both sides" is braking and drive each within the ellipse with
+μ_x along the car, which the solver has had exactly since the driven
+axle went in: the braking shape at the ellipse and the drive at
+μ_x / μ_y of what the cornering leaves (`brake_ellipse = 1`,
+`drive_share = 1 / 1.2`). The error falls by a factor of three with
+each halving of the step. **The issue's figure for "the rule above",
+36.0337 s, is not that rule's lap.** An independent integration with
+each pair of rules puts it at braking on the diamond with the drive
+held by the engine alone ("diamond on braking only", as the review's
+own comment calls the stepped oval's figure); the drive rule the issue
+writes, `min(P/V, √((μ_y G)² − (V²κ)²))`, holds the drive on the way out
+of each clothoid and laps 0.125 % slower, 36.0787 s. So the clause
+"36.0337 s within 0.03 %" could not have been met by the rule it names;
+it is replaced by the two references the solver can be set to exactly,
+and the written rule's own figure is pinned as the solver's. Also
+checked once, outside the tests: TUM's `calc_vel_profile` (loaded by
+path, its package does not import on this Python) gives 35.7305 s and
+35.1130 s on the two ovals at 0.25 m for the ellipse and 36.5277 s for
+the diamond both sides (references 35.7254, 35.1056, 36.5213), within
+0.02 %; a test against it is in the suite and skips where the package
+does not import.
+
+Gate D1's other closed forms are now tests too: a downhill helix held
+at the root of the combined rule (to 1e-4, on the diamond and on a
+shape of 0.6), and the engine's work at full throttle against the
+tyres' (6e-6). **The heat chain on a simulated lap** is
+`heat.sim_heat`: the lap is put on an even 100 Hz clock (its steps are
+even in distance, so a bin's plain mean would weight the slow part of a
+second too little), the lateral is what the tyres hold and the
+longitudinal what an accelerometer reads, and the bins count from the
+lap's start. A right-hand lap heats the left tyres and the mirrored
+track swaps them to 1e-12; halving the step moves the heat by under
+0.1 %; 25 Hz against 100 Hz by under 0.5 % (the review had 0.3 % above
+10 Hz). `heat.bin_1s(..., phase_s=)` moves the bins' edges, to measure
+what their phase is worth.
+
+**Still #206's**: the parity of the chain with production's per-lap
+heat on logged laps, the smoothing of #207 E0 against it, the pace
+table and `outside_support`, lateral heat by side (D3) and the wet
+(D2).
 
 **Batches, and speed.** The solver works on a batch of laps of one
 track, each with its own car and its own u (`solver.solve_laps`,
