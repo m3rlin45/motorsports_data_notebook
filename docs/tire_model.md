@@ -5128,14 +5128,56 @@ is this with the car's own fit and track; the unseen-car form was not
 run on the wet laps, where the dry arms show the car's transfer at
 0.2 %.
 
-**What is left of E, and what is not built.** E3 (the pace response of
-heat) stays a list: a slope against lap time within a day can be made
-by selection alone (`docs/lapsim_driver_model.md` section 8), and the
-allowance it was to be read against came from a D2 that was replaced.
-E1's reported items on slow laps (1.04–1.12 × the session best) are not
-built: the gates' laps are the build laps, by pace level. E0 is set
-aside by the owner. The lap production feeds (a session's
-25th-percentile lap) is F's.
+**The pace response: heat as the lap gets slower (2026-11-24;
+`heat_match.band_heat`, a fourth item in gate C3's report).** #207's E3
+and the slow-lap item of E1 were first set aside as written (slopes
+against an allowance from a D2 that was replaced; laps the gates' tables
+do not hold), and built when the owner asked why, as one paired
+measurement. The gates' laps are the build laps, which are within 2 %
+of their session's best; here every clean dry lap within 12 % of it is
+taken, in three bands, each solved to its own lap time by the car's own
+fit on its own track and set against the logged lap's own heat in the
+tyres' frame. No table is rebuilt: only the lap time and the logged
+heat are needed. A cell is a car at a layout on one tyre, against a
+logged lap *of the same band*, another day and like lap time.
+
+| band (lap time over the session's best) | laps | cells | from the logged lap, median cell | another day's lap of the band | four-tyre mean, median cell |
+|---|---|---|---|---|---|
+| fast: the build laps (within 2 %) | 1,126 | 27 of 36 | 1.1 % | 1.6 % | −0.7 % |
+| mid: up to 4 % | 490 | 27 of 36 | 1.5 % | 2.3 % | −0.9 % |
+| slow: 4 to 12 % | 347 | 20 of 28 | 2.0 % | 3.1 % | −1.4 % |
+
+- **The simulated heat stays nearer the logged lap than another logged
+  lap of the same pace does, in every band.** It passes three quarters
+  of the cells in each (27 of 36, 27 of 36, 20 of 28). Its distance
+  from the logged lap grows as the lap gets slower, from 1.1 to 2.0 %,
+  and the distance between two logged laps grows faster, from 1.6 to
+  3.1 %: slow laps are slow for different reasons and differ more from
+  each other than from a lap slowed evenly.
+- **In the mean it drifts low, not high.** The expectation written
+  beforehand was a little too much heat on slow laps (a driven slow lap
+  loses its time in places and coasts there). It is the other way: the
+  four-tyre mean goes from 0.7 % low to 1.4 % low in the median cell
+  (3.2 % low at most, on two laps). A driven slow lap puts slightly more
+  heat into the tyres than a lap of the same time slowed evenly.
+- **The lean between the sides grows with the slowness, on the formula
+  cars at Tsukuba.** Right less left goes from 3.4 to 4.8 to 7.3 % on
+  the KK-SII there and from 1.7 to 3.4 to 5.4 % on the KK-F (1.3, 2.2,
+  2.6 % on the Inferno 86); the left tyres are 3.5 to 5.1 % low in the
+  slow band. Elsewhere it does not move with pace (Sodegaura 0.9, 1.4,
+  1.1 %; Suzuka 1.5, 1.1, 1.1 %). So where a slow lap is slow is not
+  even between the corners at Tsukuba: the right turns keep more of
+  their pace than the lefts do. It is the lean of gate D3 seen from
+  another side, and is #313's (the driver's use by corner).
+- For a target lap time slower than the laps the car has logged fast,
+  the simulated heat is therefore usable as it is: within 2 % in the
+  median cell down to 12 % off the pace, with the caution on the left
+  tyres at Tsukuba.
+
+**What is left of E, and what is not built.** E0 is set aside by the
+owner. Every other clause that today's laps can carry is run. The lap
+production feeds (a session's 25th-percentile lap) and the lap time the
+simulation supplies are F's (#208).
 
 **Batches, and speed.** The solver works on a batch of laps of one
 track, each with its own car and its own u (`solver.solve_laps`,
