@@ -44,6 +44,9 @@ Segment D (#206), the solver:
   of its limit to the max driver's, with the out-lap from the pit join;
   :mod:`.pace_gate` holds it to a direct solve (gate D1).
 - :mod:`.car_holdout` also carries gate D3: lateral heat by side.
+- :mod:`.wet`: the wet readings (cornering, braking and the wet braking
+  term); :mod:`.wet_gate` is gate D2, each wet lap driven four ways
+  against a logged lap of the same wet day.
 
 The car's limits and the driver (#312):
 

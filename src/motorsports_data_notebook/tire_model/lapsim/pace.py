@@ -37,7 +37,13 @@ nothing in the lap.
 ``meta.use_range``): a lap time whose use lies outside it is answered and
 flagged ``outside_support``; so is one beyond the table's slow end, which
 is read off the last two knots. At a layout the car has not run the range
-is the car's over the layouts it has, and the table says so. A lap time
+is the car's over the layouts it has, and the table says so. **The wet
+is in the support**: a wet lap is driven as a lower use of the same car
+on the dry track (gate D2: no wet term is in the default), so a wet
+target is read off the same table, and the support's slow end is the
+slowest of the car's wet build laps (``meta.use_range_wet``): the
+wettest logged day, beyond which a target is flagged (owner,
+2026-11-23). A lap time
 faster than the lap at a use of 1 has ``no_solution``: the table gives
 no heat, and that lap's time and the max driver's beside it. A target
 between those two is one the committee's knob would answer (below q = 0
@@ -368,7 +374,10 @@ def support_of(model: cm.CarModel, layout_id: str) -> dict:
     """The table's support from the model's logged range of use
     (``meta.use_range``): the layout's own, else the car's over the
     layouts it has run; empty for a model without one. The fast end is
-    held at a use of 1, where the table ends."""
+    held at a use of 1, where the table ends. The slow end goes down to
+    the car's wet build laps (``meta.use_range_wet``, likewise the
+    layout's own or the car's): ``use_min_dry`` keeps the dry laps' slow
+    end and ``wet_laps`` says how many wet laps stand behind the rest."""
     ranges = model.meta.get("use_range") or {}
     if layout_id in ranges:
         own = [ranges[layout_id]]
@@ -378,13 +387,26 @@ def support_of(model: cm.CarModel, layout_id: str) -> dict:
         source = "the car's laps at the layouts it has run (it has not run this one)"
     if not own:
         return {}
-    return {
+    out: dict = {
         "use_min": float(min(r["min"] for r in own)),
         "use_max": float(min(max(r["max"] for r in own), 1.0)),
         "laps": int(sum(r["laps"] for r in own)),
         "days": int(sum(r["days"] for r in own)),
         "from": source,
     }
+    wet_ranges = model.meta.get("use_range_wet") or {}
+    here = layout_id in wet_ranges
+    wet = [wet_ranges[layout_id]] if here else list(wet_ranges.values())
+    if wet:
+        out["use_min_dry"] = out["use_min"]
+        out["use_min"] = float(min(out["use_min"], min(r["min"] for r in wet)))
+        out["wet_laps"] = int(sum(r["laps"] for r in wet))
+        out["from"] = source + (
+            "; the slow end is its wet laps' "
+            + ("at this layout" if here else "at the layouts it has run in the wet")
+            + " (the wettest logged day)"
+        )
+    return out
 
 
 def build_table(

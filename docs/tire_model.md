@@ -4557,11 +4557,15 @@ of the logged laps' right over left):
   seven of nine cells (−0.012 to −0.033; Tsukuba −0.028, −0.033, −0.021
   on the three cars). That it has one sign at four of five layouts
   means three cars agreeing at Tsukuba does not make it Tsukuba's
-  curvature: it is a lean common to the layouts, cause not known
-  (candidates not tested: the laps' own Doppler lateral against the
-  track's median curvature, which B2 found within 0.013 by side on 15 of
-  16 rows; the side the bank is read on). Under the 0.06 at which #206
-  sends one to the per-corner table; recorded as open.
+  curvature: it is a lean common to the layouts. **It is in the
+  simulated speed, not in the track**: the track's line driven at each
+  logged lap's own speed, against that lap's own lateral, has no such
+  lean (right less left 0.000 to +0.029 at eight of ten cells, −0.009
+  at two). So the simulated car is a little slower through right turns
+  than through left ones, relative to the logged car, at most layouts.
+  Why is open (candidates not tested: the side the bank is read on; a
+  car that is not the same both ways). Under the 0.06 at which #206
+  sends one to the per-corner table.
 - By the fixed limits this gate was first written with (0.03 on the
   lateral heat, ± 0.06 by side) every scored cell but one would be
   inside (the Inferno 86 at Motegi, 0.032 on four laps of two days).
@@ -4679,9 +4683,123 @@ in standard air, which does the same lap time at another use; 30 of the
 separated lap by lap. A consumer that knows a lap's day should build the
 table for that day's powertrain.
 
-**Still #206's**: the wet (D2), with the pace table's wet entry; the
-cap for a use above 1; what brings a table's heat to production's
-sensor-frame heat where the two must meet (#255).
+**Gate D2, the wet (`wet.py`, `wet_gate.py`, `lapsim check-wet`,
+2026-11-24).** A wet lap is solved to its own lap time, so the wet grip
+scale, the day's water level and the driver's use are one product that
+no simulated lap depends on. Two things are not absorbed by the lap
+time, and they are what a wet gate can judge: **braking falling less
+than cornering** (the driver committee's clause 1.6) and **the wet
+line** (a wet track exists at Tsukuba only). Everything below was
+written on #206 before the first run: the readings, the arms, the form
+and the entry rule.
+
+*What there is to judge with.* 135 wet build laps: the Inferno 86 at
+Tsukuba (41 laps, 4 days) and Sodegaura (23, 2), the KK-F at Tsukuba
+(33, 4) and Fuji (6, 1), the KK-SII at Tsukuba (17, 1) and Fuji (14, 1).
+In gate C3's form (a logged lap of another day beside the simulated
+one, the owner's ruling of 2026-11-23) four cells per measure can be
+scored, three of them one car at one layout. **The owner ruled on
+2026-11-24 that the wet is scored on same-day laps** ("let's do same
+day scoring for wet, wet is harder, we know that"; asked first as a
+question, measured, then confirmed): that scores 13 cells per
+measure (nine of them on one wet day), and it suits the wet, where two
+days differ in water. It is a much stricter bar: against a same-day lap
+the dry gate itself reaches 31 of 104 (speed 10 of 26, straights 11,
+apex 1, braking 9) where it reaches 60 of 76 against another day's. D2
+is scored on same-day laps and read beside that 31 of 104, with the
+other-day cells shown.
+
+*The readings* (per car, its wet passes pooled; the expected best of m
+wet passes over the expected best of the same m dry passes at the
+corner or stopping place, m half the wet passes, 3 to 20; the median
+over corners):
+
+| | wet cornering | wet braking | the wet braking term (their quotient) | `wet.grip_scale` as fitted |
+|---|---|---|---|---|
+| Inferno 86 | 0.874 | 0.932 | 1.07 | 0.92 |
+| KK-SII | 0.739 | 0.755 | 1.02 | 0.81 |
+| KK-F | 0.822 | 0.686 | 0.83 | 0.82 |
+
+The Inferno 86's are the committee's (0.83–0.88 and 0.92): its braking
+falls less than its cornering, on every fold (a term of 1.01 to 1.15
+without each wet day in turn). The KK-F's braking falls *more* than its
+cornering (0.83 to 0.99 by fold), which the committee put with the
+driver (no ABS; braking further from lock-up). A wet day's own
+cornering ratio runs from 0.66 to 0.93: the day's water, as far as the
+logs give it.
+
+*The arms*, each wet build lap solved to its own lap time with its
+day's car: **A**, the null, the dry track and a lower use and nothing
+else; **B**, with the wet braking term, read without the lap's own wet
+day; **C**, on the wet line (the wet track's curvature laid on the dry
+track's nodes, so the logged laps are read where they are); **D**,
+both. What a fold holds out is the wet term only: it is read without
+the lap's own wet day. The car is the dry car gate C2 saved, fitted on
+every dry lap; no wet lap is in that fit but for `wet.grip_scale`,
+which the lap time absorbs.
+
+*The wet line was checked on the real pair before its result was
+read*: laid on Tsukuba's dry track, the wet track's nodes are 0.5 m
+from the dry line in the median (1.5 m at most), the laid-over
+curvature lines up with the dry one at no shift (correlation 0.998),
+and its apexes are 2.5 % tighter in the median (from 4 % wider to 10 %
+tighter over the eight corners). Arm C drove the wet line where it is.
+
+| arm | same-day cells | other-day cells | same-day cells won / lost against A | car-days nearer than A on its own measure | needed |
+|---|---|---|---|---|---|
+| A, the null | 14 of 52 | 13 of 16 | | | |
+| B, the wet braking term | 14 of 52 | 13 of 16 | 1 / 1 | braking: 9 of 13 | 10 |
+| C, the wet line (Tsukuba) | 11 of 28 | 13 of 16 | 2 / 2 | apex: 6 of 9 | 8 |
+| D, both (Tsukuba) | 10 of 28 | 12 of 16 | 2 / 3 | speed round the lap: 5 of 9 | 8 |
+
+- **The null already does the wet about as well as the dry.** With no
+  wet term at all, a wet lap as a lower use of the same car on the dry
+  track is no further from the logged lap than a same-day lap in 14 of
+  52 cells (27 %; the dry gate 31 of 104, 30 %) and than another day's
+  in 13 of 16 (81 %; the dry gate 60 of 76, 79 %).
+- **Neither term meets the entry rule, and both stay off**
+  (`solver.WET_BRAKE_DEFAULT = False`; the wet line is not driven). The
+  rule: nearer than the null on the term's own measure on a number of
+  car-days a coin reaches under one time in twenty, and no more same-day
+  cells lost than won.
+- *The braking term* is nearer on 9 of 13 car-days (10 needed): on five
+  of the Inferno 86's six and both of the KK-SII's, and on two of the
+  KK-F's five, the car whose term is under 1. One day short of the
+  rule; it moves a day's braking measure by 0.002 to 0.034 g where the
+  measure is 0.13 to 0.24 g. Not taken, and not re-cut by car to make
+  it pass.
+- *The wet line* is nearer at the apexes on 6 of 9 car-days (8 needed).
+  Where it helps it helps a good deal (0.61 to 0.38 m/s on the KK-SII's
+  day, 0.63 to 0.41 and 0.74 to 0.52 on two of the KK-F's) and where it
+  does not it is as much worse (0.38 to 0.57 and 0.19 to 0.33 on two of
+  the Inferno 86's days): one wet line pooled from every car and every
+  wet day is right for some days and wrong for others. That the line
+  moves with the water is the candidate reason; it was not tested.
+
+So the wet stays what it was in the simulation: the same car at a lower
+use on the dry track. `wet.py` keeps the readings and
+`SolverCar.wet_brake` the term (a wet lane's braking level is multiplied
+by it; nothing in the kernel changed, and gates C2 and C3 are unchanged
+byte for byte), for when there are more wet days.
+
+*The pace table's wet entry is the dry table, with the wet laps in its
+support.* Read as built, the table flagged every one of the wet laps as
+outside its support (their use of the dry limit is 0.48 to 0.77, under
+every car's dry range), which is not the ruling: only a target wetter
+than the wettest logged day is to be flagged. So gate C2 now also saves
+the use of each wet build lap as the null drives it
+(`meta.use_range_wet`), and a table's support runs down to the slowest
+of them (at the layout, or over the layouts the car has run in the wet;
+`support["use_min_dry"]` keeps the dry laps' slow end). Of the 134 wet
+build laps of the three cars 121 are then answered `ok` and 13 flagged
+(the table's car is the latest powertrain in standard air), and the dry
+laps flagged fall from 78 to 7. No separate wet table is needed until a
+wet term enters. A slow dry lap and a wet lap of one lap time get one
+answer: there is no wetness input, by the owner's ruling.
+
+**Still #206's**: the cap for a use above 1; the lean of the simulated
+lateral heat to the left turns; what brings a table's heat to
+production's sensor-frame heat where the two must meet (#255).
 
 **Batches, and speed.** The solver works on a batch of laps of one
 track, each with its own car and its own u (`solver.solve_laps`,
