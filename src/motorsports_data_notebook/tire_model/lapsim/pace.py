@@ -70,7 +70,7 @@ from __future__ import annotations
 
 import json
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Callable
 
@@ -81,13 +81,17 @@ from . import car as cm
 from . import car_gate as cg
 from . import solver as sv
 from . import track as trk
-from .heat import CORNERS, sim_heat
+from .export import TableExport
+from .heat import CORNERS, bin_1s, sim_heat, sim_series
 
 #: The knots: this many laps, evenly in ``q``, from this use to a use of 1.
 KNOTS = 12
 USE_SLOW = 0.40
 #: Knots above a use of 1, to the knob's end lap, for a car that is capped.
 KNOTS_ABOVE = 2
+#: Knots above 1 for a car that is not (a planted wrong car, whose knob is
+#: a free scale), evenly in ``q`` up to the knob asked for.
+KNOTS_FREE = 6
 
 OK = "ok"
 OUTSIDE_SUPPORT = "outside_support"
@@ -318,6 +322,36 @@ class PaceTable:
             "pit": self.pit,
         }
 
+    def laps_export(self, made: dict | None = None) -> TableExport:
+        """The table as the laps production's chain reads (#208): every
+        knot's flying lap and out-lap binned as :func:`~.heat.sim_heat`
+        bins them, so that :meth:`~.export.TableExport.heat_knots` of any
+        shares is :meth:`heat_knots` of the same shares to the last bit,
+        with no solver and no track. ``made`` says when and at which
+        commit."""
+
+        def _bins(lap: sv.SimLap):  # type: ignore[no-untyped-def]
+            return bin_1s(*sim_series(lap), 0.0, lap.lap_time_s)
+
+        knots = range(len(self.use))
+        out = None
+        if self.v_out_ms is not None:
+            out = [_bins(lap) for lap in (self.out_lap(k) for k in knots) if lap is not None]
+        return TableExport(
+            layout_id=self.layout_id,
+            car=self.car,
+            use=np.array(self.use, float),
+            lap_time_s=np.array(self.lap_time_s, float),
+            flying=[_bins(self.lap(k)) for k in knots],
+            out=out,
+            rolling_s=float(self.pit.get("rolling_s") or 0.0) if out is not None else 0.0,
+            support=dict(self.support),
+            assumes=dict(self.assumes),
+            fastest_lap_s=self.fastest_lap_s,
+            max_driver_lap_s=float(self.max_driver_lap_s),
+            made=dict(made or {}),
+        )
+
     def to_dict(self) -> dict:
         """The table without the track (it is rebuilt against the layout's
         track by :func:`from_dict`)."""
@@ -384,19 +418,29 @@ def out_laps(
 
 
 def assumed_car(
-    model: cm.CarModel, powertrain: str | None = None, *, habits: bool = True
+    model: cm.CarModel,
+    powertrain: str | None = None,
+    *,
+    habits: bool = True,
+    use_cap: bool = True,
+    power_scale: float = 1.0,
 ) -> tuple[sv.SolverCar, dict]:
     """The car a table's laps are driven by and what that assumes
     (module docstring): ``powertrain`` or the model's latest, with its own
     shift point and gears, in standard air, braked as the driver brakes
-    (``habits=False``: braked at the car's limit, the max driver's car)."""
+    (``habits=False``: braked at the car's limit, the max driver's car).
+    ``use_cap=False`` and ``power_scale`` are for a planted wrong car
+    (#208's controls): its knob is a free scale, as in every comparison
+    arm, and its power is not the model's."""
     engines = model.power.get("engines") or {}
     name = powertrain or model.power.get("default_engine")
     if powertrain is not None and powertrain not in engines:
         raise KeyError(f"{model.car} has no powertrain {powertrain!r}")
     driven = sv.SolverCar.from_model(
-        model, engine=name if name in engines else None, brake_use=habits, use_cap=True
+        model, engine=name if name in engines else None, brake_use=habits, use_cap=use_cap
     )
+    if power_scale != 1.0:
+        driven = replace(driven, power_scale=driven.power_scale * power_scale)
     spec = engines.get(name, {}) if name else {}
     sets = len(spec.get("gear_sets") or [])
     assumes = {
@@ -411,6 +455,8 @@ def assumed_car(
         "typical_use": cg.typical_use(model),
         "basis": "dry",
     }
+    if not use_cap or power_scale != 1.0:
+        assumes["planted"] = {"use_cap": bool(use_cap), "power_scale": float(power_scale)}
     if sets > 1:
         assumes["gears_note"] = f"{sets} gear sets logged (per-circuit gearing); " + (
             "the gears are inferred and the car is driven on one specific power, so the "
@@ -468,10 +514,18 @@ def build_table(
     powertrain: str | None = None,
     knots: int = KNOTS,
     bank: bool = True,
+    use_cap: bool = True,
+    power_scale: float = 1.0,
+    use_fast: float | None = None,
 ) -> PaceTable:
     """The pace table of ``model`` at ``track``: its knots driven as one
-    batch (:func:`~.solver.drive_laps`)."""
-    driven, assumes = assumed_car(model, powertrain)
+    batch (:func:`~.solver.drive_laps`).
+
+    ``use_cap=False``, ``power_scale`` and ``use_fast`` build the table of
+    a planted wrong car (:func:`assumed_car`): with no cap there is no end
+    lap, and :data:`KNOTS_FREE` more knots run from a knob of 1 to
+    ``use_fast``."""
+    driven, assumes = assumed_car(model, powertrain, use_cap=use_cap, power_scale=power_scale)
     profile = sv.Profile.from_track(track, bank=bank)
     use = np.exp(-np.linspace(-math.log(USE_SLOW), 0.0, knots))
     use[-1] = 1.0
@@ -481,11 +535,15 @@ def build_table(
         above = np.exp(np.linspace(0.0, math.log(end), KNOTS_ABOVE + 1)[1:])
         above[-1] = end
         use = np.concatenate([use, above])
+    elif not math.isfinite(end) and use_fast is not None and use_fast > 1.0:
+        free = np.exp(np.linspace(0.0, math.log(use_fast), KNOTS_FREE + 1)[1:])
+        free[-1] = use_fast
+        use = np.concatenate([use, free])
     got = sv.drive_laps(profile, driven, use)
     assumes = {**assumes, "bank": bool(bank and profile.bank is not None)}
     pit = dict(track.meta.get("pit") or {})
     v_out = out_laps(profile, driven, use, pit)
-    limit_car, _ = assumed_car(model, powertrain, habits=False)
+    limit_car, _ = assumed_car(model, powertrain, habits=False, power_scale=power_scale)
     max_driver = float(sv.drive_laps(profile, limit_car, np.ones(1)).lap_time_s[0])
     return PaceTable(
         layout_id=track.layout_key,
@@ -506,7 +564,13 @@ def build_table(
 def from_dict(data: dict, model: cm.CarModel, track: trk.TrackModel) -> PaceTable:
     """A saved table against the model and the track it was built on."""
     assumes = dict(data["assumes"])
-    driven, _ = assumed_car(model, assumes.get("powertrain"))
+    planted = assumes.get("planted") or {}
+    driven, _ = assumed_car(
+        model,
+        assumes.get("powertrain"),
+        use_cap=bool(planted.get("use_cap", True)),
+        power_scale=float(planted.get("power_scale", 1.0)),
+    )
     return PaceTable(
         layout_id=str(data["layout_id"]),
         car=str(data["car"]),

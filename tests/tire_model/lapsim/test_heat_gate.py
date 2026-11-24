@@ -121,3 +121,47 @@ class TestFrameFactor:
             row[f"q_{c}"], row[f"t_{c}"] = np.nan, 100.0
         factors, left = heat_gate.frame_factor(pd.DataFrame([row]))
         assert factors.empty and left.empty
+
+
+class TestBinsBeforeTheShares:
+    """A lap is read and binned once; any fit's shares split the bins (#208)."""
+
+    def test_the_sensor_bins_split_to_the_chains_heat(self, monkeypatch):
+        kin = _kin(discard=(545.0, 548.0))
+        monkeypatch.setattr(
+            ss, "_session_timeseries", lambda root, sid: ss.SessionSeries(kin, None, None)
+        )
+        laps = pd.DataFrame({"session_id": "s", "lap_num": [3, 4], "car": "car"})
+        bins = heat_gate.sensor_lap_bins("root", laps)
+        assert set(bins) == {("s", 3), ("s", 4)}
+        other = ShareParams(
+            p_f=0.55,
+            g_transfer_front=1.2,
+            g_transfer_rear=1.2,
+            beta0=math.log(0.7 / 0.3),
+            beta1=0.0,
+            eps_drive=1.0,
+            eps_brake=1.0,
+        )
+        for share in (SHARE, other):
+            want = heat_gate.chain_lap_heat("root", laps, {"car": share}).set_index("lap_num")
+            for lap_num in (3, 4):
+                own, source, hole = bins[("s", lap_num)]
+                got = heat.lap_heat(own, share)
+                np.testing.assert_array_equal(
+                    got, want.loc[lap_num, [f"q_{c}" for c in heat.CORNERS]].to_numpy(float)
+                )
+                assert source == want.loc[lap_num, "source"] and hole == want.loc[lap_num, "hole"]
+        # the two fits do not split the lap alike: the bins are not a heat
+        a = heat.lap_heat(bins[("s", 3)][0], SHARE)
+        b = heat.lap_heat(bins[("s", 3)][0], other)
+        assert np.abs(np.log(a / b)).max() > 0.02
+
+    def test_the_bins_need_no_shares_for_the_car(self, monkeypatch):
+        kin = _kin(gps=True)
+        monkeypatch.setattr(
+            ss, "_session_timeseries", lambda root, sid: ss.SessionSeries(kin, None, None)
+        )
+        laps = pd.DataFrame({"session_id": "s", "lap_num": [3, 4], "car": "a car with no fit"})
+        bins = heat_gate.sensor_lap_bins("root", laps)
+        assert {source for _, source, _ in bins.values()} == {"gps"}

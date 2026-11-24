@@ -862,3 +862,55 @@ class TestGate:
             tmp_path, tracks_dir=tmp_path / "none", cars_dir=tmp_path / "cars"
         )
         assert not empty.passed
+
+
+class TestFedUse:
+    """The use of the lap an entry stands for, per raw car (#208)."""
+
+    def _fed(self, tracks, uses):
+        rows = []
+        for (raw_car, layout, date), use in uses.items():
+            lap = sv.simulate_lap(tracks[layout], CAR, use)
+            rows.append(
+                {
+                    "raw_car": raw_car,
+                    "layout_id": layout,
+                    "date": date,
+                    "session_id": f"{raw_car}-{layout}-{date}-{use}",
+                    "lap_time_s": lap.lap_time_s,
+                }
+            )
+        return pd.DataFrame(rows)
+
+    def test_the_median_over_sessions_then_over_layouts(self):
+        tracks = {"oval": _oval_track(), "long": _oval_track("long", straight=1300.0)}
+        fed = self._fed(
+            tracks,
+            {
+                ("a", "oval", "d1"): 0.80,
+                ("a", "oval", "d2"): 0.84,
+                ("a", "oval", "d3"): 0.90,
+                ("a", "long", "d1"): 0.90,
+                ("b", "oval", "d1"): 0.70,
+            },
+        )
+        got = cg.fed_use(_model(), tracks, fed)
+        a = got["a"]
+        assert a["layouts"]["oval"]["use"] == pytest.approx(0.84, abs=1e-4)
+        assert a["layouts"]["oval"]["sessions"] == 3 and a["layouts"]["oval"]["days"] == 3
+        assert a["layouts"]["oval"]["low"] == pytest.approx(0.80, abs=1e-4)
+        assert a["layouts"]["long"]["use"] == pytest.approx(0.90, abs=1e-4)
+        # the car's is the median over its layouts, not over its sessions
+        assert a["use"] == pytest.approx(0.87, abs=1e-4) and a["spread"] == pytest.approx(
+            0.06, abs=2e-4
+        )
+        # one raw car is not read off another's laps
+        assert got["b"]["use"] == pytest.approx(0.70, abs=1e-4) and math.isnan(got["b"]["spread"])
+
+    def test_a_layout_without_a_track_is_left_out(self):
+        tracks = {"oval": _oval_track()}
+        fed = self._fed(tracks, {("a", "oval", "d1"): 0.8})
+        fed = pd.concat([fed, fed.assign(layout_id="unbuilt")], ignore_index=True)
+        got = cg.fed_use(_model(), tracks, fed)
+        assert list(got["a"]["layouts"]) == ["oval"]
+        assert cg.fed_use(_model(), {}, fed) == {}
