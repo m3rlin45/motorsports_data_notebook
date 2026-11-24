@@ -4926,6 +4926,25 @@ a symmetrical car's limit (the owner's); the driver's use by corner,
 which the lean points at (#313); production on the tyres' frame (#255)
 and the table read against production's heat (#207).
 
+**Segment E (#207): the owner's rulings before it is built
+(2026-11-24).** (1) *Production is not retrained yet.* E0, the refit of
+production on GPS-derived heat (#255), is set aside; it is not a step of
+E. The simulation's heat is compared with production's heat as it is
+today (production's chain on the sensor's series) through the frame
+factor above, and one chain is on both sides: production's, unsmoothed,
+which gate D1 holds the simulated side to. (2) *E is scored in gate C3's
+form*: a cell is a car at a layout at a level of pace (P75, P90, P95)
+on one tyre, and it passes when the simulated lap's heat is no further
+from the logged lap's than a logged lap of another day is. The fixed
+limits #207 was written with (0.03, 0.02 and 0.05 per tyre on laps
+within 1.02 × the session best) stay in the reports as reference
+numbers. What the adoption of the simulation is, restated when asked the
+same day: at gate F's last clause, for the entries with no logged laps
+(their heat from a simulated lap, written into `tire_model.json` with a
+`source` flag and shown as an estimate in the calculators); an entry
+with logged laps keeps its logged heat, and the pressure model's own fit
+does not stop.
+
 **Batches, and speed.** The solver works on a batch of laps of one
 track, each with its own car and its own u (`solver.solve_laps`,
 `solver.drive_laps`; one lap is a batch of one), in two forms that give
