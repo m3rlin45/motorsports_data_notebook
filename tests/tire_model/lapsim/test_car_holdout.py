@@ -11,6 +11,7 @@ import pytest
 from motorsports_data_notebook.tire_model.lapsim import car as cm
 from motorsports_data_notebook.tire_model.lapsim import car_gate as cg
 from motorsports_data_notebook.tire_model.lapsim import car_holdout as ch
+from motorsports_data_notebook.tire_model.lapsim import heat
 from motorsports_data_notebook.tire_model.lapsim import solver as sv
 from motorsports_data_notebook.tire_model.lapsim import track as trk
 
@@ -523,7 +524,25 @@ class TestFolds:
     def test_without_shares_for_the_car_its_heat_is_not_scored(self, monkeypatch):
         tables, rows, tracks = _sim_dataset(monkeypatch)
         _, laps, _ = ch.run_folds(tables, rows, tracks, "sim", None, shares={"another": SHARE})
-        assert "h_fl" not in laps.columns
+        assert "h_fl" not in laps.columns and "sim_q_fl" not in laps.columns
+
+    def test_a_simulated_laps_heat_is_kept_apart_from_the_heat_error(self, monkeypatch):
+        # gate E1 (#207): on a layout fold ``h_<tyre>`` is gate C3's heat error (a log
+        # ratio); the simulated lap's own heat is ``sim_q_<tyre>``, on every fold
+        tables, rows, tracks = _sim_dataset(monkeypatch)
+        other = _model(sv.SolverCar(mu_y=1.0, mu_b=0.8, p_specific=60.0, c_drag=2.0e-4))
+        _, laps, _ = ch.run_folds(tables, rows, tracks, "sim", other, shares={"sim": SHARE})
+        lay, day = laps[laps["kind"] == "layout"], laps[laps["kind"] == "day"]
+        assert lay["h_fl"].abs().max() < 0.2  # an error
+        for part in (lay, day):
+            assert part["sim_q_fl"].min() > 1.0  # a heat rate, G·m/s
+            assert part["sim_q_fl_low_power"].notna().all()
+            assert part["sim_q_fl_other_car"].notna().all()
+        # the laps are the car's own simulated laps: the fitted car gives their heat back
+        track = tracks["a"]
+        want = heat.sim_heat(sv.simulate_lap(track, CAR, 1.0), SHARE)[0]
+        got = day[(day["layout_id"] == "a")]["sim_q_fl"].median()
+        assert got == pytest.approx(want, rel=0.01)
 
 
 def _folds(fit, low, other, floor=1.0, kinds=("day", "layout")):

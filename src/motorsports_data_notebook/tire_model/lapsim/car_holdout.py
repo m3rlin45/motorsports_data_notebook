@@ -65,6 +65,8 @@ from . import samples as smp
 from . import solver as sv
 from . import track as trk
 from .gates import GateItem, GateReport, md_table
+from .heat import CORNERS as HEAT_TYRES
+from .heat import sim_heat
 
 logger = logging.getLogger(__name__)
 
@@ -377,6 +379,7 @@ def score_laps(
     *,
     corners: bool = False,
     lat_obs: np.ndarray | None = None,
+    share: ShareParams | None = None,
 ) -> pd.DataFrame:
     """:func:`lap_stats` of every lap of ``laps`` (``session_id, lap_num,
     lap_time_s``; ``v_obs`` its speed at the nodes) simulated at its own
@@ -385,14 +388,17 @@ def score_laps(
     the car cannot do has NaN statistics. With ``corners`` the frame also
     has, per corner k of :func:`corner_frame`, ``apex_<k>``
     (:func:`apex_errors`) and ``apex_v_<k>`` (the logged lap's lowest
-    speed there)."""
+    speed there). With ``share`` it also has ``sim_q_<tyre>``: the simulated
+    lap's lap-mean heat rate per tyre through production's chain
+    (:func:`~.heat.sim_heat`; the tyres' frame, G·m/s), for gate E1 (#207)."""
     drive = cg.as_drive(who)
     profile = cg.profile_of(drive, layout.track)
     typical = cg.typical_use(drive)
     recs = cg._records(laps)
+    cars = [cg._lap_car(drive, rec) for rec in recs]
     got = sv.solve_laps(
         profile,
-        [cg._lap_car(drive, rec) for rec in recs],
+        cars,
         [float(rec["lap_time_s"]) for rec in recs],
     )
     rows = []
@@ -416,6 +422,10 @@ def score_laps(
                     lat_obs=None if lat_obs is None else lat_obs[i],
                 )
             )
+            if share is not None:
+                sim = sv.lap_from_nodes(profile, cars[i], got.v_node_ms[i], float(got.u[i]))
+                for tyre, q in zip(HEAT_TYRES, sim_heat(sim, share)):
+                    row[f"sim_q_{tyre}"] = float(q)
             if corners and layout.apex_nodes:
                 err, low = apex_errors(layout, got.v_node_ms[i], v_obs[i])
                 for k in range(len(err)):
@@ -847,6 +857,7 @@ def run_folds(
                 "laps": int(len(held)),
                 "floor": floor,
             }
+            fit_laps: pd.DataFrame | None = None
             for name, driven in models.items():
                 if driven is None:
                     continue
@@ -857,7 +868,12 @@ def run_folds(
                     v_held,
                     corners=name == "fit",
                     lat_obs=lat_held if name == "fit" else None,
+                    share=share,
                 )
+                if name != "fit" and fit_laps is not None and "sim_q_fl" in scores.columns:
+                    # a planted car's heat on the same laps, beside the fitted car's (gate E1)
+                    for tyre in HEAT_TYRES:
+                        fit_laps[f"sim_q_{tyre}_{name}"] = scores[f"sim_q_{tyre}"].to_numpy()
                 fold_rows.append(
                     {
                         **base,
@@ -874,6 +890,7 @@ def run_folds(
                 if name != "fit":
                     continue
                 per_lap = pd.concat([held[["session_id", "lap_num", "date"]], scores], axis=1)
+                fit_laps = per_lap
                 per_lap.insert(0, "car", car)
                 per_lap.insert(1, "kind", kind)
                 per_lap.insert(2, "layout_id", layout_id)
@@ -1828,6 +1845,20 @@ def check_car_holdout(
             md_table(summary, floats="{:.3f}"),
         )
     )
+    # Gates E1 and E2 (arm B) of #207: heat per tyre on the same folds.
+    if shares is not None and len(laps) and "sim_q_fl" in laps.columns:
+        from . import heat_match
+
+        rep.items.extend(
+            heat_match.report_items(
+                root,
+                laps,
+                shares,
+                rows.set_index(["session_id", "lap_num"])["lap_time_s"],
+                tracks_dir=tracks_dir,
+                cache_dir=cache_dir,
+            )
+        )
     return rep
 
 
