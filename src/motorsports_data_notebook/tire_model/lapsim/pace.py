@@ -4,10 +4,14 @@ time without a solver (#207, #208, the calculators).
 
 **The axis is the driver's use of the car's limit** (#312; owner,
 2026-11-23), ``q = -ln(use)``: twelve laps from a use of 0.40 to a use of
-1, the knob's lap at q = 0. That lap is braked as the driver brakes, so
-it is not the max driver's (the committee's clause 3.1: every use at 1
-*and* the driver's habits off), which is a little faster and is kept
-beside the table. A table holds each knot as its speed at the track's
+1. **Above 1 the knob is not a use** (the committee's clause 3.1, the
+cap of :func:`~.solver._knob`): the cornering stays at the car's limit
+and the braking level goes on rising, to the car's own at the *knob's
+end lap*, and a table of a car at its limit has two more knots there.
+The end lap is braked at the car's level but still on the shape the
+driver holds, so it is not the max driver's lap (every use at 1 *and*
+the driver's habits off), which is a little faster and is kept beside
+the table. A table holds each knot as its speed at the track's
 nodes and nothing made from it:
 
 - **No heat columns.** Per-tyre heat is defined by the force shares of
@@ -44,12 +48,11 @@ target is read off the same table, and the support's slow end is the
 slowest of the car's wet build laps (``meta.use_range_wet``): the
 wettest logged day, beyond which a target is flagged (owner,
 2026-11-23). A lap time
-faster than the lap at a use of 1 has ``no_solution``: the table gives
-no heat, and that lap's time and the max driver's beside it. A target
-between those two is one the committee's knob would answer (below q = 0
-the cornering use stays at 1 and the braking use rises to the car's
-level); the kernel's knob scales the two together, so until that cap is
-built such a target goes unanswered here.
+faster than the knob's end lap has ``no_solution``: the table gives no
+heat, and that lap's time and the max driver's beside it. A target
+between a use of 1 and the end lap is answered (the cornering use 1 and
+the braking use are in the reading) and flagged, no logged lap being
+there.
 
 **The out-lap.** Where the track knows its pit exit (``meta.pit`` of
 gate B2: where an out-lap joins the driven line, how fast it is going
@@ -78,11 +81,13 @@ from . import car as cm
 from . import car_gate as cg
 from . import solver as sv
 from . import track as trk
-from .heat import sim_heat
+from .heat import CORNERS, sim_heat
 
 #: The knots: this many laps, evenly in ``q``, from this use to a use of 1.
 KNOTS = 12
 USE_SLOW = 0.40
+#: Knots above a use of 1, to the knob's end lap, for a car that is capped.
+KNOTS_ABOVE = 2
 
 OK = "ok"
 OUTSIDE_SUPPORT = "outside_support"
@@ -94,12 +99,15 @@ Chain = Callable[[sv.SimLap, ShareParams], np.ndarray]
 
 @dataclass(frozen=True)
 class Reading:
-    """What a table gives for one lap time: the ``use`` of the limit and
-    ``q = -ln(use)``, the lap-mean heat rate per tyre (``fl, fr, rl, rr``;
-    G·m/s), the ``status``, the table's fastest lap (a use of 1, braked
-    as the driver brakes) and the max driver's (a use of 1 with the
-    driver's habits off). With ``no_solution`` the use and the heat are
-    NaN."""
+    """What a table gives for one lap time: the knob (``use``; the use of
+    the limit up to 1) and ``q = -ln(use)``, the lap-mean heat rate per
+    tyre (``fl, fr, rl, rr``; G·m/s), the ``status``, the table's fastest
+    lap (the knob's end lap) and the max driver's (every use at 1 with
+    the driver's habits off). ``cornering_use`` is the share of the
+    cornering limit the lap uses (the knob, at most the cap) and
+    ``braking_use`` the share of the car's braking level it brakes at
+    (the driver's share times the knob, at most the cap). With
+    ``no_solution`` the use and the heat are NaN."""
 
     lap_time_s: float
     use: float
@@ -108,6 +116,8 @@ class Reading:
     status: str
     fastest_lap_s: float
     max_driver_lap_s: float
+    cornering_use: float = float("nan")
+    braking_use: float = float("nan")
 
 
 @dataclass
@@ -143,8 +153,8 @@ class PaceTable:
 
     @property
     def fastest_lap_s(self) -> float:
-        """The table's fast end: the lap at a use of 1, braked as the
-        driver brakes (the knob's lap at q = 0)."""
+        """The table's fast end: the knob's end lap (the lap at a use of
+        1 for a car without a cap)."""
         return float(self.lap_time_s[-1])
 
     def lap(self, knot: int) -> sv.SimLap:
@@ -247,6 +257,7 @@ class PaceTable:
             )
         heat = self._at(lap_time_s, self.heat_knots(share, chain) if knots is None else knots)
         use = self.use_at(lap_time_s)
+        cap = self.driven.use_cap
         return Reading(
             lap_time_s,
             use,
@@ -255,6 +266,8 @@ class PaceTable:
             status,
             self.fastest_lap_s,
             self.max_driver_lap_s,
+            cornering_use=min(use, cap),
+            braking_use=min(self.driven.brake_use * use, cap),
         )
 
     def heat(
@@ -266,6 +279,44 @@ class PaceTable:
         times = np.atleast_1d(np.asarray(lap_time_s, float))
         out = np.vstack([self.read(float(t), share, knots=knots).heat for t in times])
         return out[0] if np.ndim(lap_time_s) == 0 else out
+
+    def export(self, share: ShareParams, *, chain: Chain = sim_heat) -> dict:
+        """The table as numbers for a consumer without a solver (the
+        calculators, #208): per knot ``lap_time_s``, the knob (``use``),
+        ``q``, ``cornering_use``, ``braking_use``, the lap-mean heat rate
+        per tyre (``q_fl .. q_rr``, G·m/s) and, with a pit exit, the
+        out-lap (``out_part_s``, ``out_q_fl .. out_q_rr``); beside them the
+        support, what the table assumes and its two fast ends. The heat is
+        of ``share`` and ``chain``: an export is of one fit, and is made
+        again for another (the table itself holds laps, not heat)."""
+        hot = self.heat_knots(share, chain)
+        out = self.out_knots(share, chain)
+        cap, level = self.driven.use_cap, self.driven.brake_use
+        knots = []
+        for k, use in enumerate(self.use):
+            row = {
+                "lap_time_s": float(self.lap_time_s[k]),
+                "use": float(use),
+                "q": float(-math.log(use)),
+                "cornering_use": float(min(use, cap)),
+                "braking_use": float(min(level * use, cap)),
+                **{f"q_{c}": float(hot[k, i]) for i, c in enumerate(CORNERS)},
+            }
+            if out is not None:
+                row["out_part_s"] = float(out[0][k])
+                row.update({f"out_q_{c}": float(out[1][k, i]) for i, c in enumerate(CORNERS)})
+            knots.append(row)
+        return {
+            "layout_id": self.layout_id,
+            "car": self.car,
+            "knots": knots,
+            "interpolation": "log-log against lap_time_s between neighbouring knots",
+            "support": self.support,
+            "assumes": self.assumes,
+            "fastest_lap_s": self.fastest_lap_s,
+            "max_driver_lap_s": float(self.max_driver_lap_s),
+            "pit": self.pit,
+        }
 
     def to_dict(self) -> dict:
         """The table without the track (it is rebuilt against the layout's
@@ -344,7 +395,7 @@ def assumed_car(
     if powertrain is not None and powertrain not in engines:
         raise KeyError(f"{model.car} has no powertrain {powertrain!r}")
     driven = sv.SolverCar.from_model(
-        model, engine=name if name in engines else None, brake_use=habits
+        model, engine=name if name in engines else None, brake_use=habits, use_cap=True
     )
     spec = engines.get(name, {}) if name else {}
     sets = len(spec.get("gear_sets") or [])
@@ -374,7 +425,8 @@ def support_of(model: cm.CarModel, layout_id: str) -> dict:
     """The table's support from the model's logged range of use
     (``meta.use_range``): the layout's own, else the car's over the
     layouts it has run; empty for a model without one. The fast end is
-    held at a use of 1, where the table ends. The slow end goes down to
+    held at a use of 1: past it the knob is not a use, and a target there
+    is flagged. The slow end goes down to
     the car's wet build laps (``meta.use_range_wet``, likewise the
     layout's own or the car's): ``use_min_dry`` keeps the dry laps' slow
     end and ``wet_laps`` says how many wet laps stand behind the rest."""
@@ -423,6 +475,12 @@ def build_table(
     profile = sv.Profile.from_track(track, bank=bank)
     use = np.exp(-np.linspace(-math.log(USE_SLOW), 0.0, knots))
     use[-1] = 1.0
+    end = sv.knob_end(driven)
+    if math.isfinite(end) and end > 1.0:
+        # past a use of 1: the braking level rising to the car's own, the knob's end lap
+        above = np.exp(np.linspace(0.0, math.log(end), KNOTS_ABOVE + 1)[1:])
+        above[-1] = end
+        use = np.concatenate([use, above])
     got = sv.drive_laps(profile, driven, use)
     assumes = {**assumes, "bank": bool(bank and profile.bank is not None)}
     pit = dict(track.meta.get("pit") or {})

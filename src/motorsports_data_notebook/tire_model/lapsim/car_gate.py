@@ -143,6 +143,10 @@ class Drive:
     brake_use: bool = True
     #: Whether the drive goes through the driven axle (None: the default).
     driven_axle: bool | None = None
+    #: Whether a use is capped at 1 where the model's ``mu_y`` is its limit:
+    #: asked for where a lap is answered. Off in the fit's own workings, a
+    #: recovery and a planted wrong car, where the knob is a free scale.
+    use_cap: bool = False
     _cache: dict = field(default_factory=dict, repr=False, compare=False)
 
     def car(self, raw_car: str = "", date: str = "", session_id: str = "") -> sv.SolverCar:
@@ -165,6 +169,7 @@ class Drive:
                 brake_onset=self.brake_onset,
                 brake_use=self.brake_use,
                 driven_axle=self.driven_axle,
+                use_cap=self.use_cap,
             )
             got = replace(
                 base,
@@ -193,7 +198,7 @@ class Drive:
         """The same with some fields changed."""
         kept: tuple[str, ...] = ("model", "air", "shifts", "gears", "power_scale", "drag_scale")
         kept += ("corner_drag", "shift_loss", "brake_shape", "brake_onset", "bank", "brake_use")
-        kept += ("driven_axle",)
+        kept += ("driven_axle", "use_cap")
         return Drive(**{**{f: getattr(self, f) for f in kept}, **changes})  # type: ignore[arg-type]
 
 
