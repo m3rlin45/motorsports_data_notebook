@@ -31,8 +31,8 @@ bank is large it agrees with what the cars' accelerometers read of it
 deck reads the ground beneath it, and the tiles cover Japan only: a
 track without them has no bank and is driven flat.
 
-Like everything read from the tiles the bank is kept with the track in
-``workspace/lapsim/tracks/`` and is not committed (see :mod:`.dem`).
+The bank is kept with the track, and the tracks are committed with it in
+``data/lapsim/tracks/``, with attribution to GSI (see :mod:`.dem`).
 """
 
 from __future__ import annotations

@@ -1661,7 +1661,8 @@ builds a layout's track from its build laps; `TrackModel` holds
 `kappa_heat` (1/m, positive in a right turn), the line, altitude, grade,
 the per-bin lap count and κ standard error (bootstrap over days), the
 corner table and the fills, on a closed grid of about 2 m, and round-trips
-through JSON (`workspace/lapsim/tracks/<layout>.json`).
+through JSON (`data/lapsim/tracks/<layout>.json`, committed since
+2026-11-24; before that `workspace/lapsim/tracks/`).
 
 - **Projection within a window.** A lap's sample is matched only to the
   piece of the reference line within 80 m of where the lap's own distance
@@ -1917,8 +1918,13 @@ over ± 10 m along the track; the angle is the slope's arctangent. Gate B2
 attaches it to each track it builds (`TrackModel.bank`, `bank_flag`,
 `meta["bank"]`; the wet track gets its own on its own line) and reports
 it. With `--no-dem`, or where the tiles do not reach, a track has no
-bank and is driven flat. The bank is derived from GSI's tiles, so like
-the tiles it stays in `workspace/` and is not committed.
+bank and is driven flat. The bank is derived from GSI's tiles. Until
+2026-11-24 it stayed in `workspace/` with them and was not committed;
+since the owner's ruling of that day (#208) the tracks are committed with
+their bank in `data/lapsim/tracks/`, with the attribution GSI's content
+terms ask for in `data/lapsim/README.md` (出典：国土地理院ウェブサイト;
+「地理院タイル（標高タイル（基盤地図情報数値標高モデル））を加工して作成」). The
+tiles themselves stay in `workspace/lapsim/gsi/`.
 
 | layout | nodes filled (bridge / not a plane) | scatter on the straights (rad) | mean into the corners (rad) | sd over the corners | largest |
 |---|---|---|---|---|---|
@@ -5211,8 +5217,14 @@ without reproduction needs no approval; Q2-4: a map made from the
 elevation model does) and its content terms, which ask for the source
 and a note that the content was processed
 (「地理院タイル（標高タイル（基盤地図情報数値標高モデル））を加工して作成」). Neither page addresses the
-numeric outputs of a simulation. Until the tracks are moved they stay in
-`workspace/`, and `dem.py`'s note stands as written.
+numeric outputs of a simulation. **Done on 2026-11-24**: the six track
+files are in `data/lapsim/tracks/` (the gates read and write them there;
+`lapsim --tracks-dir` points elsewhere), the attribution is in
+`data/lapsim/README.md` and in `dem.py`'s note, and the tracks of gate
+B3's folds, which are caches built from some cars' laps and carry no
+bank, stay in `workspace/lapsim/tracks/folds/`. The calculators' about
+text gets the same attribution when a simulated entry first reaches them
+(adoption): nothing derived from the tiles is in `tire_model.json` yet.
 
 **What F has to build first.** Nothing of F exists:
 `validate._evaluate_fold` has no hook for a heat source and `predict.py`

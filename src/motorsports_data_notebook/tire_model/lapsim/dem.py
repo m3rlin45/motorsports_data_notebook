@@ -9,11 +9,17 @@ kept in ``workspace/lapsim/gsi/``.
 
 A track's ``alt_m`` and ``grade`` come from the logs and the model only
 checks them. The road's bank is the one thing read from the model itself
-(:mod:`.bank`, #299): the logs do not give it. It is kept with the track
-in ``workspace/lapsim/tracks/``, and nothing derived from these tiles is
-committed (GSI asks for attribution, and publishing a product that
-combines its elevation model may need approval under the Survey Act; see
-#204).
+(:mod:`.bank`, #299): the logs do not give it. It is kept with the track,
+and the tracks are committed with it in ``data/lapsim/tracks/`` (owner,
+2026-11-24, #208: "commit the bank track info, add attribution"). The
+attribution GSI's content terms ask for, the source and a note that the
+content was processed, is in ``data/lapsim/README.md``:
+出典：国土地理院ウェブサイト, 「地理院タイル（標高タイル（基盤地図情報数値標高
+モデル））を加工して作成」. Read for that ruling: the Survey Act Q&A (Q1-16:
+processing without reproduction needs no approval; Q2-4: a map made from
+the elevation model does) and the content terms, section 1; neither
+addresses the numeric outputs of a simulation, and the owner ruled that
+attribution is enough. The raw tiles themselves are not committed.
 
 The model is bare earth, so a bridge deck reads the ground beneath it.
 Heights are above mean sea level where GPS altitude is above the
