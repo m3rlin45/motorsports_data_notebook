@@ -425,7 +425,8 @@ def support_of(model: cm.CarModel, layout_id: str) -> dict:
     """The table's support from the model's logged range of use
     (``meta.use_range``): the layout's own, else the car's over the
     layouts it has run; empty for a model without one. The fast end is
-    held at a use of 1, where the table ends. The slow end goes down to
+    held at a use of 1: past it the knob is not a use, and a target there
+    is flagged. The slow end goes down to
     the car's wet build laps (``meta.use_range_wet``, likewise the
     layout's own or the car's): ``use_min_dry`` keeps the dry laps' slow
     end and ``wet_laps`` says how many wet laps stand behind the rest."""
