@@ -439,10 +439,14 @@ class TestAFold:
         held.stints["track_canonical"] = "a"
         held.prep.flying["track_canonical"] = "a"
         rows, tpms = pg.score_cell(held, {}, seen=True)
-        assert set(rows["arm"]) == {"entry"} and set(rows["form"]) == set(pg.FORMS)
+        # the calculator as it is (the model's own entry), and the yardstick beside it
+        assert set(rows["arm"]) == {"entry", "other_day"} and set(rows["form"]) == set(pg.FORMS)
         assert set(tpms["arm"]) == {"entry"}
-        chain = rows[rows["form"] == "chain"]
+        chain = rows[(rows["form"] == "chain") & (rows["arm"] == "entry")]
         assert chain["gap"].iloc[0] == pytest.approx(np.log(60.0 / 60.0), abs=1e-9)
+        # only the days asked for are scored; the others are there to be paired with
+        one, _ = pg.score_cell(held, {}, seen=True, sessions={"s1"})
+        assert set(one["session_id"]) == {"s1"} and (one["arm"] == "other_day").any()
 
 
 class TestWetDays:

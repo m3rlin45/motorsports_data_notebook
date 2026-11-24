@@ -695,46 +695,15 @@ def _pairs(held: Held, day: dict) -> pd.DataFrame:
     return pd.DataFrame(d[same])
 
 
-def day_arms(held: Held, day: dict, cell: SimCell | None, *, seen: bool = False) -> list[dict]:
-    """Every arm's entry for one day, in both forms: dicts of ``arm,
-    form, entry`` (None: the fold model as it stands), ``lap_time_s``
-    (the lap time typed in; None: the entry's own), ``pick`` and, where
-    they apply, ``gap`` (the log of a paired day's lap time over the
-    day's), ``status`` and ``use``. The form ``tpms`` marks the entries
-    pressure against the TPMS is scored with (S2: production's own
-    inputs, the entry as it would be written).
-
-    ``seen`` is for a fold that leaves the day's date out and not its
-    cell: the one arm is then ``entry``, the fold model as it stands,
-    whose entry for the cell was built without the day."""
-    root = held.root
-    sid, t_day = day["session_id"], float(day["lap_time_s"])
-    own = held.entries[sid]
-    out: list[dict] = [
-        {"arm": "day", "form": "heat", "entry": _bare(own), "lap_time_s": t_day},
-        {"arm": "day", "form": "chain", "entry": own, "lap_time_s": t_day},
-    ]
-    if seen:
-        there = pr.entry_of(held.model, held.track, held.pooled, "dry")
-        if there is not None:
-            gap = float(np.log(there.lap_time_s / t_day))
-            out.append({"arm": "entry", "form": "heat", "entry": _bare(there), "lap_time_s": t_day})
-            out.append(
-                {"arm": "entry", "form": "chain", "entry": None, "lap_time_s": None, "gap": gap}
-            )
-            out.append({"arm": "entry", "form": "tpms", "entry": None})
-        return out
-    typed = float(held.prep.session_lap_time.get(sid, t_day))
-    for arm, factor in (("heat_up", 1.0 + HEAT_PLANT), ("heat_down", 1.0 - HEAT_PLANT)):
-        out.append(
-            {"arm": arm, "form": "heat", "entry": _bare(own.scaled(factor)), "lap_time_s": t_day}
-        )
-        out.append({"arm": arm, "form": "chain", "entry": own.scaled(factor), "lap_time_s": t_day})
-        out.append({"arm": arm, "form": "tpms", "entry": own.scaled(factor)})
-    out.append({"arm": "own_heat", "form": "tpms", "entry": own})
+def other_day_arms(held: Held, day: dict) -> list[dict]:
+    """The yardstick's arms for one day (``other_day``): at the day's lap
+    time, up to three sessions of other days nearest in lap time, each
+    read from its laps nearest the day's lap time; given nothing, each
+    other day as if it alone had written the entry."""
+    t_day = float(day["lap_time_s"])
     laps = held.laps[held.laps["condition"] == "dry"]
     pairs = _pairs(held, day)
-    # another day, at the day's lap time: up to three sessions nearest in lap time
+    out: list[dict] = []
     near = pairs.assign(off=(pairs["lap_time_s"] - t_day).abs()).sort_values(["off", "session_id"])
     for k, other in enumerate(near.head(cg.FLOOR_PAIRS_PER_LAP).to_dict("records")):
         got = pr.near_heat(laps[laps["session_id"] == other["session_id"]], t_day)
@@ -751,10 +720,12 @@ def day_arms(held: Held, day: dict, cell: SimCell | None, *, seen: bool = False)
                 "paired": other["session_id"],
             }
         )
-    # another day, given nothing: each other day as if it alone had written the entry
     for k, (date, group) in enumerate(pairs.groupby("date", sort=True)):
         alone = pr.logged_entry(
-            root, laps[laps["session_id"].isin(set(group["session_id"]))], held.share, curve=False
+            held.root,
+            laps[laps["session_id"].isin(set(group["session_id"]))],
+            held.share,
+            curve=False,
         )
         if alone is None:
             continue
@@ -769,6 +740,49 @@ def day_arms(held: Held, day: dict, cell: SimCell | None, *, seen: bool = False)
                 "paired": str(date),
             }
         )
+    return out
+
+
+def day_arms(held: Held, day: dict, cell: SimCell | None, *, seen: bool = False) -> list[dict]:
+    """Every arm's entry for one day, in both forms: dicts of ``arm,
+    form, entry`` (None: the fold model as it stands), ``lap_time_s``
+    (the lap time typed in; None: the entry's own), ``pick`` and, where
+    they apply, ``gap`` (the log of a paired day's lap time over the
+    day's), ``status`` and ``use``. The form ``tpms`` marks the entries
+    pressure against the TPMS is scored with (S2: production's own
+    inputs, the entry as it would be written).
+
+    ``seen`` is for a model that has the day's cell (a fold that leaves
+    the day's date out, or the model as shipped): the arms are then
+    ``entry``, the model as it stands, which is the calculator as it is,
+    and the yardstick."""
+    root = held.root
+    sid, t_day = day["session_id"], float(day["lap_time_s"])
+    own = held.entries[sid]
+    out: list[dict] = [
+        {"arm": "day", "form": "heat", "entry": _bare(own), "lap_time_s": t_day},
+        {"arm": "day", "form": "chain", "entry": own, "lap_time_s": t_day},
+    ]
+    if seen:
+        there = pr.entry_of(held.model, held.track, held.pooled, "dry")
+        if there is not None:
+            gap = float(np.log(there.lap_time_s / t_day))
+            out.append({"arm": "entry", "form": "heat", "entry": _bare(there), "lap_time_s": t_day})
+            out.append(
+                {"arm": "entry", "form": "chain", "entry": None, "lap_time_s": None, "gap": gap}
+            )
+            out.append({"arm": "entry", "form": "tpms", "entry": None})
+        return out + other_day_arms(held, day)
+    typed = float(held.prep.session_lap_time.get(sid, t_day))
+    for arm, factor in (("heat_up", 1.0 + HEAT_PLANT), ("heat_down", 1.0 - HEAT_PLANT)):
+        out.append(
+            {"arm": arm, "form": "heat", "entry": _bare(own.scaled(factor)), "lap_time_s": t_day}
+        )
+        out.append({"arm": arm, "form": "chain", "entry": own.scaled(factor), "lap_time_s": t_day})
+        out.append({"arm": arm, "form": "tpms", "entry": own.scaled(factor)})
+    out.append({"arm": "own_heat", "form": "tpms", "entry": own})
+    laps = held.laps[held.laps["condition"] == "dry"]
+    out += other_day_arms(held, day)
     # the ceiling: the raw car's logged entry at the cell, built without the day
     rest = laps[(laps["raw_car"] == day["raw_car"]) & (laps["date"] != day["date"])]
     ceiling = pr.logged_entry(root, rest, held.share) if len(rest) else None
@@ -1041,6 +1055,7 @@ def score_cell(
     seen: bool = False,
     wet: bool = False,
     weights: dict[str, float] | None = None,
+    sessions: set[str] | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """``(rows, tpms)`` of a fold's cell.
 
@@ -1061,7 +1076,9 @@ def score_cell(
     ``cells`` is the simulation's side per raw car (None: no simulated
     arm); ``seen`` as in :func:`day_arms`; ``wet`` scores the days with
     :func:`wet_arms` (the held days are then wet or damp ones);
-    ``weights`` (:func:`pool_weights`) adds the pooled simulated entry."""
+    ``weights`` (:func:`pool_weights`) adds the pooled simulated entry;
+    with ``sessions`` only those days are scored (the others are there to
+    be paired with)."""
     from ..validate import _score_fold_laps
 
     rows: list[pd.DataFrame] = []
@@ -1069,6 +1086,8 @@ def score_cell(
     flags = held.laps[["session_id", "lap_num", "after_dropped", "after_cool_down"]]
     for day in held.days.to_dict("records"):
         sid = day["session_id"]
+        if sessions is not None and sid not in sessions:
+            continue
         cond = str(day.get("condition") or "dry")
         if wet:
             arms = wet_arms(held, day, cells.get(day["raw_car"]))
@@ -1514,10 +1533,13 @@ def check_pressure(
         if got is None:
             continue
         model, prep = got
+        # every session's laps through this fold's model: the held-out days are
+        # scored, the others are the days they are paired with
+        every = _prepare_fold_laps(prod.root, sorted(prod.trained), model)
         present = prep.full[["car", "track_canonical"]].drop_duplicates()
         for pooled, track in zip(present["car"], present["track_canonical"]):
-            held = held_of(prod, model, prep, str(pooled), str(track), len(ids))
-            a, b = score_cell(held, {}, seen=True)
+            held = held_of(prod, model, every, str(pooled), str(track), len(ids))
+            a, b = score_cell(held, {}, seen=True, sessions=set(ids))
             seen_rows.append(a)
             seen_tpms.append(b)
         same_all, n_all = identity_check(model, prep)
@@ -1537,6 +1559,24 @@ def check_pressure(
     seen = pd.concat([r for r in seen_rows if len(r)], ignore_index=True) if seen_rows else None
     seen_t = pd.concat([t for t in seen_tpms if len(t)], ignore_index=True) if seen_tpms else None
 
+    # the calculator as shipped: tire_model.json, every day in its fit
+    shipped, shipped_t = None, None
+    artifact = Path(root) / "tire_model.json"
+    if dates and artifact.exists():
+        model = json.loads(artifact.read_text())
+        every = _prepare_fold_laps(prod.root, sorted(prod.trained), model)
+        parts_a, parts_b = [], []
+        for pooled, track in folds:
+            if every is None or pooled not in ho.shares_of(model):
+                continue
+            a, b = score_cell(held_of(prod, model, every, pooled, track, 0), {}, seen=True)
+            parts_a.append(a)
+            parts_b.append(b)
+        if any(len(x) for x in parts_a):
+            shipped = pd.concat([x for x in parts_a if len(x)], ignore_index=True)
+            shipped_t = pd.concat([x for x in parts_b if len(x)], ignore_index=True)
+        logger.info("pressure: the model as shipped scored")
+
     stints = by_stint(rows)
     if cache_dir is not None:
         # the rows behind the report, for whoever reads a miss: not a cache
@@ -1547,6 +1587,8 @@ def check_pressure(
         days.to_parquet(out / "days.parquet")
         if seen is not None:
             seen.to_parquet(out / "seen_rows.parquet")
+        if shipped is not None:
+            shipped.to_parquet(out / "shipped_rows.parquet")
     report_cells(rep, table, days)
     report_harness(rep, pd.DataFrame(checks))
     main = stints[stints["n"] == pr.FLYING_LAP_N] if len(stints) else stints
@@ -1556,6 +1598,7 @@ def check_pressure(
     report_replaced(rep, main)
     report_seen(rep, main, seen)
     report_tpms(rep, tpms, seen_t)
+    report_current(rep, main, seen, shipped, tpms, seen_t, shipped_t)
     report_wet(rep, wet_rows, wet_days)
     report_first_visit(rep, visit_rows, rows, tpms)
     return rep
@@ -1579,6 +1622,121 @@ def first_visits(prod: Production, days: pd.DataFrame) -> list[tuple[str, str, s
         if len(before):
             out.append((str(pooled), str(track), first))
     return out
+
+
+def report_current(
+    rep: GateReport,
+    main: pd.DataFrame,
+    seen: pd.DataFrame | None,
+    shipped: pd.DataFrame | None,
+    tpms: pd.DataFrame,
+    seen_t: pd.DataFrame | None,
+    shipped_t: pd.DataFrame | None,
+) -> None:
+    """The calculator as it is today by the same measure, beside the
+    simulation: at a cell it has no logged laps for (the fallback as
+    coded, on the cell folds), at a cell it has (its own entry, with the
+    day's date left out of the fit) and as shipped (the day in the fit)."""
+
+    def _five(frame: pd.DataFrame | None) -> pd.DataFrame:
+        if frame is None or frame.empty:
+            return pd.DataFrame()
+        own = by_stint(frame)
+        return own[own["n"] == pr.FLYING_LAP_N]
+
+    def _mae(frame: pd.DataFrame | None, arm: str) -> pd.DataFrame:
+        if frame is None or frame.empty:
+            return pd.DataFrame()
+        t = tpms_table(frame)
+        return t[t["arm"] == arm]
+
+    sources = [
+        ("the simulation, at a cell without logged laps", main, "sim", _mae(tpms, "sim")),
+        (
+            "the calculator today, at a cell without logged laps (the fallback as coded)",
+            main,
+            "fallback",
+            _mae(tpms, "fallback"),
+        ),
+        (
+            "the calculator today, at a cell with logged laps, the day's date left out",
+            _five(seen),
+            "entry",
+            _mae(seen_t, "entry"),
+        ),
+        (
+            "the calculator as shipped, the day in its fit",
+            _five(shipped),
+            "entry",
+            _mae(shipped_t, "entry"),
+        ),
+    ]
+    lines, cells = [], []
+    for name, stints, arm, mae in sources:
+        if stints is None or len(stints) == 0:
+            continue
+        row: dict[str, Any] = {"what": name}
+        for form in FORMS:
+            att = attain(stints[stints["form"] == form], arm)
+            got = tally(att)
+            row[f"{form}_cells"] = f"{got['passed']} of {got['scored']}"
+            row[f"{form}_mbar"] = got["size"]
+            row[f"{form}_another_day"] = got["beside"]
+            if len(att):
+                per = att[att["scored"]].groupby(["raw_car", "track"], sort=True)
+                cells.append(
+                    per.agg(size=("size", "median"), another_day=("beside", "median"))
+                    .reset_index()
+                    .assign(what=name, form=form)
+                )
+        ok = mae[mae["rows"] >= 4 * MIN_DAYS] if len(mae) else mae
+        row["tpms_mae"] = float(ok["mae_mbar"].median()) if len(ok) else float("nan")
+        lines.append(row)
+    if not lines:
+        return
+    table = pd.DataFrame(lines)
+    detail = (
+        "Every row by the one measure: the cold pressure recommended for the end of flying lap "
+        f"{pr.FLYING_LAP_N} against the day's own, with another logged day beside it on the "
+        "same stints (`_another_day`), at a given lap time (`heat`) and with nothing given "
+        "(`chain`: the calculator's own prefilled lap time and out-lap); `_cells`: cells (a raw "
+        "car at a track on one tyre) no further from the day than another day is; `_mbar`: the "
+        "distance in the median scored cell. `tpms_mae`: hot-pressure MAE against the TPMS at "
+        "flying lap 5 in the median cell, which does not rank a heat source. *The calculator "
+        "today* reads one entry per pooled car and track. Where it has no logged laps for the "
+        "cell it falls back on other cells (the cell folds: every constant fitted without the "
+        "cell). Where it has them, the entry is scored on days whose date was left out of the "
+        f"fit ({DATE_FOLDS} folds), and as shipped (`tire_model.json`, which has seen the day: "
+        "that row is in sample). The simulation's row is at a cell the constants, the car "
+        "model and (at Tsukuba and Fuji) the track have not seen.\n\n"
+        + md_table(table, floats="{:.3g}")
+    )
+    if cells:
+        both = pd.concat(cells, ignore_index=True)
+        wide = both.pivot_table(
+            index=["form", "raw_car", "track"], columns="what", values="size", sort=False
+        ).reset_index()
+        yard = both.groupby(["form", "raw_car", "track"], sort=False)["another_day"].median()
+        wide = wide.merge(yard.reset_index(), on=["form", "raw_car", "track"])
+        detail += (
+            "\n\n**By cell** (the four tyres' median distance from the day, mbar; "
+            "`another_day` the median over the rows' yardsticks).\n\n"
+            + md_table(wide, floats="{:.3g}")
+        )
+    rep.items.append(
+        GateItem(
+            "The calculator as it is today, by the same measure",
+            None,
+            "; ".join(
+                f"{r['what']}: {r['heat_mbar']:.1f} mbar at a given lap time "
+                f"({r['heat_cells']}), {r['chain_mbar']:.1f} with nothing given "
+                f"({r['chain_cells']})"
+                for r in lines
+            ),
+            "reported: the same pairing, rows and cells as the simulation's",
+            detail,
+        )
+    )
 
 
 def report_wet(rep: GateReport, wet_rows: list[pd.DataFrame], wet_days: list[pd.DataFrame]) -> None:
@@ -2336,6 +2494,7 @@ __all__ = [
     "cell_table",
     "check_pressure",
     "date_folds",
+    "other_day_arms",
     "day_arms",
     "donor_track",
     "fed_laps",

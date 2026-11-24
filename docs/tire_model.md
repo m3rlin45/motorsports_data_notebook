@@ -5548,6 +5548,63 @@ further, on the stints the two share):
   −46.2 at Fuji): what is left against the TPMS is the pressure model's
   (#262), not the heat's.
 
+*The calculator as it is today, by the same measure* (asked by the owner
+on 2026-11-25; `pressure_gate.report_current`). The calculator reads one
+entry per pooled car and track. It is scored three ways with the same
+pairing, rows and cells: at a cell it has no logged laps for (the
+fallback as coded, on the cell folds); at a cell it has, on days whose
+date was left out of the fit (the ten leave-date-out folds, every other
+session's laps put through the fold's model so that another day stands
+beside it on the same stints); and as shipped (`tire_model.json`, which
+has seen the day, so that row is in sample).
+
+| | at a given lap time | another day | nothing given | another day | against the TPMS |
+|---|---|---|---|---|---|
+| **the simulation, at a cell without logged laps** | **3.4** (13 of 20) | 4.4 | **6.9** (10 of 20) | 7.6 | 43 |
+| the calculator today, at a cell without logged laps | 52.6 (1 of 20) | 4.1 | 65.0 (3 of 20) | 7.0 | 87 |
+| the calculator today, at a cell with logged laps, the date left out | 3.5 (7 of 20) | 3.5 | 7.0 (7 of 20) | 5.8 | 33 |
+| the calculator as shipped, the day in its fit | 3.4 (9 of 20) | 3.5 | 6.6 (9 of 20) | 5.9 | 32 |
+
+(mbar, the median scored cell; cells no further from the day than
+another day; the last column is hot-pressure MAE at flying lap 5 and does
+not rank a heat source.) By cell, the four tyres' median:
+
+| raw car, track | `heat`: simulation, cell unseen | calculator, cell unseen | calculator, cell logged | `chain`: simulation, cell unseen | calculator, cell unseen | calculator, cell logged |
+|---|---|---|---|---|---|---|
+| KK-SII, Tsukuba | 4.6 | 26.5 | 3.6 | 8.0 | 64.2 | 5.0 |
+| KK-F, Tsukuba | 2.9 | 30.8 | 4.3 | 4.6 | 76.6 | 8.0 |
+| Inferno 86, Fuji | 4.1 | 40.3 | 7.4 | 13.4 | 38.4 | 11.5 |
+| Inferno 86, Sodegaura | 3.2 | 112 | 3.8 | 4.5 | 25.6 | 9.9 |
+| KK-SII, Suzuka | 3.6 | 150 | 2.1 | 4.8 | 92.9 | 4.7 |
+
+- **Where the calculator has no logged laps, the simulation is ten to
+  fifteen times nearer the day**: 3.4 mbar against 52.6 at a given lap
+  time and 6.9 against 65.0 with nothing given, in every one of the five
+  cells (26 to 150 mbar for the fallback at a given lap time). Against
+  the TPMS, 43 mbar against 87.
+- **A simulated entry at a cell nobody has logged recommends as near the
+  day as the calculator's own logged entry does at a cell it has**: 3.4
+  against 3.5 mbar at a given lap time and 6.9 against 7.0 with nothing
+  given. By cell it is nearer in three of five at a given lap time (the
+  KK-F at Tsukuba, Fuji, Sodegaura) and further at the KK-SII's two; with
+  nothing given nearer at the KK-F's Tsukuba and at Sodegaura, level at
+  Suzuka, further at the KK-SII's Tsukuba and at Fuji. The logged entry is
+  the pooled car's median lap, which costs the KK-F 8 mbar with nothing
+  given.
+- **The yardstick is passed by neither more than half the time**, and by
+  the logged entry less often than by the simulation (7 of 20 in both
+  forms against 13 and 10): "as near as another day" is a bar an entry
+  made of the cell's own logs sits on, not under.
+- **What a logged cell has that a simulated entry cannot give is the
+  constants**: against the TPMS the calculator with the cell in its fit
+  is at 33 mbar and the simulation at a cell left out at 43, the same 43
+  the day's own heat scores under those constants (#262). The two rows
+  are through different fits (the cell left out, the date left out), so
+  their mbar are set beside their own yardsticks and not against each
+  other tyre by tyre.
+- As shipped, in sample, the calculator is 3.4 and 6.6 mbar from the day
+  (9 of 20): leaving the date out costs it 0.1 to 0.4 mbar.
+
 *What F0 was to settle for the export.* Its clock is the chain's own:
 each knot's flying lap and out-lap as one-second bins of speed and of the
 four non-negative parts of the accelerations (`lapsim/export.py`), which
