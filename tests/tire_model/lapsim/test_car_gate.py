@@ -838,6 +838,7 @@ class TestGate:
         ranged = saved.meta["use_range"][layout]
         assert ranged["laps"] == 12 and ranged["days"] == 3
         assert ranged["min"] <= ranged["median"] <= ranged["max"]
+        assert saved.meta["use_range_wet"] == {}  # no wet laps in this dataset
 
         from motorsports_data_notebook.tire_model.lapsim import pace, pace_gate
 

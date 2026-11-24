@@ -76,6 +76,11 @@ def main(argv: list[str] | None = None) -> int:
         "a direct solve at twenty lap times; the tables go to workspace/lapsim/pace/.",
     )
     sub.add_parser(
+        "check-wet",
+        help="Gate D2: each wet build lap driven on the dry track, with the wet braking term, "
+        "on the wet line and with both, against a logged lap of the same wet day.",
+    )
+    sub.add_parser(
         "check-car-holdout",
         help="Gate C3: the car on held-out days and layouts, against two planted wrong cars.",
     )
@@ -151,6 +156,15 @@ def main(argv: list[str] | None = None) -> int:
             tracks_dir=workspace / "tracks",
             cars_dir=workspace / "cars",
             out_dir=workspace / "pace",
+        )
+    elif args.cmd == "check-wet":
+        from . import wet_gate
+
+        report = wet_gate.check_wet(
+            root,
+            cache_dir=workspace / "cache",
+            tracks_dir=workspace / "tracks",
+            cars_dir=workspace / "cars",
         )
     else:  # pragma: no cover - argparse rejects unknown commands
         parser.error(f"unknown command {args.cmd}")

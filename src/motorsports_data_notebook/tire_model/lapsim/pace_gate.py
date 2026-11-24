@@ -148,6 +148,11 @@ def check_pace_table(
                 (dry["car"] == car) & (dry["layout_id"] == layout), "lap_time_s"
             ].to_numpy(float)
             status = [table.status(float(t)) for t in logged]
+            wet_logged = rows.loc[
+                (rows["basis"] == "wet") & (rows["car"] == car) & (rows["layout_id"] == layout),
+                "lap_time_s",
+            ].to_numpy(float)
+            wet_status = [table.status(float(t)) for t in wet_logged]
             sup = table.support
             table_rows.append(
                 {
@@ -174,6 +179,8 @@ def check_pace_table(
                     "logged": len(logged),
                     "no_solution": status.count(pace.NO_SOLUTION),
                     "outside": status.count(pace.OUTSIDE_SUPPORT),
+                    "wet_logged": len(wet_logged),
+                    "wet_outside": len(wet_logged) - wet_status.count(pace.OK),
                 }
             )
             # what the assumed powertrain is worth at the layout's median logged lap
@@ -266,13 +273,17 @@ def check_pace_table(
             "Logged laps faster than the lap at a use of 1",
             None,
             f"{faster} of {int(got['logged'].sum())} dry build laps; "
-            f"{int(got['outside'].sum())} flagged outside the support",
+            f"{int(got['outside'].sum())} flagged outside the support; of "
+            f"{int(got['wet_logged'].sum())} wet build laps {int(got['wet_outside'].sum())} "
+            "are not answered `ok`",
             "reported",
             "A table is made with the car's latest powertrain, its own shift point and standard "
             "air; a logged lap was driven with its day's. A lap the table has no solution for "
             "is one that its own day's car solves to a use near or above 1 (five of 2,231 "
             "held-out laps in gate C3), or one of an earlier powertrain that the table's car "
-            "cannot be compared with at all.",
+            "cannot be compared with at all. The wet laps are read off the same table (a wet "
+            "lap is a lower use of the same car on the dry track, gate D2), and the support's "
+            "slow end is the slowest of the car's wet build laps.",
         )
     )
     if engine_rows:

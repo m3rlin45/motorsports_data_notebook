@@ -279,16 +279,25 @@ def reference_u(
     return out
 
 
-def use_range(who: Who, tracks: dict[str, trk.TrackModel], rows: pd.DataFrame, car: str) -> dict:
+def use_range(
+    who: Who,
+    tracks: dict[str, trk.TrackModel],
+    rows: pd.DataFrame,
+    car: str,
+    basis: str = "dry",
+) -> dict:
     """The range of the knob over the dry build laps of ``car``, per
     layout: ``{"min", "p05", "median", "p95", "max", "laps", "days"}`` of
     the use each lap solves to, driven with its own day's powertrain,
     shift point, gear set and air (one batch a layout). It is the car's
     logged range of pace: what a pace table's ``support`` is, and where a
     target lap time is ``outside_support`` (#206; owner, 2026-11-23: a
-    target outside it is answered and flagged)."""
+    target outside it is answered and flagged). With ``basis="wet"`` it
+    is the wet build laps', each as a lower use of the same car on the dry
+    track (gate D2's null, which is how the wet is driven): the use of
+    the dry limit a wet lap comes to, down to the wettest logged day."""
     drive = as_drive(who)
-    own = rows[(rows["car"] == car) & (rows["basis"] == "dry")]
+    own = rows[(rows["car"] == car) & (rows["basis"] == basis)]
     out: dict[str, dict] = {}
     for layout, grp in own.groupby("layout_id"):
         if layout not in tracks:
@@ -1525,16 +1534,22 @@ def check_car_fit(
         braked = car_use_laps(tables, lap_time, car_name, own)
         used, use_work = set_use(drive.but(model=at_limit(fitted)), own, braked)
         model, uses = set_limit(drive.but(model=used), own, best)
+
         # the car's logged range of pace per layout: a pace table's support (#206)
-        ranges = use_range(drive.but(model=model), own, rows, car_name)
+        def _kept(ranges: dict) -> dict:
+            return {
+                k: {f: _rounded(v, 5) if isinstance(v, float) else v for f, v in r.items()}
+                for k, r in ranges.items()
+            }
+
+        ranged = drive.but(model=model)
         model = replace(
             model,
             meta={
                 **model.meta,
-                "use_range": {
-                    k: {f: _rounded(v, 5) if isinstance(v, float) else v for f, v in r.items()}
-                    for k, r in ranges.items()
-                },
+                "use_range": _kept(use_range(ranged, own, rows, car_name)),
+                # the wet laps as a lower use on the dry track: down to the wettest logged day
+                "use_range_wet": _kept(use_range(ranged, own, rows, car_name, basis="wet")),
             },
         )
         drive = drive.but(model=model)

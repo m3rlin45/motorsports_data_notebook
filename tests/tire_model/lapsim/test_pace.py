@@ -135,6 +135,39 @@ class TestStatus:
         assert bare.support == {} and bare.status(float(bare.lap_time_s[3])) == pace.OUTSIDE_SUPPORT
 
 
+class TestWetInTheSupport:
+    def test_the_slow_end_is_the_wettest_logged_lap(self):
+        model = _ranged(_model(), oval=(0.80, 0.97))
+        wet_range = {"min": 0.55, "p05": 0.56, "median": 0.62, "p95": 0.70, "max": 0.72}
+        model.meta["use_range_wet"] = {"oval": {**wet_range, "laps": 20, "days": 2}}
+        got = pace.build_table(model, _oval_track())
+        assert got.support["use_min"] == 0.55 and got.support["use_min_dry"] == 0.80
+        assert got.support["wet_laps"] == 20 and "wettest logged day" in got.support["from"]
+
+        def at(use):
+            return float(sv.lap_time(_oval_track(), CAR, use))
+
+        assert got.status(at(0.60)) == pace.OK  # a wet lap, read off the same table
+        assert got.status(at(0.50)) == pace.OUTSIDE_SUPPORT  # wetter than the wettest logged day
+
+    def test_a_layout_with_no_wet_laps_takes_the_cars_wet_range(self):
+        model = _ranged(_model(), oval=(0.80, 0.97))
+        model.meta["use_range_wet"] = {
+            "other": {
+                "min": 0.60,
+                "p05": 0.6,
+                "median": 0.65,
+                "p95": 0.7,
+                "max": 0.7,
+                "laps": 9,
+                "days": 1,
+            }
+        }
+        got = pace.build_table(model, _oval_track())
+        assert got.support["use_min"] == 0.60
+        assert "at the layouts it has run in the wet" in got.support["from"]
+
+
 class TestAssumes:
     def test_the_latest_powertrain_unless_one_is_named(self):
         model = _two_engine_model()
@@ -236,3 +269,6 @@ class TestUseRange:
         assert got["max"] == pytest.approx(0.97, abs=1e-4)
         assert got["median"] == pytest.approx(0.90, abs=1e-4)
         assert cg.use_range(_model(), {}, rows, "car") == {}
+        # the wet laps, as a lower use of the same car on the dry track
+        wet_only = cg.use_range(_model(), {"oval": track}, pd.concat([rows, wet]), "car", "wet")
+        assert wet_only["oval"]["laps"] == 1 and wet_only["oval"]["max"] < got["min"]

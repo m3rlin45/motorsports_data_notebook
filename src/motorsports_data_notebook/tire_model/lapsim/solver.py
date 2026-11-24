@@ -125,6 +125,11 @@ CORNER_DRAG_DEFAULT = True
 #: model's ``grip.drive_share``) or has the whole car's grip. On for all
 #: three cars by the owner's decision of 2026-11-23 (issue #312).
 DRIVEN_AXLE_DEFAULT = True
+#: Whether a wet lap's braking falls less than its cornering by the
+#: car's wet braking term (a model's ``wet.brake_term``, :mod:`.wet`). Off:
+#: the term is read and scored by gate D2 (#206) and has not met its
+#: entry rule.
+WET_BRAKE_DEFAULT = False
 #: Width of the bins of a model's power curve (:data:`.car.RPM_BIN`).
 CURVE_BIN_RPM = 250.0
 #: Step of the table of engine power against speed a lap is driven from.
@@ -233,6 +238,10 @@ class SolverCar:
     p_specific: float  # W/kg
     c_drag: float  # 1/m
     wet_scale: float = 1.0
+    #: How much less braking falls than cornering in the wet: a wet lane's
+    #: braking level is multiplied by it on top of ``wet_scale`` (1: the
+    #: two fall alike; :mod:`.wet`, #206 D2).
+    wet_brake: float = 1.0
     #: Cost of cornering at full throttle (1/g): the engine gives
     #: ``P/V − k·lat²`` (lat in g, the result in g).
     k_corner_drag: float = 0.0
@@ -362,6 +371,7 @@ class SolverCar:
         brake_onset: bool | None = None,
         brake_use: bool = True,
         driven_axle: bool | None = None,
+        wet_brake: bool | None = None,
     ) -> "SolverCar":
         """The solver's car from a model.
 
@@ -429,6 +439,11 @@ class SolverCar:
             p_specific=float(p_spec),
             c_drag=c_drag,
             wet_scale=float(wet) if wet is not None else 1.0,
+            wet_brake=(
+                float(model.wet.get("brake_term") or 1.0)
+                if (WET_BRAKE_DEFAULT if wet_brake is None else wet_brake)
+                else 1.0
+            ),
             k_corner_drag=float(k) if k is not None else 0.0,
             # the curve's bins are stored by their lower edge
             curve_rpm=tuple(float(r) + CURVE_BIN_RPM / 2.0 for r, _ in curve) if geared else (),
@@ -617,7 +632,7 @@ def _passes(
         _power_table(car),
         1.0 / POWER_TABLE_DV,
         mu,
-        car.mu_b * car.brake_use * u * w,
+        car.mu_b * car.brake_use * u * w * (car.wet_brake if wet else 1.0),
         car.c_drag,
         car.k_corner_drag,
         car.brake_ellipse,
@@ -816,7 +831,10 @@ def _lanes(profile: Profile, cars: list[SolverCar], wet: bool) -> tuple:
         np.ascontiguousarray(np.stack([_power_table(car) for car in index])),
         which,
         np.array([car.mu_y for car in cars], dtype=float),
-        np.array([car.mu_b * car.brake_use for car in cars], dtype=float),
+        np.array(
+            [car.mu_b * car.brake_use * (car.wet_brake if wet else 1.0) for car in cars],
+            dtype=float,
+        ),
         np.array([car.wet_scale if wet else 1.0 for car in cars], dtype=float),
         np.array([car.c_drag for car in cars], dtype=float),
         np.array([car.k_corner_drag for car in cars], dtype=float),
@@ -970,7 +988,7 @@ def combined_use(sim: SimLap, profile: Profile, car: SolverCar, *, wet: bool = F
         )
         lat = np.abs(sim.lat_tyre_g)
     a_y = car.mu_y * sim.u * w * load
-    a_b = car.mu_b * car.brake_use * sim.u * w * load
+    a_b = car.mu_b * car.brake_use * sim.u * w * (car.wet_brake if wet else 1.0) * load
     tyre = sim.long_tyre_g
     used = np.minimum(lat / a_y, 1.0)
     left = (1.0 - car.brake_ellipse) * (1.0 - used) + car.brake_ellipse * np.sqrt(1.0 - used**2)
