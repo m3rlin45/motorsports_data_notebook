@@ -5240,6 +5240,135 @@ the car has not run as the typical use is. The harness's first output
 needs no simulation: the yardstick itself, another day against a day in
 mbar with each pair's lap-time gap, which has not been measured.
 
+**Gate F, the harness and the yardstick (F0; 2026-11-24; `validate.py`,
+`lapsim/pressure.py`, `lapsim/pressure_gate.py`, `lapsim check-pressure
+--yardstick`).** Everything in this paragraph was built and measured
+before a simulated lap was scored, and the pairing, the rows and the
+cell list were not changed afterwards.
+
+*The harness.* `validate._evaluate_fold` is split into the fit
+(`_fit_fold`), the preparation of the held-out laps with the fold model's
+κ and shares (`_prepare_fold_laps`) and the scoring (`_score_fold_laps`),
+and takes `model=` and `lap_inputs_fn=`; fold 0 of the standing holdout is
+the same 789 rows to the last bit. A heat source is the *entry* it would
+write for the held-out cell (`pressure.Entry`: a typical lap time, the
+heat per tyre at it, a pace curve, an out-lap), placed in a copy of the
+fold's model (`pressure.place`) and read by `_calculator_lap_inputs`, its
+interpolation included. `pressure.recommend` is the cold pressure for a
+pit-exit stint and a tyre at the end of flying lap 5 (10 beside it):
+through the fold's K and τ (the compound's where the session has a human
+or seed label; no label from the EM), from the stint's own pit-exit
+temperature and the session's weather, at the team's hot-pressure target
+for the car and compound (`hot_pressure_targets.yaml`; it only sets the
+unit and is the same on every side). No TPMS pressure enters. A fold's
+fit takes 33 to 65 s, so it is fitted once and kept in
+`workspace/lapsim/cache/pressure_folds/`, keyed by the sessions left out,
+the dataset's files and the bytes of the fit's source.
+
+*Per-tyre heat is of the fold's shares.* The held-out laps' heat is
+`attach_lap_heat` under the fold model; a logged lap's bins are read once
+(`heat_gate.sensor_lap_bins`, `tyres_frame_lap_bins`) and split per fold;
+`holdout.shares_of(model)` reads the shares of the model in hand
+(`production_shares` is it on `tire_model.json`, and is not used inside a
+fold).
+
+*The folds and the cells.* Seven folds, each a pooled car at a track with
+every session of the cell left out (68 for the formula cars at Tsukuba, of
+which 63 reach a fit). A *day* is a dry held-out session with three
+*ordinary* flying laps (from flying lap 4 on, none over 1.12 × the stint's
+best on the full lap list, a heat on every tyre) and a pit-exit stint; its
+own recommendation is from the median heat of those laps at their median
+lap time. Per raw car:
+
+| raw car, track | sessions / days scored | kind of source | scored |
+|---|---|---|---|
+| KK-SII, Tsukuba | 26 / 12 | GPS-derived 15, accelerometer 11 | yes |
+| KK-F, Tsukuba | 11 / 5 | GPS-derived 6, accelerometer 5 | yes |
+| Inferno 86, Fuji | 16 / 9 | accelerometer | yes |
+| Inferno 86, Sodegaura | 19 / 7 | accelerometer | yes |
+| KK-SII, Suzuka | 6 / 4 | accelerometer | yes |
+| Inferno 86, Motegi | 2 / 2 | accelerometer | listed |
+| Inferno 86, Tsukuba | 2 / 2 | accelerometer | listed |
+| KK-SII, Fuji | 2 / 1 | one of each | listed |
+| KK-F-V2, Tsukuba | 2 / 1 | accelerometer | listed |
+
+Five raw-car cells have three dry days, so twenty cells (a raw car at a
+track on one tyre) are scored. The counts are lower than the review's
+(which counted sessions that reach a fit: 40 on 17 days for the formula
+cars at Tsukuba) because a day needs its own steady laps.
+
+*The two forms and the yardstick.* The figure of any arm is its distance
+from the day's own recommendation in mbar, per pit-exit stint and tyre; a
+cell is the median over days of the day's median stint. `heat`, at a
+given lap time: every side at the day's lap time, on the out-lap the fold
+model itself answers with. `chain`, nothing given: each side at the lap
+time and with the out-lap its own entry supplies. *Another day* is a
+logged day of the same raw car, powertrain and kind of source at the
+track: in `heat` up to three sessions of other days nearest in lap time,
+each read from its five ordinary laps nearest the day's lap time (the
+pair's lap-time gap kept); in `chain` every other day as if it alone had
+written the entry (production's own builders on that day's laps). *The
+ceiling* is the raw car's logged entry at the cell built without the day.
+Per cell, front left / front right / rear left / rear right, mbar:
+
+| raw car, track | `heat`: another day | pair's lap-time gap | `heat`: ceiling | `chain`: another day | lap-time gap | `chain`: ceiling |
+|---|---|---|---|---|---|---|
+| KK-SII, Tsukuba | 4.1 / 2.3 / 4.2 / 3.1 | 0.23 % | 7.2 / 3.9 / 5.3 / 2.2 | 7.4 / 3.7 / 8.4 / 4.6 | 1.4 % | 4.1 / 2.1 / 7.7 / 3.0 |
+| KK-F, Tsukuba | 3.1 / 1.7 / 4.3 / 2.2 | 0.24 % | 10.9 / 4.8 / 6.4 / 1.7 | 4.5 / 4.0 / 6.7 / 6.1 | 0.7 % | 7.7 / 4.6 / 4.1 / 3.6 |
+| Inferno 86, Fuji | 7.9 / 6.3 / 7.9 / 20.1 | 0.65 % | 3.1 / 3.7 / 12.8 / 11.4 | 24.5 / 20.1 / 23.2 / 23.0 | 2.7 % | 20.2 / 11.0 / 18.5 / 11.8 |
+| Inferno 86, Sodegaura | 4.6 / 4.1 / 5.0 / 6.3 | 0.33 % | 4.6 / 2.2 / 5.3 / 3.7 | 7.7 / 9.7 / 7.6 / 7.6 | 1.3 % | 10.0 / 6.1 / 10.4 / 12.0 |
+| KK-SII, Suzuka | 4.6 / 0.4 / 2.8 / 1.5 | 0.50 % | 1.4 / 3.0 / 0.05 / 2.4 | 4.7 / 1.1 / 4.1 / 0.8 | 0.7 % | 4.5 / 2.6 / 4.5 / 4.0 |
+
+- **Two logged days are 4.1 mbar apart at a given lap time and 7.0 mbar
+  with nothing given** (the median cell; 0.4 to 20.1 and 0.8 to 24.5).
+  The lap time is most of the difference between the two: a pair's laps
+  are 0.3 % apart in lap time when they are chosen near the day's and
+  1.3 % when a day brings its own.
+- **The Inferno 86 at Fuji is its own case**: two days there differ by
+  2.7 % in lap time and 20 to 25 mbar with nothing given, and its rear
+  right by 20 mbar even at a given lap time. Whatever stands in that cell
+  is read against that.
+- **The ceiling is no better than another day at a given lap time** (3.8
+  mbar in the median cell, 9 of 20 cells no further than another day) and
+  a little better with nothing given (5.4 mbar, 12 of 20): a cell's median
+  lap is a steadier guess of a day's lap time than one other day's is.
+  A cell passing about half the time is what "as near as another day"
+  looks like for an entry made of the cell's own logs.
+- **What stands in for a cell without logged laps today is far off**: the
+  car's other layouts, unscaled (#260's last step), 20.1 mbar at a given
+  lap time (3 of 20 cells) and 18.4 with nothing given (5 of the 12 cells
+  where another car's lap time gives it one); the fallback as coded 52.6
+  (1 of 20) and 65.0 (3 of 20).
+
+*The harness checks* (they keep their tolerances; they are not a match to
+reality): an entry read from a fold's model and placed again is the same
+rows and the holdout the same frame, bit for bit, in 17 of 17 folds
+(13,407 rows); no row of a held-out cell is in a fold model's entry
+tables; with a stand-in entry materialised in every cell without logged
+laps (the formula cars at Motegi and Sodegaura, the Inferno 86 at Suzuka)
+no row of the leave-date-out holdout moves (0 of 6,725).
+
+*The reference level on seen cells* (leave-date-out, ten folds of whole
+dates, 138 sessions' worth of fits): the fold model's own entry for the
+cell, pooled and with constants that have seen the cell, is 3.5 mbar from
+the day at a given lap time and 7.0 with nothing given in the median
+cell, which is the yardstick again. *The pooled formula-car entry* costs
+nothing that can be told at a given lap time (4.5 mbar pooled against
+5.0 for the raw car's own, median of eight cells at Tsukuba) and about
+2.5 mbar with nothing given (6.7 against 4.1): the KK-F reads +6.5 to
++9.3 mbar on every tyre (the pooled lap time is 1.8 % slower than its
+days' own) and the KK-SII 2 to 3 mbar further on three tyres.
+
+*Pressure against the TPMS* (S2, reported, never ranking) at flying lap 5
+of pit-exit stints with production's own inputs, hot-pressure MAE in
+mbar, constants fitted without the cell: the ceiling 33 to 70 by cell
+(median 41), the car's other layouts 31 to 78 (50), the fallback 32 to
+164 (87), and the cell with only the date left out 30 to 62 (33). At
+Tsukuba the fallback and the other layouts score *better* against the
+TPMS than the cell's own logged entry does (32 and 31 against 41 on the
+KK-SII), which is finding 2 of #208 again (a heat source can be nearer
+the TPMS by being wrong) and why S2 does not rank.
+
 **Batches, and speed.** The solver works on a batch of laps of one
 track, each with its own car and its own u (`solver.solve_laps`,
 `solver.drive_laps`; one lap is a batch of one), in two forms that give
