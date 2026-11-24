@@ -114,7 +114,9 @@ tire-predict-holdout *ARGS:
 # Lap simulation gates (#202): `just tire-lapsim check-geometry` (B1),
 # `check-track-truth` (B2), `check-track-holdout` (B3), `check-frame` (C0),
 # `check-envelope-samples` (C1), `check-car-fit` (C2), `check-car-holdout` (C3), `check-heat-chain` and
-# `check-pace-table` (D1), `check-wet` (D2); each under two minutes, C3 about seven.
+# `check-pace-table` (D1), `check-wet` (D2); each under two minutes, C3 about seven;
+# `check-pressure` (F: the first run refits the pressure model seventeen times, about
+# twenty minutes; later runs read the fits from workspace/lapsim/cache/pressure_folds/).
 # Reports, caches and car JSON go to workspace/lapsim/; the tracks are committed in
 # data/lapsim/tracks/ (with attribution to GSI for the bank); run under `ulimit -v 10000000`
 tire-lapsim *ARGS:

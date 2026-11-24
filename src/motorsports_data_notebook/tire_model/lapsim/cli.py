@@ -100,6 +100,24 @@ def main(argv: list[str] | None = None) -> int:
         "check-car-holdout",
         help="Gate C3: the car on held-out days and layouts, against two planted wrong cars.",
     )
+    p_pressure = sub.add_parser(
+        "check-pressure",
+        help="Gate F: the cold pressure a simulated lap leads to at a track the car has not "
+        "run, against paired real days; one refit of the pressure model per fold, kept in "
+        "workspace/lapsim/cache/pressure_folds/.",
+    )
+    p_pressure.add_argument(
+        "--yardstick",
+        action="store_true",
+        help="Stop at the yardstick: the folds, the cells, another day against a day, the "
+        "ceiling and what the simulation replaces, with no simulated lap.",
+    )
+    p_pressure.add_argument(
+        "--no-dates",
+        action="store_true",
+        help="Leave the leave-date-out folds out (ten more fits: the reference level on "
+        "cells the fit has seen, and pressure against the TPMS with the cell in the fit).",
+    )
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     root = args.dataset_root or default_dataset_root()
@@ -181,6 +199,17 @@ def main(argv: list[str] | None = None) -> int:
             cache_dir=workspace / "cache",
             tracks_dir=tracks,
             cars_dir=workspace / "cars",
+        )
+    elif args.cmd == "check-pressure":
+        from . import pressure_gate
+
+        report = pressure_gate.check_pressure(
+            root,
+            cache_dir=workspace / "cache",
+            tracks_dir=tracks,
+            folds_dir=folds,
+            simulate=not args.yardstick,
+            dates=not args.no_dates,
         )
     else:  # pragma: no cover - argparse rejects unknown commands
         parser.error(f"unknown command {args.cmd}")
