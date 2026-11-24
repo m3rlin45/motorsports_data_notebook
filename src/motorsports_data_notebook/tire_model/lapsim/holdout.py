@@ -71,11 +71,12 @@ PACE_BAND = (1.04, 1.12)
 LAP_METRIC_SMOOTH_S = 0.5
 
 
-def production_shares(root: Path) -> dict[str, ShareParams]:
-    """The fitted force shares of ``tire_model.json`` per fitted car, with
-    the car aliases the model was fitted under."""
-    model = json.loads((Path(root) / "tire_model.json").read_text())
-    hi = model.get("heat_input", {})
+def shares_of(model: dict) -> dict[str, ShareParams]:
+    """The fitted force shares of a pressure model (the dict
+    ``tire_model.json`` holds, or a fold's) per fitted car, and per raw
+    car the model was fitted under an alias for. A heat is of one fit's
+    shares: read them from the model in hand, never from another."""
+    hi = model.get("heat_input") or {}
     out: dict[str, ShareParams] = {}
     for car, fitted in hi.get("fitted_by_car", {}).items():
         facts = hi.get("car_facts_by_car", {}).get(car, {})
@@ -98,6 +99,12 @@ def production_shares(root: Path) -> dict[str, ShareParams]:
         if fitted_as in out:
             out[raw] = out[fitted_as]
     return out
+
+
+def production_shares(root: Path) -> dict[str, ShareParams]:
+    """The fitted force shares of ``tire_model.json`` per fitted car, with
+    the car aliases the model was fitted under."""
+    return shares_of(json.loads((Path(root) / "tire_model.json").read_text()))
 
 
 def share_for(car: str, shares: dict[str, ShareParams]) -> ShareParams:

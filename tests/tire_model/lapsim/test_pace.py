@@ -338,3 +338,85 @@ class TestUseRange:
         # the wet laps, as a lower use of the same car on the dry track
         wet_only = cg.use_range(_model(), {"oval": track}, pd.concat([rows, wet]), "car", "wet")
         assert wet_only["oval"]["laps"] == 1 and wet_only["oval"]["max"] < got["min"]
+
+
+@pytest.fixture(scope="module")
+def piped():
+    track = _oval_track()
+    track.meta["pit"] = {"s_join_m": 400.0, "v_join_ms": 15.0, "rolling_s": 20.0, "n": 12}
+    return pace.build_table(_ranged(_model(), oval=(0.80, 0.97)), track)
+
+
+class TestLapsExport:
+    """The table as the laps the heat chain reads (#208): any fit's shares
+    split it, without a solver or a track."""
+
+    def test_any_shares_split_the_export_as_they_split_the_table(self, piped):
+        export = piped.laps_export({"commit": "abc", "date": "2026-11-24"})
+        other = replace(SHARE, p_f=0.55, g_transfer_front=1.5)
+        for share in (SHARE, other):
+            np.testing.assert_array_equal(export.heat_knots(share), piped.heat_knots(share))
+            part, hot = export.out_knots(share)
+            want_part, want_hot = piped.out_knots(share)
+            np.testing.assert_array_equal(hot, want_hot)
+            assert part == pytest.approx(want_part, rel=1e-12)
+        assert export.rolling_s == 20.0 and export.made["commit"] == "abc"
+        np.testing.assert_array_equal(export.lap_time_s, piped.lap_time_s)
+
+    def test_read_between_the_knots_as_the_table_is(self, piped):
+        export = piped.laps_export()
+        t = float(np.sqrt(piped.lap_time_s[3] * piped.lap_time_s[4]))
+        np.testing.assert_allclose(
+            export.at(t, export.heat_knots(SHARE)), piped.heat(t, SHARE), rtol=1e-12
+        )
+        assert export.use_at(t) == pytest.approx(piped.use_at(t), rel=1e-12)
+        assert math.isnan(export.use_at(piped.fastest_lap_s * 0.99))
+
+    def test_the_lap_time_of_a_use_is_the_inverse(self, piped):
+        export = piped.laps_export()
+        for use in (0.45, 0.8, 0.93, 1.0):
+            t = export.lap_time_at(use)
+            assert export.use_at(t) == pytest.approx(use, rel=1e-9)
+        assert export.lap_time_at(1.0) == pytest.approx(piped.lap_time_s[pace.KNOTS - 1])
+        assert math.isnan(export.lap_time_at(0.2)) and math.isnan(export.lap_time_at(3.0))
+
+    def test_round_trip_and_no_pit_exit(self, piped, table, tmp_path):
+        export = piped.laps_export({"commit": "abc"})
+        export.save(tmp_path / "export.json")
+        back = type(export).load(tmp_path / "export.json")
+        np.testing.assert_array_equal(back.heat_knots(SHARE), export.heat_knots(SHARE))
+        np.testing.assert_array_equal(back.out_knots(SHARE)[1], export.out_knots(SHARE)[1])
+        assert back.support == export.support and back.assumes == export.assumes
+        assert back.made == {"commit": "abc"} and back.rolling_s == 20.0
+        bare = table.laps_export()
+        assert bare.out is None and bare.out_knots(SHARE) is None and bare.rolling_s == 0.0
+        assert "out" not in bare.to_dict()["knots"][0]
+
+
+class TestPlantedCar:
+    """A planted wrong car (#208's controls): its knob is a free scale."""
+
+    def test_no_cap_and_knots_past_one(self):
+        model, track = _ranged(_model(), oval=(0.80, 0.97)), _oval_track()
+        plain = pace.build_table(model, track)
+        free = pace.build_table(model, track, use_cap=False, use_fast=1.5)
+        assert len(free.use) == pace.KNOTS + pace.KNOTS_FREE
+        assert free.use[-1] == 1.5 and free.use[pace.KNOTS - 1] == 1.0
+        assert (np.diff(free.lap_time_s) < 0).all()
+        # up to a use of 1 the laps are the capped table's
+        np.testing.assert_array_equal(free.lap_time_s[: pace.KNOTS], plain.lap_time_s[: pace.KNOTS])
+        assert free.assumes["planted"] == {"use_cap": False, "power_scale": 1.0}
+        assert "planted" not in plain.assumes
+        # a lap faster than the plain table's fastest has a use above 1
+        assert free.use_at(float(free.lap_time_s[-1])) == pytest.approx(1.5)
+
+    def test_less_power_is_a_slower_lap_at_the_same_use(self, tmp_path):
+        model, track = _ranged(_model(), oval=(0.80, 0.97)), _oval_track()
+        plain = pace.build_table(model, track)
+        low = pace.build_table(model, track, power_scale=0.85, use_cap=False, use_fast=1.3)
+        assert (low.lap_time_s[: pace.KNOTS] > plain.lap_time_s[: pace.KNOTS]).all()
+        assert low.driven.power_scale == pytest.approx(0.85 * plain.driven.power_scale)
+        low.save(tmp_path / "low.json")
+        back = pace.from_dict(json.loads((tmp_path / "low.json").read_text()), model, track)
+        assert back.driven.power_scale == low.driven.power_scale
+        np.testing.assert_array_equal(back.heat_knots(SHARE), low.heat_knots(SHARE))

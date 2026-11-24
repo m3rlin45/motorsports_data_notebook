@@ -676,6 +676,61 @@ def typical_use(who: Who) -> float:
     return float(model.meta.get("use_ref") or 1.0)
 
 
+def fed_use(who: Who, tracks: dict[str, trk.TrackModel], fed: pd.DataFrame) -> dict[str, dict]:
+    """The use of the lap an entry of the pressure model stands for, per
+    raw car (#208's *fed use*).
+
+    The typical use (:func:`typical_use`) is the use of a day's best lap.
+    An entry of the pressure model is the median of a cell's flying laps
+    with the median of their heat, which is 1.4-3.4 % slower than the
+    day's best, so a simulated lap that is to stand in for one is driven
+    at the use of such a lap. ``fed`` has one row per session: the
+    session's median flying lap (``lap_time_s``) with ``layout_id, date,
+    session_id, raw_car``. Each is solved for its use on its layout's
+    track with its own day's powertrain, shift point, gears and air, as
+    the reference laps are (:func:`reference_u`); a layout's use is the
+    median over its sessions and a raw car's the median over its layouts,
+    which is what is carried to a layout the car has not run. Per raw
+    car: ``{"use", "layouts": {layout: {"use", "sessions", "days",
+    "low", "high"}}, "spread"}``, the spread being the largest less the
+    smallest of the layouts' uses (NaN on one layout). It is read per raw
+    car and never off a pooled entry: two cars pooled in one entry do not
+    lap alike."""
+    drive = as_drive(who)
+    by_layout: dict[str, dict[str, dict]] = {}
+    for layout, grp in fed.groupby("layout_id", sort=True):
+        if layout not in tracks or grp.empty:
+            continue
+        recs = _records(grp)
+        got = sv.solve_laps(
+            profile_of(drive, tracks[str(layout)]),
+            [_lap_car(drive, row) for row in recs],
+            [float(row["lap_time_s"]) for row in recs],
+            guess=typical_use(who),
+        )
+        solved = grp.assign(
+            use=np.where(np.asarray(got.ok, bool), np.asarray(got.u, float), np.nan)
+        )
+        solved = solved[np.isfinite(solved["use"])]
+        for raw_car, own in solved.groupby("raw_car", sort=True):
+            by_layout.setdefault(str(raw_car), {})[str(layout)] = {
+                "use": float(own["use"].median()),
+                "sessions": int(len(own)),
+                "days": int(own["date"].nunique()),
+                "low": float(own["use"].min()),
+                "high": float(own["use"].max()),
+            }
+    out: dict[str, dict] = {}
+    for raw_car, layouts in by_layout.items():
+        uses = np.array([v["use"] for v in layouts.values()])
+        out[raw_car] = {
+            "use": float(np.median(uses)),
+            "layouts": layouts,
+            "spread": float(uses.max() - uses.min()) if len(uses) > 1 else float("nan"),
+        }
+    return out
+
+
 def set_limit(
     who: Drive | cm.CarModel,
     tracks: dict[str, trk.TrackModel],

@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
+from typing import Iterable
 
 import numpy as np
 import pandas as pd
@@ -35,7 +36,7 @@ from . import holdout as ho
 from . import samples as smp
 from . import solver as sv
 from .gates import GateItem, GateReport, md_table
-from .heat import CORNERS, bin_1s, lap_heat, sim_series
+from .heat import CORNERS, LapBins, bin_1s, lap_heat, sim_series
 from .track import IMU_SOURCES
 
 logger = logging.getLogger(__name__)
@@ -70,23 +71,22 @@ def _smooth(x: np.ndarray, t: np.ndarray) -> np.ndarray:
     return np.asarray(geo.nan_window_mean(x, t, SMOOTH_HALF_S))
 
 
-def chain_lap_heat(root: Path, laps: pd.DataFrame, shares: dict[str, ShareParams]) -> pd.DataFrame:
-    """The chain of :mod:`.heat` on each lap of ``laps``
-    (:func:`production_lap_heat`), from the samples production bins:
-    ``q_<tyre>`` with the bins from the lap's start, ``phase_<tyre>``
-    with their edges :data:`PHASE_S` back, ``smooth_<tyre>`` with both
-    accelerations smoothed over 0.5 s first; ``hole`` says the lap holds
-    a discarded window (its heats are then NaN) and ``source`` what its
-    samples are (``imu``, ``gps`` or ``mixed``)."""
+def _sensor_laps(root: Path, laps: pd.DataFrame, cars: Iterable[str] | None = None):  # type: ignore[no-untyped-def]
+    """Walk the laps of ``laps`` (``session_id, lap_num, car``) as
+    production's chain sees them: per lap ``(session_id, car, lap_num,
+    hole, source, t, v, lat, lng, lat_lp, lng_lp, a, b)``, the moving
+    samples outside discarded windows of the sensor's series
+    (``lat_lp, lng_lp`` smoothed over 0.5 s) and the lap's span. A session
+    without a series, or of a car not in ``cars`` when it is given, is
+    skipped."""
     from ..statespace import MOVING_SPEED_MS, _session_timeseries
 
-    rows: list[dict] = []
+    known = None if cars is None else set(cars)
     for sid, grp in laps.groupby("session_id", sort=True):
         series = _session_timeseries(str(root), str(sid))
         car = str(grp["car"].iloc[0])
-        if series is None or car not in shares:
+        if series is None or (known is not None and car not in known):
             continue
-        share = shares[car]
         kin = series.kin.sort_values("t_session_s")
         t_all = kin["t_session_s"].to_numpy(float)
         lap_all = kin["lap_num"].to_numpy()
@@ -108,27 +108,68 @@ def chain_lap_heat(root: Path, laps: pd.DataFrame, shares: dict[str, ShareParams
             # a second through a discarded window has no known heat: its
             # samples are left out, and the lap then lacks coverage
             keep = (np.nan_to_num(v, nan=0.0) > MOVING_SPEED_MS) & (src_all[on] != "discard")
-            a, b = float(t[0]), float(t[-1]) + step
-            row: dict = {
-                "session_id": str(sid),
-                "lap_num": lap_num,
-                "hole": hole,
-                "source": (
-                    "imu"
-                    if moving_kinds <= set(IMU_SOURCES)
-                    else "mixed" if moving_kinds & set(IMU_SOURCES) else "gps"
-                ),
-            }
-            for tag, lat, lng, phase in (
-                ("q", lat_all[on], lng_all[on], 0.0),
-                ("phase", lat_all[on], lng_all[on], PHASE_S),
-                ("smooth", lat_lp[on], lng_lp[on], 0.0),
-            ):
-                bins = bin_1s(t[keep], v[keep], lat[keep], lng[keep], a, b, phase_s=phase)
-                for c, q in zip(CORNERS, lap_heat(bins, share)):
-                    row[f"{tag}_{c}"] = float(q)
-            rows.append(row)
+            source = (
+                "imu"
+                if moving_kinds <= set(IMU_SOURCES)
+                else "mixed" if moving_kinds & set(IMU_SOURCES) else "gps"
+            )
+            yield (
+                str(sid),
+                car,
+                lap_num,
+                hole,
+                source,
+                t[keep],
+                v[keep],
+                lat_all[on][keep],
+                lng_all[on][keep],
+                lat_lp[on][keep],
+                lng_lp[on][keep],
+                float(t[0]),
+                float(t[-1]) + step,
+            )
+
+
+def chain_lap_heat(root: Path, laps: pd.DataFrame, shares: dict[str, ShareParams]) -> pd.DataFrame:
+    """The chain of :mod:`.heat` on each lap of ``laps``
+    (:func:`production_lap_heat`), from the samples production bins:
+    ``q_<tyre>`` with the bins from the lap's start, ``phase_<tyre>``
+    with their edges :data:`PHASE_S` back, ``smooth_<tyre>`` with both
+    accelerations smoothed over 0.5 s first; ``hole`` says the lap holds
+    a discarded window (its heats are then NaN) and ``source`` what its
+    samples are (``imu``, ``gps`` or ``mixed``)."""
+    rows: list[dict] = []
+    for sid, car, lap_num, hole, source, t, v, lat, lng, lat_lp, lng_lp, a, b in _sensor_laps(
+        root, laps, shares
+    ):
+        row: dict = {"session_id": sid, "lap_num": lap_num, "hole": hole, "source": source}
+        for tag, lat_, lng_, phase in (
+            ("q", lat, lng, 0.0),
+            ("phase", lat, lng, PHASE_S),
+            ("smooth", lat_lp, lng_lp, 0.0),
+        ):
+            bins = bin_1s(t, v, lat_, lng_, a, b, phase_s=phase)
+            for c, q in zip(CORNERS, lap_heat(bins, shares[car])):
+                row[f"{tag}_{c}"] = float(q)
+        rows.append(row)
     return pd.DataFrame(rows)
+
+
+def sensor_lap_bins(
+    root: Path, laps: pd.DataFrame
+) -> dict[tuple[str, int], tuple[LapBins, str, bool]]:
+    """Each lap of ``laps`` (``session_id, lap_num, car``) as production's
+    chain bins it, before any force shares: ``(session_id, lap_num) ->
+    (bins, source, hole)``. :func:`~.heat.lap_heat` of the bins is
+    :func:`chain_lap_heat`'s ``q_<tyre>`` to the last bit, so one read of
+    the timeseries serves every fit's shares (#208: a fold's heat is of
+    the fold's own shares)."""
+    return {
+        (sid, lap_num): (bin_1s(t, v, lat, lng, a, b), source, hole)
+        for sid, _car, lap_num, hole, source, t, v, lat, lng, _lp, _lg, a, b in _sensor_laps(
+            root, laps
+        )
+    }
 
 
 def simulated_smoothing(
@@ -178,30 +219,27 @@ def simulated_smoothing(
     return pd.DataFrame(rows)
 
 
-def tyres_frame_lap_heat(
+def _tyres_frame_laps(  # type: ignore[no-untyped-def]
     root: Path,
     laps: pd.DataFrame,
-    shares: dict[str, ShareParams],
+    cars: Iterable[str] | None = None,
     *,
     tracks_dir: Path | None = None,
     cache_dir: Path | None = None,
-) -> pd.DataFrame:
-    """The heat of each logged lap of ``laps`` (``session_id, lap_num,
-    car``) **in the frame a simulated lap is in**: the lap's own Doppler
-    lateral as the tyres hold it on the road's bank, and ``dV/dt`` with the
-    grade (what an accelerometer reads along the road), on the position
-    clock, through the chain. ``t_<tyre>`` per lap; laps without geometry,
-    a track or a place in the lap index are left out."""
-    from .heat import series_heat
-
+):
+    """Walk the laps of ``laps`` in the frame a simulated lap is in: per
+    lap ``(session_id, car, lap_num, t, v, lat, along, a, b)``, the lap's
+    samples on the position clock and its span. Laps without geometry, a
+    track or a place in the lap index, or of a car not in ``cars`` when it
+    is given, are skipped."""
     index = geo.clean_lap_index(root, cache_dir=cache_dir)
     spans = index.set_index(["session_id", "lap_num"])[["t_start_s", "t_end_s", "layout_id"]]
-    rows: list[dict] = []
+    known = None if cars is None else set(cars)
     tracks: dict[str, object] = {}
     for sid, grp in laps.groupby("session_id", sort=True):
         car = str(grp["car"].iloc[0])
         keys = [(sid, int(n)) for n in grp["lap_num"] if (sid, int(n)) in spans.index]
-        if not keys or car not in shares:
+        if not keys or (known is not None and car not in known):
             continue
         own = spans.loc[keys].reset_index()
         own = own[np.isfinite(own["t_start_s"]) & np.isfinite(own["t_end_s"])]
@@ -225,15 +263,53 @@ def tyres_frame_lap_heat(
         t, v = sig.geom.t, np.nan_to_num(sig.geom.speed, nan=0.0)
         for n, a, b in zip(own["lap_num"], own["t_start_s"], own["t_end_s"]):
             i0, i1 = np.searchsorted(t, [a, b])
-            q = series_heat(t[i0:i1], v[i0:i1], lat[i0:i1], along[i0:i1], shares[car], a, b)
-            rows.append(
-                {
-                    "session_id": sid,
-                    "lap_num": int(n),
-                    **{f"t_{c}": q[k] for k, c in enumerate(CORNERS)},
-                }
-            )
+            yield sid, car, int(n), t[i0:i1], v[i0:i1], lat[i0:i1], along[i0:i1], a, b
+
+
+def tyres_frame_lap_heat(
+    root: Path,
+    laps: pd.DataFrame,
+    shares: dict[str, ShareParams],
+    *,
+    tracks_dir: Path | None = None,
+    cache_dir: Path | None = None,
+) -> pd.DataFrame:
+    """The heat of each logged lap of ``laps`` (``session_id, lap_num,
+    car``) **in the frame a simulated lap is in**: the lap's own Doppler
+    lateral as the tyres hold it on the road's bank, and ``dV/dt`` with the
+    grade (what an accelerometer reads along the road), on the position
+    clock, through the chain. ``t_<tyre>`` per lap; laps without geometry,
+    a track or a place in the lap index are left out."""
+    from .heat import series_heat
+
+    rows: list[dict] = []
+    for sid, car, n, t, v, lat, along, a, b in _tyres_frame_laps(
+        root, laps, shares, tracks_dir=tracks_dir, cache_dir=cache_dir
+    ):
+        q = series_heat(t, v, lat, along, shares[car], a, b)
+        rows.append(
+            {"session_id": sid, "lap_num": n, **{f"t_{c}": q[k] for k, c in enumerate(CORNERS)}}
+        )
     return pd.DataFrame(rows, columns=["session_id", "lap_num"] + [f"t_{c}" for c in CORNERS])
+
+
+def tyres_frame_lap_bins(
+    root: Path,
+    laps: pd.DataFrame,
+    *,
+    tracks_dir: Path | None = None,
+    cache_dir: Path | None = None,
+) -> dict[tuple[str, int], LapBins]:
+    """Each lap of ``laps`` binned in the frame a simulated lap is in,
+    before any force shares: ``(session_id, lap_num) -> bins``, of which
+    :func:`~.heat.lap_heat` is :func:`tyres_frame_lap_heat`'s ``t_<tyre>``
+    to the last bit."""
+    return {
+        (str(sid), n): bin_1s(t, v, lat, along, a, b)
+        for sid, _car, n, t, v, lat, along, a, b in _tyres_frame_laps(
+            root, laps, tracks_dir=tracks_dir, cache_dir=cache_dir
+        )
+    }
 
 
 def frame_factor(both: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -502,6 +578,8 @@ __all__ = [
     "check_heat_chain",
     "frame_factor",
     "production_lap_heat",
+    "sensor_lap_bins",
     "simulated_smoothing",
+    "tyres_frame_lap_bins",
     "tyres_frame_lap_heat",
 ]
