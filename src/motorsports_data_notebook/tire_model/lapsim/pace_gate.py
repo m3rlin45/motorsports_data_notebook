@@ -160,6 +160,7 @@ def check_pace_table(
                     "layout_id": layout,
                     "powertrain": table.assumes["powertrain"],
                     "slow_s": float(table.lap_time_s[0]),
+                    "at_one_s": float(table.lap_time_s[int(np.argmin(np.abs(table.use - 1.0)))]),
                     "fastest_s": table.fastest_lap_s,
                     "max_driver_s": table.max_driver_lap_s,
                     "between": int(
@@ -223,10 +224,11 @@ def check_pace_table(
             "and the lap times, with the car's own force shares and with another car's. `use`: "
             "the same for the use read off the table. `slow_s` and `fastest_s` are the "
             "table's ends (a use of "
-            f"{pace.USE_SLOW:g} and of 1, braked as the driver brakes); `max_driver_s` is the "
-            "max driver's lap beside it (a use of 1 with the driver's habits off); `between`: "
-            "the logged laps that fall between those two, which the table cannot answer until "
-            "the knob has its cap. `use_min` and `use_max`: the support, the car's logged "
+            f"{pace.USE_SLOW:g}, and the knob's end lap: the cornering at the limit and the "
+            "braking at the car's own level, past a use of 1); `at_one_s` the lap at a use of "
+            "1; `max_driver_s` the max driver's lap beside it (the driver's habits off); "
+            "`between`: the logged laps faster than the end lap and no faster than the max "
+            "driver's, which no knob answers. `use_min` and `use_max`: the support, the car's logged "
             "range of use (at the layout where `run_here`, else over the layouts it has run). "
             "`logged`: the car's dry build laps at the layout; `no_solution`: those faster than "
             "the lap at a use of 1; `outside`: those the table flags.\n\n"

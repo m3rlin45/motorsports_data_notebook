@@ -270,6 +270,10 @@ class SolverCar:
     #: Seconds between full drive and full braking: every speed peak of the
     #: lap is flat for this long (:func:`._kernel.open_peaks`).
     onset_s: float = 0.0
+    #: The most of ``mu_y`` and of ``mu_b`` a lap may use (:func:`_knob`):
+    #: 1 where a lap is answered for a car whose ``mu_y`` is its limit (a
+    #: pace table, a held-out lap of the fitted car), no cap otherwise.
+    use_cap: float = math.inf
     #: Seconds of drive lost in an upshift out of each gear (as ``gears``;
     #: nothing for the top one). Empty: shifts cost nothing.
     shift_s: tuple[float, ...] = ()
@@ -372,6 +376,7 @@ class SolverCar:
         brake_use: bool = True,
         driven_axle: bool | None = None,
         wet_brake: bool | None = None,
+        use_cap: bool = False,
     ) -> "SolverCar":
         """The solver's car from a model.
 
@@ -444,6 +449,10 @@ class SolverCar:
                 if (WET_BRAKE_DEFAULT if wet_brake is None else wet_brake)
                 else 1.0
             ),
+            # asked for where a lap is answered (a pace table, a held-out lap
+            # of the fitted car); the fit's own workings, a recovery and a
+            # planted wrong car use the knob as a free scale and are not capped
+            use_cap=1.0 if use_cap and _at_limit(model) else math.inf,
             k_corner_drag=float(k) if k is not None else 0.0,
             # the curve's bins are stored by their lower edge
             curve_rpm=tuple(float(r) + CURVE_BIN_RPM / 2.0 for r, _ in curve) if geared else (),
@@ -474,6 +483,15 @@ class SolverCar:
                 else 0.0
             ),
         )
+
+
+def _at_limit(model: CarModel) -> bool:
+    """Whether the model's ``mu_y`` is the car's cornering limit (and not
+    the old convention's value, where the knob runs above 1)."""
+    limit = model.grip.get("mu_y_limit")
+    if not limit:
+        return False
+    return math.isclose(float(limit), float(model.grip["mu_y"]), rel_tol=1e-9)
 
 
 def _shift_times_for(
@@ -594,6 +612,43 @@ def _power_table(car: SolverCar) -> np.ndarray:
     return table
 
 
+def _knob(car: SolverCar, u: float, wet: bool) -> tuple[float, float, float]:
+    """``(knob, mu_y, mu_b)`` as a lane of either solver form takes them
+    (they multiply the knob into the two limits, and the wet scale).
+
+    Up to the car's cap that is the knob and the car's own two numbers
+    (``mu_b`` at the driver's level). Above it (clause 3.1 of the driver
+    committee's design) a use cannot pass the cap: the cornering stays at
+    ``mu_y · cap`` and the braking level goes on rising with the knob,
+    ``min(mu_b · brake_use · u, mu_b · cap)``, until it is the car's own
+    at ``u = cap / brake_use`` (*the knob's end lap*); the lane is handed
+    those with a knob of 1. Nothing inside the solver changes, and a lap
+    at or under the cap is the old arithmetic to the last bit."""
+    wet_brake = car.wet_brake if wet else 1.0
+    level = car.mu_b * car.brake_use * wet_brake
+    if not u > car.use_cap:
+        return u, car.mu_y, level
+    return 1.0, car.mu_y * car.use_cap, min(level * u, car.mu_b * wet_brake * car.use_cap)
+
+
+def knob_end(car: SolverCar) -> float:
+    """The knob at which a capped car brakes at its own level: the end of
+    what the knob can ask for (infinite without a cap)."""
+    return car.use_cap / car.brake_use if car.brake_use > 0.0 else car.use_cap
+
+
+def _handed(lanes: tuple, cars: list[SolverCar], us: np.ndarray, wet: bool) -> tuple:
+    """``(knobs, lanes)`` with every lane above its car's cap handed its
+    capped limits (:func:`_knob`); the others as they are."""
+    over = [i for i, car in enumerate(cars) if us[i] > car.use_cap]
+    if not over:
+        return us, lanes
+    knobs, mu_y, mu_b = np.array(us, dtype=float), lanes[7].copy(), lanes[8].copy()
+    for i in over:
+        knobs[i], mu_y[i], mu_b[i] = _knob(cars[i], float(us[i]), wet)
+    return knobs, (*lanes[:7], mu_y, mu_b, *lanes[9:])
+
+
 def _passes(
     profile: Profile,
     car: SolverCar,
@@ -607,16 +662,18 @@ def _passes(
     (:mod:`._kernel`), else a batch of one through :mod:`._tensor`, which
     they reproduce."""
     if not USE_COMPILED:
+        knobs, lanes = _handed(_lanes(profile, [car], wet), [car], np.array([float(u)]), wet)
         _, v = _tensor.drive_lanes(
-            np.array([float(u)]),
-            *_lanes(profile, [car], wet),
+            knobs,
+            *lanes,
             closed=profile.closed,
             v_start=float("nan") if v_start is None else float(v_start),
             v_end=float("nan") if v_end is None else float(v_end),
         )
         return np.asarray(v[0])
     w = car.wet_scale if wet else 1.0
-    mu = car.mu_y * u * w
+    knob, mu_y, mu_b = _knob(car, float(u), wet)
+    mu = mu_y * knob * w
     v_lim = corner_speed_limit(profile, mu)
     n = profile.n
     start = int(np.argmin(v_lim)) if profile.closed else 0
@@ -632,7 +689,7 @@ def _passes(
         _power_table(car),
         1.0 / POWER_TABLE_DV,
         mu,
-        car.mu_b * car.brake_use * u * w * (car.wet_brake if wet else 1.0),
+        mu_b * knob * w,
         car.c_drag,
         car.k_corner_drag,
         car.brake_ellipse,
@@ -773,14 +830,18 @@ def solve_u_near(
             float(lap_time_s), float(guess), kap, grd, kv, cos, gsb, ptabs[0], mu_y[0], mu_b[0],
             w[0], c[0], kc[0], be[0], ons[0], cst, np.empty(profile.n),
         )  # fmt: skip
-        return float(u), "ok" if status == _kernel.OK else "no_root"
-    us, found, _ = _tensor.solve_lanes(
-        np.array([float(lap_time_s)]),
-        np.array([float(guess)]),
-        *_lanes(profile, [car], wet),
-        closed=profile.closed,
-    )
-    return float(us[0]), "ok" if found[0] == _kernel.OK else "no_root"
+        u, good = float(u), bool(status == _kernel.OK)
+    else:
+        us, found, _ = _tensor.solve_lanes(
+            np.array([float(lap_time_s)]),
+            np.array([float(guess)]),
+            *_lanes(profile, [car], wet),
+            closed=profile.closed,
+        )
+        u, good = float(us[0]), bool(found[0] == _kernel.OK)
+    if good and u > car.use_cap:
+        u, good = _solve_capped(profile, car, float(lap_time_s), wet)
+    return u, "ok" if good else "no_root"
 
 
 @dataclass
@@ -885,7 +946,34 @@ def solve_laps(
         ]
         u, status, v = (np.concatenate([part[k] for part in parts]) for k in range(3))
     ok = status == _kernel.OK
+    u, v = np.array(u, dtype=float), np.array(v, dtype=float)
+    for i, car in enumerate(own):
+        if ok[i] and u[i] > car.use_cap:
+            # past the cap the lap time is the capped car's: solved again on it
+            u[i], good = _solve_capped(profile, car, float(target[i]), wet)
+            ok[i] = good
+            v[i] = drive_laps(profile, car, [u[i]], wet=wet).v_node_ms[0] if good else np.nan
     return LapBatch(u, ok, np.where(ok, target, np.nan), v)
+
+
+def _solve_capped(
+    profile: Profile, car: SolverCar, lap_time_s: float, wet: bool
+) -> tuple[float, bool]:
+    """The knob of a capped car for a lap time faster than its lap at the
+    cap: between the cap and the knob's end (:func:`knob_end`), where the
+    lap time still falls; ``(nan, False)`` for a lap time faster than the
+    end lap, which no knob gives."""
+    from scipy.optimize import brentq
+
+    def miss(x: float) -> float:
+        return lap_time(profile, car, x, wet=wet) - lap_time_s
+
+    lo, hi = car.use_cap, knob_end(car)
+    if not hi > lo or miss(hi) > 0.0:
+        return float("nan"), False
+    if miss(lo) <= 0.0:
+        return float(lo), True
+    return float(brentq(miss, lo, hi, xtol=U_TOL)), True
 
 
 def drive_laps(
@@ -908,16 +996,14 @@ def drive_laps(
         # a lap driven is about a tenth of a lap solved
         spread = laps > 1 and laps * profile.n >= 10 * PARALLEL_MIN_NODES
         run = _kernel.drive_lanes_parallel if spread else _kernel.drive_lanes
-        t, v = run(us, *_lanes(profile, own, wet))
+        knobs, lanes = _handed(_lanes(profile, own, wet), own, us, wet)
+        t, v = run(knobs, *lanes)
     else:
-        parts = [
-            _tensor.drive_lanes(
-                us[k : k + TENSOR_MAX_LAPS],
-                *_lanes(profile, own[k : k + TENSOR_MAX_LAPS], wet),
-                closed=profile.closed,
-            )
-            for k in range(0, laps, TENSOR_MAX_LAPS)
-        ]
+        parts = []
+        for k in range(0, laps, TENSOR_MAX_LAPS):
+            some = own[k : k + TENSOR_MAX_LAPS]
+            knobs, lanes = _handed(_lanes(profile, some, wet), some, us[k : k + len(some)], wet)
+            parts.append(_tensor.drive_lanes(knobs, *lanes, closed=profile.closed))
         t, v = (np.concatenate([part[k] for part in parts]) for k in range(2))
     return LapBatch(us, np.ones(laps, dtype=bool), np.asarray(t), v)
 
@@ -987,8 +1073,9 @@ def combined_use(sim: SimLap, profile: Profile, car: SolverCar, *, wet: bool = F
             / G_MS2
         )
         lat = np.abs(sim.lat_tyre_g)
-    a_y = car.mu_y * sim.u * w * load
-    a_b = car.mu_b * car.brake_use * sim.u * w * (car.wet_brake if wet else 1.0) * load
+    knob, mu_y, mu_b = _knob(car, sim.u, wet)
+    a_y = mu_y * knob * w * load
+    a_b = mu_b * knob * w * load
     tyre = sim.long_tyre_g
     used = np.minimum(lat / a_y, 1.0)
     left = (1.0 - car.brake_ellipse) * (1.0 - used) + car.brake_ellipse * np.sqrt(1.0 - used**2)
@@ -1010,6 +1097,7 @@ __all__ = [
     "combined_use",
     "corner_speed_limit",
     "drive_laps",
+    "knob_end",
     "lap_time",
     "simulate_lap",
     "solve_laps",

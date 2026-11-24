@@ -1239,3 +1239,100 @@ class TestBank:
         # and a lap of the track itself is driven on its bank
         flat = sv.lap_time(sv.Profile.from_track(banked, bank=False), self.FREE, 1.0)
         assert sv.lap_time(banked, self.FREE, 1.0) < flat - 0.05
+
+
+class TestUseCap:
+    """A use is capped at 1 on a car at its limit (#206; the driver
+    committee's clause 3.1): above it the cornering stays and the braking
+    level rises to the car's own."""
+
+    CAPPED = replace(REF_CAR, brake_use=0.85, use_cap=1.0)
+
+    def _track(self):
+        return _reference_oval(2.0, 40.0)
+
+    def test_at_or_under_the_cap_nothing_changes(self):
+        track = self._track()
+        free = replace(self.CAPPED, use_cap=math.inf)
+        for u in (0.8, 1.0):
+            a = sv.simulate_lap(track, self.CAPPED, u)
+            b = sv.simulate_lap(track, free, u)
+            np.testing.assert_array_equal(a.v_node_ms, b.v_node_ms)
+        both = sv.drive_laps(track, [self.CAPPED, free], [0.93, 0.93])
+        np.testing.assert_array_equal(both.v_node_ms[0], both.v_node_ms[1])
+
+    def test_above_it_the_cornering_stays_and_the_braking_rises(self):
+        track = self._track()
+        at_cap = sv.simulate_lap(track, self.CAPPED, 1.0)
+        above = sv.simulate_lap(track, self.CAPPED, 1.1)
+        free = sv.simulate_lap(track, replace(self.CAPPED, use_cap=math.inf), 1.1)
+        # the slowest point of the lap is the corner's, at the cornering limit: unchanged
+        assert above.v_node_ms.min() == pytest.approx(at_cap.v_node_ms.min(), rel=1e-12)
+        assert free.v_node_ms.min() > above.v_node_ms.min() * 1.02
+        # braking is harder than at the cap, by the knob
+        assert -above.long_tyre_g.min() == pytest.approx(-at_cap.long_tyre_g.min() * 1.1, rel=0.01)
+        assert at_cap.lap_time_s > above.lap_time_s > free.lap_time_s
+        # it is the car at its cap with the driver braking that much harder
+        same = replace(self.CAPPED, brake_use=0.85 * 1.1, use_cap=math.inf)
+        np.testing.assert_array_equal(above.v_node_ms, sv.simulate_lap(track, same, 1.0).v_node_ms)
+
+    def test_lap_time_is_continuous_through_the_cap_and_flat_past_the_end(self):
+        track = self._track()
+        end = sv.knob_end(self.CAPPED)
+        assert end == pytest.approx(1.0 / 0.85)
+        t = [sv.lap_time(track, self.CAPPED, u) for u in (1.0 - 1e-6, 1.0, 1.0 + 1e-6)]
+        # no step at the cap; past it a knob buys less lap time (braking only)
+        assert 0.0 < t[1] - t[2] < t[0] - t[1] < 1e-4
+        assert sv.lap_time(track, self.CAPPED, end) == sv.lap_time(track, self.CAPPED, end * 1.3)
+        # the end lap is the car braked at its own level, on the shape it holds
+        own_level = replace(self.CAPPED, brake_use=1.0, use_cap=math.inf)
+        assert sv.lap_time(track, self.CAPPED, end) == pytest.approx(
+            sv.lap_time(track, own_level, 1.0), rel=1e-12
+        )
+        assert sv.knob_end(REF_CAR) == math.inf
+
+    @pytest.mark.parametrize("compiled", [True, False])
+    def test_every_way_of_solving_agrees_above_the_cap(self, compiled, monkeypatch):
+        monkeypatch.setattr(sv, "USE_COMPILED", compiled and sv.USE_COMPILED)
+        track = self._track()
+        target = sv.lap_time(track, self.CAPPED, 1.08)
+        one, status = sv.solve_u(track, self.CAPPED, target)
+        near, near_status = sv.solve_u_near(track, self.CAPPED, target, guess=0.95)
+        batch = sv.solve_laps(track, self.CAPPED, [target, sv.lap_time(track, self.CAPPED, 0.9)])
+        curve, curve_status = sv.PaceCurve.build(track, self.CAPPED).solve(target)
+        assert status == near_status == curve_status == "ok" and batch.ok.all()
+        for got in (one, near, batch.u[0], curve):
+            assert got == pytest.approx(1.08, abs=2e-5)
+        assert batch.u[1] == pytest.approx(0.9, abs=2e-5)
+        np.testing.assert_allclose(
+            batch.v_node_ms[0], sv.simulate_lap(track, self.CAPPED, 1.08).v_node_ms, atol=2e-3
+        )
+
+    @pytest.mark.parametrize("compiled", [True, False])
+    def test_faster_than_the_end_lap_has_no_root(self, compiled, monkeypatch):
+        monkeypatch.setattr(sv, "USE_COMPILED", compiled and sv.USE_COMPILED)
+        track = self._track()
+        target = sv.lap_time(track, self.CAPPED, sv.knob_end(self.CAPPED)) - 0.05
+        assert sv.solve_u(track, self.CAPPED, target)[1] == "no_root"
+        assert sv.solve_u_near(track, self.CAPPED, target, guess=1.0)[1] == "no_root"
+        batch = sv.solve_laps(track, self.CAPPED, [target])
+        assert not batch.ok[0] and np.isnan(batch.u[0]) and np.isnan(batch.v_node_ms[0]).all()
+        assert sv.PaceCurve.build(track, self.CAPPED).solve(target)[1] == "no_root"
+        # the same lap time has a root without the cap
+        assert sv.solve_laps(track, replace(self.CAPPED, use_cap=math.inf), [target]).ok[0]
+
+    def test_the_compiled_and_the_numpy_form_agree_to_the_last_bit(self, monkeypatch):
+        if not sv.USE_COMPILED:
+            pytest.skip("numba is not installed")
+        track = self._track()
+        fast = sv.drive_laps(track, self.CAPPED, [0.9, 1.05, 1.3])
+        monkeypatch.setattr(sv, "USE_COMPILED", False)
+        slow = sv.drive_laps(track, self.CAPPED, [0.9, 1.05, 1.3])
+        np.testing.assert_array_equal(fast.v_node_ms, slow.v_node_ms)
+        np.testing.assert_array_equal(fast.lap_time_s, slow.lap_time_s)
+
+    def test_how_much_of_the_envelope_a_capped_lap_uses(self):
+        track = self._track()
+        sim = sv.simulate_lap(track, self.CAPPED, 1.1)
+        used = sv.combined_use(sim, track, self.CAPPED)
+        assert used.max() == pytest.approx(1.0, abs=0.02)

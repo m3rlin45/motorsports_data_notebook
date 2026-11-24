@@ -206,3 +206,14 @@ class TestSolver:
         assert sv.SolverCar.from_model(model, wet_brake=True).wet_brake == 1.08
         model.wet = {"grip_scale": 0.85}
         assert sv.SolverCar.from_model(model, wet_brake=True).wet_brake == 1.0
+
+    def test_the_cap_is_asked_for_and_only_a_car_at_its_limit_has_one(self):
+        import math
+
+        model = _model()
+        assert sv.SolverCar.from_model(model, use_cap=True).use_cap == math.inf  # the convention
+        model.grip["mu_y_limit"] = model.grip["mu_y"]
+        assert sv.SolverCar.from_model(model, use_cap=True).use_cap == 1.0
+        assert sv.SolverCar.from_model(model).use_cap == math.inf  # the fit's workings: no cap
+        model.grip["mu_y"] = 0.9 * model.grip["mu_y_limit"]  # the convention's value beside a limit
+        assert sv.SolverCar.from_model(model, use_cap=True).use_cap == math.inf

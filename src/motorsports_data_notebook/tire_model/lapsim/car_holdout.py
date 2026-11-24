@@ -826,8 +826,11 @@ def run_folds(
                 power_scale=POWER_CONTROL,
                 use=fitted.model.driver,  # a wrong power is planted, not another driver
             )
+            # the fitted car's held-out laps are answered under the cap (a use
+            # cannot pass 1); a planted wrong car needs a knob above 1 by
+            # construction and keeps the arithmetic without it
             models: dict[str, cg.Drive | None] = {
-                "fit": fitted,
+                "fit": fitted.but(use_cap=True),
                 "low_power": low,
                 "other_car": other_car,
             }
@@ -874,6 +877,9 @@ def run_folds(
                 per_lap.insert(0, "car", car)
                 per_lap.insert(1, "kind", kind)
                 per_lap.insert(2, "layout_id", layout_id)
+                # the variants below are comparison arms (another drive rule, a
+                # drag that is not the car's, a flat road): like the planted cars
+                # they are driven without the cap, as before it
                 # the fold's car with the other drive rule (the whole car's grip
                 # where the default is the driven axle's share), its use read again
                 whole = convene(
@@ -897,19 +903,19 @@ def run_folds(
                     for col in (*YARDSTICK_MEASURES, "u"):
                         per_lap[f"{col}_limit"] = at_limit[col]
                 if kind == "layout":
-                    flipped = driven.but(corner_drag=not sv.CORNER_DRAG_DEFAULT)
+                    flipped = fitted.but(corner_drag=not sv.CORNER_DRAG_DEFAULT)
                     variant = score_laps(flipped, layout, held, v_held)
                     per_lap["S1_other"] = variant["S1"]
                     per_lap["top_other"] = variant["top"]
                     # and with the shift times the other way round
                     shifted = score_laps(
-                        driven.but(shift_loss=not sv.SHIFT_LOSS_DEFAULT), layout, held, v_held
+                        fitted.but(shift_loss=not sv.SHIFT_LOSS_DEFAULT), layout, held, v_held
                     )
                     per_lap["S1_shift"] = shifted["S1"]
                     per_lap["top_shift"] = shifted["top"]
                     # and with the braking limit's shape the other way round
                     braked = score_laps(
-                        driven.but(brake_shape=not sv.BRAKE_SHAPE_DEFAULT), layout, held, v_held
+                        fitted.but(brake_shape=not sv.BRAKE_SHAPE_DEFAULT), layout, held, v_held
                     )
                     per_lap["S1_brake"] = braked["S1"]
                     per_lap["S3_brake"] = braked["S3"]
@@ -952,7 +958,7 @@ def run_folds(
                             if k == 1.0:
                                 per_lap["top_1.0"] = per_lap["top"]
                                 continue
-                            grid = driven.but(drag_scale=k)
+                            grid = fitted.but(drag_scale=k)
                             per_lap[f"top_{k}"] = score_laps(grid, layout, held, v_held)["top"]
                 lap_rows.append(per_lap)
     folds = pd.DataFrame(fold_rows)
