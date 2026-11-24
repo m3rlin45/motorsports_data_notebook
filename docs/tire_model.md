@@ -5843,6 +5843,79 @@ Against the TPMS on those rows it is 45.4 mbar where the logged entry is
 simulated entry recommends nearer what a day's own heat recommends, and
 scores a little further from the TPMS.
 
+*The KK-F fitted apart from the KK-SII* (the owner, 2026-11-25: "let's
+split out the KK-F and see if it gets better"; `check-pressure-holdout
+--split KK-F KK-F-V2`, `pressure_gate.split_pooling`, an experiment's
+switch that writes nothing). The same folds and rows; the KK-F and the
+KK-F-V2 are one pooled car with its own K, τ, κ, shares and entries, and
+the "FJ" that is left is the KK-SII alone. Hot-pressure MAE in bar,
+pooled fit and then split:
+
+| | rows | current calculator | simulation, pace table |
+|---|---|---|---|
+| every car | 5,751 | 0.0437 → 0.0436 | 0.0446 → 0.0446 |
+| KK-SII, all | 2,175 | 0.0318 → **0.0302** | 0.0331 → **0.0316** |
+| KK-SII, dry | 1,802 | 0.0312 → 0.0289 | 0.0327 → 0.0307 |
+| KK-SII, wet | 373 | 0.0347 → 0.0363 | 0.0350 → 0.0363 |
+| KK-F, all | 1,132 | 0.0421 → 0.0446 | 0.0434 → 0.0458 |
+| KK-F, dry | 668 | 0.0349 → 0.0342 | 0.0365 → 0.0345 |
+| KK-F, wet | 240 | 0.0328 → 0.0266 | 0.0327 → 0.0276 |
+| KK-F, damp | 224 | 0.0732 → **0.0948** | 0.0752 → **0.0989** |
+| Inferno 86 | 2,444 | 0.0551 → 0.0551 | 0.0555 → 0.0555 |
+
+- **It gets better on the KK-SII and in the dry on both cars, and worse
+  on the KK-F's damp sessions; in total it is level.** The KK-SII gains
+  1.2 ± 0.7 mbar a session (better on 36 of 53) and its bias falls from
+  +7.6 to +2.7 mbar. The KK-F in the dry gains 0.7 mbar on the current
+  calculator and 2.0 on the simulation-based one, and its bias goes from
+  −11.5 to +2.3; in the wet it gains 5 to 6 mbar. Its four damp sessions
+  (224 rows) lose 22 mbar, which is the whole of its loss: over its 22
+  sessions the change is +1.3 ± 3.6 mbar.
+- **With the cars apart the simulation-based calculator is level with
+  the current one on the KK-F in the dry** (0.0345 against 0.0342, where
+  pooled it was 0.0365 against 0.0349), and still 1.4 to 1.8 mbar behind
+  on the KK-SII.
+- What it would take to keep: the damp cell of a car with four damp
+  sessions needs the condition chain to fall back sensibly (it reads the
+  KK-F's own thin damp fit where pooled it shared the KK-SII's), and the
+  KK-F's constants rest on one track. Not adopted; the pooling in
+  `warmup_table.CAR_FIT_ALIASES` is unchanged.
+
+*A lap time under anything the models were trained on* (the owner,
+2026-11-25; `check-pressure-holdout --fastest 0.25`,
+`pressure_gate.fastest_sessions`). Per raw car and track with ten dry
+sessions, the fastest quarter of them by the lap time a driver would
+type is held out of every model, one fold a cell: 28 sessions in five
+cells. **The data cannot ask for much**: the held-out sessions' typed lap
+time is 0.4 to 0.8 % under the fastest typed lap time left in training
+(median 0.5 %), and only 6 of the 28 are under every single lap left at
+the cell (by 0.0 to 1.0 %).
+
+| hot-pressure MAE, bar | rows | current calculator | simulation, pace table | simulation, driven directly |
+|---|---|---|---|---|
+| the 28 fastest sessions | 1,192 | 0.0387 | 0.0401 | 0.0403 |
+| FJ, Tsukuba | 643 | 0.0308 | 0.0331 | 0.0334 |
+| FJ, Suzuka | 112 | 0.0355 | 0.0363 | 0.0364 |
+| Inferno 86, Fuji | 181 | 0.0490 | **0.0465** | **0.0458** |
+| Inferno 86, Sodegaura | 256 | 0.0528 | 0.0548 | 0.0557 |
+| the 6 sessions under every lap left | 232 | 0.0443 | 0.0449 | 0.0458 |
+
+- **The simulation is not better at a pace it was not trained on, as far
+  as these data reach**: +1.2 ± 0.7 mbar a session against the current
+  calculator, the same gap as in the standing folds. It is nearer in one
+  cell of four, the Inferno 86 at Fuji (2.5 to 3.2 mbar), the cell whose
+  held-out sessions are furthest under their training pace (0.8 %).
+- The current calculator's pace curve is itself a simulation of a faster
+  lap (each logged lap scaled to the target lap time), so half a per
+  cent past the logged pace is inside what it already does. A test of a
+  lap time several per cent under anything logged does not exist in the
+  dataset: the fastest quarter of a cell's sessions is that close to the
+  rest.
+- One of the 28 has no directly driven lap: the Inferno 86's fastest
+  session at Fuji asks for a lap time the car fitted without its fastest
+  sessions cannot make under the cap of a use of 1. The table answers it
+  from its fastest knot, flagged; a direct simulation has no lap to give.
+
 **Batches, and speed.** The solver works on a batch of laps of one
 track, each with its own car and its own u (`solver.solve_laps`,
 `solver.drive_laps`; one lap is a batch of one), in two forms that give
