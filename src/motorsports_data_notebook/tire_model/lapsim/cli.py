@@ -1,8 +1,12 @@
 """CLI of the lap simulation's gates (``just tire-lapsim <command>``).
 
 Reports go to ``workspace/lapsim/reports/`` and the lap index cache to
-``workspace/lapsim/cache/`` (neither is committed). Run under a memory cap,
-like every job that reads the timeseries: ``ulimit -v 10000000``.
+``workspace/lapsim/cache/`` (neither is committed). The tracks gate B2
+builds are committed, with their bank: they are read from and written to
+``data/lapsim/tracks/`` (owner, 2026-11-24; the attribution to GSI is in
+``data/lapsim/README.md``). The tracks of gate B3's folds are caches and
+stay in ``workspace/lapsim/tracks/folds/``. Run under a memory cap, like
+every job that reads the timeseries: ``ulimit -v 10000000``.
 """
 
 from __future__ import annotations
@@ -19,6 +23,11 @@ def default_workspace() -> Path:
     return repo_root() / "workspace" / "lapsim"
 
 
+def default_tracks() -> Path:
+    """Where the committed tracks are (``data/lapsim/tracks``)."""
+    return repo_root() / "data" / "lapsim" / "tracks"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="lapsim", description=__doc__)
     parser.add_argument("--dataset-root", type=Path, default=None)
@@ -27,6 +36,13 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         default=None,
         help="Where reports and caches go (default: workspace/lapsim).",
+    )
+    parser.add_argument(
+        "--tracks-dir",
+        type=Path,
+        default=None,
+        help="Where the tracks are read from and saved (default: data/lapsim/tracks, "
+        "which is committed).",
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser(
@@ -88,6 +104,8 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     root = args.dataset_root or default_dataset_root()
     workspace = args.workspace or default_workspace()
+    tracks = args.tracks_dir or default_tracks()
+    folds = workspace / "tracks" / "folds"
 
     from . import gates
 
@@ -104,16 +122,14 @@ def main(argv: list[str] | None = None) -> int:
         report = gates.check_track_truth(
             root,
             cache_dir=workspace / "cache",
-            tracks_dir=workspace / "tracks",
+            tracks_dir=tracks,
             dem=ground,
             drawings=DRAWINGS,
         )
     elif args.cmd == "check-track-holdout":
         from . import holdout
 
-        report = holdout.check_track_holdout(
-            root, cache_dir=workspace / "cache", folds_dir=workspace / "tracks" / "folds"
-        )
+        report = holdout.check_track_holdout(root, cache_dir=workspace / "cache", folds_dir=folds)
     elif args.cmd == "check-frame":
         from . import frame
 
@@ -122,7 +138,7 @@ def main(argv: list[str] | None = None) -> int:
         from . import samples
 
         report = samples.check_envelope_samples(
-            root, cache_dir=workspace / "cache", tracks_dir=workspace / "tracks"
+            root, cache_dir=workspace / "cache", tracks_dir=tracks
         )
     elif args.cmd == "check-car-fit":
         from . import car_gate
@@ -130,14 +146,14 @@ def main(argv: list[str] | None = None) -> int:
         report = car_gate.check_car_fit(
             root,
             cache_dir=workspace / "cache",
-            tracks_dir=workspace / "tracks",
+            tracks_dir=tracks,
             cars_dir=workspace / "cars",
         )
     elif args.cmd == "check-car-holdout":
         from . import car_holdout
 
         report = car_holdout.check_car_holdout(
-            root, cache_dir=workspace / "cache", tracks_dir=workspace / "tracks"
+            root, cache_dir=workspace / "cache", tracks_dir=tracks, folds_dir=folds
         )
     elif args.cmd == "check-heat-chain":
         from . import heat_gate
@@ -145,7 +161,7 @@ def main(argv: list[str] | None = None) -> int:
         report = heat_gate.check_heat_chain(
             root,
             cache_dir=workspace / "cache",
-            tracks_dir=workspace / "tracks",
+            tracks_dir=tracks,
             cars_dir=workspace / "cars",
         )
     elif args.cmd == "check-pace-table":
@@ -153,7 +169,7 @@ def main(argv: list[str] | None = None) -> int:
 
         report = pace_gate.check_pace_table(
             root,
-            tracks_dir=workspace / "tracks",
+            tracks_dir=tracks,
             cars_dir=workspace / "cars",
             out_dir=workspace / "pace",
         )
@@ -163,7 +179,7 @@ def main(argv: list[str] | None = None) -> int:
         report = wet_gate.check_wet(
             root,
             cache_dir=workspace / "cache",
-            tracks_dir=workspace / "tracks",
+            tracks_dir=tracks,
             cars_dir=workspace / "cars",
         )
     else:  # pragma: no cover - argparse rejects unknown commands

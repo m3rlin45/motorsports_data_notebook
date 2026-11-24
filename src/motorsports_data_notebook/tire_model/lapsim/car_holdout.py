@@ -1108,10 +1108,16 @@ def verdict(folds: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
 
 
 def check_car_holdout(
-    root: Path, *, cache_dir: Path | None = None, tracks_dir: Path | None = None
+    root: Path,
+    *,
+    cache_dir: Path | None = None,
+    tracks_dir: Path | None = None,
+    folds_dir: Path | None = None,
 ) -> GateReport:
     """Gate C3: a car's parameters predict its speed trace on days and at
-    layouts the fit never saw, and two planted wrong cars are told apart."""
+    layouts the fit never saw, and two planted wrong cars are told apart.
+    ``folds_dir`` is where gate B3 saved the tracks from other cars
+    (``tracks_dir / "folds"`` when it is not given)."""
     tables = cm.as_families(smp.car_tables(root, cache_dir=cache_dir, tracks_dir=tracks_dir))
     rows = cm.as_family(smp.build_laps(geo.clean_lap_index(root, cache_dir=cache_dir)))
     air = cm.air_state(root, geo.load_sessions(root))
@@ -1857,6 +1863,7 @@ def check_car_holdout(
                 rows.set_index(["session_id", "lap_num"])["lap_time_s"],
                 tracks_dir=tracks_dir,
                 cache_dir=cache_dir,
+                folds_dir=folds_dir,
                 transfer={
                     "tables": tables,
                     "rows": rows,

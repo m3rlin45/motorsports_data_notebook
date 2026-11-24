@@ -909,12 +909,14 @@ def report_items(
     tracks_dir: Path | None = None,
     cache_dir: Path | None = None,
     transfer: dict | None = None,
+    folds_dir: Path | None = None,
 ) -> list:
     """The items gate C3's report carries for gate E1 (the day folds) and
     arm B of gate E2 (the layout folds), from gate C3's per-lap frame.
     With ``transfer`` (``tables, rows, tracks, full, shifts, gears, air``
     of gate C3) arms C and D follow, at each layout with a saved track
-    from other cars under ``tracks_dir / "folds"``."""
+    from other cars under ``folds_dir`` (``tracks_dir / "folds"`` when it
+    is not given)."""
     from .gates import GateItem, md_table
 
     bands = pd.DataFrame()
@@ -1025,7 +1027,9 @@ def report_items(
                 detail,
             )
         )
-    if transfer is not None and tracks_dir is not None:
+    if folds_dir is None and tracks_dir is not None:
+        folds_dir = Path(tracks_dir) / "folds"
+    if transfer is not None and folds_dir is not None:
         parts, donor_rows = [], []
         for car, full in transfer["full"].items():
             try:
@@ -1036,7 +1040,7 @@ def report_items(
                 continue
             others = {}
             for layout_id in transfer["tracks"]:
-                path = Path(tracks_dir) / "folds" / f"{fold_track_name(car, layout_id)}.json"
+                path = Path(folds_dir) / f"{fold_track_name(car, layout_id)}.json"
                 if path.exists():
                     others[layout_id] = trk.TrackModel.load(path)
                     built = others[layout_id].meta.get("built_from") or {}
