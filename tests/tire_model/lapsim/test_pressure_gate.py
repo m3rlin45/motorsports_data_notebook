@@ -179,11 +179,11 @@ class TestScores:
         assert other["gap"] == pytest.approx(0.01)
 
     def test_a_cell_is_the_median_over_days_and_passes_beside_another_day(self):
-        cells = pg.by_cell(pg.by_stint(self._rows()))
-        att = pg.attain(cells, "sim").iloc[0]
+        stints = pg.by_stint(self._rows())
+        att = pg.attain(stints, "sim").iloc[0]
         assert att["size"] == 3.0 and att["signed"] == 2.0 and att["beside"] == 4.0
         assert att["days"] == 3 and att["scored"] and att["passed"]
-        got = pg.tally(pg.attain(cells, "sim"))
+        got = pg.tally(pg.attain(stints, "sim"))
         assert got == {
             "passed": 1,
             "scored": 1,
@@ -195,17 +195,34 @@ class TestScores:
 
     def test_two_days_are_listed_and_not_scored(self):
         rows = self._rows()
-        cells = pg.by_cell(pg.by_stint(rows[rows["date"] != "d3"]))
-        att = pg.attain(cells, "sim").iloc[0]
+        stints = pg.by_stint(rows[rows["date"] != "d3"])
+        att = pg.attain(stints, "sim").iloc[0]
         assert att["days"] == 2 and not att["scored"] and not att["passed"]
-        assert pg.tally(pg.attain(cells, "sim"))["scored"] == 0
+        assert pg.tally(pg.attain(stints, "sim"))["scored"] == 0
 
     def test_a_day_without_a_pair_is_not_counted_for_either(self):
         rows = self._rows()
         lone = _row("KK-F", "d4", "s-d4", 0, "fl", "sim", 50.0)
-        cells = pg.by_cell(pg.by_stint(pd.concat([rows, pd.DataFrame([lone])])))
-        att = pg.attain(cells, "sim").iloc[0]
+        stints = pg.by_stint(pd.concat([rows, pd.DataFrame([lone])]))
+        att = pg.attain(stints, "sim").iloc[0]
         assert att["days"] == 3 and att["size"] == 3.0  # the fourth day has no other day beside it
+
+    def test_two_arms_are_compared_on_the_stints_both_have(self):
+        """The simulation has no entry on the third day (no frame factor
+        for that day's kind of source, say): the yardstick beside it is
+        then of the first two days alone, not of all three."""
+        rows = self._rows()
+        rows.loc[rows["arm"] == "other_day", "d_mbar"] *= rows["date"].map(
+            {"d1": 1.0, "d2": 1.0, "d3": 10.0}
+        )
+        rows = rows[~((rows["arm"] == "sim") & (rows["date"] == "d3"))]
+        stints = pg.by_stint(rows)
+        att = pg.attain(stints, "sim").iloc[0]
+        assert att["days"] == 2 and att["beside_days"] == 2
+        assert att["beside"] == 4.0  # d3's 40 mbar is not in it
+        # the yardstick by itself is still of every day it has
+        yard = pg.by_cell(stints)
+        assert yard[yard["arm"] == "other_day"]["days"].iloc[0] == 3
 
     def test_a_lap_with_no_solution_is_a_miss_and_is_kept(self):
         rows = self._rows()
@@ -213,8 +230,7 @@ class TestScores:
             np.nan,
             pr.NO_SOLUTION,
         )
-        cells = pg.by_cell(pg.by_stint(rows))
-        att = pg.attain(cells, "sim").iloc[0]
+        att = pg.attain(pg.by_stint(rows), "sim").iloc[0]
         assert np.isinf(att["size"]) and att["days"] == 3 and att["flagged"] == 2
         assert att["scored"] and not att["passed"]
 
@@ -222,8 +238,8 @@ class TestScores:
         rows = self._rows()
         rear = rows.assign(corner="rl")
         rear.loc[rear["arm"] == "sim", "d_mbar"] = 20.0
-        cells = pg.by_cell(pg.by_stint(pd.concat([rows, rear], ignore_index=True)))
-        got = pg.tally(pg.attain(cells, "sim"))
+        stints = pg.by_stint(pd.concat([rows, rear], ignore_index=True))
+        got = pg.tally(pg.attain(stints, "sim"))
         assert got["passed"] == 1 and got["scored"] == 2
         assert got["whole"] == 0 and got["groups"] == 1
 
@@ -231,8 +247,8 @@ class TestScores:
         rows = self._rows()
         chain = rows.assign(form="chain", d_mbar=rows["d_mbar"] * 2.0)
         sibling = rows.assign(raw_car="KK-SII")
-        cells = pg.by_cell(pg.by_stint(pd.concat([rows, chain, sibling], ignore_index=True)))
-        att = pg.attain(cells, "sim")
+        stints = pg.by_stint(pd.concat([rows, chain, sibling], ignore_index=True))
+        att = pg.attain(stints, "sim")
         assert len(att) == 3
         assert set(zip(att["raw_car"], att["form"], att["size"])) == {
             ("KK-F", "heat", 3.0),
@@ -395,14 +411,21 @@ class TestAFold:
     def test_the_cells_and_the_score(self, scored):
         _, rows, _, _ = scored
         stints = pg.by_stint(rows)
-        cells = pg.by_cell(stints[(stints["n"] == 5) & (stints["form"] == "heat")])
-        att = pg.attain(cells, "sim")
+        att = pg.attain(stints[(stints["n"] == 5) & (stints["form"] == "heat")], "sim")
         assert len(att) == 4 and (att["days"] == 4).all() and att["scored"].all()
         assert pg.tally(att)["scored"] == 4
 
     def test_pressure_against_the_tpms_at_the_fifth_flying_lap(self, scored):
         _, _, tpms, _ = scored
-        assert set(tpms["arm"]) == {"sim", "ceiling", "other_layouts", "fallback"}
+        assert set(tpms["arm"]) == {
+            "sim",
+            "ceiling",
+            "other_layouts",
+            "fallback",
+            "own_heat",
+            "heat_up",
+            "heat_down",
+        }
         # one row per day and tyre for each arm: the same rows under every entry
         counts = tpms.groupby("arm").size()
         assert (counts == 16).all()
@@ -420,3 +443,104 @@ class TestAFold:
         assert set(tpms["arm"]) == {"entry"}
         chain = rows[rows["form"] == "chain"]
         assert chain["gap"].iloc[0] == pytest.approx(np.log(60.0 / 60.0), abs=1e-9)
+
+
+class TestWetDays:
+    def test_a_wet_day_is_set_against_a_run_of_the_same_day(self, tmp_path):
+        held = _held(tmp_path, {"d1": 70.0, "d2": 71.0})
+        # a second session on the first day, and every session wet
+        twin = _held(tmp_path, {"d1": 70.5})
+        for frame in (twin.laps, twin.stints):
+            frame["session_id"] = "s9"
+        twin.days["session_id"] = "s9"
+        held.laps = pd.concat([held.laps, twin.laps], ignore_index=True)
+        held.stints = pd.concat([held.stints, twin.stints], ignore_index=True)
+        held.days = pd.concat([held.days, twin.days], ignore_index=True)
+        held.entries["s9"] = twin.entries["s0"]
+        held.days["condition"] = "wet"
+        held.laps["condition"] = "wet"
+        held.stints["condition"] = "wet"
+        rows, tpms = pg.score_cell(held, {"car": _cell(70.0)}, wet=True)
+        assert tpms.empty and set(rows["form"]) == {"heat"}
+        pairs = rows[rows["arm"] == "other_day"]
+        # only the two sessions of d1 have a run of the same day beside them
+        assert set(pairs["session_id"]) == {"s0", "s9"}
+        assert {"sim", "fallback", "heat_up", "heat_down"} <= set(rows["arm"])
+        sim = rows[(rows["arm"] == "sim") & (rows["session_id"] == "s1")]
+        assert sim["use"].between(0.4, 1.0).all()  # the dry table read at the wet lap time
+        att = pg.attain(pg.by_stint(rows[rows["n"] == 5]), "sim")
+        assert (att["days"] == 1).all() and not att["scored"].any()
+
+
+class TestPooling:
+    def test_weights_are_usable_laps_in_the_folds_fit(self, tmp_path):
+        prod = _production(
+            tmp_path,
+            [
+                _session("a", "KK-F", "tsukuba", "d1"),
+                _session("b", "KK-SII", "tsukuba", "d1"),
+                _session("c", "KK-SII", "suzuka", "d2"),
+                _session("d", "KK-F", "fuji", "d3"),
+                _session("e", "Inferno 86", "fuji", "d3"),
+            ],
+        )
+        prod.raw_laps = pd.DataFrame(
+            {
+                "session_id": ["a"] * 5 + ["b"] * 4 + ["c"] * 6 + ["d"] * 3 + ["e"] * 9,
+                "tire_usable": [True] * 26 + [False],
+            }
+        )
+        # with Tsukuba left out the pooled car's fit has the KK-SII's Suzuka and the KK-F's Fuji
+        assert pg.pool_weights(prod, "FJ", ["a", "b"]) == {"KK-F": 3.0, "KK-SII": 6.0}
+        assert pg.pool_weights(prod, "Inferno 86", []) == {"Inferno 86": 8.0}
+
+    def test_the_pooled_simulated_entry_of_two_raw_cars(self):
+        table = pace.build_table(_ranged(_model(), oval=(0.5, 1.0)), _oval_track())
+        t_fast, t_slow = float(table.lap_time_s[8]), float(table.lap_time_s[6])
+        fast, slow = _cell(t_fast), _cell(t_slow)
+        for cell, raw in ((fast, "one"), (slow, "two")):
+            cell.fed = {"sim": {raw: cell.fed["sim"]["car"]}}
+        day = {
+            "session_id": "s0",
+            "raw_car": "one",
+            "date": "d1",
+            "powertrain": "engine",
+            "source": "imu",
+            "lap_time_s": t_fast,
+        }
+        got = pg.pooled_sim_arms({"one": fast, "two": slow}, {"one": 1.0, "two": 1.0}, day)
+        assert [a["form"] for a in got] == ["heat", "chain"]
+        chain = got[1]["entry"]
+        # the reference lap time is between the two cars' own
+        assert chain.lap_time_s == pytest.approx(np.sqrt(t_fast * t_slow), rel=1e-6)
+        assert chain.source == "sim_pooled" and len(chain.curve_t) == len(pg.POOL_GRID)
+        # the day's own raw car alone under the name: the pooled entry is its own
+        assert pg.pooled_sim_arms({"one": fast}, {"one": 1.0}, day) == []
+        # another raw car alone in the fit: the day is read through that car's entry
+        other = pg.pooled_sim_arms({"one": fast, "two": slow}, {"two": 1.0}, day)
+        assert other[1]["entry"].lap_time_s == pytest.approx(t_slow, rel=1e-6)
+        # a raw car without a fed use has no part: what is left is the day's own car's
+        slow.fed = {"sim": {}}
+        assert pg.pooled_sim_arms({"one": fast, "two": slow}, {"one": 1.0, "two": 1.0}, day) == []
+
+
+class TestFirstVisits:
+    def test_a_cells_first_day_with_history_elsewhere_before_it(self, tmp_path):
+        prod = _production(
+            tmp_path,
+            [
+                _session("a", "KK-SII", "tsukuba", "2026-01-01"),
+                _session("b", "KK-SII", "suzuka", "2026-02-01"),
+                _session("c", "KK-SII", "suzuka", "2026-03-01"),
+            ],
+        )
+        days = pd.DataFrame(
+            {
+                "pooled": ["FJ", "FJ", "FJ"],
+                "track": ["tsukuba", "suzuka", "suzuka"],
+                "date": ["2026-01-01", "2026-02-01", "2026-03-01"],
+            }
+        )
+        # Suzuka was first run after Tsukuba; Tsukuba had nothing before it
+        assert pg.first_visits(prod, days) == [("FJ", "suzuka", "2026-02-01")]
+        assert pg.first_visits(prod, days.iloc[:0]) == []
