@@ -553,6 +553,183 @@ def arm_scores(
     return out
 
 
+# ------------------------------------- the pace response: bands of pace
+
+#: Bands of a clean dry lap's time over its session's best: the build
+#: laps (within 2 %), the other clean laps up to here, and the slow laps.
+BANDS = ("fast", "mid", "slow")
+MID_MAX = 1.04
+SLOW_MAX = 1.12
+
+
+def band_rows(index: pd.DataFrame, cars: tuple[str, ...]) -> pd.DataFrame:
+    """The clean dry laps of ``cars`` within :data:`SLOW_MAX` of their
+    session's best, from the clean-lap index (by family), with ``band``:
+    ``fast`` (a build lap), ``mid`` (another clean lap up to
+    :data:`MID_MAX`) or ``slow``. A session with no dry build lap (a wet
+    one) is left out."""
+    own = index[index["clean"] & index["car"].isin(cars)]
+    dry = set(own.loc[own["in_build"], "session_id"])
+    own = own[own["session_id"].isin(dry)].copy()
+    over = own["lap_time_s"] / own.groupby("session_id")["lap_time_s"].transform("min")
+    own["band"] = np.select(
+        [
+            own["in_build"].to_numpy(bool),
+            (over <= MID_MAX).to_numpy(),
+            (over <= SLOW_MAX).to_numpy(),
+        ],
+        list(BANDS),
+        default="",
+    )
+    return own[own["band"] != ""].reset_index(drop=True)
+
+
+def band_heat(
+    rows: pd.DataFrame,
+    tracks: dict[str, trk.TrackModel],
+    full: dict[str, cg.Drive | None],
+    shares: dict[str, ShareParams],
+) -> pd.DataFrame:
+    """Each lap of :func:`band_rows` solved to its own lap time by its
+    car's own fit on its own track (its day's powertrain, shift point,
+    gears and air): ``sim_q_<tyre>`` beside the lap's keys and ``band``.
+    A lap the car cannot do, or of a car without shares or a track, is
+    left out."""
+    out: list[dict] = []
+    for (car, layout_id), cell in rows.groupby(["car", "layout_id"], sort=False):
+        drive = full.get(str(car))
+        if drive is None or layout_id not in tracks:
+            continue
+        try:
+            share = ho.share_for(str(car), shares)
+        except KeyError:
+            continue
+        drive = drive.but(use_cap=True)
+        profile = cg.profile_of(drive, tracks[str(layout_id)])
+        cell = cell.reset_index(drop=True)
+        recs = cg._records(cell)
+        cars = [cg._lap_car(drive, rec) for rec in recs]
+        got = sv.solve_laps(
+            profile, cars, [float(r["lap_time_s"]) for r in recs], guess=cg.typical_use(drive)
+        )
+        for i in range(len(cell)):
+            if not got.ok[i]:
+                continue
+            sim = sv.lap_from_nodes(profile, cars[i], got.v_node_ms[i], float(got.u[i]))
+            out.append(
+                {
+                    "car": car,
+                    "layout_id": layout_id,
+                    "session_id": cell["session_id"].iloc[i],
+                    "lap_num": int(cell["lap_num"].iloc[i]),
+                    "date": str(cell["date"].iloc[i]),
+                    "band": cell["band"].iloc[i],
+                    "lap_time_s": float(cell["lap_time_s"].iloc[i]),
+                    "use": float(got.u[i]),
+                    **{f"sim_q_{t}": float(q) for t, q in zip(CORNERS, sim_heat(sim, share))},
+                }
+            )
+    return pd.DataFrame(out)
+
+
+def band_scores(heat: pd.DataFrame, obs: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """``(by_band, by_cell)`` of :func:`band_heat` against the logged
+    laps' own heat in the tyres' frame.
+
+    ``by_band``: per band, the cells (car, layout, tyre) in which the
+    simulated lap is no further from the logged lap than a logged lap *of
+    the same band*, another day and like lap time is (``passed`` of
+    ``scored``), the two distances in the median scored cell
+    (``simulated``, ``other_day``), ``same_day`` likewise, and ``laps``.
+    ``by_cell``: per band, car and layout, the signed log of simulated
+    over logged heat (the median over days of the day's median lap) per
+    tyre, its four-tyre ``mean`` and ``right_less_left``, with ``laps``
+    and ``days``."""
+    if heat.empty:
+        return pd.DataFrame(), pd.DataFrame()
+    both = heat.merge(usable(obs), on=["session_id", "lap_num"], how="inner")
+    g = list(G_MEASURES)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        for c in CORNERS:
+            both[f"g_{c}"] = np.log(both[f"sim_q_{c}"] / both[f"t_{c}"])
+    both = both.replace([np.inf, -np.inf], np.nan).dropna(subset=g)
+    band_rows_, cell_rows = [], []
+    for band in BANDS:
+        own = both[both["band"] == band]
+        if own.empty:
+            continue
+        parts = []
+        for (car, layout_id), cell in own.groupby(["car", "layout_id"], sort=False):
+            yard = yardsticks(cell.reset_index(drop=True), levels=(0.0,))
+            if len(yard):
+                yard.insert(0, "car", str(car))
+                yard.insert(1, "layout_id", str(layout_id))
+                parts.append(yard)
+        cells = (
+            score(own, pd.concat(parts, ignore_index=True), G_MEASURES) if parts else pd.DataFrame()
+        )
+        row: dict = {"band": band, "laps": int(len(own)), "passed": 0, "scored": 0}
+        if len(cells):
+            ok = cells[cells["scored"]]
+            row.update(
+                passed=int(ok["passed"].sum()),
+                scored=int(len(ok)),
+                simulated=float(ok["simulated"].median()) if len(ok) else np.nan,
+                other_day=float(ok["other_day"].median()) if len(ok) else np.nan,
+                same_day=float(cells["same_day"].median()),
+            )
+        band_rows_.append(row)
+        days = own.groupby(["car", "layout_id", "date"], sort=False)[g].median()
+        mid = days.groupby(["car", "layout_id"], sort=False)[g].median()
+        mid.insert(0, "laps", own.groupby(["car", "layout_id"], sort=False).size())
+        mid.insert(1, "days", days.groupby(["car", "layout_id"], sort=False).size())
+        mid["mean"] = mid[g].mean(axis=1)
+        mid["right_less_left"] = 0.5 * (mid["g_fr"] + mid["g_rr"] - mid["g_fl"] - mid["g_rl"])
+        mid = mid.reset_index()
+        mid.insert(0, "band", band)
+        cell_rows.append(mid)
+    by_cell = pd.concat(cell_rows, ignore_index=True) if cell_rows else pd.DataFrame()
+    return pd.DataFrame(band_rows_), by_cell
+
+
+def band_item(heat: pd.DataFrame, obs: pd.DataFrame) -> list:
+    """The item gate C3's report carries for the pace response (#207:
+    E3, and E1's slow laps)."""
+    from .gates import GateItem, md_table
+
+    by_band, by_cell = band_scores(heat, obs)
+    if by_band.empty:
+        return []
+    spread = by_cell.groupby("band", sort=False)["mean"].agg(["median", "min", "max"])
+    measured = "; ".join(
+        f"{r['band']} ({r['laps']} laps) {r['passed']} of {r['scored']} cells, "
+        f"{r.get('simulated', float('nan')):.3f} from the logged lap against "
+        f"{r.get('other_day', float('nan')):.3f} for another day's lap of the band, the four-tyre "
+        f"mean {spread.loc[r['band'], 'median']:+.3f} in the median cell"
+        for r in by_band.to_dict("records")
+    )
+    return [
+        GateItem(
+            "Per-tyre heat as the lap gets slower (gates E3 and E1 of #207: the pace response)",
+            None,
+            measured,
+            "a score in gate C3's form (no fixed limits): against a logged lap of the same "
+            "band, another day and like lap time",
+            "Every clean dry lap within "
+            f"{SLOW_MAX:g} × its session's best, in three bands: `fast` the build laps (within "
+            f"2 %), `mid` the other clean laps up to {MID_MAX:g} ×, `slow` beyond. Each is solved "
+            "to its own lap time by the car's own fit on its own track and its heat set against "
+            "the logged lap's own heat in the tyres' frame. A cell is a car at a layout on one "
+            "tyre, passing when the simulated lap is no further from the logged lap than a logged "
+            "lap of the same band, another day and like lap time is. A simulated slow lap uses "
+            "less of the limit everywhere alike; a driven one is slow in places.\n\n"
+            + md_table(by_band, floats="{:.4f}")
+            + "\n\n**Signed, by band and cell** (`mean`: the four tyres' mean; above zero, the "
+            "simulated lap has more heat).\n\n" + md_table(by_cell, floats="{:.3f}"),
+        )
+    ]
+
+
 def carried_factors(laps: pd.DataFrame, obs: pd.DataFrame) -> pd.DataFrame:
     """What carrying a frame factor to a layout costs by itself: per car,
     layout and source, the log of the layout's own factor over the one
@@ -740,7 +917,12 @@ def report_items(
     from other cars under ``tracks_dir / "folds"``."""
     from .gates import GateItem, md_table
 
-    obs = observed(root, laps, shares, tracks_dir=tracks_dir, cache_dir=cache_dir)
+    bands = pd.DataFrame()
+    if transfer is not None and transfer.get("index") is not None:
+        bands = band_rows(transfer["index"], tuple(transfer["full"]))
+    seen_keys = ["car", "session_id", "lap_num"]
+    every = pd.concat([laps[seen_keys], bands[seen_keys]] if len(bands) else [laps[seen_keys]])
+    obs = observed(root, every, shares, tracks_dir=tracks_dir, cache_dir=cache_dir)
     errs = errors(laps, obs)
     yard = cell_yardsticks(laps, obs, lap_time)
     if errs.empty or yard.empty:
@@ -886,6 +1068,8 @@ def report_items(
         if parts:
             arm_laps = pd.concat(parts, ignore_index=True)
             items += transfer_item(arm_laps, obs, yard, laps, pd.DataFrame(donor_rows))
+    if len(bands) and transfer is not None:
+        items += band_item(band_heat(bands, transfer["tracks"], transfer["full"], shares), obs)
     return items
 
 
