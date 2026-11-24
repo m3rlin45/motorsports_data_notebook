@@ -4591,11 +4591,12 @@ from the table #206 first specified in the four ways its note of
 
 - **The axis is the driver's use of the car's limit**, `q = −ln(use)`:
   twelve laps evenly in q from a use of 0.40 to a use of 1, driven as
-  one batch. The lap at a use of 1 is the knob's lap at q = 0, braked as
-  the driver brakes; it is **not the max driver's lap** (clause 3.1 of
-  the driver committee's design: every use at 1 and the driver's habits
-  off), which is 0.3 to 0.9 s faster at these layouts and is kept beside
-  the table (`max_driver_lap_s`).
+  one batch (and, since the cap was built, two more to the knob's end
+  lap: below). The lap at a use of 1 is the knob's lap at q = 0, braked
+  as the driver brakes; it is **not the max driver's lap** (clause 3.1
+  of the driver committee's design: every use at 1 and the driver's
+  habits off), which is 0.3 to 0.9 s faster at these layouts and is kept
+  beside the table (`max_driver_lap_s`).
 - **It holds laps, not heat.** Each knot is kept as its speed at the
   track's nodes. Per-tyre heat is defined by the force shares of the fit
   in hand (#208: leaving a cell out moves the same laps' heat by up to
@@ -4614,19 +4615,16 @@ from the table #206 first specified in the four ways its note of
   `outside_support`, answered and flagged (owner, 2026-11-23): its use
   lies outside the car's logged range, or it is slower than the table's
   slow end and is read off the last two knots; `no_solution`: it is
-  faster than the lap at a use of 1, and the table gives no heat, with
-  that lap's time and the max driver's beside it. A target between those
-  two is one the committee's knob would answer (below q = 0 the
-  cornering use stays at 1 and the braking use rises); the kernel scales
-  the two together, so until that cap is built such a target goes
-  unanswered. None of the cars' 1,129 dry build laps falls there. The
+  faster than the table's fastest lap, and the table gives no heat, with
+  that lap's time and the max driver's beside it. As first built the
+  table ended at a use of 1; with the cap (below) it ends at the knob's
+  end lap. None of the cars' 1,129 dry build laps is faster than the lap
+  at a use of 1. The
   logged range is the use of every dry build
   lap of the car at the layout, each driven with its own day's car
   (`car_gate.use_range`, saved by gate C2 as the model's
   `meta.use_range`); at a layout the car has not run it is the car's
-  range over the layouts it has, and the table says so. The kernel's
-  knob is untouched: the cap of the committee's clause 3.1 (cornering
-  held at 1 while braking rises) is still open on #206.
+  range over the layouts it has, and the table says so.
 
 *The out-lap.* Each knot also has the part of a lap from the pit exit's
 join to the line, begun at the speed the logged out-laps have at the
@@ -4797,9 +4795,62 @@ laps flagged fall from 78 to 7. No separate wet table is needed until a
 wet term enters. A slow dry lap and a wet lap of one lap time get one
 answer: there is no wetness input, by the owner's ruling.
 
-**Still #206's**: the cap for a use above 1; the lean of the simulated
-lateral heat to the left turns; what brings a table's heat to
-production's sensor-frame heat where the two must meet (#255).
+**The cap: a use cannot pass 1 (2026-11-24; `solver._knob`,
+`SolverCar.use_cap`).** The driver committee's clause 3.1, built at the
+owner's request to finish #206. With the knob u above 1 the cornering
+stays at the car's limit and the braking level goes on rising,
+`min(mu_b · brake_use · u, mu_b)`, to the car's own at u = 1 /
+`brake_use`: *the knob's end lap*, braked at the car's level and still
+on the shape the driver holds. Lap time is continuous through 1, falls
+to the end lap and is flat beyond it; a target faster than the end lap
+has no solution.
+
+- **It is built above the two solver forms, not in them.** A lane above
+  its cap is handed to the kernel or to the numpy form with its limits
+  already set (cornering at the cap, braking at its capped level, the
+  knob at 1); a lap first solved above 1 is solved again on the capped
+  lap time. Neither form changed, so they agree to the last bit as
+  before, and a lap at or under a use of 1 is the old arithmetic exactly.
+- **It is asked for where a lap is answered**: a pace table, and the
+  fitted car's held-out laps in gate C3 (`from_model(..., use_cap=True)`,
+  `Drive.use_cap`), and only for a car whose `mu_y` is its limit. *As
+  first built it was on for every limit car, and by the rule written
+  before the run that was a defect*: it moved gate C2's recovery on
+  simulated laps and the making of gate C3's planted wrong cars, which
+  use the knob as a free scale (a known car driven at 1.1; a car with
+  0.85 of the power, which needs more than its limit to make the lap
+  time). The fit's own workings, a recovery, a planted car and the
+  gate's comparison arms (another drive rule, a drag that is not the
+  car's, a flat road) are driven without it.
+- **What moved, against the rule** (gates C2 and D2 and the pace gate
+  under a use of 1 byte for byte; gate C3 only where a fold's car solved
+  a lap above 1): C2 and D2 are byte for byte. Gate C3 stays at 60 of
+  76, and what differs is the Inferno 86's folds that hold one of the
+  five laps (of 2,231) above 1: under the cap the highest of them needs
+  a knob of 1.102 where it needed 1.009, since past 1 only the braking
+  rises; a day's median speed error there moves by under 0.03 m/s.
+- **The pace table goes on to the end lap.** A car at its limit has two
+  more knots, from a use of 1 to the knob's end, held to the same 1 %
+  (0.96 % at most over the fifteen tables). The end lap is faster than
+  the lap at a use of 1 by 0.27 to 0.60 s on the Inferno 86 and 0.19 to
+  0.40 s on the KK-F, and by 0.05 to 0.11 s on the KK-SII, whose driver
+  already brakes at 0.97 of the car's level. The max driver's lap is a
+  further 0.15 to 0.42 s beyond it (the held shape's cost), and no knob
+  reaches it: there is no habit left to give up past the braking level.
+  A target between a use of 1 and the end lap is answered and flagged
+  (no logged lap is there), with the cornering use (1) and the braking
+  use given apart, since the knob there is not a use.
+
+*An export for a consumer without a solver* (`PaceTable.export(share)`,
+for #208's calculators): the knots as plain numbers (lap time, knob, q,
+cornering and braking use, heat per tyre, the out-lap's time and heat),
+with the support, what the table assumes and its two fast ends. It is of
+one set of shares and is made again for another; the table itself holds
+laps.
+
+**Still #206's**: what brings a table's heat to production's
+sensor-frame heat where the two must meet (#255); the lean of the
+simulated lateral heat to the left turns.
 
 **Batches, and speed.** The solver works on a batch of laps of one
 track, each with its own car and its own u (`solver.solve_laps`,

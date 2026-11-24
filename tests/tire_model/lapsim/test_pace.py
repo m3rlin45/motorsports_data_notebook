@@ -135,6 +135,43 @@ class TestStatus:
         assert bare.support == {} and bare.status(float(bare.lap_time_s[3])) == pace.OUTSIDE_SUPPORT
 
 
+class TestAboveAUseOfOne:
+    def _capped(self):
+        model = _ranged(_model(), oval=(0.80, 0.97))
+        model.grip["mu_y_limit"] = model.grip["mu_y"]
+        model.driver = {"brake_use": 0.85, "brake_use_ellipse": 0.0, "use_ref": 0.9}
+        return model, pace.build_table(model, _oval_track())
+
+    def test_knots_to_the_knobs_end_lap(self):
+        model, table = self._capped()
+        assert len(table.use) == pace.KNOTS + pace.KNOTS_ABOVE
+        assert table.use[pace.KNOTS - 1] == 1.0 and table.use[-1] == pytest.approx(1.0 / 0.85)
+        assert (np.diff(table.lap_time_s) < 0).all()
+        # the end lap: braked at the car's level; the max driver's is that lap here
+        # (the driver holds the car's own shape in this model)
+        assert table.fastest_lap_s == pytest.approx(table.max_driver_lap_s, rel=1e-9)
+
+    def test_between_one_and_the_end_is_answered_and_flagged(self):
+        _, table = self._capped()
+        t = 0.5 * (float(table.lap_time_s[pace.KNOTS - 1]) + table.fastest_lap_s)
+        got = table.read(t, SHARE)
+        assert got.status == pace.OUTSIDE_SUPPORT and np.isfinite(got.heat).all()
+        assert got.use > 1.0 and got.q < 0.0
+        assert got.cornering_use == 1.0 and 0.85 < got.braking_use < 1.0
+        under = table.read(float(table.lap_time_s[5]), SHARE)
+        assert under.cornering_use == pytest.approx(table.use[5])
+        assert under.braking_use == pytest.approx(0.85 * table.use[5])
+        assert table.read(table.fastest_lap_s - 0.3, SHARE).status == pace.NO_SOLUTION
+
+    def test_the_table_holds_to_a_direct_solve_above_one(self):
+        _, table = self._capped()
+        times = np.linspace(table.fastest_lap_s, float(table.lap_time_s[pace.KNOTS - 1]), 8)[1:-1]
+        use, laps = pace.direct(table, times)
+        assert (use > 1.0).all() and all(lap is not None for lap in laps)
+        want = np.vstack([heat.sim_heat(lap, SHARE) for lap in laps])
+        assert np.abs(np.log(table.heat(times, SHARE) / want)).max() < 0.01
+
+
 class TestWetInTheSupport:
     def test_the_slow_end_is_the_wettest_logged_lap(self):
         model = _ranged(_model(), oval=(0.80, 0.97))
@@ -247,6 +284,35 @@ class TestOutLap:
         no_speed = _oval_track()
         no_speed.meta["pit"] = {"s_join_m": 400.0, "rolling_s": 20.0, "n": 12}
         assert pace.build_table(_model(), no_speed).v_out_ms is None
+
+
+class TestExport:
+    def test_numbers_for_a_consumer_without_a_solver(self, table):
+        got = table.export(SHARE)
+        assert len(got["knots"]) == pace.KNOTS and got["fastest_lap_s"] == table.fastest_lap_s
+        knot = got["knots"][4]
+        want = heat.sim_heat(table.lap(4), SHARE)
+        assert [knot[f"q_{c}"] for c in ("fl", "fr", "rl", "rr")] == pytest.approx(list(want))
+        assert knot["use"] == pytest.approx(table.use[4]) and knot["q"] == pytest.approx(table.q[4])
+        assert knot["cornering_use"] == knot["braking_use"] == knot["use"]  # no cap, no driver
+        assert "out_part_s" not in knot and got["support"] == table.support
+        # read log-log between two knots, it is the table's own answer
+        a, b = got["knots"][4], got["knots"][5]
+        t = math.sqrt(a["lap_time_s"] * b["lap_time_s"])
+        assert math.sqrt(a["q_fl"] * b["q_fl"]) == pytest.approx(table.heat(t, SHARE)[0])
+        json.dumps(got)  # plain numbers
+
+    def test_with_the_out_lap_and_other_shares(self):
+        track = _oval_track()
+        track.meta["pit"] = {"s_join_m": 400.0, "v_join_ms": 15.0, "rolling_s": 20.0, "n": 12}
+        table = pace.build_table(_ranged(_model(), oval=(0.80, 0.97)), track)
+        got = table.export(SHARE)
+        part, hot = table.out_knots(SHARE)
+        assert got["knots"][3]["out_part_s"] == pytest.approx(part[3])
+        assert got["knots"][3]["out_q_rr"] == pytest.approx(hot[3, 3])
+        other = table.export(replace(SHARE, p_f=0.60))
+        assert other["knots"][3]["q_fl"] > got["knots"][3]["q_fl"]
+        assert other["knots"][3]["lap_time_s"] == got["knots"][3]["lap_time_s"]
 
 
 class TestUseRange:
