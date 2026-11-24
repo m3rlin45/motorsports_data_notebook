@@ -118,6 +118,22 @@ def main(argv: list[str] | None = None) -> int:
         help="Leave the leave-date-out folds out (ten more fits: the reference level on "
         "cells the fit has seen, and pressure against the TPMS with the cell in the fit).",
     )
+    p_holdout = sub.add_parser(
+        "check-pressure-holdout",
+        help="The calculator's own holdout (MAE over folds of held-out sessions, hot pressure "
+        "against the TPMS) for a calculator whose entries are simulated laps, beside the "
+        "calculator as it is on the same folds and rows.",
+    )
+    p_holdout.add_argument("--n-folds", type=int, default=20)
+    p_holdout.add_argument("--n-per-bucket", type=int, default=2)
+    p_holdout.add_argument("--min-bucket-size", type=int, default=10)
+    p_holdout.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help="Folds scored side by side (default: half the cores; a fold's fit and the "
+        "solver use about two each, and a fold needs about 2.3 GB).",
+    )
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     root = args.dataset_root or default_dataset_root()
@@ -210,6 +226,19 @@ def main(argv: list[str] | None = None) -> int:
             folds_dir=folds,
             simulate=not args.yardstick,
             dates=not args.no_dates,
+        )
+    elif args.cmd == "check-pressure-holdout":
+        from . import pressure_gate
+
+        report = pressure_gate.check_pressure_holdout(
+            root,
+            cache_dir=workspace / "cache",
+            tracks_dir=tracks,
+            folds_dir=folds,
+            n_folds=args.n_folds,
+            n_per_bucket=args.n_per_bucket,
+            min_bucket_size=args.min_bucket_size,
+            workers=args.workers,
         )
     else:  # pragma: no cover - argparse rejects unknown commands
         parser.error(f"unknown command {args.cmd}")

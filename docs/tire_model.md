@@ -5679,6 +5679,170 @@ the fit's source and of the loaders it reads the timeseries through
 (`tire_etl/kinematics.py`, `dataset.py`); adding those two to the key
 refitted all seventeen folds and gave the yardstick back to the digit.
 
+**The goal restated by the owner, and the shootout (2026-11-25; the plan,
+not yet run).** Asked how the simulation compares with the calculator as
+it is, the owner restated what the programme is for, in these words:
+"our goal is to build a simulation based model that will replace the
+current calculator"; "the goal is to delete the current calculator model
+and replace it with one that does a simulation IN THE BROWSER"; "the
+simulation based model is everything built in 202. It is supposed to be a
+track model, a car model, a driver model, a heat model, and a tire
+pressure model, all of which stack together to predict the tire pressure
+growth"; and, on how it is judged, "we evaluate the calculator's accuracy
+using MAE over folds of held out data". This replaces two things the plan
+of 2026-11-24 said: that an entry with logged laps keeps its logged heat
+(under a replacement every cell's heat is the simulated stack's), and
+that the simulation reaches the calculators only as precomputed entries.
+What is built today is not that yet: the lap solver is Python (numpy and
+numba) with no port, the tyre pressure model is the current one (its K,
+τ and κ fitted on logged heat, the simulated heat brought to it by the
+frame factor), and gate F read the simulation through a pace table.
+
+*How the replacement is evaluated.* By the calculator's own measure: the
+standing holdout (`tire-predict-holdout`: folds of held-out sessions,
+calculator inputs, hot pressure against the TPMS, MAE and bias per tyre,
+pooled, per car and per condition), the simulation-based calculator
+beside the current one on the same folds, fits and rows
+(`lapsim check-pressure-holdout`). Gate F's paired-day measure is
+reported beside it. One thing is known of this MAE and is to be read with
+it: on these data a heat 5 % too low scores better in three of five
+cells (gate F, S2; #208 findings 1 and 2), so a small difference in MAE
+between two heat sources is not by itself evidence for either.
+
+*The shootout: a precomputed pace table against a direct simulation.*
+The owner's instruction of 2026-11-25. Both contestants are the same
+stack (track, car, driver, heat, pressure); they differ in where the lap
+is driven.
+
+- **A, the precomputed pace table.** Per car, powertrain and layout the
+  fourteen knots are driven ahead of time and shipped as their laps'
+  one-second bins (`lapsim/export.py`, 155 to 350 kB a table). The
+  calculator holds no solver: it reads the heat of a lap time between the
+  knots and splits it with the fit's shares.
+- **B, a direct simulation.** The calculator holds the track, the car
+  model and the solver and drives the lap it is asked for: at the lap
+  time typed in (the knob solved for it), or at the car's fed use where
+  none is typed, with the out-lap driven from the pit exit's join; the
+  heat chain then runs on that lap. In the browser this is the solver
+  ported to JavaScript (and to C# for the desktop and Android heads).
+
+What B can take that A cannot, and so where the two can differ beyond
+A's interpolation (0.9 % of a tyre's heat at most between knots, 0.24
+mbar in gate F): the air of the day (the calculators already ask for the
+ambient temperature; a table is in standard air), a powertrain, shift
+point or gear set other than the table's, a lap time past the table's
+ends, and the wet as its own use. What A has that B has not: no solver
+port to write and to hold to the Python reference, and nothing to
+compute in the client.
+
+The shootout, on the same folds, fits and rows throughout:
+
+1. **Accuracy, by the calculator's measure**: MAE over the held-out
+   folds for the current calculator, A and B. B is driven by the Python
+   solver, which is what a faithful port computes, so accuracy is settled
+   before a port is written. B is given what a user types (track, car,
+   compound, condition, ambient temperature, lap time); a second arm, B+,
+   is also given the day's logged shift point and gear set, to show what
+   more inputs could buy.
+2. **Accuracy, by gate F's measure**: the recommended cold pressure
+   against the day's own with another day beside it, A and B.
+3. **A against B directly**: the difference between their two
+   recommendations on the same rows (median and worst), and where it
+   comes from (interpolation, the air, the out-lap, the ends of the
+   table).
+4. **Coverage**: the held-out sessions each can answer, and why not
+   where not (no lap at the lap time, outside the logged support, no
+   frame factor).
+5. **Cost**: what each ships (bytes per car and layout), what each
+   computes per prediction, and for B the port: the kernel in JavaScript
+   timed in the browser's engine on one lap solved for a lap time (the
+   compiled Python form takes 1 to 4 ms, the numpy form 0.5 to 4 s), and
+   the parity it has to hold with the Python solver, whose two forms are
+   held identical to the last bit today.
+
+Expected before the run: A and B within about 1 % of heat of each other
+at a lap time inside the table, so 1 to 3 mbar apart and not told apart
+by an MAE of 30 to 70 mbar; any difference that shows will come from the
+air and from lap times near the table's ends. The call between them is
+the owner's on the report; nothing is adopted, ported or deleted before
+it. The form of adoption written on 2026-11-24 (entries materialised
+from a committed export) is A's and waits on it too.
+
+**The standing holdout on simulated heat, and the shootout's first item
+(2026-11-25; `pressure_gate.check_pressure_holdout`, `just tire-lapsim
+check-pressure-holdout`; 7 min 46 s on four workers of two threads, the
+folds side by side).** The calculator's own evaluation: 2 sessions per
+(track, car, condition) bucket per fold, 15 folds before the buckets run
+out, 128 sessions, 5,751 lap × tyre rows; calculator inputs (the session's
+25th-percentile lap time typed in). Each fold is fitted once and scored
+by four calculators on the same rows: the current one (the fold model as
+it stands: 0.0387 bar on fold 0, the standing holdout's own figure) and
+the simulation-based one as a pace table, as a lap driven directly for
+the typed lap time in the session's air, and the same with the day's
+logged shift point and gears. **A fold's held-out sessions, and only
+those, are out of every model under the simulated entry** (owner: "make
+sure the holdout is applying to the training of the underlying model as
+well"; "you should just be excluding the sessions that are not used"):
+the pressure model's fit, the car model with its limit, braking use and
+typical use (`held_out_drive`), the track's curvature (`track_without`),
+the frame factor and the fed use. A fold does not take out which laps
+count as build laps, the track's reference line, bank, grade and pit
+exit, or the compound label of an unlabelled session (the standing
+holdout's own, an EM on the full dataset).
+
+| hot-pressure MAE, bar | current calculator | simulation, pace table | simulation, driven directly | with the day's shift point and gears |
+|---|---|---|---|---|
+| **pooled** (5,751 rows) | **0.0437** | **0.0446** | **0.0447** | 0.0447 |
+| FJ (3,307) | 0.0353 | 0.0366 | 0.0366 | 0.0366 |
+| Inferno 86 (2,444) | 0.0551 | 0.0555 | 0.0558 | 0.0558 |
+| dry (4,650) | 0.0434 | 0.0446 | 0.0447 | 0.0447 |
+| damp (224) | 0.0732 | 0.0752 | 0.0751 | 0.0751 |
+| wet (877) | 0.0377 | 0.0372 | 0.0371 | 0.0371 |
+| pooled bias | +0.0070 | +0.0096 | +0.0096 | +0.0096 |
+
+- **The simulation-based calculator is about 1 mbar behind the current
+  one**: per session +0.7 ± 0.3 mbar for the table and +0.8 ± 0.3 for the
+  direct lap (mean and its standard error over 128 sessions), nearer the
+  TPMS on 63 and 57 of them. Every arm answers all 128 sessions.
+- **The table and the direct lap are not told apart**: their predictions
+  differ by 0.8 mbar in the median row and 4.3 at the 95th percentile,
+  and the direct lap's MAE less the table's is +0.1 ± 0.1 mbar. The air
+  of the day and the day's shift point and gears buy nothing that this
+  measure sees.
+- **At levels of pace** (the laps above a percentile of pace among the
+  held-out laps of the same raw car, track and condition; MAE in bar):
+
+  | level | laps | current | table | direct |
+  |---|---|---|---|---|
+  | all | 1,469 | 0.0437 | 0.0446 | 0.0447 |
+  | P75 | 371 | 0.0411 | 0.0417 | 0.0419 |
+  | P90 | 150 | 0.0394 | 0.0401 | 0.0405 |
+  | P95 | 80 | 0.0410 | 0.0411 | 0.0417 |
+
+  The gap does not close on fast laps. On dry laps it is a steady 1 to
+  1.5 mbar on the FJ at every level and grows on the Inferno 86 from
+  under 1 mbar to 2 to 3 at P90 (0.0486 against 0.0507 and 0.0517). Every
+  arm is fed the session's 25th-percentile lap time on every lap, so a
+  fast lap here is one driven harder than its plan, and every arm
+  over-predicts more there (+17 mbar dry at P90 for the current one, 3 to
+  4 more for the simulation).
+- **To be read with it**: this MAE moves by 4 to 6 mbar for a heat 5 %
+  off and prefers less heat in three of five cells (gate F, S2), and the
+  constants under every arm were fitted on logged heat.
+
+*The same question by gate F's measure* (the ten leave-date-out folds,
+dry days, the held-out sessions out of every model; an item of
+`check-pressure`): on the cells the calculator has logged, the simulated
+entry of the day's own raw car is 3.2 mbar from the day's own
+recommendation at a given lap time and 6.0 with nothing given, the
+calculator's pooled logged entry 3.5 and 7.0, another day 3.5 and 5.8;
+the simulated entry passes 13 of 20 cells in both forms where the logged
+entry passes 7, and is nearer the day in 15 cells and further in 5.
+Against the TPMS on those rows it is 45.4 mbar where the logged entry is
+44.1. So the two measures disagree in sign by about 1 mbar each: the
+simulated entry recommends nearer what a day's own heat recommends, and
+scores a little further from the TPMS.
+
 **Batches, and speed.** The solver works on a batch of laps of one
 track, each with its own car and its own u (`solver.solve_laps`,
 `solver.drive_laps`; one lap is a batch of one), in two forms that give

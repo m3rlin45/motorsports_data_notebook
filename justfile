@@ -117,6 +117,8 @@ tire-predict-holdout *ARGS:
 # `check-pace-table` (D1), `check-wet` (D2); each under two minutes, C3 about seven;
 # `check-pressure` (F: the first run refits the pressure model seventeen times, about
 # twenty minutes; later runs read the fits from workspace/lapsim/cache/pressure_folds/).
+# `check-pressure-holdout`: the calculator's standing holdout (MAE over folds of held-out
+# sessions) for the simulation-based calculator beside the current one, folds side by side.
 # Reports, caches and car JSON go to workspace/lapsim/; the tracks are committed in
 # data/lapsim/tracks/ (with attribution to GSI for the bank); run under `ulimit -v 10000000`
 tire-lapsim *ARGS:

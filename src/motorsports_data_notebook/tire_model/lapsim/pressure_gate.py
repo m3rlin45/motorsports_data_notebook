@@ -531,10 +531,15 @@ class SimCell:
     _raw_car: str
     _tracks: dict[str, trk.TrackModel] = field(default_factory=dict)
     _sources: dict[tuple, pr.SimSource | None] = field(default_factory=dict)
+    #: The one track every day of the cell is driven on, where it is given
+    #: (:func:`seen_cell`: the layout's track built without a fold's dates).
+    _fixed: trk.TrackModel | None = None
 
     def track(self, date: str) -> trk.TrackModel:
         """The track a day's lap is driven on: from other classes' laps
         without that date where such a track exists, else the own."""
+        if self._fixed is not None:
+            return self._fixed
         if not self.neither:
             return self._sim.tracks[self.layout_id]
         has = date in set(donor_laps(self._sim, self._raw_car, self.layout_id)["date"])
@@ -571,6 +576,55 @@ class SimCell:
             else:
                 self._sources[key] = pr.SimSource.of(table.laps_export(), self.share)
         return self._sources[key]
+
+    def direct_entry(
+        self,
+        raw_car: str,
+        date: str,
+        session_id: str,
+        lap_time_s: float,
+        factor: np.ndarray,
+        *,
+        setup: bool = False,
+    ) -> pr.Entry | None:
+        """The entry of a lap driven for the asking, with no table (the
+        shootout's direct simulation): the fitted car with the day's
+        powertrain in the session's air, the knob solved for
+        ``lap_time_s``, the out-lap driven at that knob from the pit
+        exit's join; its heat through the chain and the cell's shares, in
+        production's frame (``factor``). The shift point and the gears are
+        the powertrain's own, or with ``setup`` the day's logged ones.
+        None where the car has no lap of that lap time."""
+        from . import solver as sv
+        from .heat import bin_1s, lap_heat, sim_series
+
+        drive = self.drives.get("sim")
+        if drive is None or not np.isfinite(factor).all():
+            return None
+        asked = drive.but(use_cap=True) if setup else drive.but(use_cap=True, shifts={}, gears={})
+        car = asked.car(raw_car, date, session_id)
+        track = self.track(date)
+        profile = cg.profile_of(asked, track)
+        got = sv.solve_laps(profile, [car], [float(lap_time_s)], guess=cg.typical_use(drive))
+        if not bool(got.ok[0]):
+            return None
+        knob = float(got.u[0])
+
+        def _heat(lap: sv.SimLap) -> np.ndarray:
+            return np.asarray(lap_heat(bin_1s(*sim_series(lap), 0.0, lap.lap_time_s), self.share))
+
+        q = _heat(sv.lap_from_nodes(profile, car, got.v_node_ms[0], knob)) * factor
+        out_s = out_q = None
+        pit = dict(track.meta.get("pit") or {})
+        v_out = pace.out_laps(profile, car, np.array([knob]), pit)
+        if v_out is not None:
+            part = pace._out_profile(profile, pace._join_node(profile, pit), whole=False)
+            out_lap = sv.lap_from_nodes(part, car, v_out[0], knob)
+            out_s = float(pit.get("rolling_s") or 0.0) + out_lap.lap_time_s
+            out_q = _heat(out_lap) * factor * out_lap.lap_time_s / out_s
+        return pr.Entry(
+            lap_time_s=float(lap_time_s), q=q, out_s=out_s, out_q=out_q, source="direct"
+        )
 
     def use(self, arm: str, raw_car: str) -> float:
         """The fed use of ``raw_car`` as ``arm``'s car reads it (NaN
@@ -649,6 +703,136 @@ def sim_cell(sim: Sim, raw_car: str, layout_id: str, share: ShareParams) -> SimC
         },
         _sim=sim,
         _raw_car=raw_car,
+    )
+
+
+def track_without(sim: Sim, layout_id: str, held: set[str]) -> trk.TrackModel:
+    """The layout's track with its curvature from the build laps of every
+    car but the sessions ``held`` (laid on the own track's nodes; the
+    bank and the grade stay the road's)."""
+    own = sim.index[sim.index["in_build"] & (sim.index["layout_id"] == layout_id)]
+    gone = set(own.loc[own["session_id"].astype(str).isin(held), "session_id"])
+    if not gone:
+        return sim.tracks[layout_id]
+    other = trk.build_track_model(
+        sim.root,
+        layout_id,
+        exclude_session_ids=gone,
+        cache_dir=sim.cache_dir,
+        inertial=False,
+        n_boot=0,
+    ).model
+    return hm.laid_track(sim.tracks[layout_id], other)
+
+
+def without_sessions(tables: smp.CarTables, held: set[str]) -> smp.CarTables:
+    """``tables`` without every sample of the sessions ``held``."""
+
+    def _keep(tbl: pd.DataFrame) -> pd.DataFrame:
+        if tbl.empty or "session_id" not in tbl.columns:
+            return tbl
+        return tbl[~tbl["session_id"].astype(str).isin(held)]
+
+    return smp.CarTables(
+        sessions=tables.sessions,
+        throttle=_keep(tables.throttle),
+        coast=_keep(tables.coast),
+        brake=_keep(tables.brake),
+        apex=_keep(tables.apex),
+        speed_laps=tables.speed_laps,
+        speed=tables.speed,
+        lateral=tables.lateral,
+    )
+
+
+def held_out_drive(
+    sim: Sim, family: str, held: set[str]
+) -> tuple[cg.Drive | None, dict, pd.DataFrame]:
+    """A car with the sessions ``held`` out of everything it is made of,
+    at every layout: ``(drive, fed, rows)``. The car model is fitted from
+    the sample tables without them, its limit, its driver's braking use
+    and its typical use read on the laps that are left (as a fold of gate
+    C3, with sessions in place of a day); ``fed`` is the fed use per raw
+    car from the sessions that are left (:func:`~.car_gate.fed_use`) and
+    ``rows`` the build laps that are left."""
+    tables = without_sessions(ch.car_only(sim.tables, family), held)
+    rows = sim.rows[~sim.rows["session_id"].astype(str).isin(held)]
+    best = cg.day_best_laps(rows, family)
+    use_laps = {
+        k: own.keep((~own.frame["session_id"].astype(str).isin(held)).to_numpy())
+        for k, own in sim.use_laps[family].items()
+    }
+    raw = cm.fit_car(tables, family, air=sim.air)[0]
+    drive = ch.convene(
+        raw,
+        sim.tracks,
+        best,
+        air=sim.air,
+        shifts=sim.shifts[family],
+        gears=sim.gears[family],
+        laps=use_laps,
+    )
+    if drive is None:
+        return None, {}, rows
+    ranged = cm.CarModel.from_json(drive.model.to_json())
+    ranged.meta = {**drive.model.meta, "use_range": cg.use_range(drive, sim.tracks, rows, family)}
+    drive = drive.but(model=ranged)
+    left = sim.fed[(sim.fed["car"] == family) & ~sim.fed["session_id"].astype(str).isin(held)]
+    return drive, cg.fed_use(drive, sim.tracks, left), rows
+
+
+def seen_cell(
+    sim: Sim,
+    raw_car: str,
+    layout_id: str,
+    share: ShareParams,
+    held: set[str],
+    track: trk.TrackModel | None = None,
+    memo: dict | None = None,
+) -> SimCell | None:
+    """The simulation's side of a cell the car *has* run, for a fold that
+    holds the sessions ``held`` out: the simulation as the heat source
+    where the calculator has logged laps. **The holdout applies to every
+    model under the entry**: the car model, its limit, the driver's
+    braking use and the typical use (:func:`held_out_drive`); the track's
+    curvature (``track``: :func:`track_without`); the frame factor (the
+    car's build laps that are left at the layout, per kind of source; its
+    other layouts' where the layout has too few of that kind); and the
+    fed use (the raw car's own sessions that are left at the layout; the
+    median over its layouts where it has none). ``memo`` keeps a fold's
+    car per family between cells."""
+    family = cm.family_of(raw_car)
+    if family not in sim.full or layout_id not in sim.tracks:
+        return None
+    memo = {} if memo is None else memo
+    if family not in memo:
+        memo[family] = held_out_drive(sim, family, held)
+    drive, carried, rows = memo[family]
+    if drive is None:
+        return None
+    fed = {
+        car: {**own, "use": own["layouts"].get(layout_id, own)["use"]}  # the layout's own first
+        for car, own in carried.items()
+    }
+    build = rows[(rows["car"] == family) & (rows["basis"] == "dry")]
+    heats = pr.heats_frame(
+        build[["session_id", "lap_num", "layout_id"]], sim.sensor, sim.tyres, share
+    )
+    factors = pr.frame_factors(heats[heats["layout_id"] != layout_id]) if len(heats) else {}
+    factors.update(pr.frame_factors(heats[heats["layout_id"] == layout_id]) if len(heats) else {})
+    return SimCell(
+        family=family,
+        layout_id=layout_id,
+        share=share,
+        drives={"sim": drive, "low_power": None, "other_car": None},
+        fed={"sim": fed},
+        factors=factors,
+        factor_laps={},
+        neither=False,
+        donors={"cars": [], "laps": 0, "days": 0},
+        _sim=sim,
+        _raw_car=raw_car,
+        _fixed=track if track is not None else track_without(sim, layout_id, held),
     )
 
 
@@ -772,7 +956,8 @@ def day_arms(held: Held, day: dict, cell: SimCell | None, *, seen: bool = False)
                 {"arm": "entry", "form": "chain", "entry": None, "lap_time_s": None, "gap": gap}
             )
             out.append({"arm": "entry", "form": "tpms", "entry": None})
-        return out + other_day_arms(held, day)
+        out += other_day_arms(held, day)
+        return out + (sim_arms(cell, day) if cell is not None else [])
     typed = float(held.prep.session_lap_time.get(sid, t_day))
     for arm, factor in (("heat_up", 1.0 + HEAT_PLANT), ("heat_down", 1.0 - HEAT_PLANT)):
         out.append(
@@ -1067,11 +1252,12 @@ def score_cell(
     status ``no_solution``.
 
     ``tpms``: pressure against the TPMS (S2), which is reported and never
-    ranks: per arm with a ``tpms`` entry, the holdout's own rows at flying
-    lap :data:`~.pressure.FLYING_LAP_N` of pit-exit stints (production's
-    inputs: the session's 25th-percentile lap time typed in), with
-    ``resid_mbar`` and whether the row is ``after_dropped`` or
-    ``after_cool_down`` (:func:`~.pressure.mark_laps`).
+    ranks: per arm with a ``tpms`` entry, the holdout's own rows
+    (production's inputs: the session's 25th-percentile lap time typed
+    in), every scored lap and tyre, with ``resid_mbar``, ``flying_lap``,
+    ``pit_exit`` and whether the row is ``after_dropped`` or
+    ``after_cool_down`` (:func:`~.pressure.mark_laps`). :func:`at_lap`
+    takes the rows S2 is read on.
 
     ``cells`` is the simulation's side per raw car (None: no simulated
     arm); ``seen`` as in :func:`day_arms`; ``wet`` scores the days with
@@ -1117,11 +1303,9 @@ def score_cell(
                 got = _score_fold_laps(held.prep, model, session_ids=[sid])
                 if got.empty:
                     continue
-                got = got[
-                    (got["lap_within_stint"] == pr.FLYING_LAP_N)
-                    & (got["anchor_kind"] == "pit_exit")
-                    & got["resid_bar"].notna()
-                ].merge(flags, on=["session_id", "lap_num"], how="left")
+                got = got[got["resid_bar"].notna()].merge(
+                    flags, on=["session_id", "lap_num"], how="left"
+                )
                 tpms.append(
                     pd.DataFrame(
                         {
@@ -1130,6 +1314,8 @@ def score_cell(
                             "lap_num": got["lap_num"],
                             "corner": got["corner"],
                             "arm": a["arm"],
+                            "flying_lap": got["lap_within_stint"],
+                            "pit_exit": got["anchor_kind"] == "pit_exit",
                             "resid_mbar": 1000.0 * got["resid_bar"],
                             "after_dropped": got["after_dropped"].fillna(False).astype(bool),
                             "after_cool_down": got["after_cool_down"].fillna(False).astype(bool),
@@ -1170,10 +1356,20 @@ def score_cell(
     )
 
 
+def at_lap(tpms: pd.DataFrame, n: int = pr.FLYING_LAP_N) -> pd.DataFrame:
+    """The rows of :func:`score_cell`'s ``tpms`` that S2 is read on: the
+    end of flying lap ``n`` of a pit-exit stint."""
+    if tpms.empty or "flying_lap" not in tpms.columns:
+        return tpms
+    return tpms[(tpms["flying_lap"] == n) & tpms["pit_exit"].astype(bool)]
+
+
 def tpms_table(tpms: pd.DataFrame) -> pd.DataFrame:
-    """Pressure against the TPMS per raw car, track and arm on the clean
-    rows (not after a dropped lap, not at or after a cool-down lap):
-    ``rows``, ``mae_mbar``, ``bias_mbar``, with the rows set aside."""
+    """Pressure against the TPMS per raw car, track and arm at flying lap
+    5 of pit-exit stints (:func:`at_lap`) on the clean rows (not after a
+    dropped lap, not at or after a cool-down lap): ``rows``, ``mae_mbar``,
+    ``bias_mbar``, with the rows set aside."""
+    tpms = at_lap(tpms)
     if tpms.empty:
         return tpms
     aside = tpms["after_dropped"] | tpms["after_cool_down"]
@@ -1517,6 +1713,7 @@ def check_pressure(
         )
         a, b = score_cell(held, cells)
         visit_rows.append(a.assign(what="first visit", tpms=False))
+        b = at_lap(b)
         if len(b):
             visit_rows.append(
                 b.rename(columns={"resid_mbar": "d_mbar"}).assign(
@@ -1537,9 +1734,27 @@ def check_pressure(
         # scored, the others are the days they are paired with
         every = _prepare_fold_laps(prod.root, sorted(prod.trained), model)
         present = prep.full[["car", "track_canonical"]].drop_duplicates()
+        out_ids, fold_memo = set(ids), {}  # type: ignore[var-annotated]
+        fold_tracks: dict[str, trk.TrackModel] = {}
         for pooled, track in zip(present["car"], present["track_canonical"]):
             held = held_of(prod, model, every, str(pooled), str(track), len(ids))
-            a, b = score_cell(held, {}, seen=True, sessions=set(ids))
+            seen_cells: dict[str, SimCell | None] = {}
+            if sim is not None:
+                mine = held.days[held.days["session_id"].isin(ids)]
+                for raw_car, own in mine.groupby("raw_car", sort=True):
+                    layout_id = _majority(list(own["layout_id"]))
+                    if layout_id in sim.tracks and layout_id not in fold_tracks:
+                        fold_tracks[layout_id] = track_without(sim, layout_id, out_ids)
+                    seen_cells[str(raw_car)] = seen_cell(
+                        sim,
+                        str(raw_car),
+                        layout_id,
+                        held.share,
+                        out_ids,
+                        fold_tracks.get(layout_id),
+                        fold_memo,
+                    )
+            a, b = score_cell(held, seen_cells, seen=True, sessions=set(ids))
             seen_rows.append(a)
             seen_tpms.append(b)
         same_all, n_all = identity_check(model, prep)
@@ -1599,6 +1814,7 @@ def check_pressure(
     report_seen(rep, main, seen)
     report_tpms(rep, tpms, seen_t)
     report_current(rep, main, seen, shipped, tpms, seen_t, shipped_t)
+    report_nfold(rep, seen, seen_t)
     report_wet(rep, wet_rows, wet_days)
     report_first_visit(rep, visit_rows, rows, tpms)
     return rep
@@ -1739,6 +1955,131 @@ def report_current(
     )
 
 
+def report_nfold(rep: GateReport, seen: pd.DataFrame | None, seen_t: pd.DataFrame | None) -> None:
+    """The n-fold analysis: on the cells the calculator has logged, every
+    dry day scored once with its date left out, the simulated entry in
+    place of the logged one on the same rows."""
+    if seen is None or seen.empty or not (seen["arm"] == "sim").any():
+        return
+    stints = by_stint(seen)
+    stints = stints[stints["n"] == pr.FLYING_LAP_N]
+    lines, cells, heads = [], [], []
+    for form in FORMS:
+        own = stints[stints["form"] == form]
+        # the two on the stints both have, and the yardstick has
+        keys = own.loc[own["arm"] == "sim", _STINT].merge(
+            own.loc[own["arm"] == "entry", _STINT], on=_STINT
+        )
+        own = own.merge(keys.drop_duplicates(), on=_STINT)
+        row: dict[str, Any] = {"form": form}
+        both = None
+        for arm, name in (("entry", "logged"), ("sim", "sim")):
+            att = attain(own, arm)
+            got = tally(att)
+            row[f"{name}_cells"] = f"{got['passed']} of {got['scored']}"
+            row[f"{name}_mbar"] = got["size"]
+            row["another_day"] = got["beside"]
+            part = att[_CELL + ["days", "stints", "size", "signed", "beside", "scored"]].rename(
+                columns={"size": name, "signed": f"{name}_signed"}
+            )
+            both = (
+                part
+                if both is None
+                else both.merge(part[_CELL + [name, f"{name}_signed"]], on=_CELL)
+            )
+        versus = attain(own, "sim", beside="entry")
+        versus = versus[versus["scored"]] if len(versus) else versus
+        row["sim_nearer"] = int((versus["size"] < versus["beside"]).sum()) if len(versus) else 0
+        row["sim_further"] = int((versus["size"] > versus["beside"]).sum()) if len(versus) else 0
+        lines.append(row)
+        if both is not None:
+            cells.append(both.assign(form_=form))
+        heads.append(
+            f"{FORM_NAMES[form]}: the logged entry {row['logged_mbar']:.1f} mbar from the day "
+            f"({row['logged_cells']}), the simulated entry {row['sim_mbar']:.1f} "
+            f"({row['sim_cells']}), another day {row['another_day']:.1f}; the simulation nearer "
+            f"in {row['sim_nearer']} cells and further in {row['sim_further']}"
+        )
+    detail = (
+        f"{DATE_FOLDS} folds of whole dates, so every dry day with a pit-exit stint is scored "
+        "once by a fit that has not seen its date. On each day two entries are read for the "
+        "day's cell through that fit: the fold model's own (the calculator today: the pooled "
+        "car's logged laps at the track on the other dates) and a simulated one, in which "
+        "nothing has seen the fold's dates at the layout either: the car model is fitted "
+        "without them, the track's curvature built without them, the frame factor and the fed "
+        "use read from the car's laps at the layout on other dates. The measure, the pairing "
+        "and the cells are the gate's; both entries are on the stints both have.\n\n"
+        + md_table(pd.DataFrame(lines), floats="{:.3g}")
+    )
+    if cells:
+        table = pd.concat(cells, ignore_index=True)
+        detail += (
+            "\n\n**By cell** (`logged`, `sim`: the distance from the day, mbar, with the "
+            "signed median; `beside`: another day's).\n\n"
+            + md_table(
+                table[
+                    ["form_", "raw_car", "track", "corner", "days", "stints", "logged"]
+                    + ["logged_signed", "sim", "sim_signed", "beside", "scored"]
+                ],
+                floats="{:.3g}",
+            )
+        )
+    if seen_t is not None and len(seen_t):
+        lap = ["session_id", "stint_id", "lap_num", "corner"]
+        have = seen_t.loc[seen_t["arm"] == "sim", lap].merge(
+            seen_t.loc[seen_t["arm"] == "entry", lap], on=lap
+        )
+        own_t = seen_t[seen_t["arm"].isin(["entry", "sim"])].merge(have.drop_duplicates(), on=lap)
+        clean = own_t[~(own_t["after_dropped"] | own_t["after_cool_down"])]
+        rows_t = []
+        for label, frame in (
+            ("every scored lap", own_t),
+            ("every scored lap, clean rows", clean),
+            (f"flying lap {pr.FLYING_LAP_N} of pit-exit stints, clean rows", at_lap(clean)),
+        ):
+            for pooled, grp in list(frame.groupby("pooled", sort=True)) + [("all", frame)]:
+                wide = grp.groupby("arm")["resid_mbar"].agg(
+                    mae=lambda x: float(x.abs().mean()), bias="mean", rows="size"
+                )
+                if {"entry", "sim"} <= set(wide.index):
+                    rows_t.append(
+                        {
+                            "rows_of": label,
+                            "car": pooled,
+                            "rows": int(wide.loc["sim", "rows"]),
+                            "logged_mae": wide.loc["entry", "mae"],
+                            "sim_mae": wide.loc["sim", "mae"],
+                            "logged_bias": wide.loc["entry", "bias"],
+                            "sim_bias": wide.loc["sim", "bias"],
+                        }
+                    )
+        if rows_t:
+            t = pd.DataFrame(rows_t)
+            top = t[(t["rows_of"] == "every scored lap") & (t["car"] == "all")].iloc[0]
+            heads.append(
+                f"against the TPMS over {int(top['rows'])} lap × tyre rows: the logged entry "
+                f"{top['logged_mae']:.1f} mbar MAE, the simulated entry {top['sim_mae']:.1f}"
+            )
+            detail += (
+                "\n\n**Pressure against the TPMS**, the holdout's own measure (hot-pressure "
+                "MAE and signed bias, mbar; production's inputs, the session's 25th-percentile "
+                "lap time typed in), on the lap × tyre rows both entries have. It does not rank "
+                "a heat source (a heat too low scores better in most cells); it is here "
+                "because it is the number the standing holdout reports.\n\n"
+                + md_table(t, floats="{:.3g}")
+            )
+    rep.items.append(
+        GateItem(
+            "The n-fold analysis: the simulated entry in place of the logged one, on the cells "
+            "the calculator has logged",
+            None,
+            "; ".join(heads),
+            "reported: an entry with logged laps keeps its logged heat (#208)",
+            detail,
+        )
+    )
+
+
 def report_wet(rep: GateReport, wet_rows: list[pd.DataFrame], wet_days: list[pd.DataFrame]) -> None:
     """Reported beside: the wet and damp cells, against a logged run of
     the same wet day."""
@@ -1814,7 +2155,9 @@ def report_first_visit(
     visit = pd.concat(frames, ignore_index=True)
     sessions = set(visit["session_id"])
     cell = rows[rows["session_id"].isin(sessions)].assign(what="cell left out", tpms=False)
-    cell_t = tpms[tpms["session_id"].isin(sessions)].rename(columns={"resid_mbar": "d_mbar"})
+    cell_t = at_lap(tpms[tpms["session_id"].isin(sessions)]).rename(
+        columns={"resid_mbar": "d_mbar"}
+    )
     cell_t = cell_t.assign(what="cell left out", tpms=True, form="tpms", n=pr.FLYING_LAP_N)
     both = pd.concat([visit, cell, cell_t], ignore_index=True)
     both = both[both["n"] == pr.FLYING_LAP_N]
@@ -2480,6 +2823,467 @@ def report_simulation(
             )
 
 
+# ------------------------------------- the standing holdout, on simulated heat
+
+
+#: The calculators of the standing holdout: the current one, and the
+#: simulation-based one as a precomputed pace table and as a lap driven
+#: directly (with the powertrain's own shift point and gears, and with
+#: the day's logged ones).
+HOLDOUT_ARMS = ("calculator", "table", "direct", "direct_setup")
+ARM_NAMES = {
+    "calculator": "the current calculator",
+    "table": "simulation, precomputed pace table",
+    "direct": "simulation, driven directly",
+    "direct_setup": "simulation, driven directly with the day's shift point and gears",
+}
+
+
+def holdout_rows(
+    prod: Production,
+    sim: Sim,
+    ids: list[str],
+    labels: dict[str, str],
+    cache_dir: Path | None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """One fold of production's holdout scored on one fit by every arm of
+    :data:`HOLDOUT_ARMS`: ``(rows, sessions)``. ``rows`` are
+    ``validate._score_fold_laps``'s (every scored lap and tyre, calculator
+    inputs) with ``arm``. ``calculator`` is the fold model as it stands,
+    the standing holdout's own rows. The others are the same fit with the
+    session's cell and condition answered by the simulated stack, **in
+    which the fold's held-out sessions are out of every model**
+    (:func:`seen_cell`): ``table`` reads a pace table's knots at the lap
+    time typed in, the entry's own lap being that of the fed use;
+    ``direct`` drives the lap of the typed lap time in the session's air
+    (:meth:`SimCell.direct_entry`), ``direct_setup`` with the day's logged
+    shift point and gears as well. A wet or damp session is the same car
+    at a lower use on the dry track (gate D2: no wet term). ``sessions``
+    says per held-out session which arms have an entry and, where one has
+    none, why."""
+    from ..validate import _prepare_fold_laps, _score_fold_laps
+
+    model = fold_model(prod.root, ids, cache_dir)
+    prep = _prepare_fold_laps(prod.root, ids, model, inferred_labels=labels)
+    if prep is None:
+        return pd.DataFrame(), pd.DataFrame()
+    shares = ho.shares_of(model)
+    meta = prod.sessions.set_index(prod.sessions["session_id"].astype(str))
+    held = set(ids)
+    parts = [_score_fold_laps(prep, model).assign(arm="calculator")]
+    kinds = {
+        k: v[1]
+        for k, v in hg.sensor_lap_bins(
+            prod.root, prep.flying[["session_id", "lap_num", "car"]]
+        ).items()
+    }
+    cells: dict[tuple[str, str], SimCell | None] = {}
+    tracks: dict[str, trk.TrackModel] = {}
+    memo: dict = {}
+    notes = []
+    for sid, own in prep.flying.groupby("session_id", sort=True):
+        sid = str(sid)
+        pooled, track = str(own["car"].iloc[0]), str(own["track_canonical"].iloc[0])
+        cond = str(own["condition"].iloc[0])
+        cond = "dry" if cond == "unknown" else cond
+        raw_car, date = str(meta.loc[sid, "car"]), str(meta.loc[sid, "date"])
+        layout_id = str(meta.loc[sid, "layout_id"])
+        typed = float(prep.session_lap_time.get(sid, float("nan")))
+        seen = [kinds.get((sid, int(n)), "") for n in own["lap_num"]]
+        source = _majority([k for k in seen if k])
+        note: dict[str, Any] = {"session_id": sid, "car": pooled, "raw_car": raw_car}
+        note.update(track=track, condition=cond, source=source, why="")
+        entries: dict[str, pr.Entry | None] = {}
+        if pooled not in shares or layout_id not in sim.tracks:
+            note["why"] = "no track or no car model"
+        else:
+            key = (raw_car, layout_id)
+            if key not in cells:
+                if layout_id not in tracks:
+                    tracks[layout_id] = track_without(sim, layout_id, held)
+                cells[key] = seen_cell(
+                    sim, raw_car, layout_id, shares[pooled], held, tracks[layout_id], memo
+                )
+            cell = cells[key]
+            factor = None if cell is None else cell.factors.get(source)
+            if cell is None:
+                note["why"] = "no car model"
+            elif factor is None:
+                note["why"] = f"no frame factor for a {source or 'mixed'} session"
+            else:
+                src = cell.source("sim", cm.powertrain_of(raw_car, date), date)
+                use = cell.use("sim", raw_car)
+                if src is None:
+                    note["why"] = "no table for the day's powertrain"
+                elif not np.isfinite(use):
+                    note["why"] = "no fed use"
+                else:
+                    entries["table"] = src.entry(factor, use=use)
+                    note["use"] = use
+                    note["table_status"] = src.status(typed)
+                if src is not None and np.isfinite(typed):
+                    entries["direct"] = cell.direct_entry(raw_car, date, sid, typed, factor)
+                    entries["direct_setup"] = cell.direct_entry(
+                        raw_car, date, sid, typed, factor, setup=True
+                    )
+        for arm in HOLDOUT_ARMS[1:]:
+            entry = entries.get(arm)
+            note[arm] = entry is not None
+            if entry is not None:
+                placed = pr.place(model, track, pooled, cond, entry)
+                parts.append(_score_fold_laps(prep, placed, session_ids=[sid]).assign(arm=arm))
+        notes.append(note)
+    return pd.concat(parts, ignore_index=True), pd.DataFrame(notes)
+
+
+def _common(rows: pd.DataFrame, arms: tuple[str, ...]) -> pd.DataFrame:
+    """The rows of ``arms`` on the lap × tyre keys every one of them has."""
+    keys = ["session_id", "lap_num", "corner", "fold"]
+    ok = rows[rows["resid_bar"].notna() & rows["arm"].isin(arms)]
+    have = None
+    for arm in arms:
+        mine = ok.loc[ok["arm"] == arm, keys].drop_duplicates()
+        have = mine if have is None else have.merge(mine, on=keys)
+    return ok.merge(have, on=keys) if have is not None else ok
+
+
+def mae_table(
+    rows: pd.DataFrame, by: list[str], arms: tuple[str, ...] = HOLDOUT_ARMS
+) -> pd.DataFrame:
+    """Hot-pressure MAE and bias (bar) per tyre for each of ``arms``
+    (:func:`holdout_rows`), grouped by ``by``, on the lap × tyre rows
+    every one of them has: ``<arm>_mae`` and ``<arm>_bias``."""
+    ok = _common(rows, arms)
+    out = []
+    for key, grp in ok.groupby(by, sort=True) if by else [((), ok)]:
+        key = key if isinstance(key, tuple) else (key,)
+        for corner, tyre in list(grp.groupby("corner", sort=False)) + [("all", grp)]:
+            stat = tyre.groupby("arm")["resid_bar"].agg(
+                mae=lambda x: float(x.abs().mean()), bias="mean", rows="size"
+            )
+            if not set(arms) <= set(stat.index):
+                continue
+            row: dict[str, Any] = {**dict(zip(by, key)), "tyre": corner}
+            row["rows"] = int(stat.loc[arms[0], "rows"])
+            row.update({f"{arm}_mae": float(stat.loc[arm, "mae"]) for arm in arms})
+            row.update({f"{arm}_bias": float(stat.loc[arm, "bias"]) for arm in arms})
+            out.append(row)
+    return pd.DataFrame(out)
+
+
+def mae_by_pace(
+    rows: pd.DataFrame,
+    arms: tuple[str, ...] = HOLDOUT_ARMS,
+    levels: tuple[float, ...] = (0.0, *ch.PACE_LEVELS),
+    by: tuple[str, ...] = (),
+) -> pd.DataFrame:
+    """The holdout's MAE at levels of pace, as gate C3 reads its
+    measures: per level the laps above that percentile of pace among the
+    held-out laps of the same raw car, track and condition
+    (:func:`~.car_holdout.fast_laps`; level 0 is every lap), and on their
+    lap × tyre rows each arm's MAE and bias (bar), with the laps and rows
+    counted. ``rows`` are :func:`holdout_rows`'s with ``raw_car`` and the
+    lap's ``lap_time_s``; ``by`` groups further (the pooled car, say)."""
+    ok = _common(rows, arms)
+    ok = ok[np.isfinite(ok["lap_time_s"])]
+    laps = ok.drop_duplicates(["session_id", "lap_num"])
+    out = []
+    for level in levels:
+        fast = []
+        for _, cell in laps.groupby(["raw_car", "track", "condition"], sort=False):
+            keep = ch.fast_laps(cell["lap_time_s"].to_numpy(float), level) if level else None
+            fast.append(cell if keep is None else cell[keep])
+        chosen = pd.concat(fast)[["session_id", "lap_num"]] if fast else laps.iloc[:0]
+        own = ok.merge(chosen, on=["session_id", "lap_num"])
+        for key, grp in own.groupby(list(by), sort=True) if by else [((), own)]:
+            key = key if isinstance(key, tuple) else (key,)
+            stat = grp.groupby("arm")["resid_bar"].agg(
+                mae=lambda x: float(x.abs().mean()), bias="mean"
+            )
+            if not set(arms) <= set(stat.index):
+                continue
+            row: dict[str, Any] = {**dict(zip(by, key)), "level": f"P{level:g}" if level else "all"}
+            row["laps"] = int(grp.drop_duplicates(["session_id", "lap_num"]).shape[0])
+            row["rows"] = int(len(grp) // len(arms))
+            row.update({f"{arm}_mae": float(stat.loc[arm, "mae"]) for arm in arms})
+            row.update({f"{arm}_bias": float(stat.loc[arm, "bias"]) for arm in arms})
+            out.append(row)
+    return pd.DataFrame(out)
+
+
+def paired_by_session(rows: pd.DataFrame, arm: str, base: str = "calculator") -> dict:
+    """``arm``'s mean absolute residual less ``base``'s, per held-out
+    session on the rows both have: its mean over sessions, the standard
+    error of that mean and the sessions on which ``arm`` is nearer the
+    TPMS (bar)."""
+    keys = ["session_id", "lap_num", "corner", "fold"]
+    ok = _common(rows, (arm, base)).assign(size=lambda d: d["resid_bar"].abs())
+    wide = ok.pivot_table(index=keys, columns="arm", values="size", aggfunc="first").dropna()
+    if wide.empty or not {arm, base} <= set(wide.columns):
+        return {"sessions": 0, "mean": float("nan"), "se": float("nan"), "nearer": 0}
+    per = (wide[arm] - wide[base]).groupby(level="session_id").mean()
+    return {
+        "sessions": int(len(per)),
+        "mean": float(per.mean()),
+        "se": float(per.std(ddof=1) / np.sqrt(len(per))) if len(per) > 1 else float("nan"),
+        "nearer": int((per < 0).sum()),
+    }
+
+
+#: What a worker process of the holdout has loaded: the dataset and the
+#: lap simulation's side, once, however many folds it scores.
+_WORKER: dict = {}
+
+
+def _fold_job(job: tuple) -> tuple[int, pd.DataFrame, pd.DataFrame]:
+    """One fold of the holdout in a worker process: ``(fold, rows,
+    sessions)`` of :func:`holdout_rows`."""
+    root, cache_dir, tracks_dir, folds_dir, fold, ids, labels = job
+    key = (str(root), str(cache_dir), str(tracks_dir), str(folds_dir))
+    if _WORKER.get("key") != key:
+        _WORKER.update(
+            key=key,
+            prod=load_production(root),
+            sim=load_sim(root, cache_dir=cache_dir, tracks_dir=tracks_dir, folds_dir=folds_dir),
+        )
+    rows, notes = holdout_rows(_WORKER["prod"], _WORKER["sim"], ids, labels, cache_dir)
+    return fold, rows, notes
+
+
+def check_pressure_holdout(
+    root: Path,
+    *,
+    cache_dir: Path | None = None,
+    tracks_dir: Path | None = None,
+    folds_dir: Path | None = None,
+    n_folds: int = 20,
+    n_per_bucket: int = 2,
+    min_bucket_size: int = 10,
+    workers: int | None = None,
+) -> GateReport:
+    """The calculator's own evaluation, MAE over folds of held-out
+    sessions (``tire-predict-holdout``: the every-session holdout,
+    calculator inputs, hot pressure against the TPMS), for a calculator
+    whose entries are simulated laps, beside the calculator as it is on
+    the same folds, fits and rows (owner, 2026-11-25: the goal is a
+    simulation-based model that replaces the current calculator).
+
+    The folds are independent (a fit, then its scoring), so they run side
+    by side: ``workers`` processes (half the machine's cores by default,
+    a fit and the solver using about two each; one fold needs about 2.3
+    GB), each loading the dataset and the simulation's side once."""
+    import multiprocessing
+    import os
+    from concurrent.futures import ProcessPoolExecutor
+
+    from ..validate import _inferred_compound_labels, _pick_holdout_sessions
+
+    rep = GateReport(
+        "FH", "the standing holdout on simulated heat (`lapsim check-pressure-holdout`)"
+    )
+    prod = load_production(root)
+    labels = _inferred_compound_labels(root)
+    jobs = []
+    for fold in range(max(1, n_folds)):
+        ids = _pick_holdout_sessions(
+            prod.sessions,
+            prod.raw_laps,
+            n_per_bucket=n_per_bucket,
+            min_bucket_size=min_bucket_size,
+            fold=fold,
+            session_condition=prod.conditions,
+        )
+        if not ids:
+            break
+        jobs.append((root, cache_dir, tracks_dir, folds_dir, fold, ids, labels))
+    cores = os.cpu_count() or 2
+    workers = max(1, min(len(jobs), workers or cores // 2))
+    all_rows, all_notes = [], []
+    if workers == 1:
+        done = map(_fold_job, jobs)
+        results = list(done)
+    else:
+        # fresh interpreters (the solver's compiled threads do not survive a fork),
+        # each given its share of the cores
+        threads = str(max(1, cores // workers))
+        saved = {k: os.environ.get(k) for k in ("NUMBA_NUM_THREADS", "OMP_NUM_THREADS")}
+        saved["OPENBLAS_NUM_THREADS"] = os.environ.get("OPENBLAS_NUM_THREADS")
+        os.environ.update({k: threads for k in saved})
+        try:
+            with ProcessPoolExecutor(
+                max_workers=workers, mp_context=multiprocessing.get_context("spawn")
+            ) as pool:
+                results = list(pool.map(_fold_job, jobs))
+        finally:
+            for k, v in saved.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+    for fold, rows, notes in results:
+        if len(rows):
+            all_rows.append(rows.assign(fold=fold))
+            all_notes.append(notes.assign(fold=fold))
+    logger.info("pressure holdout: %d folds scored on %d workers", len(results), workers)
+    if not all_rows:
+        rep.items.append(GateItem("Held-out sessions", False, "none", "at least one"))
+        return rep
+    rows = pd.concat(all_rows, ignore_index=True)
+    notes = pd.concat(all_notes, ignore_index=True)
+    # each row's raw car and its lap's own lap time, for the levels of pace
+    lap_time = prod.raw_laps[["session_id", "lap_num", "lap_time_s"]].drop_duplicates(
+        ["session_id", "lap_num"]
+    )
+    rows = rows.merge(lap_time, on=["session_id", "lap_num"], how="left").merge(
+        notes[["session_id", "raw_car"]].drop_duplicates("session_id"), on="session_id", how="left"
+    )
+    if cache_dir is not None:
+        out = Path(cache_dir) / "pressure_rows"
+        out.mkdir(parents=True, exist_ok=True)
+        rows.to_parquet(out / "holdout_rows.parquet")
+        notes.to_parquet(out / "holdout_sessions.parquet")
+    own = rows[rows["arm"] == "calculator"]
+    rep.notes.append(
+        f"{len(results)} folds (of {n_folds} asked for: the buckets run out) of {n_per_bucket} "
+        f"sessions per (track, car, condition) bucket (dry buckets of {min_bucket_size} sessions "
+        f"or more, rain buckets of 3): {notes['session_id'].nunique()} sessions held out, "
+        f"{int(own['resid_bar'].notna().sum())} lap × tyre rows with a TPMS reading. Calculator "
+        "inputs: the pit-exit temperature, N laps of the session's 25th-percentile lap time, "
+        "the compound a driver would have selected. Each fold is fitted once. `calculator` is "
+        "that fit as it stands (the standing holdout, row for row). The simulation-based "
+        "calculator is the same fit with the cell answered by the simulated stack, and **the "
+        "fold's held-out sessions are out of every model in that stack**: the pressure model's "
+        "K, tau, kappa, shares and compound multipliers (the fold's fit); the car model, its "
+        "limit, the driver's braking use and typical use; the track's curvature; the frame "
+        "factor; the fed use. What a fold does not take out: which laps of the dataset count "
+        "as build laps (the lap index judges pace against every session), the track's "
+        "reference line, bank, grade and pit exit, the day's own powertrain and (for "
+        "`direct_setup` only) its logged shift point and gears, which are inputs, and the "
+        "compound label of an unlabelled session, which is the standing holdout's own (an EM "
+        "on the full dataset). `table`: a precomputed pace table read at the typed lap time. "
+        "`direct`: the lap of the typed lap time driven for the asking, in the session's air."
+    )
+    whole = float(own["resid_bar"].abs().mean())
+    rep.items.append(
+        GateItem(
+            "The calculator's rows are the standing holdout's",
+            None,
+            f"{int(own['resid_bar'].notna().sum())} rows, pooled MAE {whole:.4f} bar",
+            "reported: `tire-predict-holdout --n-folds` prints the same",
+        )
+    )
+    sims = HOLDOUT_ARMS[1:]
+    cover = {arm: int(notes[arm].sum()) for arm in sims if arm in notes.columns}
+    missing = notes[~notes[[a for a in sims if a in notes.columns]].all(axis=1)]
+    rep.items.append(
+        GateItem(
+            "Sessions each simulation-based calculator has an answer for",
+            None,
+            "; ".join(f"{arm} {n} of {len(notes)}" for arm, n in cover.items())
+            + (
+                "; without a frame factor or a car: "
+                + "; ".join(f"{n} {why}" for why, n in missing["why"].value_counts().items() if why)
+                if len(missing)
+                else ""
+            ),
+            "reported: a replacement has to answer every session; the tables below are on "
+            "the rows every arm has",
+            (
+                md_table(
+                    missing[
+                        ["session_id", "raw_car", "track", "condition", "source", "why", *cover]
+                    ]
+                )
+                if len(missing)
+                else ""
+            ),
+        )
+    )
+    arms = tuple(a for a in HOLDOUT_ARMS if (rows["arm"] == a).any())
+    pooled = mae_table(rows, [], arms)
+    by_car = mae_table(rows, ["car"], arms)
+    by_cond = mae_table(rows, ["condition"], arms)
+    by_cell = mae_table(rows, ["car", "track", "condition"], arms)
+    by_cell = by_cell[by_cell["tyre"] == "all"] if len(by_cell) else by_cell
+    if pooled.empty:
+        return rep
+    top = pooled[pooled["tyre"] == "all"].iloc[0]
+    pairs = {arm: paired_by_session(rows, arm) for arm in arms[1:]}
+    rep.items.append(
+        GateItem(
+            "Hot-pressure MAE over the held-out folds: the simulation-based calculator beside "
+            "the current one",
+            None,
+            f"pooled over {int(top['rows'])} lap × tyre rows: "
+            + "; ".join(f"{ARM_NAMES[a]} {top[f'{a}_mae']:.4f} bar" for a in arms)
+            + ". Per session, less the current calculator: "
+            + "; ".join(
+                f"{a} {1000 * p['mean']:+.1f} ± {1000 * p['se']:.1f} mbar, nearer the TPMS on "
+                f"{p['nearer']} of {p['sessions']} sessions"
+                for a, p in pairs.items()
+            ),
+            "reported: the calculator's own measure of accuracy",
+            "Lap-end hot-pressure residual (predicted less the TPMS reading), bar, on the rows "
+            "every arm has.\n\n**Pooled.**\n\n"
+            + md_table(pooled, floats="{:.4f}")
+            + "\n\n**Per car.**\n\n"
+            + md_table(by_car, floats="{:.4f}")
+            + "\n\n**Per condition.**\n\n"
+            + md_table(by_cond, floats="{:.4f}")
+            + "\n\n**Per cell** (all four tyres).\n\n"
+            + md_table(by_cell, floats="{:.4f}"),
+        )
+    )
+    paced = mae_by_pace(rows, arms)
+    if len(paced):
+        dry = mae_by_pace(rows[rows["condition"] == "dry"], arms, by=("car",))
+        rep.items.append(
+            GateItem(
+                "The same holdout at levels of pace",
+                None,
+                "; ".join(
+                    f"{r['level']} ({r['laps']} laps): "
+                    + ", ".join(f"{a} {r[f'{a}_mae']:.4f}" for a in arms)
+                    for r in paced.to_dict("records")
+                ),
+                "reported: gate C3's levels (the laps above a percentile of pace)",
+                "The rows of the holdout above, kept where the lap is above the level's "
+                "percentile of pace among the held-out laps of the same raw car, track and "
+                "condition (`P90`: the fastest tenth; `all`: every lap). MAE and bias in bar. "
+                "Every arm is fed the same thing on every lap of a session, the session's "
+                "25th-percentile lap time, so a fast lap is one driven harder than the plan it "
+                "is predicted with.\n\n"
+                + md_table(paced, floats="{:.4f}")
+                + "\n\n**Dry laps, per car.**\n\n"
+                + md_table(dry, floats="{:.4f}"),
+            )
+        )
+    if {"table", "direct"} <= set(arms):
+        keys = ["session_id", "lap_num", "corner", "fold"]
+        both = _common(rows, ("table", "direct"))
+        wide = both.pivot_table(index=keys, columns="arm", values="P_hot_pred_bar", aggfunc="first")
+        gap = 1000.0 * (wide["table"] - wide["direct"]).dropna()
+        ab = paired_by_session(rows, "direct", base="table")
+        rep.items.append(
+            GateItem(
+                "The shootout: the precomputed pace table against the lap driven directly",
+                None,
+                f"their two predictions differ by {gap.abs().median():.1f} mbar in the median "
+                f"row and {gap.abs().quantile(0.95):.1f} at the 95th percentile (table less "
+                f"direct {gap.median():+.1f} mbar); per session the direct lap's MAE less the "
+                f"table's is {1000 * ab['mean']:+.1f} ± {1000 * ab['se']:.1f} mbar, nearer the "
+                f"TPMS on {ab['nearer']} of {ab['sessions']} sessions",
+                "reported: the owner's call",
+                "`table`: the entry's own lap is that of the fed use and the typed lap time is "
+                "read along its knots, in standard air, with the powertrain's own shift point "
+                "and gears. `direct`: the knob is solved for the typed lap time in the "
+                "session's air. The difference between the two predictions is on the same "
+                "rows, hot pressure at the lap's end.",
+            )
+        )
+    return rep
+
+
 __all__ = [
     "FORMS",
     "Held",
@@ -2487,12 +3291,18 @@ __all__ = [
     "Production",
     "Sim",
     "SimCell",
+    "at_lap",
     "attain",
     "by_cell",
     "by_stint",
     "cell_sessions",
     "cell_table",
     "check_pressure",
+    "check_pressure_holdout",
+    "holdout_rows",
+    "mae_by_pace",
+    "mae_table",
+    "paired_by_session",
     "date_folds",
     "other_day_arms",
     "day_arms",
@@ -2508,9 +3318,14 @@ __all__ = [
     "pooled_sim_arms",
     "prepare",
     "score_cell",
+    "seen_cell",
     "sim_arms",
     "sim_cell",
     "tally",
     "tpms_table",
+    "track_without",
+    "without_sessions",
+    "held_out_drive",
+    "HOLDOUT_ARMS",
     "wet_arms",
 ]

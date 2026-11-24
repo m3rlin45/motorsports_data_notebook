@@ -427,8 +427,10 @@ class TestAFold:
             "heat_down",
         }
         # one row per day and tyre for each arm: the same rows under every entry
-        counts = tpms.groupby("arm").size()
+        counts = pg.at_lap(tpms).groupby("arm").size()
         assert (counts == 16).all()
+        # every scored lap is kept beside: the standing holdout's rows
+        assert (tpms.groupby("arm").size() > 16).all() and set(tpms["flying_lap"]) >= {1, 5}
         table = pg.tpms_table(tpms)
         assert set(table.columns) >= {"rows", "mae_mbar", "bias_mbar", "set_aside"}
         assert (table["set_aside"] == 0).all()
@@ -548,3 +550,49 @@ class TestFirstVisits:
         # Suzuka was first run after Tsukuba; Tsukuba had nothing before it
         assert pg.first_visits(prod, days) == [("FJ", "suzuka", "2026-02-01")]
         assert pg.first_visits(prod, days.iloc[:0]) == []
+
+
+class TestHoldoutOnSimulatedHeat:
+    """The calculator's own measure (MAE over folds of held-out sessions)
+    for the two calculators, on the rows both have."""
+
+    def _rows(self):
+        rows = []
+        for sid, car, calc, sim in (("s1", "FJ", 0.03, 0.02), ("s2", "FJ", -0.01, -0.04)):
+            for lap in (1, 2):
+                for corner in ("fl", "rr"):
+                    for arm, resid in (("calculator", calc), ("sim", sim)):
+                        rows.append(
+                            {
+                                "session_id": sid,
+                                "car": car,
+                                "condition": "dry",
+                                "lap_num": lap,
+                                "corner": corner,
+                                "fold": 0,
+                                "arm": arm,
+                                "resid_bar": resid,
+                            }
+                        )
+        # a session the simulation has no entry for is in neither side's figures
+        rows.append({**rows[0], "session_id": "s3", "arm": "calculator", "resid_bar": 0.5})
+        return pd.DataFrame(rows)
+
+    def test_mae_and_bias_per_tyre_on_the_rows_both_have(self):
+        arms = ("calculator", "sim")
+        got = pg.mae_table(self._rows(), ["car"], arms).set_index("tyre")
+        assert got.loc["all", "rows"] == 8
+        assert got.loc["all", "calculator_mae"] == pytest.approx(0.02)
+        assert got.loc["all", "sim_mae"] == pytest.approx(0.03)
+        assert got.loc["fl", "calculator_bias"] == pytest.approx(0.01)
+        assert got.loc["fl", "sim_bias"] == pytest.approx(-0.01)
+        pooled = pg.mae_table(self._rows(), [], arms)
+        assert set(pooled["tyre"]) == {"fl", "rr", "all"}
+        # an arm with no rows: nothing to set beside the others
+        assert pg.mae_table(self._rows(), [], ("calculator", "direct")).empty
+
+    def test_the_difference_session_by_session(self):
+        got = pg.paired_by_session(self._rows(), "sim")
+        # the simulation is 10 mbar nearer on one session and 30 further on the other
+        assert got["sessions"] == 2 and got["nearer"] == 1
+        assert got["mean"] == pytest.approx(0.01) and got["se"] == pytest.approx(0.02)
