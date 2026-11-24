@@ -79,6 +79,10 @@ DATE_FOLDS = 10
 #: The planted errors: a heat scaled by this either way, a lap time by this.
 HEAT_PLANT = 0.05
 LAP_TIME_PLANT = 0.01
+#: The curve nodes two cars' simulated entries share before they are
+#: pooled: multiples of the reference lap time.
+POOL_GRID = np.exp(np.linspace(np.log(0.9), np.log(1.6), 14))
+WET = ("wet", "damp")
 FORMS = ("heat", "chain")
 FORM_NAMES = {"heat": "heat, at a given lap time", "chain": "the whole chain, nothing given"}
 #: The simulated arms and how each one's table is built (:func:`~.pace.build_table`).
@@ -87,8 +91,12 @@ SIM_ARMS: dict[str, dict] = {
     "low_power": {"power_scale": ch.POWER_CONTROL, "use_cap": False, "use_fast": FREE_KNOB},
     "other_car": {"use_cap": False, "use_fast": FREE_KNOB},
 }
-#: The source files a fold's fit is made by: a cached fold is of their bytes.
+#: The source files a fold's fit is made by (beside ``tire_model/``: the
+#: loaders the fit reads the timeseries through): a cached fold is of
+#: their bytes.
 _FIT_SOURCES = (
+    "../tire_etl/kinematics.py",
+    "../tire_etl/dataset.py",
     "warmup_table.py",
     "statespace.py",
     "heat_input.py",
@@ -252,9 +260,16 @@ def prepare(
 
 
 def held_of(
-    prod: Production, model: dict[str, Any], prep: Any, pooled: str, track: str, left_out: int
+    prod: Production,
+    model: dict[str, Any],
+    prep: Any,
+    pooled: str,
+    track: str,
+    left_out: int,
+    conditions: tuple[str, ...] = ("dry",),
 ) -> Held:
-    """The held-out laps of one (pooled car, track) of a fold (:class:`Held`)."""
+    """The held-out laps of one (pooled car, track) of a fold
+    (:class:`Held`), its days being the sessions of ``conditions``."""
     share = ho.shares_of(model)[pooled]
     meta = prod.sessions.set_index(prod.sessions["session_id"].astype(str))
     laps = pr.mark_laps(prep, prod.raw_laps)
@@ -264,12 +279,12 @@ def held_of(
     laps["layout_id"] = laps["session_id"].map(meta["layout_id"]).astype(str)
     stints = pr.stints_of(prep, prod.targets)
     stints = stints[(stints["car"] == pooled) & (stints["track_canonical"] == track)]
-    ordinary = laps[laps["ordinary"] & (laps["condition"] == "dry")]
+    ordinary = laps[laps["ordinary"] & laps["condition"].isin(conditions)]
     keys = ordinary[["session_id", "lap_num", "car"]]
     kinds = {k: v[1] for k, v in hg.sensor_lap_bins(prod.root, keys).items()} if len(keys) else {}
     entries: dict[str, pr.Entry] = {}
     rows = []
-    for sid, own in laps[laps["condition"] == "dry"].groupby("session_id", sort=True):
+    for sid, own in laps[laps["condition"].isin(conditions)].groupby("session_id", sort=True):
         entry = pr.day_entry(prod.root, own, share)
         if entry is None:
             continue
@@ -287,10 +302,11 @@ def held_of(
                 "source": _majority([s for s in seen if s]),
                 "lap_time_s": entry.lap_time_s,
                 "ordinary_laps": entry.n_laps,
+                "condition": str(own["condition"].iloc[0]),
             }
         )
     cols = ["session_id", "raw_car", "date", "layout_id", "powertrain", "source", "lap_time_s"]
-    days = pd.DataFrame(rows, columns=cols + ["ordinary_laps"])
+    days = pd.DataFrame(rows, columns=cols + ["ordinary_laps", "condition"])
     return Held(prod.root, pooled, track, model, prep, share, laps, stints, days, entries, left_out)
 
 
@@ -646,15 +662,20 @@ def _bare(entry: pr.Entry) -> pr.Entry:
 
 
 def _recommend(
-    held: Held, sid: str, entry: pr.Entry | None, lap_time_s: float | None
+    held: Held,
+    sid: str,
+    entry: pr.Entry | None,
+    lap_time_s: float | None,
+    condition: str = "dry",
 ) -> pd.DataFrame:
     """The recommendations for a session's stints from ``entry`` placed
-    in the fold's model (None: the fold model as it stands), at each
-    flying lap of :data:`~.pressure.FLYING_LAPS`."""
+    in the fold's model as the cell's entry for ``condition`` (None: the
+    fold model as it stands), at each flying lap of
+    :data:`~.pressure.FLYING_LAPS`."""
     model = held.model
     if entry is not None:
-        model = pr.place(held.model, held.track, held.pooled, "dry", entry)
-    stints = held.stints[(held.stints["session_id"] == sid) & (held.stints["condition"] == "dry")]
+        model = pr.place(held.model, held.track, held.pooled, condition, entry)
+    stints = held.stints[held.stints["session_id"] == sid]
     parts = [
         pr.recommend(model, stints, lap_time_s=lap_time_s, n=n).assign(n=n) for n in pr.FLYING_LAPS
     ]
@@ -709,6 +730,8 @@ def day_arms(held: Held, day: dict, cell: SimCell | None, *, seen: bool = False)
             {"arm": arm, "form": "heat", "entry": _bare(own.scaled(factor)), "lap_time_s": t_day}
         )
         out.append({"arm": arm, "form": "chain", "entry": own.scaled(factor), "lap_time_s": t_day})
+        out.append({"arm": arm, "form": "tpms", "entry": own.scaled(factor)})
+    out.append({"arm": "own_heat", "form": "tpms", "entry": own})
     laps = held.laps[held.laps["condition"] == "dry"]
     pairs = _pairs(held, day)
     # another day, at the day's lap time: up to three sessions nearest in lap time
@@ -886,8 +909,138 @@ def sim_arms(cell: SimCell, day: dict) -> list[dict]:
     return out
 
 
+def latest_powertrain(raw_car: str) -> str:
+    """The powertrain a raw car has today: what its entry is of."""
+    return cm.powertrain_of(raw_car, "9999-12-31")
+
+
+def pool_weights(prod: Production, pooled: str, left_out: list[str]) -> dict[str, float]:
+    """Each raw car's usable laps among the pooled car's sessions that
+    reach a fold's fit: what its share of a pooled entry is weighed by."""
+    own = prod.sessions[
+        (prod.sessions["pooled"] == pooled)
+        & prod.sessions["session_id"].astype(str).isin(prod.trained - set(left_out))
+    ]
+    laps = prod.raw_laps[prod.raw_laps["tire_usable"].astype(bool)]
+    count = laps.groupby("session_id").size()
+    got = own.assign(laps=own["session_id"].map(count).fillna(0)).groupby("car")["laps"].sum()
+    return {str(k): float(v) for k, v in got.items() if v > 0}
+
+
+def pooled_sim_arms(
+    cells: dict[str, SimCell | None], weights: dict[str, float], day: dict
+) -> list[dict]:
+    """The pooled simulated entry for one day, where the model pools more
+    than one raw car (``sim_pooled``, both forms): each raw car's table of
+    its latest powertrain read at one reference lap time (the weighted
+    geometric mean of the lap times of their fed uses) on shared nodes,
+    and pooled (:func:`~.pressure.pooled_entry`). A raw car with no fed
+    use, no table or no frame factor for the day's kind of source has no
+    part in it. Nothing where the pooled entry would be the day's own raw
+    car's alone (then it is the ``sim`` arm)."""
+    t_day = float(day["lap_time_s"])
+    parts = []
+    for raw_car, weight in sorted(weights.items()):
+        cell = cells.get(raw_car)
+        if cell is None:
+            continue
+        factor = cell.factors.get(str(day["source"]))
+        src = cell.source("sim", latest_powertrain(raw_car), str(day["date"]))
+        use = cell.use("sim", raw_car)
+        if factor is None or src is None or not np.isfinite(use):
+            continue
+        own = src.export.lap_time_at(use)
+        if np.isfinite(own):
+            parts.append((src, factor, float(own), weight, raw_car))
+    if not parts or {p[4] for p in parts} == {str(day["raw_car"])}:
+        return []
+    w = np.array([p[3] for p in parts])
+    ref = float(np.exp(np.sum(w * np.log([p[2] for p in parts])) / w.sum()))
+    entries = [src.entry(factor, lap_time_s=ref, nodes=POOL_GRID) for src, factor, *_ in parts]
+    pooled = pr.pooled_entry([e for e in entries if e is not None], list(w))
+    if pooled is None:
+        return []
+    return [
+        {"arm": "sim_pooled", "form": "heat", "entry": _bare(pooled), "lap_time_s": t_day},
+        {
+            "arm": "sim_pooled",
+            "form": "chain",
+            "entry": pooled,
+            "lap_time_s": None,
+            "status": pooled.status,
+            "gap": float(np.log(pooled.lap_time_s / t_day)),
+        },
+    ]
+
+
+def wet_arms(held: Held, day: dict, cell: SimCell | None) -> list[dict]:
+    """The arms of a wet or damp day, at the day's lap time (``heat``;
+    the lap time of a wet entry is typed in, #261): the day's own;
+    ``other_day``, which in the wet is another session **of the same day**
+    (D2's form: wet days do not repeat), same raw car, powertrain, kind of
+    source and condition, up to three nearest in lap time; the simulation
+    (the dry table read at the wet lap time, no wet term: gate D2); the
+    planted heat; the fold model as it stands (``fallback``)."""
+    sid, t_day = day["session_id"], float(day["lap_time_s"])
+    own = held.entries[sid]
+    out: list[dict] = [{"arm": "day", "form": "heat", "entry": _bare(own), "lap_time_s": t_day}]
+    for arm, scale in (("heat_up", 1.0 + HEAT_PLANT), ("heat_down", 1.0 - HEAT_PLANT)):
+        out.append(
+            {"arm": arm, "form": "heat", "entry": _bare(own.scaled(scale)), "lap_time_s": t_day}
+        )
+    d = held.days
+    same = d[
+        (d["raw_car"] == day["raw_car"])
+        & (d["powertrain"] == day["powertrain"])
+        & (d["source"] == day["source"])
+        & (d["condition"] == day["condition"])
+        & (d["date"] == day["date"])
+        & (d["session_id"] != sid)
+    ]
+    near = same.assign(off=(same["lap_time_s"] - t_day).abs()).sort_values(["off", "session_id"])
+    for k, other in enumerate(near.head(cg.FLOOR_PAIRS_PER_LAP).to_dict("records")):
+        got = pr.near_heat(held.laps[held.laps["session_id"] == other["session_id"]], t_day)
+        if got is None:
+            continue
+        out.append(
+            {
+                "arm": "other_day",
+                "form": "heat",
+                "entry": pr.Entry(lap_time_s=t_day, q=got[0], source="same_day"),
+                "lap_time_s": t_day,
+                "pick": k,
+                "gap": float(np.log(got[1] / t_day)),
+            }
+        )
+    out.append({"arm": "fallback", "form": "heat", "entry": None, "lap_time_s": t_day})
+    if cell is None:
+        return out
+    factor = cell.factors.get(str(day["source"]))
+    src = cell.source("sim", str(day["powertrain"]), str(day["date"]))
+    if factor is None or src is None:
+        return out
+    entry = src.entry(factor, lap_time_s=t_day)
+    if entry is not None:
+        out.append(
+            {
+                "arm": "sim",
+                "form": "heat",
+                "entry": _bare(entry),
+                "lap_time_s": t_day,
+                "status": src.status(t_day),
+                "use": float(src.export.use_at(t_day)),
+            }
+        )
+    return out
+
+
 def score_cell(
-    held: Held, cells: dict[str, SimCell | None], *, seen: bool = False
+    held: Held,
+    cells: dict[str, SimCell | None],
+    *,
+    seen: bool = False,
+    wet: bool = False,
+    weights: dict[str, float] | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """``(rows, tpms)`` of a fold's cell.
 
@@ -906,7 +1059,9 @@ def score_cell(
     ``after_cool_down`` (:func:`~.pressure.mark_laps`).
 
     ``cells`` is the simulation's side per raw car (None: no simulated
-    arm); ``seen`` as in :func:`day_arms`."""
+    arm); ``seen`` as in :func:`day_arms`; ``wet`` scores the days with
+    :func:`wet_arms` (the held days are then wet or damp ones);
+    ``weights`` (:func:`pool_weights`) adds the pooled simulated entry."""
     from ..validate import _score_fold_laps
 
     rows: list[pd.DataFrame] = []
@@ -914,9 +1069,15 @@ def score_cell(
     flags = held.laps[["session_id", "lap_num", "after_dropped", "after_cool_down"]]
     for day in held.days.to_dict("records"):
         sid = day["session_id"]
-        arms = day_arms(held, day, cells.get(day["raw_car"]), seen=seen)
+        cond = str(day.get("condition") or "dry")
+        if wet:
+            arms = wet_arms(held, day, cells.get(day["raw_car"]))
+        else:
+            arms = day_arms(held, day, cells.get(day["raw_car"]), seen=seen)
+            if weights and not seen:
+                arms += pooled_sim_arms(cells, weights, day)
         ref = {
-            a["form"]: _recommend(held, sid, a["entry"], a["lap_time_s"])
+            a["form"]: _recommend(held, sid, a["entry"], a["lap_time_s"], cond)
             for a in arms
             if a["arm"] == "day"
         }
@@ -933,7 +1094,7 @@ def score_cell(
             if a["form"] == "tpms":
                 model = held.model
                 if a["entry"] is not None:
-                    model = pr.place(held.model, held.track, held.pooled, "dry", a["entry"])
+                    model = pr.place(held.model, held.track, held.pooled, cond, a["entry"])
                 got = _score_fold_laps(held.prep, model, session_ids=[sid])
                 if got.empty:
                     continue
@@ -961,7 +1122,7 @@ def score_cell(
             if a["entry"] is None and a.get("status") == pr.NO_SOLUTION:
                 got = base.assign(cold_bar=np.nan)
             else:
-                got = _recommend(held, sid, a["entry"], a["lap_time_s"])
+                got = _recommend(held, sid, a["entry"], a["lap_time_s"], cond)
             both = base.merge(
                 got, on=["session_id", "stint_id", "corner", "n"], suffixes=("_day", "")
             )
@@ -1046,16 +1207,9 @@ def by_stint(rows: pd.DataFrame) -> pd.DataFrame:
     return got
 
 
-def by_cell(stints: pd.DataFrame, beside: str = "other_day") -> pd.DataFrame:
-    """One row per raw car, track, tyre, flying lap, form and arm: the
-    median over days of the day's median stint of ``size``, ``signed`` and
-    ``gap``, with ``days`` and ``stints``. Only the stints that the arm
-    ``beside`` also has are counted (a day with no pair is listed, not
-    scored), so that an arm and the yardstick stand on the same rows."""
-    if stints.empty:
-        return stints
-    keys = stints.loc[stints["arm"] == beside, _STINT].drop_duplicates()
-    own = stints.merge(keys, on=_STINT, how="inner")
+def _cells(own: pd.DataFrame) -> pd.DataFrame:
+    """Stint rows as cells: per raw car, track, tyre, flying lap, form and
+    arm the median over days of the day's median stint."""
     cols = ["size", "signed", "gap", "gap_signed"]
     days = own.groupby(_CELL + ["arm", "date"], sort=False)[cols].median()
     got = days.groupby(_CELL + ["arm"], sort=False)[cols].median()
@@ -1066,15 +1220,35 @@ def by_cell(stints: pd.DataFrame, beside: str = "other_day") -> pd.DataFrame:
     return got.reset_index()
 
 
-def attain(cells: pd.DataFrame, arm: str, beside: str = "other_day") -> pd.DataFrame:
+def by_cell(stints: pd.DataFrame, beside: str = "other_day") -> pd.DataFrame:
+    """One row per raw car, track, tyre, flying lap, form and arm: the
+    median over days of the day's median stint of ``size``, ``signed`` and
+    ``gap``, with ``days`` and ``stints``. Only the stints that the arm
+    ``beside`` also has are counted (a day with no pair is listed, not
+    scored). An arm that lacks some of those stints is on fewer rows than
+    ``beside`` here: two arms are set against each other by
+    :func:`attain`, on the rows both have."""
+    if stints.empty:
+        return stints
+    keys = stints.loc[stints["arm"] == beside, _STINT].drop_duplicates()
+    return _cells(stints.merge(keys, on=_STINT, how="inner"))
+
+
+def attain(stints: pd.DataFrame, arm: str, beside: str = "other_day") -> pd.DataFrame:
     """``arm`` beside ``beside``, cell by cell (a raw car at a track on
-    one tyre): ``size`` and ``signed`` of the arm, ``beside`` the size of
-    the other, ``scored`` (both have :data:`MIN_DAYS` days) and ``passed``
-    (the arm is no further from the day than the other is)."""
-    if cells.empty:
-        return cells
-    a = cells[cells["arm"] == arm].drop(columns="arm")
-    b = cells[cells["arm"] == beside][_CELL + ["size", "days", "gap"]].rename(
+    one tyre), **on the stints both have**: ``size`` and ``signed`` of the
+    arm, ``beside`` the size of the other, ``scored`` (:data:`MIN_DAYS`
+    days) and ``passed`` (the arm is no further from the day than the
+    other is). ``stints`` is :func:`by_stint`'s rows of one form."""
+    if stints.empty:
+        return stints
+    mine = stints[stints["arm"] == arm]
+    theirs = stints[stints["arm"] == beside]
+    keys = mine[_STINT].merge(theirs[_STINT], on=_STINT).drop_duplicates()
+    if keys.empty:
+        return pd.DataFrame()
+    a = _cells(mine.merge(keys, on=_STINT)).drop(columns="arm")
+    b = _cells(theirs.merge(keys, on=_STINT))[_CELL + ["size", "days", "gap"]].rename(
         columns={"size": "beside", "days": "beside_days", "gap": "beside_gap"}
     )
     both = a.merge(b, on=_CELL, how="inner")
@@ -1228,11 +1402,26 @@ def check_pressure(
         + "; the car's first listed where the session has no label), from the stint's own "
         "pit-exit temperature and the session's weather, through the fold's K, tau and shares."
     )
+    from ..validate import _prepare_fold_laps
+
     all_rows, all_tpms, checks, day_rows, sim_rows = [], [], [], [], []
+    wet_rows: list[pd.DataFrame] = []
+    wet_days: list[pd.DataFrame] = []
+
+    def _sim_cells(raw_cars: list[str], layout_of: dict[str, str], share: ShareParams) -> dict:
+        out: dict[str, SimCell | None] = {}
+        for raw_car in raw_cars:
+            if sim is not None and raw_car in layout_of:
+                out[raw_car] = sim_cell(sim, raw_car, layout_of[raw_car], share)
+        return out
+
     for pooled, track in folds:
-        held = hold_out(prod, pooled, track, cache_dir)
-        if held is None:
+        ids = cell_sessions(prod, pooled, track)
+        got = prepare(prod, ids, cache_dir)
+        if got is None:
             continue
+        model, prep = got
+        held = held_of(prod, model, prep, pooled, track, len(ids))
         same, n_rows = identity_check(held.model, held.prep)
         checks.append(
             {
@@ -1243,22 +1432,79 @@ def check_pressure(
                 "cell_rows_in_model": left_in(held),
             }
         )
-        cells: dict[str, SimCell | None] = {}
-        if sim is not None:
-            for raw_car, own in held.days.groupby("raw_car", sort=True):
-                layout_id = _majority(list(own["layout_id"]))
-                cell = sim_cell(sim, str(raw_car), layout_id, held.share)
-                cells[str(raw_car)] = cell
-        rows, tpms = score_cell(held, cells)
+        # the layout a raw car's laps at the track are of (the cell's most common)
+        layout = _majority(list(held.laps["layout_id"])) if len(held.laps) else ""
+        weights = pool_weights(prod, pooled, ids)
+        raw_cars = sorted(set(held.days["raw_car"]) | set(weights))
+        cells = _sim_cells(raw_cars, {r: layout for r in raw_cars}, held.share)
+        rows, tpms = score_cell(held, cells, weights=weights)
         # after the scoring: a cell's tracks are built as its days ask for them
-        sim_rows += [_sim_row(pooled, track, k, c) for k, c in cells.items() if c is not None]
+        scored = set(held.days["raw_car"])
+        sim_rows += [
+            _sim_row(pooled, track, k, c) for k, c in cells.items() if c is not None and k in scored
+        ]
         all_rows.append(rows)
         all_tpms.append(tpms)
         day_rows.append(held.days.assign(pooled=pooled, track=track))
+        # the wet and damp days of the cell: the same fold, and the fold with
+        # the car's wet and damp sessions elsewhere left out too
+        wet = held_of(prod, model, prep, pooled, track, len(ids), conditions=WET)
+        if len(wet.days):
+            wet_cells = _sim_cells(
+                sorted(set(wet.days["raw_car"])),
+                {r: layout for r in wet.days["raw_car"]},
+                wet.share,
+            )
+            wet_rows.append(score_cell(wet, wet_cells, wet=True)[0].assign(fold="track new"))
+            wet_days.append(wet.days.assign(pooled=pooled, track=track))
+            elsewhere = prod.sessions[
+                (prod.sessions["pooled"] == pooled)
+                & prod.sessions["session_id"].astype(str).map(prod.conditions).isin(WET)
+            ]
+            both = sorted(set(ids) | set(elsewhere["session_id"].astype(str)))
+            if len(both) > len(ids):
+                model2 = fold_model(prod.root, both, cache_dir)
+                prep2 = _prepare_fold_laps(prod.root, ids, model2)
+                if prep2 is not None and pooled in ho.shares_of(model2):
+                    wet2 = held_of(prod, model2, prep2, pooled, track, len(both), conditions=WET)
+                    cells2 = _sim_cells(
+                        sorted(set(wet2.days["raw_car"])),
+                        {r: layout for r in wet2.days["raw_car"]},
+                        wet2.share,
+                    )
+                    wet_rows.append(
+                        score_cell(wet2, cells2, wet=True)[0].assign(fold="track and condition new")
+                    )
         logger.info("pressure: %s at %s scored (%d sessions)", pooled, track, len(held.days))
     rows = pd.concat([r for r in all_rows if len(r)], ignore_index=True)
     tpms = pd.concat([t for t in all_tpms if len(t)], ignore_index=True)
     days = pd.concat(day_rows, ignore_index=True) if day_rows else pd.DataFrame()
+
+    # the chronological first visit: a fit of what was logged before the car first ran the track
+    visit_rows: list[pd.DataFrame] = []
+    for pooled, track, date in first_visits(prod, days) if dates else []:
+        after = sorted(prod.sessions.loc[prod.sessions["date"] >= date, "session_id"].astype(str))
+        model = fold_model(prod.root, after, cache_dir)
+        if pooled not in ho.shares_of(model):
+            continue
+        own = days[(days["pooled"] == pooled) & (days["track"] == track) & (days["date"] == date)]
+        prep = _prepare_fold_laps(prod.root, list(own["session_id"]), model)
+        if prep is None:
+            continue
+        held = held_of(prod, model, prep, pooled, track, len(after))
+        layout = _majority(list(held.laps["layout_id"])) if len(held.laps) else ""
+        cells = _sim_cells(
+            sorted(set(held.days["raw_car"])), {r: layout for r in held.days["raw_car"]}, held.share
+        )
+        a, b = score_cell(held, cells)
+        visit_rows.append(a.assign(what="first visit", tpms=False))
+        if len(b):
+            visit_rows.append(
+                b.rename(columns={"resid_mbar": "d_mbar"}).assign(
+                    what="first visit", tpms=True, form="tpms", n=pr.FLYING_LAP_N
+                )
+            )
+        logger.info("pressure: first visit of %s to %s on %s scored", pooled, track, date)
 
     # leave-date-out: the reference level on cells the fit has seen
     seen_rows, seen_tpms = [], []
@@ -1310,7 +1556,145 @@ def check_pressure(
     report_replaced(rep, main)
     report_seen(rep, main, seen)
     report_tpms(rep, tpms, seen_t)
+    report_wet(rep, wet_rows, wet_days)
+    report_first_visit(rep, visit_rows, rows, tpms)
     return rep
+
+
+def first_visits(prod: Production, days: pd.DataFrame) -> list[tuple[str, str, str]]:
+    """``(pooled car, track, date)`` of each cell's first scored day, where
+    the pooled car had a session in a fit at another track before it:
+    the visits a fit of what was logged before them can be scored on."""
+    if days.empty:
+        return []
+    trained = prod.sessions[prod.sessions["session_id"].astype(str).isin(prod.trained)]
+    out = []
+    for (pooled, track), own in days.groupby(["pooled", "track"], sort=True):
+        first = str(own["date"].min())
+        before = trained[
+            (trained["pooled"] == pooled)
+            & (trained["track_canonical"] != track)
+            & (trained["date"] < first)
+        ]
+        if len(before):
+            out.append((str(pooled), str(track), first))
+    return out
+
+
+def report_wet(rep: GateReport, wet_rows: list[pd.DataFrame], wet_days: list[pd.DataFrame]) -> None:
+    """Reported beside: the wet and damp cells, against a logged run of
+    the same wet day."""
+    frames = [r for r in wet_rows if len(r)]
+    if not frames:
+        return
+    rows = pd.concat(frames, ignore_index=True)
+    days = pd.concat(wet_days, ignore_index=True)
+    lines, parts = [], []
+    for fold, own in rows.groupby("fold", sort=True):
+        stints = by_stint(own)
+        stints = stints[stints["n"] == pr.FLYING_LAP_N]
+        att = attain(stints, "sim")
+        if att.empty:
+            continue
+        paired = att[att["beside_days"] >= 1]
+        lines.append(
+            f"{fold}: the simulation no further than a run of the same wet day in "
+            f"{int((paired['size'] <= paired['beside']).sum())} of {len(paired)} cells, "
+            f"{paired['size'].median():.1f} mbar from the day against {paired['beside'].median():.1f}"
+        )
+        alone = _cells(stints[stints["arm"].isin(["sim", "fallback", "heat_up"])])
+        wide = alone.pivot_table(index=_CELL, columns="arm", values="size").reset_index()
+        both = att[_CELL + ["days", "stints", "size", "signed", "beside", "flagged"]].merge(
+            wide.rename(columns={"sim": "sim_every_day"}), on=_CELL, how="outer"
+        )
+        parts.append(both.assign(fold=fold))
+    if not parts:
+        return
+    table = pd.concat(parts, ignore_index=True)
+    counts = (
+        days.groupby(["pooled", "track", "raw_car", "condition"], sort=True)
+        .agg(sessions=("session_id", "size"), days=("date", "nunique"))
+        .reset_index()
+    )
+    rep.items.append(
+        GateItem(
+            "The wet and damp cells, against a logged run of the same wet day",
+            None,
+            "; ".join(lines),
+            "reported beside (#208): nothing rests on one",
+            "A wet or damp day's own recommendation (its own heat at its own lap time, the "
+            "fold's wet constants where it has them) against the simulation's: the dry table "
+            "read at the wet lap time, which is typed in, with no wet term (gate D2). The "
+            "yardstick in the wet is another session of the *same* day (wet days do not "
+            "repeat), same raw car, powertrain, kind of source and condition. `track new`: the "
+            "cell's fold; `track and condition new`: the car's wet and damp sessions at every "
+            "other track left out of the fit as well. `size`, `signed`, `beside`: on the stints "
+            "with such a run (mbar); `sim_every_day`, `fallback`, `heat_up`: the simulation, "
+            "the fold model as it stands and the day's own heat × "
+            f"{1.0 + HEAT_PLANT:g} on every wet stint, with or without a pair.\n\n"
+            + md_table(
+                table[
+                    ["fold", "raw_car", "track", "corner", "days", "stints", "size", "signed"]
+                    + ["beside", "flagged", "sim_every_day", "heat_up", "fallback"]
+                ],
+                floats="{:.3g}",
+            )
+            + "\n\n**The wet and damp days.**\n\n"
+            + md_table(counts),
+        )
+    )
+
+
+def report_first_visit(
+    rep: GateReport, visit_rows: list[pd.DataFrame], rows: pd.DataFrame, tpms: pd.DataFrame
+) -> None:
+    """Reported: the first day a car ran a track, under a fit of what was
+    logged before it, beside the same day under the cell's fold."""
+    frames = [r for r in visit_rows if len(r)]
+    if not frames:
+        return
+    visit = pd.concat(frames, ignore_index=True)
+    sessions = set(visit["session_id"])
+    cell = rows[rows["session_id"].isin(sessions)].assign(what="cell left out", tpms=False)
+    cell_t = tpms[tpms["session_id"].isin(sessions)].rename(columns={"resid_mbar": "d_mbar"})
+    cell_t = cell_t.assign(what="cell left out", tpms=True, form="tpms", n=pr.FLYING_LAP_N)
+    both = pd.concat([visit, cell, cell_t], ignore_index=True)
+    both = both[both["n"] == pr.FLYING_LAP_N]
+    arms = ["sim", "ceiling", "other_layouts", "fallback", "own_heat"]
+    both = both[both["arm"].isin(arms)]
+    table = (
+        both.assign(size=both["d_mbar"].abs())
+        .groupby(["pooled", "track", "date", "form", "arm", "what"], sort=True)["size"]
+        .agg(["median", "mean", "size"])
+        .reset_index()
+    )
+    wide = table.pivot_table(
+        index=["pooled", "track", "date", "form", "arm"], columns="what", values=["median", "mean"]
+    )
+    names: list[str] = []
+    for column in wide.columns.tolist():
+        stat, what = tuple(column)
+        names.append(f"{what}, {stat}")
+    wide = wide.set_axis(names, axis=1).reset_index()
+    events = visit.drop_duplicates(["pooled", "track", "date"])
+    rep.items.append(
+        GateItem(
+            "The chronological first visit: a fit of what was logged before it",
+            None,
+            f"{len(events)} first visits, {len(sessions)} sessions: "
+            + "; ".join(f"{r.pooled} at {r.track} on {r.date}" for r in events.itertuples()),
+            "reported (#208): a check that leaving a cell out does not flatter",
+            "The first scored day of a car at a track, where the car had run elsewhere before: "
+            "the pressure model fitted on the sessions before that date only (`first visit`), "
+            "beside the same sessions under the cell's own fold (`cell left out`, which knows "
+            "the car's later days elsewhere). The simulated side is the cell fold's in both "
+            "(the car fitted without the layout, not without its later days). `heat`, `chain`: "
+            "the size of an arm's distance from the day's own recommendation, mbar, over the "
+            "day's stints and tyres; `tpms`: the size of prediction less the TPMS reading at "
+            "flying lap 5, where `mean` is the MAE. One day has no other day beside it.\n\n"
+            + md_table(wide, floats="{:.3g}"),
+        )
+    )
 
 
 def _sim_row(pooled: str, track: str, raw_car: str, cell: SimCell) -> dict:
@@ -1426,11 +1810,12 @@ def report_harness(rep: GateReport, checks: pd.DataFrame) -> None:
 
 
 def _arm_table(main: pd.DataFrame, arms: tuple[str, ...], form: str) -> pd.DataFrame:
-    """Per arm in one form: its cells beside the yardstick's."""
-    cells = by_cell(main[main["form"] == form])
+    """Per arm in one form: its cells beside the yardstick's, each on the
+    stints the arm and the yardstick both have."""
+    own = main[main["form"] == form]
     out = []
     for arm in arms:
-        att = attain(cells, arm)
+        att = attain(own, arm)
         if att.empty:
             continue
         got = tally(att)
@@ -1457,7 +1842,7 @@ def report_yardstick(rep: GateReport, main: pd.DataFrame) -> None:
         if yard.empty:
             continue
         scored = yard[yard["days"] >= MIN_DAYS]
-        ceiling = attain(cells, "ceiling")
+        ceiling = attain(main[main["form"] == form], "ceiling")
         got = tally(ceiling)
         lines.append(
             f"{FORM_NAMES[form]}: another day is {scored['size'].median():.1f} mbar from the "
@@ -1591,6 +1976,40 @@ def report_seen(rep: GateReport, main: pd.DataFrame, seen: pd.DataFrame | None) 
         parts.append(both.assign(form_=form))
     cost = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
     cost = cost[cost["days"] >= MIN_DAYS] if len(cost) else cost
+    sims = []
+    for form in FORMS:
+        own = main[main["form"] == form]
+        att = attain(own, "sim_pooled", beside="sim")
+        if len(att):
+            sims.append(att[att["days"] >= MIN_DAYS].assign(form_=form))
+    pooled_sim = pd.concat(sims, ignore_index=True) if sims else pd.DataFrame()
+    if len(pooled_sim):
+        rep.items.append(
+            GateItem(
+                "The pooled simulated entry's cost per raw car",
+                None,
+                "; ".join(
+                    f"{form}: the pooled simulated entry {grp['size'].median():.1f} mbar from the "
+                    f"day where the raw car's own simulated entry is {grp['beside'].median():.1f}"
+                    for form, grp in pooled_sim.groupby("form_", sort=False)
+                ),
+                "reported: splitting the alias is the owner's",
+                "What the calculators would read where the model pools raw cars: per tyre the "
+                "geometric mean of the raw cars' simulated entries at one reference lap time, "
+                "each of its latest powertrain, weighted by the raw car's share of the pooled "
+                "car's usable laps in the fold's fit (a raw car with no fed use, as the KK-F-V2, "
+                "or no frame factor for the day's kind of source has no part). `size`, `signed`: "
+                "the pooled entry's distance from the day; `beside`: the raw car's own simulated "
+                "entry's, on the same stints (mbar).\n\n"
+                + md_table(
+                    pooled_sim[
+                        ["form_", "raw_car", "track", "corner", "days", "stints", "size"]
+                        + ["signed", "beside", "gap"]
+                    ],
+                    floats="{:.3g}",
+                ),
+            )
+        )
     if len(cost):
         rep.items.append(
             GateItem(
@@ -1621,46 +2040,102 @@ def report_tpms(rep: GateReport, tpms: pd.DataFrame, seen: pd.DataFrame | None) 
     """Clause 7: pressure against the TPMS, reported and never ranking."""
     if tpms.empty:
         return
+    # every arm on the rows the simulation has (all of them where there is none)
+    keys = ["session_id", "stint_id", "lap_num", "corner"]
+    if (tpms["arm"] == "sim").any():
+        tpms = tpms.merge(tpms.loc[tpms["arm"] == "sim", keys].drop_duplicates(), on=keys)
     table = tpms_table(tpms)
-    wide = table.pivot_table(
-        index=["pooled", "track", "raw_car"], columns="arm", values=["mae_mbar", "bias_mbar"]
-    )
+    cell = ["pooled", "track", "raw_car"]
+    wide = table.pivot_table(index=cell, columns="arm", values=["mae_mbar", "bias_mbar"])
     names: list[str] = []
     for column in wide.columns.tolist():
         what, arm = tuple(column)
         names.append(f"{arm}_{str(what).split('_')[0]}")
-    wide = wide.set_axis(names, axis=1)
-    wide = wide.reset_index()
-    rows = table.groupby(["pooled", "track", "raw_car"])[["rows", "set_aside"]].max().reset_index()
-    wide = rows.merge(wide, on=["pooled", "track", "raw_car"])
+    wide = wide.set_axis(names, axis=1).reset_index()
+    rows = table.groupby(cell)[["rows", "set_aside"]].max().reset_index()
+    wide = rows.merge(wide, on=cell)
     if seen is not None and len(seen):
         ref = tpms_table(seen)
-        ref = ref[ref["arm"] == "entry"][["pooled", "track", "raw_car", "mae_mbar", "bias_mbar"]]
+        ref = ref[ref["arm"] == "entry"][cell + ["mae_mbar", "bias_mbar"]]
         wide = wide.merge(
             ref.rename(columns={"mae_mbar": "in_the_fit_mae", "bias_mbar": "in_the_fit_bias"}),
-            on=["pooled", "track", "raw_car"],
+            on=cell,
             how="left",
         )
     wide = wide[wide["rows"] >= 4 * MIN_DAYS]
     arms = [c[:-4] for c in wide.columns if c.endswith("_mae")]
+    first = ("own_heat", "heat_up", "heat_down", "sim", "ceiling")
+    order: list[str] = [c for c in first if c in arms] + [c for c in arms if c not in first]
+    shown = wide[cell + ["rows", "set_aside"] + [f"{a}_mae" for a in order]]
+    bias = wide[cell + [f"{a}_bias" for a in order]]
+    plant = ""
+    if {"own_heat_mae", "heat_up_mae", "heat_down_mae"} <= set(wide.columns):
+        moved = (wide["heat_down_mae"] - wide["own_heat_mae"]).median()
+        up = (wide["heat_up_mae"] - wide["own_heat_mae"]).median()
+        plant = (
+            f"; the day's own heat scaled by ± {HEAT_PLANT:.0%} moves the MAE by {up:+.1f} and "
+            f"{moved:+.1f} mbar in the median cell"
+        )
     rep.items.append(
         GateItem(
             "Pressure against the TPMS at flying lap "
             f"{pr.FLYING_LAP_N} (S2: reported, it does not rank a heat source)",
             None,
-            "; ".join(f"{a} {wide[f'{a}_mae'].median():.0f} mbar" for a in arms)
-            + " in the median cell",
+            "; ".join(f"{a} {wide[f'{a}_mae'].median():.0f} mbar" for a in order)
+            + " in the median cell"
+            + plant,
             "reported (#208, clause 7): a heat source with too little heat scores better",
-            "Hot-pressure MAE and signed bias (prediction less the TPMS reading, mbar) at the "
-            f"end of flying lap {pr.FLYING_LAP_N} of pit-exit stints, production's own inputs "
-            "(the session's 25th-percentile lap time typed in), per raw car and cell, the "
-            "constants fitted without the cell. `rows`: stint × tyre rows; `set_aside`: rows "
-            "after a lap that cleaning dropped from the stint or at or after a cool-down lap, "
-            "not counted. `in_the_fit`: the same cell with only the day's date left out "
-            "(leave-date-out), which is the level the constants reach when they have seen the "
+            "Hot-pressure MAE (prediction less the TPMS reading, mbar) at the end of flying lap "
+            f"{pr.FLYING_LAP_N} of pit-exit stints, production's own inputs (the session's "
+            "25th-percentile lap time typed in), per raw car and cell, the constants fitted "
+            "without the cell, every arm on the rows the simulation has. `rows`: stint × tyre "
+            "rows; `set_aside`: rows after a lap that cleaning dropped from the stint or at or "
+            "after a cool-down lap, not counted. `own_heat`: the day's own heat as the entry; "
+            "`heat_up`, `heat_down`: that heat scaled either way. `in_the_fit`: the same cell "
+            "with only the day's date left out (leave-date-out, the pooled entry on every one "
+            "of its rows), which is the level the constants reach when they have seen the "
             "cell. The floor no heat source moves is about 25 mbar on the formula cars and 45 "
-            "on the Inferno 86 (#208, finding 5).\n\n" + md_table(wide, floats="{:.3g}"),
+            "on the Inferno 86 (#208, finding 5).\n\n"
+            + md_table(shown, floats="{:.3g}")
+            + "\n\n**Signed bias** (the mean of prediction less reading, mbar).\n\n"
+            + md_table(bias, floats="{:.3g}"),
         )
+    )
+
+
+def _lap_time_detail(chain: pd.DataFrame) -> str:
+    """With nothing given, each side's lap-time error in per cent and in
+    mbar: the simulation's, the ceiling's and another day's, the mbar
+    being the error times what 1 % of lap time is worth in the cell (half
+    the distance between the simulation's lap time moved up and down)."""
+    wide = chain.pivot_table(index=_STINT, columns="arm", values="signed", aggfunc="first")
+    if not {"lap_up", "lap_down"} <= set(wide.columns):
+        return ""
+    worth = ((wide["lap_up"] - wide["lap_down"]).abs() / (2.0 * 100.0 * LAP_TIME_PLANT)).rename(
+        "mbar_per_pct"
+    )
+    cell = ["raw_car", "track"]
+    per = worth.reset_index().groupby(cell, sort=True)["mbar_per_pct"].median().reset_index()
+    gaps = by_cell(chain)
+    rows = []
+    for rec in per.to_dict("records"):
+        grp = gaps[(gaps["raw_car"] == rec["raw_car"]) & (gaps["track"] == rec["track"])]
+        row: dict[str, Any] = {str(k): v for k, v in rec.items()}
+        for arm in ("sim", "ceiling", "other_day"):
+            own = grp[grp["arm"] == arm]
+            if own.empty:
+                continue
+            pct = 100.0 * float(own["gap"].median())
+            row[f"{arm}_pct"] = pct
+            row[f"{arm}_mbar"] = pct * float(rec["mbar_per_pct"])
+        rows.append(row)
+    if not rows:
+        return ""
+    return (
+        "\n\n**The lap time each side supplies.** `_pct`: the size of the log of the side's "
+        "lap time over the day's, in per cent (the median over days); `mbar_per_pct`: what 1 % "
+        "of lap time is worth in the cell at flying lap 5, the four tyres' median; `_mbar`: the "
+        "two multiplied.\n\n" + md_table(pd.DataFrame(rows), floats="{:.3g}")
     )
 
 
@@ -1697,26 +2172,36 @@ def report_simulation(
     )
     arms = ("sim", "low_power", "other_car", "heat_up", "heat_down", "lap_up", "lap_down")
     for form, clause in (("heat", 4), ("chain", 5)):
-        cells = by_cell(main[main["form"] == form])
-        att = attain(cells, "sim")
+        own = main[main["form"] == form]
+        att = attain(own, "sim")
         if att.empty:
             continue
         att["neither"] = [(r, t) in neither for r, t in zip(att["raw_car"], att["track"])]
         got_n, got_c = tally(att[att["neither"]]), tally(att[~att["neither"]])
         table = _arm_table(main, arms + ("ceiling", "other_layouts", "fallback"), form)
-        # cells an arm wins and loses against the simulation
+        # cells in which the simulation is nearer the day than an arm, and further:
+        # on the stints the two and the yardstick all have
+        paired = own.merge(own.loc[own["arm"] == "other_day", _STINT].drop_duplicates(), on=_STINT)
         won = []
         for arm in table["arm"]:
-            other = attain(cells, arm)
-            both = att[att["scored"]].merge(
-                other[_CELL + ["size", "scored"]], on=_CELL, suffixes=("", "_arm")
-            )
-            both = both[both["scored_arm"]]
+            both = attain(paired, arm, beside="sim") if arm != "sim" else pd.DataFrame()
+            both = both[both["scored"]] if len(both) else both
             won.append(
-                f"{int((both['size'] < both['size_arm']).sum())} / "
-                f"{int((both['size'] > both['size_arm']).sum())}"
+                f"{int((both['beside'] < both['size']).sum())} / "
+                f"{int((both['beside'] > both['size']).sum())}"
+                if len(both)
+                else ""
             )
         table["sim_nearer / further"] = won
+        # the rows: the yardstick's stints, and those the simulation has of them
+        yard = by_cell(own)
+        yard = yard[yard["arm"] == "other_day"][_CELL + ["stints", "days"]].rename(
+            columns={"stints": "yardstick_stints", "days": "yardstick_days"}
+        )
+        att = att.merge(yard, on=_CELL, how="left")
+        extra = ""
+        if form == "chain":
+            extra = _lap_time_detail(main[main["form"] == form])
         flagged = main[(main["form"] == form) & (main["arm"] == "sim")]
         status = flagged["status"].value_counts().to_dict()
         shown = att.copy()
@@ -1727,17 +2212,21 @@ def report_simulation(
             "another day is. `size`, `signed`: the simulation's distance in mbar and its signed "
             "median (above zero: a higher cold pressure, so less heat); `beside`: another day's; "
             "`gap`: the size of the log of the simulation's lap time over the day's (zero where "
-            "the lap time is given).\n\n"
+            "the lap time is given). Both sides are on the stints both have: `stints` of the "
+            "yardstick's `yardstick_stints` (the simulation has no entry for a day whose kind "
+            "of source has no frame factor at the car's other layouts).\n\n"
             + md_table(
                 shown[
-                    ["raw_car", "track", "corner", "neither_seen", "days", "stints", "size"]
-                    + ["signed", "beside", "gap", "gap_signed", "flagged", "scored", "passed"]
+                    ["raw_car", "track", "corner", "neither_seen", "days", "stints"]
+                    + ["yardstick_stints", "size", "signed", "beside", "gap", "gap_signed"]
+                    + ["flagged", "scored", "passed"]
                 ],
                 floats="{:.3g}",
             )
             + "\n\n**Every arm on the same rows.** `sim_nearer / further`: the scored cells in "
             "which the simulation is nearer the day than the arm, and further.\n\n"
             + md_table(table, floats="{:.3g}")
+            + extra
             + f"\n\nThe simulation's stint rows by how the table answered: {status}."
         )
         rep.items.append(
@@ -1751,6 +2240,39 @@ def report_simulation(
                 f"{got_c['beside']:.1f})",
                 "a score in gate C3's form (owner, 2026-11-24): no fixed limit in bar",
                 detail,
+            )
+        )
+    # the cells with too few days for a pair of days to mean anything
+    listed = []
+    for form in FORMS:
+        cells = by_cell(main[main["form"] == form], beside="sim")
+        own = cells[cells["arm"].isin(["sim", "ceiling"]) & (cells["days"] < MIN_DAYS)]
+        listed.append(own.assign(form_=form))
+    few = pd.concat(listed, ignore_index=True) if listed else pd.DataFrame()
+    if len(few):
+        rep.items.append(
+            GateItem(
+                f"The listed cells: fewer than {MIN_DAYS} dry days, no yardstick",
+                None,
+                "; ".join(
+                    f"{car} at {track}: {grp['size'].median():.1f} mbar"
+                    for (car, track), grp in few[
+                        (few["arm"] == "sim") & (few["form_"] == "heat")
+                    ].groupby(["raw_car", "track"], sort=True)
+                )
+                + " from the day at a given lap time (the four tyres' median)",
+                "listed, not scored",
+                "The simulation's and the ceiling's distance from the day's own recommendation "
+                "(mbar; `gap` the size of the log of the entry's lap time over the day's) where "
+                "the raw car has too few days at the track for another day to stand beside "
+                "it.\n\n"
+                + md_table(
+                    few[
+                        ["form_", "raw_car", "track", "corner", "arm", "days", "stints", "size"]
+                        + ["signed", "gap"]
+                    ],
+                    floats="{:.3g}",
+                ),
             )
         )
     # the entry as the calculators read it, and N = 10
@@ -1817,15 +2339,19 @@ __all__ = [
     "day_arms",
     "donor_track",
     "fed_laps",
+    "first_visits",
     "fold_model",
     "held_of",
     "hold_out",
     "load_production",
     "load_sim",
+    "pool_weights",
+    "pooled_sim_arms",
     "prepare",
     "score_cell",
     "sim_arms",
     "sim_cell",
     "tally",
     "tpms_table",
+    "wet_arms",
 ]

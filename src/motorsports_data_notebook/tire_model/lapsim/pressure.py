@@ -584,7 +584,7 @@ class SimSource:
         *,
         use: float | None = None,
         lap_time_s: float | None = None,
-        nodes: int | None = None,
+        nodes: int | np.ndarray | None = None,
         source: str = "sim",
     ) -> Entry | None:
         """The entry a simulated lap writes, in production's frame
@@ -596,7 +596,8 @@ class SimSource:
         pace curve is the knots themselves (rising lap times), or with
         ``nodes`` that many nodes from 0.75 to 1.5 × the typical lap time
         read off the table, which is the grid the calculators' logged
-        curves have. The out-lap is the track's rolling time to the pit
+        curves have (an array: those multiples of the typical lap time,
+        so that two cars' entries can share their nodes). The out-lap is the track's rolling time to the pit
         exit's join, with no heat, and the knot's part from the join to
         the line. None where the table has no lap for the use, or the
         factor is not known."""
@@ -614,7 +615,8 @@ class SimSource:
         if nodes is None:
             curve_t, curve_q = exp.lap_time_s[::-1].copy(), hot[::-1].copy()
         else:
-            curve_t = float(typ) * np.linspace(0.75, 1.5, nodes)
+            grid = np.linspace(0.75, 1.5, nodes) if isinstance(nodes, int) else np.asarray(nodes)
+            curve_t = float(typ) * grid
             curve_q = np.vstack(
                 [exp.at(max(float(t), float(exp.lap_time_s[-1])), hot) for t in curve_t]
             )
@@ -642,6 +644,40 @@ class SimSource:
         return (
             None if got is None else replace(got, curve_t=None, curve_q=None, source="sim_direct")
         )
+
+
+def pooled_entry(entries: list[Entry], weights: list[float]) -> Entry | None:
+    """The one entry the calculators read for cars pooled under one name
+    (#208: the formula cars are one FJ): per tyre the geometric mean of
+    the cars' entries, weighted (by each car's share of the pooled car's
+    training laps, the caller's). The entries are at one reference lap
+    time and on the same curve nodes (:meth:`SimSource.entry` with
+    ``lap_time_s`` and a ``nodes`` array). The out-lap is pooled where
+    every entry has one; the status is the worst of them. None without an
+    entry or a weight."""
+    pairs = [(e, float(w)) for e, w in zip(entries, weights) if e is not None and w > 0.0]
+    if not pairs:
+        return None
+    w = np.array([p[1] for p in pairs])
+    w = w / w.sum()
+    own = [p[0] for p in pairs]
+
+    def _mean(values: list) -> np.ndarray:
+        return np.asarray(np.exp(np.tensordot(w, np.log(np.array(values, float)), axes=1)))
+
+    curve = all(e.curve_t is not None and e.curve_q is not None for e in own)
+    out = all(e.out_s is not None and e.out_q is not None for e in own)
+    order = [OK, OUTSIDE_SUPPORT, NO_SOLUTION]
+    return Entry(
+        lap_time_s=float(_mean([e.lap_time_s for e in own])),
+        q=_mean([e.q for e in own]),
+        curve_t=_mean([e.curve_t for e in own]) if curve else None,
+        curve_q=_mean([e.curve_q for e in own]) if curve else None,
+        out_s=float(_mean([e.out_s for e in own])) if out else None,
+        out_q=_mean([e.out_q for e in own]) if out else None,
+        source="sim_pooled",
+        status=max((e.status for e in own), key=order.index),
+    )
 
 
 # ------------------------------------------- what the simulation replaces
@@ -725,6 +761,7 @@ __all__ = [
     "near_heat",
     "other_layouts_entry",
     "place",
+    "pooled_entry",
     "recommend",
     "stints_of",
     "target_hot",

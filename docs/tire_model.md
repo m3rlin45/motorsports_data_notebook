@@ -5369,6 +5369,259 @@ TPMS than the cell's own logged entry does (32 and 31 against 41 on the
 KK-SII), which is finding 2 of #208 again (a heat source can be nearer
 the TPMS by being wrong) and why S2 does not rank.
 
+**Gate F, the simulation scored (2026-11-24; `lapsim check-pressure`,
+about three minutes once the seventeen fold fits are kept).** The
+simulation's side of a fold is `pressure_gate.sim_cell`: the car fitted
+without the layout as a layout fold of gate C3 fits it; the track from
+the other classes' laps where they have three days and thirty laps
+(Tsukuba and Fuji; a day is driven on a track built without any lap of
+its own date, the smallest being 25 laps), else the cell's own track;
+`pace.build_table` for the scored day's powertrain; its laps exported
+(`PaceTable.laps_export`) and split through the fold's shares; times the
+frame factor of the day's kind of source, read from the car's build laps
+at its other layouts under the fold's shares; and the entry's own lap
+time from the *fed use*.
+
+| raw car, track | track from | fed use (typical use) | read at |
+|---|---|---|---|
+| KK-SII, Tsukuba | Inferno 86, 37 laps on 4 days | 0.814 (0.862) | Suzuka 0.837, Fuji 0.790 |
+| KK-F, Tsukuba | the same | 0.803 (0.849) | Fuji 0.803, Suzuka 0.802 |
+| Inferno 86, Fuji | KK-F, KK-SII, SFJ, 105 laps on 5 days | 0.845 (0.915) | Sodegaura 0.829, Tsukuba 0.845, Motegi 0.940 |
+| Inferno 86, Sodegaura | its own (only the car unseen) | 0.861 (0.923) | Fuji 0.861, Tsukuba 0.846, Motegi 0.924 |
+| KK-SII, Suzuka | its own (only the car unseen) | 0.837 (0.888) | Tsukuba 0.847, Fuji 0.828 |
+
+*What of the cell the simulated side has still seen.* The pit exit: a
+track's `meta.pit` (where an out-lap joins the driven line, how fast and
+after how long) is the median over the layout's out-laps of every car,
+the held-out car's among them, and a track from other cars keeps the own
+track's. It enters the out-lap of an entry with nothing given and no
+flying lap. And the layout's reference line, bank and grade are the own
+track's in every cell (the bank is the road's); only the curvature is
+from the other cars' laps.
+
+*The fed use* (`car_gate.fed_use`) is the use of a session's median
+flying lap, the median over a raw car's dry sessions at a layout and then
+over its layouts (`pressure_gate.fed_laps`: the lap index's full laps
+under the pressure model's own lap filter; on the 148 sessions both
+sides have, the session medians agree with production's to 0.01 % in the
+median and 0.02 % at the 90th percentile). It is 0.05 to 0.07 under the
+typical use, which is a best-lap pace. Its spread between a car's layouts
+is 0.00 to 0.05 on the formula cars and 0.08 to 0.11 on the Inferno 86,
+nearly all of that Motegi's two sessions (0.92 to 0.94 where the others
+read 0.83 to 0.86). The KK-F-V2 has no dry session away from Tsukuba and
+so no fed use; it has one day and is listed. The KK-F's laps away from
+Tsukuba are all GPS-derived, so it has a frame factor for that kind of
+source only, and its five accelerometer sessions at Tsukuba have no
+simulated entry: three or four of its five days are scored.
+
+*At a given lap time* (`heat`; signed distance in mbar, above zero a
+higher cold pressure, so less heat than the day's own):
+
+| raw car, track | simulation, fl / fr / rl / rr | another day | cells passed |
+|---|---|---|---|
+| KK-SII, Tsukuba | +5.0 / +0.6 / +3.2 / −6.5 | 4.1 / 2.3 / 4.2 / 3.1 | 2 of 4 |
+| KK-F, Tsukuba | +7.3 / +2.5 / +3.2 / −2.1 | 4.7 / 2.7 / 4.9 / 1.2 | 2 of 4 |
+| Inferno 86, Fuji | +2.7 / +2.5 / −6.4 / −2.3 (size 3.3 / 3.1 / 10.7 / 4.9) | 7.9 / 6.3 / 7.9 / 20.1 | 3 of 4 |
+| Inferno 86, Sodegaura | −0.3 / +0.2 / −0.0 / −1.3 (size 3.0 / 2.2 / 4.3 / 3.4) | 4.6 / 4.1 / 5.0 / 6.3 | 4 of 4 |
+| KK-SII, Suzuka | +2.4 / −2.3 / −0.5 / −6.4 | 4.6 / 0.4 / 2.8 / 1.5 | 2 of 4 |
+
+*With nothing given* (`chain`; the simulation at the lap time of its fed
+use and with its own out-lap):
+
+| raw car, track | simulation, size, fl / fr / rl / rr | another day | its lap time against the day's | another day's | cells passed |
+|---|---|---|---|---|---|
+| KK-SII, Tsukuba | 8.4 / 3.4 / 9.4 / 7.6 | 7.4 / 3.7 / 8.4 / 4.6 | 1.1 % | 1.4 % | 1 of 4 |
+| KK-F, Tsukuba | 12.0 / 3.8 / 5.5 / 1.9 | 9.0 / 2.2 / 10.8 / 2.1 | 0.8 % | 0.7 % | 2 of 4 |
+| Inferno 86, Fuji | 16.0 / 18.5 / 10.9 / 9.3 | 24.5 / 20.1 / 23.2 / 23.0 | 2.1 % | 2.7 % | 4 of 4 |
+| Inferno 86, Sodegaura | 8.8 / 4.3 / 4.6 / 4.4 | 7.7 / 9.7 / 7.6 / 7.6 | 0.6 % | 1.3 % | 3 of 4 |
+| KK-SII, Suzuka | 8.0 / 3.3 / 6.3 / 2.3 | 4.7 / 1.1 / 4.1 / 0.8 | 1.3 % | 0.7 % | 0 of 4 |
+
+**Two arms are compared on the stints both have** (`pressure_gate.attain`).
+It matters in one place: the KK-F at Tsukuba, where the simulation has an
+entry for the GPS-derived days only (5 or 6 of the 9 to 13 stints), so
+"another day" in its rows above is the yardstick on those stints and not
+the one in the yardstick's own table. (The first run of the gate set the
+simulation's stints against the yardstick over all of its own; that gave
+11 of 20 with nothing given where equal rows give 10. No other count
+moved.)
+
+Every arm beside the yardstick (cells no further from the day than
+another day is, of 20; the distance in the median scored cell, mbar; the
+cells in which the simulation is nearer the day than the arm, and
+further, on the stints the two share):
+
+| arm | `heat` | mbar | sim nearer / further | `chain` | mbar | sim nearer / further |
+|---|---|---|---|---|---|---|
+| **the simulation** | **13** | **3.4** | | **10** | **6.9** | |
+| another day, on the simulation's stints | | 4.4 | | | 7.6 | |
+| another day, on all of its own (the yardstick as recorded) | | 4.1 | | | 7.0 | |
+| the ceiling: the cell's logged entry without the day | 9 | 3.8 | 13 / 7 | 12 | 5.4 | 12 / 8 |
+| the car's other layouts, unscaled | 3 | 20.1 | 19 / 1 | 5 of 12 | 18.4 | 11 / 1 |
+| the fallback as coded | 1 | 52.6 | 17 / 3 | 3 | 65.0 | 19 / 1 |
+| planted: the day's heat × 1.05 | 1 | 10.4 | 20 / 0 | 4 | 10.9 | 17 / 3 |
+| planted: the day's heat × 0.95 | 1 | 10.5 | 20 / 0 | 4 | 11.0 | 17 / 3 |
+| planted: another car's parameters | 5 | 8.9 | 16 / 4 | 9 | 9.7 | 15 / 5 |
+| planted: 0.85 of the power | 11 | 4.0 | 11 / 9 | 11 | 7.4 | 12 / 8 |
+| planted: the simulation's lap time + 1 % | | | | 8 | 10.0 | 16 / 4 |
+| planted: the simulation's lap time − 1 % | | | | 15 | 5.7 | 9 / 11 |
+
+- **At a given lap time the simulation is as near the day as another
+  logged day is**: 13 of 20 cells, 3.4 mbar from the day's own
+  recommendation where another day is 4.4. With neither the car nor the
+  track having seen the cell 7 of 12 (3.7 against 4.4); with only the car
+  unseen 6 of 8 (3.4 against 4.3). It is nearer the day than the cell's
+  own logged entry built without the day in 13 cells and further in 7.
+  This is E's finding carried through the fold's constants, shares and
+  frame factor into bar: nothing was lost on the way.
+- **With nothing given it is on the yardstick too**: 10 of 20 cells, 6.9
+  mbar where another day, given nothing either, is 7.6. Neither seen: 7
+  of 12 (8.9 against 8.7); only the car unseen: 3 of 8 (4.5 against
+  6.1). The cell's own logged entry without the day passes 12 (5.4 mbar);
+  the simulation is nearer the day than it in 12 cells and further in 8.
+- **The count is five groups and the groups do not agree, which is what
+  the plan said of it.** With nothing given the Inferno 86 at Fuji passes
+  on all four tyres because two days there are 20 to 25 mbar apart, not
+  because the simulation is near (9 to 19 mbar); the KK-SII at Suzuka
+  fails on all four with distances of 2 to 8 mbar because its days there
+  repeat to 1 to 5. The distances are the result.
+- **The lap time the fed use supplies is as good as another day's**: 0.6
+  to 2.1 % from the day's in the scored cells, where another day's is
+  0.7 to 2.7 % and the ceiling's 0.7 to 1.7 %. One per cent of lap time
+  is 4.3 to 8.2 mbar at flying lap 5 by cell, so it is most of the
+  distance with nothing given: 3 to 7 mbar on the formula cars and at
+  Sodegaura, 17 at Fuji. It is slow on the formula cars (+0.5 % on the
+  KK-SII at Tsukuba, +1.3 % at Suzuka, signed), and moving the
+  simulation's lap time 1 % faster scores better
+  (15 cells, 5.7 mbar) while 1 % slower scores worse (8, 10.0).
+- **The misses, by where they point.** *The lean by side* (#313, the
+  driver's use by corner): on the formula cars at Tsukuba the left tyres
+  read 3 to 7 mbar less heat than the day's and the rear right 2 to 7
+  more (KK-SII +5.0 / +0.6 / +3.2 / −6.5; KK-F +7.3 / +2.5 / +3.2 /
+  −2.1), the sign E wrote down; at Suzuka the rear right reads 6.4 more.
+  *The track or the chain at one layout*: the Inferno 86's rear left at
+  Fuji, 6.4 mbar more heat (E: +2.4 % there). *The fed use*: the KK-SII
+  at Suzuka, 1.3 % slow, which is 7 mbar on every tyre. Nothing points at
+  the car model: every cell of one car does not miss alike.
+- **What the gate detects, and what it does not.** A heat 5 % off is
+  seen in both forms (1 and 4 cells of 20; 10 to 11 mbar from the day,
+  further than the simulation in 20 and 17 cells), and so are another
+  car's parameters (5 and 9 cells; 9 to 10 mbar, further than the
+  simulation in 16 and 15) and a lap time 1 % slow. **A car with 0.85 of the power is not told from the fitted car in
+  either form** (11 cells in both; 4.0 and 7.4 mbar): at a given lap time
+  the heat is set by the track and the lap time, as in E, and with
+  nothing given the wrong car's fed use is read from the same logged laps
+  and hands back about the same lap time. The expectation written before
+  the run had it showing with nothing given; it does not, and the gate
+  cannot detect a wrong power.
+- **Against what it replaces** the simulation is nearer the day than the
+  car's other layouts in 19 of 20 cells at a given lap time and 11 of 12
+  with nothing given, and nearer than the fallback as coded in 17 and 19
+  of 20. The expectation was every cell; one or two are lost to each (a
+  single tyre where the stand-in happens to sit close).
+- **The entry as the calculators read it.** With the table's fourteen
+  knots as the curve's nodes, read linearly as the ports read a curve,
+  the recommendation is within 0.24 mbar of the table read log-log. On
+  nine nodes from 0.75 to 1.5 × the entry's lap time, the grid of a
+  logged curve, it is up to 4.3 mbar off (the Inferno 86's rears at Fuji
+  3.0 and 2.5, Motegi 2.6 to 4.3). The ports interpolate whatever nodes
+  an entry has, so a simulated entry is written with its knots.
+- **Flying lap 10**: 13 of 20 at a given lap time (4.4 mbar against 5.7)
+  and 11 of 20 with nothing given (9.4 against 10.5).
+- **The listed cells**, with no yardstick: the Inferno 86 at Motegi (two
+  days) 1 to 9 mbar at a given lap time, its fronts +9.2 and +9.4 (E: its
+  fronts read 4 to 6 % low there), and 14 to 31 with nothing given (the
+  fed lap time is 2.9 % slow, read against a fed use carried from
+  Sodegaura and Fuji where Motegi's own two sessions read 0.93); the
+  Inferno 86 at Tsukuba 0.8 to 3.2 and 0.4 to 4.2; the KK-SII at Fuji
+  2.8 to 4.5 and 3.2 to 12.7.
+- **Pressure against the TPMS** (S2, flying lap 5, on the rows the
+  simulation has, MAE in mbar): the simulation 33 to 69 by cell (median
+  43), the day's own heat 33 to 71 (43), the ceiling 33 to 70 (41), the
+  cell with only its date left out 30 to 62 (33). The day's own heat
+  scaled down by 5 % scores *better* in three of the five cells (the two
+  at Tsukuba and Sodegaura, by 4 to 5 mbar) and worse at Suzuka and
+  Fuji; scaled up it is worse in four. So S2 moves by 4 to 6 mbar for a
+  heat error the recommendation moves by 10, in a direction set by the
+  cell's constants: reported, not counted. The simulation's bias is the
+  day's own heat's within 4 mbar in every cell (+0.2 against −2.5 at
+  Suzuka, +32.5 against +29.3 on the KK-SII at Tsukuba, −45.4 against
+  −46.2 at Fuji): what is left against the TPMS is the pressure model's
+  (#262), not the heat's.
+
+*What F0 was to settle for the export.* Its clock is the chain's own:
+each knot's flying lap and out-lap as one-second bins of speed and of the
+four non-negative parts of the accelerations (`lapsim/export.py`), which
+is everything `lap_heat` reads, so any fit's shares split an export to
+the table's own heat exactly. A table of fourteen knots is 155 kB of JSON
+at Tsukuba and 350 kB at Suzuka, against 0.5 to 1.5 MB for the node
+speeds, and takes under 0.1 s to build and export. A refit's shares move
+the carried frame factor by 0.1 % or less in three of four folds and by
+up to 1.2 % on a tyre where leaving the cell out moves `g_transfer` from
+2.49 to 1.04 (the formula cars without Tsukuba), so the factor is read
+again from the laps' bins at each retrain and is not a number to store.
+
+*Reported beside* (each is in the same report; nothing above rests on
+one).
+
+- **The wet and damp cells** (`pressure_gate.wet_arms`): a wet or damp
+  day's own recommendation against the simulation's, which is the dry
+  table read at the wet lap time (typed in, #261) with no wet term (gate
+  D2), at a given lap time. The yardstick in the wet is another session
+  of the *same* day, same raw car, powertrain, kind of source and
+  condition, as in D2 (wet days do not repeat). Twenty-three sessions in
+  five cells of a raw car at a track; three cells (twelve with the tyres) have
+  a same-day pair, on one or two days each, so none reaches three days
+  and none is "scored". The simulation is no further from the wet day
+  than a run of the same wet day in 9 of those 12 cells, 2.4 mbar where
+  the same-day run is 6.0; with the car's wet and damp sessions at every
+  other track left out of the fit as well (track and condition both new)
+  9 of 12, 2.8 against 6.4. On every wet stint, paired or
+  not, the simulation is 0.9 to 9.0 mbar from the day, the day's own heat
+  scaled by 5 % 5 to 12, and the fold model as it stands 4 to 216. The
+  KK-SII's rear right at Tsukuba reads 7 mbar more heat in the wet, as it
+  does in the dry.
+- **The chronological first visit** (`pressure_gate.first_visits`): the
+  first scored day of a car at a track where the car had run elsewhere
+  before, with the pressure model fitted on the sessions before that
+  date only, beside the same sessions under the cell's fold. Four visits
+  with rows, eight sessions (the formula cars at Fuji, 2026-02-26, and at
+  Suzuka, 2026-07-19; the Inferno 86 at Sodegaura, 2025-07-24, and at
+  Motegi, 2025-10-04). **Leaving a cell out does not flatter the figure**:
+  the simulation's distance from the day at a given lap time is 4.1, 2.0,
+  3.0 and 3.1 mbar (mean over the day's stints and tyres) under the fit
+  of what was logged before, and 3.8, 1.9, 2.8 and 2.7 under the cell's
+  fold; with nothing given 6.6, 4.3, 6.0 and 14.4 against 6.8, 4.8, 5.8
+  and 14.5. Against the TPMS the earlier fits are worse where little had
+  been logged (the formula cars at Fuji 123 mbar against 78, Sodegaura 70
+  against 54) and the same elsewhere (44 against 48, 62 against 61),
+  whatever the heat source: that is the constants, not the heat. The
+  simulated side is the cell fold's in both (the car fitted without the
+  layout, not without its later days), so this checks the pressure
+  model's side of the fold only.
+- **The pooled simulated entry** (`pressure.pooled_entry`,
+  `pressure_gate.pooled_sim_arms`): per tyre the geometric mean of the
+  raw cars' simulated entries at one reference lap time, each of its
+  latest powertrain, weighted by the raw car's share of the pooled car's
+  usable laps in the fold's fit. With Tsukuba left out the only formula
+  car with laps in the fit is the KK-SII, so the KK-F's days are read
+  through the KK-SII's entry: at a given lap time 1.1 to 4.1 mbar from
+  the day where its own simulated entry is 2.1 to 7.3 (no further on
+  three tyres), and with nothing given 1.8 to 16.1 against 1.9 to 12.0,
+  2 to 4 mbar further on three tyres, because the pooled lap time is 1.0
+  to 2.1 % slower than the KK-F's days. With Suzuka left out the KK-SII is read through an
+  entry weighed with the KK-F's laps and is no further for it (0.7 to
+  6.0 against 2.3 to 8.0 with nothing given). The cost of pooling is the
+  lap time, as for the logged entry.
+
+*Not built*: adoption (the committed export, the entries with their
+`source` flag in `tire_model.json`, the calculators' line and their
+attribution), which waits for the owner's call on this report, as
+planned; and #260's changes to `predict.py` (the 90 s constant, the
+prior), which #208 lists as not in F. The fold cache is of the bytes of
+the fit's source and of the loaders it reads the timeseries through
+(`tire_etl/kinematics.py`, `dataset.py`); adding those two to the key
+refitted all seventeen folds and gave the yardstick back to the digit.
+
 **Batches, and speed.** The solver works on a batch of laps of one
 track, each with its own car and its own u (`solver.solve_laps`,
 `solver.drive_laps`; one lap is a batch of one), in two forms that give

@@ -578,3 +578,52 @@ def test_an_entry_placed_scores_the_holdout_as_its_model_does():
     before, after = _score_fold_laps(prep, model), _score_fold_laps(prep, placed)
     assert len(before) == 12
     pd.testing.assert_frame_equal(before, after, check_exact=True)
+
+
+class TestPooledEntry:
+    """The one entry the calculators read for cars pooled under one name."""
+
+    def _entry(self, lap_time, q, out_s=None):
+        nodes = lap_time * np.array([0.9, 1.0, 1.2])
+        return pr.Entry(
+            lap_time_s=lap_time,
+            q=np.full(4, q),
+            curve_t=nodes,
+            curve_q=np.outer([1.3, 1.0, 0.7], np.full(4, q)),
+            out_s=out_s,
+            out_q=None if out_s is None else np.full(4, 0.5 * q),
+            source="sim",
+        )
+
+    def test_the_weighted_geometric_mean_per_tyre(self):
+        a, b = self._entry(60.0, 4.0, 80.0), self._entry(60.0, 9.0, 90.0)
+        even = pr.pooled_entry([a, b], [1.0, 1.0])
+        assert even.q == pytest.approx([6.0] * 4) and even.lap_time_s == pytest.approx(60.0)
+        assert even.curve_q[1] == pytest.approx([6.0] * 4)
+        assert even.out_s == pytest.approx(math.sqrt(80.0 * 90.0))
+        assert even.out_q == pytest.approx([3.0] * 4) and even.source == "sim_pooled"
+        # three laps of one car to one of the other
+        heavy = pr.pooled_entry([a, b], [3.0, 1.0])
+        assert heavy.q == pytest.approx([4.0**0.75 * 9.0**0.25] * 4)
+
+    def test_one_car_alone_is_its_own_entry(self):
+        a, b = self._entry(60.0, 4.0), self._entry(60.0, 9.0)
+        alone = pr.pooled_entry([a, b], [1.0, 0.0])
+        assert alone.q == pytest.approx(a.q) and alone.curve_t == pytest.approx(a.curve_t)
+
+    def test_no_out_lap_unless_every_car_has_one_and_the_worst_status(self):
+        a, b = self._entry(60.0, 4.0, 80.0), replace(
+            self._entry(60.0, 9.0), status=pr.OUTSIDE_SUPPORT
+        )
+        got = pr.pooled_entry([a, b], [1.0, 1.0])
+        assert got.out_s is None and got.status == pr.OUTSIDE_SUPPORT
+        assert pr.pooled_entry([], []) is None and pr.pooled_entry([a], [0.0]) is None
+
+
+def test_a_simulated_entry_on_nodes_shared_between_cars(source):
+    table, src = source
+    grid = np.array([0.9, 1.0, 1.1, 1.3])
+    typ = float(table.lap_time_s[8])
+    entry = src.entry(TestSimSource.FACTOR, lap_time_s=typ, nodes=grid)
+    assert entry.curve_t == pytest.approx(typ * grid)
+    assert entry.curve_q[1] == pytest.approx(entry.q, rel=1e-12)
