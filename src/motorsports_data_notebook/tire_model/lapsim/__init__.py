@@ -48,6 +48,11 @@ Segment D (#206), the solver:
   term); :mod:`.wet_gate` is gate D2, each wet lap driven four ways
   against a logged lap of the same wet day.
 
+Segment E (#207), the heat coupling:
+
+- :mod:`.heat_match`: a held-out lap's simulated heat per tyre against
+  production's, on gate C3's folds (gate E1; arm B of gate E2).
+
 The car's limits and the driver (#312):
 
 - :mod:`.limits`: the car's cornering limit as the expected best of m
