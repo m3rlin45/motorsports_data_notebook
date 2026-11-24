@@ -151,3 +151,143 @@ class TestScore:
         assert table.loc["fit", "days"] == 4 and table.loc["fit", "laps"] == 40
         assert hm.tally(pd.DataFrame()) == {"passed": 0, "scored": 0, "whole": 0, "groups": 0}
         assert hm.score(errs.iloc[:0], yard, hm.G_MEASURES).empty
+
+
+def _arm_laps(obs, lifts):
+    """Laps of the four arms: arm ``a`` simulates the tyres'-frame heat
+    times ``lifts[a]`` (a number or one per tyre)."""
+    parts = []
+    for arm, lift in lifts.items():
+        part = obs[["car", "layout_id", "session_id", "lap_num", "date"]].copy()
+        part["arm"] = arm
+        for k, c in enumerate(CORNERS):
+            part[f"sim_q_{c}"] = obs[f"t_{c}"] * np.broadcast_to(lift, 4)[k]
+        parts.append(part)
+    return pd.concat(parts, ignore_index=True)
+
+
+class TestTransfers:
+    def test_transfers_between_the_arms_and_whether_they_add(self):
+        rng = np.random.default_rng(6)
+        obs = pd.concat(
+            [_obs(rng, "a", f"d{k}", 8, start=10 * k) for k in range(3)], ignore_index=True
+        )
+        track = np.array([1.02, 1.0, 1.01, 1.0])  # the other cars' line: more heat on the lefts
+        lifts = {"A": 1.0, "B": 1.01, "C": track, "D": 1.01 * track * 1.001}
+        per_lap, by_cell = hm.transfers(_arm_laps(obs, lifts), obs)
+        assert len(per_lap) == 4 * 24
+        got = by_cell.set_index("what")
+        assert got.loc["A", "g_fl"] == pytest.approx(0.0, abs=1e-12)
+        assert got.loc["B-A", "g_rr"] == pytest.approx(np.log(1.01), abs=1e-12)
+        assert got.loc["C-A", "g_fl"] == pytest.approx(np.log(1.02), abs=1e-12)
+        assert got.loc["C-A", "g_fr"] == pytest.approx(0.0, abs=1e-12)
+        assert got.loc["D-A", "g_fl"] == pytest.approx(np.log(1.01 * 1.02 * 1.001), abs=1e-12)
+        assert got.loc["D-B-C+A", "g_fl"] == pytest.approx(np.log(1.001), abs=1e-12)
+        assert got.loc["D", "days"] == 3 and got.loc["D", "laps"] == 24
+        assert hm.transfers(pd.DataFrame(), obs)[1].empty
+
+    def test_the_report_item_reads_the_cells_and_scores_arm_d(self):
+        rng = np.random.default_rng(7)
+        here = pd.concat(
+            [_obs(rng, "a", f"d{k}", 10, start=10 * k) for k in range(3)], ignore_index=True
+        )
+        there = pd.concat(
+            [_obs(rng, "b", f"e{k}", 10, start=100 + 10 * k, level=1.3) for k in range(2)],
+            ignore_index=True,
+        )
+        obs = pd.concat([here, there], ignore_index=True)
+        laps = _laps(obs, "layout")  # gate C3's laps: where the car's other layouts are
+        lap_time = pd.Series(
+            60.0 + 0.1 * (np.arange(len(obs)) % 10),
+            index=pd.MultiIndex.from_frame(obs[["session_id", "lap_num"]]),
+        )
+        yard = hm.cell_yardsticks(laps, obs, lap_time)
+        arms = _arm_laps(here, {"A": 1.0, "B": 1.01, "C": 1.015, "D": 1.01 * 1.015})
+        donors = pd.DataFrame(
+            [{"car": "car", "layout_id": "a", "donor_laps": 40, "donor_days": 4, "donor_cars": "x"}]
+        )
+        (item,) = hm.transfer_item(arms, obs, yard, laps, donors)
+        assert "arms C and D" in item.name and item.passed is None
+        assert "worst tyre within 0.05 in 1 of 1 cells (1 of 1 with a verdict)" in item.measured
+        assert "C-A up to 0.015" in item.measured and "within 0.0000" in item.measured
+        assert "other_layouts" in item.detail and "| car | layout_id | days |" in item.detail
+        thin = donors.assign(donor_days=2)
+        (listed,) = hm.transfer_item(arms, obs, yard, laps, thin)
+        assert "(0 of 0 with a verdict)" in listed.measured
+        assert hm.transfer_item(arms.iloc[:0], obs, yard, laps, donors) == []
+
+    def test_the_lap_time_not_given(self):
+        rng = np.random.default_rng(8)
+        obs = pd.concat(
+            [_obs(rng, "a", f"d{k}", 4, start=10 * k) for k in range(3)], ignore_index=True
+        )
+        best = obs.groupby("date").head(1)  # one lap a day stands as the day's best
+        arms = _arm_laps(best, {"B*": 1.04, "D*": 1.06})
+        arms["lap_time_s"] = 60.0
+        arms["lap_time_sim_s"] = np.where(arms["arm"] == "B*", 60.6, [59.4, 60.9, 61.2] * 2)
+        got = hm.pace_carried(arms, obs).set_index("arm")
+        assert got.loc["B*", "days"] == 3
+        assert got.loc["B*", "lap_time"] == pytest.approx(np.log(60.6 / 60.0))
+        assert got.loc["B*", "g_fl"] == pytest.approx(np.log(1.04), abs=1e-12)
+        # a lap time now fast and now slow: the size is not the signed median
+        assert got.loc["D*", "lap_time"] == pytest.approx(np.log(60.9 / 60.0))
+        assert got.loc["D*", "lap_time_size"] == pytest.approx(np.log(60.9 / 60.0))
+        assert hm.pace_carried(_arm_laps(obs, {"A": 1.0}), obs).empty
+
+    def test_the_track_from_other_cars_is_laid_on_the_own_tracks_nodes(self):
+        from .test_car_gate import _oval_track
+        from .test_wet_gate import _drawn
+
+        own = _drawn(_oval_track())
+        own.bank = 0.03 * np.sign(own.kappa_heat)
+        other = hm.replace(own, kappa_heat=own.kappa_heat * 1.04, bank=np.zeros(0))
+        laid = hm.laid_track(own, other)
+        np.testing.assert_allclose(laid.kappa_heat, own.kappa_heat * 1.04, atol=1e-9)
+        np.testing.assert_array_equal(laid.bank, own.bank)  # the road's bank stays
+        assert hm.fold_track_name("KK-SII", "tsukuba_2000") == "tsukuba_2000__without_FJ__rung5"
+        assert hm.fold_track_name("Inferno 86", "fuji_gp") == "fuji_gp__without_Inferno-86__rung5"
+
+
+class TestTransferLaps:
+    def test_four_arms_and_the_lap_time_not_given_on_simulated_laps(self, monkeypatch):
+        from dataclasses import replace
+
+        from motorsports_data_notebook.tire_model.lapsim import car as cm
+        from motorsports_data_notebook.tire_model.lapsim import car_gate as cg
+        from motorsports_data_notebook.tire_model.lapsim import car_holdout as ch
+        from motorsports_data_notebook.tire_model.lapsim import heat
+        from motorsports_data_notebook.tire_model.lapsim import solver as sv
+
+        from .test_car_gate import CAR
+        from .test_car_holdout import _sim_dataset
+        from .test_holdout import SHARE
+
+        tables, rows, tracks = _sim_dataset(monkeypatch)
+        # the other cars' line at layout a: every corner 4 % tighter (no geometry to lay it by)
+        monkeypatch.setattr(hm, "laid_track", lambda own, other: other)
+        others = {"a": replace(tracks["a"], kappa_heat=tracks["a"].kappa_heat * 1.04)}
+        own = ch.car_only(tables, "sim")
+        lap_time = rows.set_index(["session_id", "lap_num"])["lap_time_s"]
+        best = cg.day_best_laps(rows, "sim")
+        full = ch.convene(
+            cm.fit_car(own, "sim")[0],
+            tracks,
+            best,
+            laps=cg.car_use_laps(own, lap_time, "sim", tracks),
+        )
+        got = hm.transfer_laps(tables, rows, tracks, others, "sim", full, SHARE)
+        assert set(got["arm"]) == set(hm.ARMS) | set(hm.CARRIED)
+        assert set(got["layout_id"]) == {"a"} and got.groupby("arm").size().eq(3).all()
+        by = got.set_index(["arm", "session_id"])
+        # the laps are the car's own simulated laps: on its own fit and track their heat comes back
+        truth = heat.sim_heat(sv.simulate_lap(tracks["a"], CAR, 1.0), SHARE)
+        assert by.loc["A", "sim_q_fl"].median() == pytest.approx(truth[0], rel=0.01)
+        assert by.loc["B", "sim_q_fl"].median() == pytest.approx(truth[0], rel=0.03)
+        # a tighter line at the same lap time is another lap
+        assert abs(by.loc["C", "sim_q_fl"].median() / by.loc["A", "sim_q_fl"].median() - 1) > 0.003
+        # nothing given: a lap time comes with the heat, near the lap's own on the car's own fit
+        own_fit = got[got["arm"] == "A*"]
+        assert (own_fit["lap_time_sim_s"] / own_fit["lap_time_s"] - 1).abs().max() < 0.01
+        assert got[got["arm"] == "D*"]["lap_time_sim_s"].notna().all()
+        # a layout with no track from other cars is not driven
+        assert hm.transfer_laps(tables, rows, tracks, {}, "sim", full, SHARE).empty

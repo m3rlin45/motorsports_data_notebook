@@ -33,17 +33,22 @@ other layouts, unscaled" on the same cells.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 from ..heat_input import ShareParams
+from . import car as cm
 from . import car_gate as cg
 from . import car_holdout as ch
 from . import heat_gate as hg
 from . import holdout as ho
-from .heat import CORNERS
+from . import samples as smp
+from . import solver as sv
+from . import track as trk
+from .heat import CORNERS, sim_heat
 
 #: The measures: log of simulated over observed heat per tyre, in
 #: production's frame through the factor (``e``) and in the tyres' (``g``).
@@ -123,7 +128,9 @@ def fold_factors(
     return {str(src): _factor(grp) for src, grp in pool.groupby("source")}
 
 
-def errors(laps: pd.DataFrame, obs: pd.DataFrame) -> pd.DataFrame:
+def errors(
+    laps: pd.DataFrame, obs: pd.DataFrame, where: pd.DataFrame | None = None
+) -> pd.DataFrame:
     """One row per held-out lap, fold kind and arm: ``e_<tyre>`` and
     ``g_<tyre>`` (module docstring).
 
@@ -134,17 +141,21 @@ def errors(laps: pd.DataFrame, obs: pd.DataFrame) -> pd.DataFrame:
     is :func:`observed` of the same laps, usable or not. ``model`` is one
     of :data:`SIM_MODELS` or, on a layout fold, :data:`OTHER_LAYOUTS`
     (the car's median logged heat at its other layouts from the same
-    kind of source, unscaled: no simulated lap)."""
+    kind of source, unscaled: no simulated lap). ``where`` names the
+    car's logged laps the factors and the other layouts are read from
+    (``car, layout_id, session_id, lap_num, date``; ``laps`` itself
+    when it is not given)."""
     keys = ["car", "kind", "layout_id", "session_id", "lap_num", "date"]
     cols = keys + ["source", "model", *E_MEASURES, *G_MEASURES]
     if laps.empty or "sim_q_fl" not in laps.columns:
         return pd.DataFrame(columns=cols)
     good = usable(obs)
     both = laps.merge(good, on=["session_id", "lap_num"], how="inner")
-    where = laps[["car", "layout_id", "session_id", "lap_num", "date"]].drop_duplicates(
+    known = laps if where is None else where
+    known = known[["car", "layout_id", "session_id", "lap_num", "date"]].drop_duplicates(
         ["session_id", "lap_num"]
     )
-    car_obs_all = where.merge(good, on=["session_id", "lap_num"], how="inner")
+    car_obs_all = known.merge(good, on=["session_id", "lap_num"], how="inner")
     q_cols, t_cols = [f"q_{c}" for c in CORNERS], [f"t_{c}" for c in CORNERS]
     out: list[pd.DataFrame] = []
     for (car, kind, layout_id), cell in both.groupby(["car", "kind", "layout_id"], sort=False):
@@ -294,6 +305,220 @@ def signed(errs: pd.DataFrame) -> pd.DataFrame:
     return out.reset_index()
 
 
+# ------------------------------------------------- arms C and D of gate E2
+
+#: The arms: the car fitted on everything or without the layout, on its
+#: own track or on the track from other cars.
+ARMS = ("A", "B", "C", "D")
+ARM_NAMES = {
+    "A": "the car's own fit, its own track",
+    "B": "the car fitted without the layout, its own track",
+    "C": "the car's own fit, the track from other cars",
+    "D": "the car fitted without the layout, the track from other cars",
+}
+#: The same with the lap time not given: each day's best lap driven at
+#: the car's typical use of its limit (what is carried to a layout it has
+#: not run), on the arm's car and track.
+CARRIED = {"A*": "A", "B*": "B", "D*": "D"}
+#: #207's reference numbers for a transfer and for the transfers adding up.
+REF_TRANSFER = 0.02
+REF_ADDITIVE = 0.002
+
+
+def fold_track_name(car: str, layout_id: str) -> str:
+    """The file stem of gate B3's saved track of ``layout_id`` built
+    without the class of ``car`` (the strictest fold)."""
+    return f"{layout_id}__without_{ho.CLASS_OF.get(car, car).replace(' ', '-')}__rung5"
+
+
+def laid_track(own: trk.TrackModel, other: trk.TrackModel) -> trk.TrackModel:
+    """``own`` with the curvature of ``other`` (the same layout from other
+    cars' laps) laid on its nodes, so that a lap driven on it has its
+    speed where the logged laps have theirs. The bank and the grade stay
+    ``own``'s: the bank is the road's, from the elevation model."""
+    from .wet_gate import wet_line
+
+    return replace(own, kappa_heat=wet_line(own, other))
+
+
+def transfer_laps(
+    tables: smp.CarTables,
+    rows: pd.DataFrame,
+    tracks: dict[str, trk.TrackModel],
+    others: dict[str, trk.TrackModel],
+    car: str,
+    full: cg.Drive,
+    share: ShareParams,
+    *,
+    air: pd.DataFrame | None = None,
+    shifts: dict[str, float] | None = None,
+    gears: dict[str, tuple[float, ...]] | None = None,
+) -> pd.DataFrame:
+    """One row per dry build lap of ``car`` and arm of :data:`ARMS`, at
+    each layout that has a track from other cars (``others``, by
+    layout): the simulated lap's heat per tyre (``sim_q_<tyre>``; the
+    tyres' frame) and the knob it solved to, with ``car, layout_id,
+    session_id, lap_num, date, arm``. ``full`` is the car fitted on
+    everything (gate C3's); the car without the layout is fitted here as
+    a layout fold of gate C3 is."""
+    own = ch.car_only(tables, car)
+    best_all = cg.day_best_laps(rows, car)
+    lap_time = rows.set_index(["session_id", "lap_num"])["lap_time_s"]
+    use_tracks = {k: v for k, v in tracks.items() if k in set(best_all["layout_id"])}
+    use_laps = cg.car_use_laps(own, lap_time, car, use_tracks)
+    out: list[dict] = []
+    for layout_id, other in others.items():
+        if layout_id not in tracks:
+            continue
+        cell, _ = own.lap_speeds(car, layout_id)
+        if cell.empty:
+            continue
+        keys = pd.MultiIndex.from_frame(cell[["session_id", "lap_num"]])
+        cell = cell.assign(lap_time_s=lap_time.reindex(keys).to_numpy())
+        cell = cell[np.isfinite(cell["lap_time_s"])].reset_index(drop=True)
+        raw = cm.fit_car(ch.without(own, layout_id), car, air=air)[0]
+        unseen = ch.convene(
+            raw,
+            tracks,
+            best_all[best_all["layout_id"] != layout_id],
+            air=air,
+            shifts=shifts,
+            gears=gears,
+            laps=ch.laps_left(use_laps, layout_id),
+        )
+        roads = {"own": tracks[layout_id], "other": laid_track(tracks[layout_id], other)}
+        recs = cg._records(cell)
+        target = [float(rec["lap_time_s"]) for rec in recs]
+        for arm, who, road in (
+            ("A", full, "own"),
+            ("B", unseen, "own"),
+            ("C", full, "other"),
+            ("D", unseen, "other"),
+        ):
+            if who is None:
+                continue
+            drive = who.but(use_cap=True)
+            profile = cg.profile_of(drive, roads[road])
+            cars = [cg._lap_car(drive, rec) for rec in recs]
+            got = sv.solve_laps(profile, cars, target, guess=cg.typical_use(drive))
+            for i in range(len(cell)):
+                row = {
+                    "car": car,
+                    "layout_id": layout_id,
+                    "session_id": cell["session_id"].iloc[i],
+                    "lap_num": int(cell["lap_num"].iloc[i]),
+                    "date": str(cell["date"].iloc[i]),
+                    "arm": arm,
+                    "use": float(got.u[i]) if got.ok[i] else np.nan,
+                }
+                if got.ok[i]:
+                    sim = sv.lap_from_nodes(profile, cars[i], got.v_node_ms[i], float(got.u[i]))
+                    for tyre, q in zip(CORNERS, sim_heat(sim, share)):
+                        row[f"sim_q_{tyre}"] = float(q)
+                out.append(row)
+        # the lap time not given: each day's best lap at the car's typical use
+        best = cell.loc[cell.groupby("date")["lap_time_s"].idxmin()].reset_index(drop=True)
+        best_recs = cg._records(best)
+        for arm, who, road in (("A*", full, "own"), ("B*", unseen, "own"), ("D*", unseen, "other")):
+            if who is None:
+                continue
+            drive = who.but(use_cap=True)
+            profile = cg.profile_of(drive, roads[road])
+            typical = cg.typical_use(drive)
+            cars = [cg._lap_car(drive, rec) for rec in best_recs]
+            got = sv.drive_laps(profile, cars, np.full(len(cars), typical))
+            for i in range(len(best)):
+                sim = sv.lap_from_nodes(profile, cars[i], got.v_node_ms[i], typical)
+                out.append(
+                    {
+                        "car": car,
+                        "layout_id": layout_id,
+                        "session_id": best["session_id"].iloc[i],
+                        "lap_num": int(best["lap_num"].iloc[i]),
+                        "date": str(best["date"].iloc[i]),
+                        "arm": arm,
+                        "use": float(typical),
+                        "lap_time_s": float(best["lap_time_s"].iloc[i]),
+                        "lap_time_sim_s": float(got.lap_time_s[i]),
+                        **{f"sim_q_{t}": float(q) for t, q in zip(CORNERS, sim_heat(sim, share))},
+                    }
+                )
+    return pd.DataFrame(out)
+
+
+def pace_carried(arm_laps: pd.DataFrame, obs: pd.DataFrame) -> pd.DataFrame:
+    """The lap time not given (the arms of :data:`CARRIED`): per car,
+    layout and arm, over the days' best laps, ``lap_time`` (the median of
+    the log of the simulated lap time at the car's typical use over the
+    day's best lap), ``lap_time_size`` (the median of its size) and, per
+    tyre, ``g_<tyre>``: the median of the log of that lap's simulated heat
+    over the best lap's own heat in the tyres' frame."""
+    if arm_laps.empty or "lap_time_sim_s" not in arm_laps.columns:
+        return pd.DataFrame()
+    own = arm_laps[arm_laps["arm"].isin(list(CARRIED))]
+    both = own.merge(usable(obs), on=["session_id", "lap_num"], how="inner")
+    if both.empty:
+        return pd.DataFrame()
+    with np.errstate(divide="ignore", invalid="ignore"):
+        both["lap_time"] = np.log(both["lap_time_sim_s"] / both["lap_time_s"])
+        for c in CORNERS:
+            both[f"g_{c}"] = np.log(both[f"sim_q_{c}"] / both[f"t_{c}"])
+    both["lap_time_size"] = both["lap_time"].abs()
+    cols = ["lap_time", "lap_time_size", *G_MEASURES]
+    cell = ["car", "layout_id", "arm"]
+    out = both.groupby(cell, sort=False)[cols].median()
+    out.insert(0, "days", both.groupby(cell, sort=False)["date"].nunique())
+    return out.reset_index()
+
+
+def transfers(arm_laps: pd.DataFrame, obs: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """``(per_lap, by_cell)`` of :func:`transfer_laps`: per lap and arm the
+    log of simulated heat over the lap's own heat in the tyres' frame
+    (``g_<tyre>``); and per car and layout, the median over days of the
+    day's median lap of each arm's ``g`` and, lap by lap, of the
+    transfers ``B-A``, ``C-A``, ``D-A`` and of ``D-B-C+A`` (whether they
+    add), one row per quantity (``what``)."""
+    t_cols = [f"t_{c}" for c in CORNERS]
+    if arm_laps.empty or "sim_q_fl" not in arm_laps.columns:
+        return pd.DataFrame(), pd.DataFrame()
+    both = arm_laps.merge(usable(obs), on=["session_id", "lap_num"], how="inner")
+    with np.errstate(divide="ignore", invalid="ignore"):
+        g = np.log(both[[f"sim_q_{c}" for c in CORNERS]].to_numpy(float) / both[t_cols].to_numpy())
+    per_lap = both[["car", "layout_id", "session_id", "lap_num", "date", "arm", "source"]].copy()
+    for k, c in enumerate(CORNERS):
+        per_lap[f"g_{c}"] = g[:, k]
+    per_lap = per_lap.replace([np.inf, -np.inf], np.nan)
+    keys = ["car", "layout_id", "session_id", "lap_num", "date"]
+    wide = per_lap.pivot_table(index=keys, columns="arm", values=list(G_MEASURES))
+    rows = []
+    for (car, layout_id), cell in wide.groupby(level=["car", "layout_id"], sort=False):
+        have = set(cell.columns.get_level_values("arm"))
+        things: dict[str, pd.DataFrame] = {
+            a: pd.DataFrame(cell.xs(a, axis=1, level="arm")) for a in ARMS if a in have
+        }
+        if {"A", "B"} <= have:
+            things["B-A"] = things["B"] - things["A"]
+        if {"A", "C"} <= have:
+            things["C-A"] = things["C"] - things["A"]
+        if set(ARMS) <= have:
+            things["D-A"] = things["D"] - things["A"]
+            things["D-B-C+A"] = things["D"] - things["B"] - things["C"] + things["A"]
+        for what, frame in things.items():
+            days = frame.groupby(level="date").median()
+            mid = days.median()
+            rows.append(
+                {
+                    "car": car,
+                    "layout_id": layout_id,
+                    "what": what,
+                    "laps": int(frame.dropna().shape[0]),
+                    "days": int(len(days)),
+                    **{m: float(mid[m]) for m in G_MEASURES},
+                }
+            )
+    return per_lap, pd.DataFrame(rows)
+
+
 def carried_factors(laps: pd.DataFrame, obs: pd.DataFrame) -> pd.DataFrame:
     """What carrying a frame factor to a layout costs by itself: per car,
     layout and source, the log of the layout's own factor over the one
@@ -321,6 +546,141 @@ def carried_factors(laps: pd.DataFrame, obs: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def transfer_item(
+    arm_laps: pd.DataFrame,
+    obs: pd.DataFrame,
+    yard: pd.DataFrame,
+    laps: pd.DataFrame,
+    donors: pd.DataFrame,
+) -> list:
+    """The item gate C3's report carries for arms C and D of gate E2
+    (:func:`transfer_laps`); ``donors`` says what each track from other
+    cars was built from (``car, layout_id, donor_laps, donor_days,
+    donor_cars``)."""
+    from .gates import GateItem, md_table
+
+    per_lap, by_cell = transfers(arm_laps, obs)
+    if by_cell.empty:
+        return []
+    g = list(G_MEASURES)
+    # laps arm D could not drive: under the cap the car cannot make the lap time
+    lost = arm_laps[(arm_laps["arm"] == "D") & arm_laps["sim_q_fl"].isna()]
+    unsolved = lost.groupby(["car", "layout_id"]).size().to_dict()
+    cells = []
+    for (car, layout_id), grp in by_cell.groupby(["car", "layout_id"], sort=False):
+
+        def worst(what: str) -> float:
+            row = grp[grp["what"] == what]
+            return float(row[g].abs().to_numpy().max()) if len(row) else float("nan")
+
+        days = int(grp["days"].max())
+        donor = donors[(donors["car"] == car) & (donors["layout_id"] == layout_id)]
+        d_laps = int(donor["donor_laps"].iloc[0]) if len(donor) else 0
+        d_days = int(donor["donor_days"].iloc[0]) if len(donor) else 0
+        cells.append(
+            {
+                "car": car,
+                "layout_id": layout_id,
+                "days": days,
+                "track_from": str(donor["donor_cars"].iloc[0]) if len(donor) else "",
+                "donor_laps": d_laps,
+                "donor_days": d_days,
+                "verdict": bool(days >= 3 and d_days >= 3 and d_laps >= 30),
+                "B-A": worst("B-A"),
+                "C-A": worst("C-A"),
+                "D-A": worst("D-A"),
+                "adds": worst("D-B-C+A"),
+                "D_worst_tyre": worst("D"),
+                "D_no_lap": int(unsolved.get((car, layout_id), 0)),
+            }
+        )
+    table = pd.DataFrame(cells)
+    # arm D as a held-out lap of gate E2's form, with the car's other layouts beside it
+    arm_d = arm_laps[arm_laps["arm"] == "D"].assign(kind="layout")
+    errs = errors(arm_d, obs, where=laps)
+    tallies = []
+    for model in ("fit", OTHER_LAYOUTS):
+        arm = errs[errs["model"] == model]
+        if arm.empty:
+            continue
+        row: dict = {"arm": "D" if model == "fit" else model}
+        for tag, measures in (("production", E_MEASURES), ("tyres_frame", G_MEASURES)):
+            got = tally(score(arm, yard, measures))
+            row[f"{tag}_cells"] = f"{got['passed']} of {got['scored']}"
+            row[f"{tag}_whole"] = f"{got['whole']} of {got['groups']}"
+        tallies.append(row)
+    seen = table[table["verdict"]]
+    inside = int((table["D_worst_tyre"] <= REF_UNSEEN).sum())
+    measured = (
+        f"both unseen (arm D): worst tyre within {REF_UNSEEN:g} in {inside} of {len(table)} "
+        f"cells ({int((seen['D_worst_tyre'] <= REF_UNSEEN).sum())} of {len(seen)} with a "
+        f"verdict), {table['D_worst_tyre'].median():.3f} in the median; the track's transfer "
+        f"C-A up to {table['C-A'].max():.3f} on a tyre, the car's B-A up to "
+        f"{table['B-A'].max():.3f}, their sum against D-A within {table['adds'].max():.4f}"
+        + (
+            "; cells in gate C3's form: "
+            + "; ".join(
+                f"{r['arm']} {r['production_cells']} / {r['tyres_frame_cells']}" for r in tallies
+            )
+            if tallies
+            else ""
+        )
+    )
+    detail = (
+        "Four arms on every dry build lap of the cell, each solved to the lap's own lap time: "
+        + "; ".join(f"**{a}** {ARM_NAMES[a]}" for a in ARMS)
+        + ". The track from other cars is gate B3's saved track of the layout built without "
+        "the car's class, its curvature laid on the own track's nodes (the bank and the grade "
+        "stay the own track's). Everything here is in the tyres' frame (simulated heat over "
+        "the logged lap's own heat there, no factor), per tyre, lap by lap and then the median "
+        "over days of the day's median. `B-A`, `C-A`, `D-A`: the largest transfer on a tyre "
+        f"(reference {REF_TRANSFER:g}); `adds`: the largest of D-B-C+A (reference "
+        f"{REF_ADDITIVE:g}); `D_worst_tyre`: arm D against the logged lap (reference "
+        f"{REF_UNSEEN:g}). `verdict`: three scored dry days of the car, and three days and 30 "
+        "laps of other cars behind the track. `D_no_lap`: laps arm D has no lap for (under "
+        "the cap of a use of 1 the unseen car on the other cars' track cannot make the lap "
+        "time).\n\n"
+        + md_table(table, floats="{:.4f}")
+        + "\n\n**Per tyre** (`what`: an arm's log of simulated over logged heat, or a "
+        "transfer between arms).\n\n" + md_table(by_cell, floats="{:.4f}")
+    )
+    if tallies:
+        detail += (
+            "\n\n**Arm D in gate C3's form**, beside the car's logged heat at its other "
+            "layouts, unscaled (`production`: through the frame factor carried from the car's "
+            "other layouts).\n\n" + md_table(pd.DataFrame(tallies))
+        )
+    carried = pace_carried(arm_laps, obs)
+    if len(carried):
+        both_unseen = carried[carried["arm"] == "D*"]
+        off = both_unseen[g].abs().max(axis=1)
+        measured += (
+            "; the lap time not given (both unseen, each day's best lap at the car's typical "
+            f"use): lap time off by {both_unseen['lap_time_size'].median():.3f} in the median "
+            f"cell (up to {both_unseen['lap_time_size'].max():.3f}), worst tyre "
+            f"{off.median():.3f} in the median cell (up to {off.max():.3f})"
+        )
+        detail += (
+            "\n\n**The lap time not given.** Each day's best lap of the cell is driven at the "
+            "car's typical use of its limit, which is what is carried to a layout the car has "
+            "not run: `A*` the car's own fit on its own track, `B*` the car fitted without the "
+            "layout, `D*` that car on the track from other cars. `lap_time`: the log of the "
+            "simulated lap time over the day's best lap (the median over days; "
+            "`lap_time_size` the median of its size); `g_<tyre>`: the log of that lap's "
+            "simulated heat over the best lap's own heat in the tyres' frame.\n\n"
+            + md_table(carried, floats="{:.4f}")
+        )
+    return [
+        GateItem(
+            "Per-tyre heat on a track from other cars (gate E2 of #207, arms C and D)",
+            None,
+            measured,
+            "reported, with #207's limits as reference numbers; the lap time is given",
+            detail,
+        )
+    ]
+
+
 def report_items(
     root: Path,
     laps: pd.DataFrame,
@@ -329,9 +689,13 @@ def report_items(
     *,
     tracks_dir: Path | None = None,
     cache_dir: Path | None = None,
+    transfer: dict | None = None,
 ) -> list:
     """The items gate C3's report carries for gate E1 (the day folds) and
-    arm B of gate E2 (the layout folds), from gate C3's per-lap frame."""
+    arm B of gate E2 (the layout folds), from gate C3's per-lap frame.
+    With ``transfer`` (``tables, rows, tracks, full, shifts, gears, air``
+    of gate C3) arms C and D follow, at each layout with a saved track
+    from other cars under ``tracks_dir / "folds"``."""
     from .gates import GateItem, md_table
 
     obs = observed(root, laps, shares, tracks_dir=tracks_dir, cache_dir=cache_dir)
@@ -436,6 +800,49 @@ def report_items(
                 detail,
             )
         )
+    if transfer is not None and tracks_dir is not None:
+        parts, donor_rows = [], []
+        for car, full in transfer["full"].items():
+            try:
+                share = ho.share_for(car, shares)
+            except KeyError:
+                continue
+            if full is None:
+                continue
+            others = {}
+            for layout_id in transfer["tracks"]:
+                path = Path(tracks_dir) / "folds" / f"{fold_track_name(car, layout_id)}.json"
+                if path.exists():
+                    others[layout_id] = trk.TrackModel.load(path)
+                    built = others[layout_id].meta.get("built_from") or {}
+                    donor_rows.append(
+                        {
+                            "car": car,
+                            "layout_id": layout_id,
+                            "donor_laps": int(built.get("n_laps") or 0),
+                            "donor_days": int(built.get("n_days") or 0),
+                            "donor_cars": ", ".join(built.get("cars") or []),
+                        }
+                    )
+            if not others:
+                continue
+            parts.append(
+                transfer_laps(
+                    transfer["tables"],
+                    transfer["rows"],
+                    transfer["tracks"],
+                    others,
+                    car,
+                    full,
+                    share,
+                    air=transfer.get("air"),
+                    shifts=transfer["shifts"].get(car),
+                    gears=transfer["gears"].get(car),
+                )
+            )
+        if parts:
+            arm_laps = pd.concat(parts, ignore_index=True)
+            items += transfer_item(arm_laps, obs, yard, laps, pd.DataFrame(donor_rows))
     return items
 
 

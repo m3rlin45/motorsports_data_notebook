@@ -1857,6 +1857,15 @@ def check_car_holdout(
                 rows.set_index(["session_id", "lap_num"])["lap_time_s"],
                 tracks_dir=tracks_dir,
                 cache_dir=cache_dir,
+                transfer={
+                    "tables": tables,
+                    "rows": rows,
+                    "tracks": tracks,
+                    "full": full,
+                    "shifts": shifts,
+                    "gears": gears,
+                    "air": air,
+                },
             )
         )
     return rep
