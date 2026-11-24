@@ -5179,6 +5179,55 @@ owner. Every other clause that today's laps can carry is run. The lap
 production feeds (a session's 25th-percentile lap) and the lap time the
 simulation supplies are F's (#208).
 
+**Segment F (#208): the plan the owner approved (2026-11-24), before any
+of it is built.** #208 was read against B–E as built and rewritten; it
+holds the plan only. The rulings: (1) *Paired days.* The cold pressure
+the calculators would recommend from a simulated lap (flying lap 5,
+through the fold model, no TPMS reading in it) is set against the one a
+logged day's own heat gives, with another logged day of the same raw
+car, powertrain and kind of source at the same track beside it. A cell
+is a raw car at a track on one tyre and passes when the simulation is no
+further from the day than another day is. No fixed limit in bar (#208's
+0.006, 0.008 and 0.010 bar are gone) and no levels of pace: a stint is
+fed one lap time. (2) *With nothing given, the real run is given nothing
+either*: another single day's logs with their own lap time, heat and
+out-lap, and beside it the ceiling, the logged entry built without the
+day. (3) *Sodegaura and Suzuka are scored with only the car unseen*,
+labelled and tallied apart: a track from another class of car exists at
+Tsukuba and Fuji only. (4) *The gate is a report; the switchover is the
+owner's call on it* ("I will make the call when you have data"). Three
+cells have neither the car nor the track seen and a cell's four tyres
+move together, so the count is about three groups: the distances, the
+planted controls and the simulation against what it replaces (the car's
+other layouts) carry the result. (5) *Simulated entries are built from a
+committed export*: each knot's flying lap and out-lap as the series the
+heat chain reads, which `build_warmup_table` splits through the shares
+of the fit in hand at every retrain (an entry's heat is of one fit's
+shares, so it cannot be written once). (6) *The tracks are committed
+with their bank, with attribution to GSI, and no flat-road arm is run*
+("attribution is fine ... commit the bank track info, add attribution,
+no flat stuff"). Read for it: GSI's Survey Act Q&A (Q1-16: processing
+without reproduction needs no approval; Q2-4: a map made from the
+elevation model does) and its content terms, which ask for the source
+and a note that the content was processed
+(「地理院タイル（標高タイル（基盤地図情報数値標高モデル））を加工して作成」). Neither page addresses the
+numeric outputs of a simulation. Until the tracks are moved they stay in
+`workspace/`, and `dem.py`'s note stands as written.
+
+**What F has to build first.** Nothing of F exists:
+`validate._evaluate_fold` has no hook for a heat source and `predict.py`
+still ends at a 90 s lap. Four laps are called typical and differ: the
+simulation's typical use is the use of a day's best lap; production's
+holdout types in a session's 25th-percentile flying lap; the calculators
+prefill the median of all the cell's flying laps, beside the median of
+per-lap heat; #208's given lap is the median of a session's ordinary
+flying laps from flying lap 4 on. A simulated entry has to mean what a
+logged one means, so F0 builds a *fed use* beside `meta.use_ref`: per
+raw car, the use of a session's median flying lap, carried to a layout
+the car has not run as the typical use is. The harness's first output
+needs no simulation: the yardstick itself, another day against a day in
+mbar with each pair's lap-time gap, which has not been measured.
+
 **Batches, and speed.** The solver works on a batch of laps of one
 track, each with its own car and its own u (`solver.solve_laps`,
 `solver.drive_laps`; one lap is a batch of one), in two forms that give
