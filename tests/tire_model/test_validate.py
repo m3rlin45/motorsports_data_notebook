@@ -10,6 +10,9 @@ from __future__ import annotations
 import pandas as pd
 
 from motorsports_data_notebook.tire_model.validate import (
+    FoldLaps,
+    _fold_constants,
+    _score_fold_laps,
     _calculator_lap_inputs,
     _pick_holdout_sessions,
 )
@@ -247,3 +250,166 @@ def test_calculator_lap_inputs_use_bucket_g2_pace_scaled_and_lap_clock() -> None
         model, "t", "c", "wet", 1, 65.0, with_outlap=True
     )
     assert g2_wet == 0.8 and out_w == 80.0
+
+
+# ---------- one fit, several heat sources (#208's harness) ----------
+
+
+def _harness_model() -> dict:
+    """A fold model with one car's constants and one cell's entries."""
+    return {
+        "K_buckets": [
+            {"key": {"car": "c", "corner": k, "condition": "dry"}, "value_kelvin_per_g2": 5.0}
+            for k in ("fl", "fr", "rl", "rr")
+        ],
+        "K_by_car_compound_corner_cond": [
+            {
+                "car": "c",
+                "compound": "soft",
+                "corner": "fl",
+                "condition": "dry",
+                "value_kelvin_per_g2": 7.0,
+            }
+        ],
+        "tau_sec_by_car_corner_cond": [
+            {"car": "c", "corner": k, "condition": "dry", "value_seconds": 300.0}
+            for k in ("fl", "fr", "rl", "rr")
+        ],
+        "g2_typ_by_track_car_cond": [
+            {
+                "track_canonical": "t",
+                "car": "c",
+                "condition": "dry",
+                "g2_typ": 4.0,
+                "n_laps_used": 50,
+                "q_typ_by_corner": {"fl": 4.0, "fr": 4.0, "rl": 4.0, "rr": 4.0},
+            }
+        ],
+        "lap_time_typ_by_track_car_cond": [
+            {
+                "track_canonical": "t",
+                "car": "c",
+                "condition": "dry",
+                "lap_time_typ_s": 60.0,
+                "n_laps_used": 50,
+            }
+        ],
+        "outlap_typ_by_track_car_cond": [],
+        "g2_lap_time_model": {
+            "default_exponent": 3.0,
+            "multiplier_clamp": {"min": 0.4, "max": 2.5},
+        },
+    }
+
+
+def _harness_laps(sessions: tuple[str, ...] = ("s1", "s2")) -> FoldLaps:
+    """Two flying laps per session on a first-lap anchor, front left only."""
+    rows = []
+    for sid in sessions:
+        for n in (1, 2):
+            rows.append(
+                {
+                    "session_id": sid,
+                    "track_canonical": "t",
+                    "car": "c",
+                    "condition": "dry",
+                    "lap_num": n,
+                    "stint_id": 0,
+                    "lap_within_stint": n,
+                    "t_cum_s": 60.0 * n,
+                    "on_track_s": 60.0,
+                    "t_eff_c": 20.0,
+                    "heat_proxy": float("nan"),
+                    "q_lap_fl": 4.0,
+                    "t_gas_fl_end": 30.0,
+                    "tpms_temp_fl_end": 30.0,
+                    "t_anchor_fl": 0.0,
+                    "t_start_fl": 20.0,
+                    "anchor_kind_fl": "first_lap",
+                    "p_start_fl": 1.5,
+                    "tpms_press_fl_end": 1.6,
+                }
+            )
+    flying = pd.DataFrame(rows)
+    return FoldLaps(
+        flying=flying,
+        full=flying,
+        label_by_session={},
+        session_lap_time={sid: 60.0 for sid in sessions},
+        stint_outlap={},
+        kappa_by_car={},
+    )
+
+
+def test_fold_constants_take_the_compound_k_and_fall_back_to_dry() -> None:
+    pick = _fold_constants(_harness_model())
+    assert pick("c", "fl", "dry", None) == (5.0, 300.0)
+    assert pick("c", "fl", "dry", "soft") == (7.0, 300.0)
+    # a compound without its own K on that corner keeps the pooled one
+    assert pick("c", "fr", "dry", "soft") == (5.0, 300.0)
+    # a condition without constants reads the dry ones
+    assert pick("c", "fl", "wet", None) == (5.0, 300.0)
+    assert pick("other", "fl", "dry", None) == (None, None)
+
+
+def test_score_fold_laps_scores_one_preparation_under_several_entry_tables() -> None:
+    """The laps are prepared once and scored against any number of models:
+    another entry in the cell's table moves the prediction, the rows stay
+    the same rows."""
+    prep, model = _harness_laps(), _harness_model()
+    base = _score_fold_laps(prep, model)
+    assert list(base["corner"].unique()) == ["fl"] and len(base) == 4
+    hotter = _harness_model()
+    hotter["g2_typ_by_track_car_cond"][0]["q_typ_by_corner"]["fl"] = 8.0
+    moved = _score_fold_laps(prep, hotter)
+    keys = ["session_id", "lap_num", "corner", "T_hot_obs_c"]
+    pd.testing.assert_frame_equal(base[keys], moved[keys])
+    assert (moved["T_hot_pred_c"] > base["T_hot_pred_c"]).all()
+    assert (moved["g2_used"] == 8.0).all() and (base["g2_used"] == 4.0).all()
+
+
+def test_score_fold_laps_can_take_the_laps_of_some_sessions() -> None:
+    prep, model = _harness_laps(), _harness_model()
+    every = _score_fold_laps(prep, model)
+    one = _score_fold_laps(prep, model, session_ids=["s2"])
+    want = every[every["session_id"] == "s2"].reset_index(drop=True)
+    pd.testing.assert_frame_equal(one, want)
+
+
+def test_score_fold_laps_feeds_the_curve_from_a_given_function() -> None:
+    """A heat source that is not a table of entries is a function with the
+    signature of ``_calculator_lap_inputs``."""
+    seen: list[tuple] = []
+
+    def source(model, track, car, cond, n, lap_time_s, *, with_outlap, corner=None):  # type: ignore[no-untyped-def]
+        seen.append((track, car, cond, n, lap_time_s, with_outlap, corner))
+        return 6.0, n * lap_time_s, 1.5, 0.0, 0.0
+
+    got = _score_fold_laps(_harness_laps(("s1",)), _harness_model(), lap_inputs_fn=source)
+    assert seen == [
+        ("t", "c", "dry", 1, 60.0, False, "fl"),
+        ("t", "c", "dry", 2, 60.0, False, "fl"),
+    ]
+    assert (got["g2_used"] == 6.0).all() and (got["g2_scale"] == 1.5).all()
+
+
+def test_evaluate_fold_does_not_fit_when_given_the_fold_model(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """With ``model=`` the fold is not fitted again: the model given is the
+    one the laps are prepared and scored with."""
+    from motorsports_data_notebook.tire_model import validate
+
+    def no_fit(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise AssertionError("the fold was fitted again")
+
+    prep, model = _harness_laps(), _harness_model()
+    asked: list[dict] = []
+
+    def prepare(root, holdout_ids, fold_model, *, inferred_labels=None):  # type: ignore[no-untyped-def]
+        asked.append(fold_model)
+        return prep
+
+    monkeypatch.setattr(validate, "build_warmup_table", no_fit)
+    monkeypatch.setattr(validate, "_prepare_fold_laps", prepare)
+    got = validate._evaluate_fold(tmp_path, ["s1", "s2"], model=model)
+    assert asked == [model]
+    pd.testing.assert_frame_equal(got, _score_fold_laps(prep, model))

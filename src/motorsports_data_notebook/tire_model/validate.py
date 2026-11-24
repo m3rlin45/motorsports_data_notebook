@@ -16,7 +16,9 @@ from __future__ import annotations
 import json
 import logging
 import math
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Callable, Iterable
 
 import numpy as np
 import pandas as pd
@@ -398,12 +400,83 @@ def _calculator_lap_inputs(
     return g2_typ * scale, t_flying_s, scale, out_s, out_g2
 
 
+@dataclass
+class FoldLaps:
+    """A fold's held-out laps as the scoring reads them: prepared once per
+    fold model (its κ puts the lap-end readings on the gas-law scale and its
+    shares give each lap its own per-corner heat), then scored against any
+    number of entry tables (:func:`_score_fold_laps`).
+
+    ``flying`` are the scored laps (``lap_within_stint > 0``), ``full`` the
+    same with the out-laps; ``label_by_session`` the compound a driver
+    would have selected; ``session_lap_time`` the lap time typed in
+    (:data:`TARGET_LAP_TIME_QUANTILE`); ``stint_outlap`` the measured
+    out-lap per ``(session_id, stint_id)`` as ``(rolling-clock end,
+    {corner: q})``."""
+
+    flying: pd.DataFrame
+    full: pd.DataFrame
+    label_by_session: dict[str, str]
+    session_lap_time: dict[str, float]
+    stint_outlap: dict[tuple[str, int], tuple[float, dict[str, float]]]
+    kappa_by_car: dict[str, float]
+
+
+#: What the warmup curve is fed for one lap and corner: the signature of
+#: :func:`_calculator_lap_inputs`. A heat source that is not a table of
+#: entries (a lap time that is not typed, for one) is scored by passing its
+#: own function to :func:`_evaluate_fold`.
+LapInputsFn = Callable[..., tuple[float, float, float, float, float]]
+
+
+def _fit_fold(root: Path, holdout_ids: Iterable[str]) -> dict[str, Any]:
+    """The model fitted without ``holdout_ids``, nothing written."""
+    return build_warmup_table(root, exclude_session_ids=set(holdout_ids), write_artifacts=False)
+
+
+def _fold_constants(
+    model: dict[str, Any],
+) -> Callable[[str, str, str, str | None], tuple[float | None, float | None]]:
+    """``(car, corner, condition, compound) -> (K, tau)`` as the holdout
+    picks them from a model: the condition's own, else the dry one; the
+    compound's K where the model has it (None where it has neither)."""
+    k_lookup = {
+        (d["key"]["car"], d["key"]["corner"], d["key"]["condition"]): d["value_kelvin_per_g2"]
+        for d in model["K_buckets"]
+    }
+    k_compound_lookup = {
+        (d["car"], d["compound"], d["corner"], d["condition"]): d["value_kelvin_per_g2"]
+        for d in model.get("K_by_car_compound_corner_cond", [])
+    }
+    tau_lookup = {
+        (d["car"], d["corner"], d["condition"]): d["value_seconds"]
+        for d in model["tau_sec_by_car_corner_cond"]
+    }
+
+    def pick(
+        car: str, corner: str, cond: str, compound: str | None
+    ) -> tuple[float | None, float | None]:
+        K = k_lookup.get((car, corner, cond)) or k_lookup.get((car, corner, "dry"))
+        if compound is not None:
+            K = (
+                k_compound_lookup.get((car, compound, corner, cond))
+                or k_compound_lookup.get((car, compound, corner, "dry"))
+                or K
+            )
+        tau = tau_lookup.get((car, corner, cond)) or tau_lookup.get((car, corner, "dry"))
+        return K, tau
+
+    return pick
+
+
 def _evaluate_fold(
     root: Path,
     holdout_ids: list[str],
     *,
     inputs: str = "calculator",
     inferred_labels: dict[str, str] | None = None,
+    model: dict[str, Any] | None = None,
+    lap_inputs_fn: LapInputsFn | None = None,
 ) -> pd.DataFrame:
     """Train a model excluding ``holdout_ids`` and return per-(lap, corner)
     residual rows for the held-out sessions.
@@ -420,24 +493,35 @@ def _evaluate_fold(
     - ``"oracle"``: the measured out-lap and the lap's own measured g² and
       clock from the same anchor — the thermal model's accuracy given the
       real driving, an upper bound on what the calculator can do.
+
+    ``model`` is a model already fitted without ``holdout_ids``
+    (:func:`_fit_fold`), possibly with other entries placed in its tables:
+    several heat sources are then scored on one fit (#208's harness; fit a
+    fold once, :func:`_prepare_fold_laps` once and :func:`_score_fold_laps`
+    per source). ``lap_inputs_fn`` stands in for
+    :func:`_calculator_lap_inputs`.
     """
     if inputs not in INPUT_MODES:
         raise ValueError(f"inputs must be one of {INPUT_MODES}; got {inputs!r}")
-    model = build_warmup_table(root, exclude_session_ids=set(holdout_ids), write_artifacts=False)
+    if model is None:
+        model = _fit_fold(root, holdout_ids)
+    prep = _prepare_fold_laps(root, holdout_ids, model, inferred_labels=inferred_labels)
+    if prep is None:
+        return pd.DataFrame()
+    return _score_fold_laps(prep, model, inputs=inputs, lap_inputs_fn=lap_inputs_fn)
 
-    # Build per-(track, car) lookups from the held-out model
-    g2_lookup = {
-        (d["track_canonical"], d["car"], d["condition"]): d["g2_typ"]
-        for d in model["g2_typ_by_track_car_cond"]
-    }
-    k_lookup = {
-        (d["key"]["car"], d["key"]["corner"], d["key"]["condition"]): d["value_kelvin_per_g2"]
-        for d in model["K_buckets"]
-    }
-    k_compound_lookup = {
-        (d["car"], d["compound"], d["corner"], d["condition"]): d["value_kelvin_per_g2"]
-        for d in model.get("K_by_car_compound_corner_cond", [])
-    }
+
+def _prepare_fold_laps(
+    root: Path,
+    holdout_ids: Iterable[str],
+    model: dict[str, Any],
+    *,
+    inferred_labels: dict[str, str] | None = None,
+) -> FoldLaps | None:
+    """The held-out laps of a fold, prepared with the fold model's κ and
+    force shares (:class:`FoldLaps`); None when none of ``holdout_ids`` has
+    a usable lap. Nothing here reads the model's entry tables."""
+    holdout_ids = list(holdout_ids)
     # Held-out sessions' compound labels (metadata, not telemetry — using
     # them mirrors a driver entering the compound in the calculator).
     # Condition seeds count as metadata too (the driver knows whether wets
@@ -447,10 +531,6 @@ def _evaluate_fold(
     from .compounds import load_compound_labels, load_condition_seeds
 
     labels = load_compound_labels(root)
-    tau_lookup = {
-        (d["car"], d["corner"], d["condition"]): d["value_seconds"]
-        for d in model["tau_sec_by_car_corner_cond"]
-    }
 
     # Build (session_id → ambient_temp_c) from weather attached during training prep.
     # Simpler: re-run the same weather lookup logic for held-out sessions only.
@@ -468,7 +548,7 @@ def _evaluate_fold(
     all_laps = _load_filtered_laps(root)
     all_laps = all_laps[all_laps["session_id"].isin(holdout_ids)].copy()
     if all_laps.empty:
-        return pd.DataFrame()
+        return None
     weather = _load_weather(root)
     all_laps = _attach_weather(all_laps, weather)
     all_laps = _compute_stint_clock(all_laps)
@@ -514,8 +594,8 @@ def _evaluate_fold(
     labels = apply_condition_seeds(
         labels, all_laps, alias_condition_seeds(load_condition_seeds(root))
     )
-    label_by_session = {
-        r.session_id: r.compound for r in labels.itertuples() if isinstance(r.compound, str)
+    label_by_session: dict[str, str] = {
+        str(r.session_id): r.compound for r in labels.itertuples() if isinstance(r.compound, str)
     }
     # The driver always selects the tire. For sessions without a human or
     # seed label, stand in the EM's inferred compound (fitted once on the
@@ -525,9 +605,12 @@ def _evaluate_fold(
     flying_only = all_laps[~all_laps["_is_out"]] if "_is_out" in all_laps.columns else all_laps
     # The target lap time a driver enters: people are optimistic, so stand
     # in the session's 25th-percentile flying lap rather than the median.
-    session_lap_time = (
-        flying_only.groupby("session_id")["on_track_s"].quantile(TARGET_LAP_TIME_QUANTILE).to_dict()
-    )
+    session_lap_time: dict[str, float] = {
+        str(sid): float(t)
+        for sid, t in flying_only.groupby("session_id")["on_track_s"]
+        .quantile(TARGET_LAP_TIME_QUANTILE)
+        .items()
+    }
     # Measured out-lap per stint for the oracle: (rolling-clock end, {corner: q}).
     stint_outlap: dict[tuple[str, int], tuple[float, dict[str, float]]] = {}
     if "_is_out" in all_laps_full.columns and "moving_s" in all_laps_full.columns:
@@ -543,6 +626,44 @@ def _evaluate_fold(
                     per[c] = float(hp) / float(mv)
             if per:
                 stint_outlap[(str(o["session_id"]), int(o["stint_id"]))] = (t_end, per)
+
+    return FoldLaps(
+        flying=all_laps,
+        full=all_laps_full,
+        label_by_session=label_by_session,
+        session_lap_time=session_lap_time,
+        stint_outlap=stint_outlap,
+        kappa_by_car=kappa_by_car,
+    )
+
+
+def _score_fold_laps(
+    prep: FoldLaps,
+    model: dict[str, Any],
+    *,
+    inputs: str = "calculator",
+    lap_inputs_fn: LapInputsFn | None = None,
+    session_ids: Iterable[str] | None = None,
+) -> pd.DataFrame:
+    """Per-(lap, corner) residual rows of ``prep`` under ``model``'s
+    constants and entry tables (see :func:`_evaluate_fold`); only the laps
+    of ``session_ids`` when given."""
+    if inputs not in INPUT_MODES:
+        raise ValueError(f"inputs must be one of {INPUT_MODES}; got {inputs!r}")
+    lap_inputs = lap_inputs_fn or _calculator_lap_inputs
+    all_laps = prep.flying
+    if session_ids is not None:
+        all_laps = all_laps[all_laps["session_id"].isin(set(session_ids))]
+    label_by_session = prep.label_by_session
+    session_lap_time = prep.session_lap_time
+    stint_outlap = prep.stint_outlap
+    kappa_by_car = prep.kappa_by_car
+    # Build per-(track, car) lookups from the held-out model
+    g2_lookup = {
+        (d["track_canonical"], d["car"], d["condition"]): d["g2_typ"]
+        for d in model["g2_typ_by_track_car_cond"]
+    }
+    constants = _fold_constants(model)
 
     # Per-lap predictions. Per-lap g² (heat_proxy / on_track_s) is the
     # held-out lap's actual driving intensity; falls back to the bucket
@@ -579,14 +700,7 @@ def _evaluate_fold(
             # The lap's own driving intensity for this corner (schema v5), else the total g².
             q_c = lap.get(f"q_lap_{c}")
             g2 = float(q_c) if (q_c is not None and pd.notna(q_c) and float(q_c) > 0) else g2_total
-            K = k_lookup.get((car, c, cond)) or k_lookup.get((car, c, "dry"))
-            if session_compound is not None:
-                K = (
-                    k_compound_lookup.get((car, session_compound, c, cond))
-                    or k_compound_lookup.get((car, session_compound, c, "dry"))
-                    or K
-                )
-            tau = tau_lookup.get((car, c, cond)) or tau_lookup.get((car, c, "dry"))
+            K, tau = constants(car, c, cond, session_compound)
             if K is None or tau is None:
                 continue
             # Observable: the pressure-implied gas temperature at lap end
@@ -611,7 +725,7 @@ def _evaluate_fold(
                 n_flying = (
                     int(lap["lap_within_stint"]) if pit_exit else int(lap["lap_within_stint"])
                 )
-                g2_c, t_fly, g2_scale, out_s, out_g2 = _calculator_lap_inputs(
+                g2_c, t_fly, g2_scale, out_s, out_g2 = lap_inputs(
                     model,
                     track,
                     car,
