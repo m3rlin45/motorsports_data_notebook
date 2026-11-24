@@ -128,6 +128,22 @@ def main(argv: list[str] | None = None) -> int:
     p_holdout.add_argument("--n-per-bucket", type=int, default=2)
     p_holdout.add_argument("--min-bucket-size", type=int, default=10)
     p_holdout.add_argument(
+        "--split",
+        nargs="+",
+        default=[],
+        metavar="CAR",
+        help="An experiment: fit these raw cars as a pooled car of their own, named after "
+        "the first (e.g. --split KK-F KK-F-V2), on the same folds.",
+    )
+    p_holdout.add_argument(
+        "--fastest",
+        type=float,
+        default=0.0,
+        metavar="FRACTION",
+        help="A holdout by pace in place of the folds: per raw car and track the fastest "
+        "fraction of the dry sessions (by the lap time typed in) is held out of every model.",
+    )
+    p_holdout.add_argument(
         "--workers",
         type=int,
         default=None,
@@ -239,6 +255,8 @@ def main(argv: list[str] | None = None) -> int:
             n_per_bucket=args.n_per_bucket,
             min_bucket_size=args.min_bucket_size,
             workers=args.workers,
+            split=tuple(args.split),
+            fastest=args.fastest,
         )
     else:  # pragma: no cover - argparse rejects unknown commands
         parser.error(f"unknown command {args.cmd}")

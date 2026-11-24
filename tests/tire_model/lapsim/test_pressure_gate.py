@@ -596,3 +596,52 @@ class TestHoldoutOnSimulatedHeat:
         # the simulation is 10 mbar nearer on one session and 30 further on the other
         assert got["sessions"] == 2 and got["nearer"] == 1
         assert got["mean"] == pytest.approx(0.01) and got["se"] == pytest.approx(0.02)
+
+
+class TestHoldoutByPace:
+    def test_a_cells_fastest_sessions_and_how_far_under_the_rest_they_are(self, tmp_path):
+        sessions, laps = [], []
+        for k in range(12):
+            sid = f"s{k:02d}"
+            sessions.append(_session(sid, "KK-SII", "tsukuba", f"2026-01-{k + 1:02d}"))
+            for lap in range(4):
+                t = 60.0 + k + 0.1 * lap
+                laps.append(
+                    {
+                        "session_id": sid,
+                        "lap_num": lap + 1,
+                        "tire_usable": True,
+                        "is_outlap": False,
+                        "on_track_s": t,
+                        "lap_time_s": t,
+                    }
+                )
+        sessions.append(_session("few", "KK-F", "tsukuba", "2026-02-01"))
+        prod = _production(tmp_path, sessions)
+        prod.raw_laps = pd.DataFrame(laps)
+        folds, margins = pg.fastest_sessions(prod, 0.25, min_sessions=10)
+        # the fastest quarter of the one cell with ten dry sessions
+        assert folds == [("KK-SII at tsukuba", ["s00", "s01", "s02"])]
+        fastest = margins.set_index("session_id").loc["s00"]
+        assert fastest["sessions_left"] == 9 and fastest["under_typed"] < 0
+        # under the fastest typed lap time left, and under every single lap left
+        assert fastest["under_typed"] == pytest.approx(np.log(60.075 / 63.075))
+        assert fastest["under_lap"] == pytest.approx(np.log(60.075 / 63.0))
+
+
+class TestSplitPooling:
+    def test_raw_cars_fitted_as_a_pooled_car_of_their_own(self):
+        from motorsports_data_notebook.tire_model import heat_input, warmup_table
+
+        before, facts = dict(warmup_table.CAR_FIT_ALIASES), dict(heat_input.CAR_FACTS)
+        try:
+            got = pg.split_pooling(("KK-F", "KK-F-V2"))
+            assert got == {"KK-F-V2": "KK-F", "KK-SII": "FJ"}
+            assert warmup_table.CAR_FIT_ALIASES == got  # the one dict every module reads
+            assert heat_input.CAR_FACTS["KK-F"] == facts["FJ"]  # the facts of the car it leaves
+            assert pg.split_pooling(()) == got  # nothing asked: the pooling in force
+        finally:
+            warmup_table.CAR_FIT_ALIASES.clear()
+            warmup_table.CAR_FIT_ALIASES.update(before)
+            heat_input.CAR_FACTS.clear()
+            heat_input.CAR_FACTS.update(facts)

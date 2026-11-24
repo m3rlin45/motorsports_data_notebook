@@ -504,6 +504,8 @@ def write_report(report: GateReport, out_dir: Path) -> Path:
         "D2": "wet",
         "F": "pressure",
         "FH": "pressure_holdout",
+        "FHS": "pressure_holdout_split",
+        "FHP": "pressure_holdout_pace",
     }.get(report.gate, "report")
     path = out_dir / f"{report.gate}_{slug}.md"
     path.write_text(report.to_markdown())

@@ -111,6 +111,12 @@ _FIT_SOURCES = (
 _FIT_SIDECARS = ("sensor_blacklist.yaml", "tire_compounds.yaml", "session_overrides.yaml")
 
 
+def _shipped_aliases() -> dict[str, str]:
+    from ..warmup_table import CAR_FIT_ALIASES
+
+    return dict(CAR_FIT_ALIASES)
+
+
 # ------------------------------------------------------- production's side
 
 
@@ -181,10 +187,46 @@ def cell_table(prod: Production) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+#: The pooling the pressure model ships with (``warmup_table.CAR_FIT_ALIASES``
+#: as imported), which a cached fold is of unless :func:`split_pooling` says
+#: otherwise.
+_SHIPPED_POOLING = dict(_shipped_aliases())
+
+
+def split_pooling(own: tuple[str, ...]) -> dict[str, str]:
+    """An experiment's switch (#208, the owner's question of 2026-11-25:
+    does splitting the pooled formula car help?): fit the raw cars ``own``
+    as a pooled car of their own, named after the first, in place of the
+    one they are pooled under. It changes ``warmup_table.CAR_FIT_ALIASES``
+    for the process (every module reads that one dict) and gives the new
+    car the facts of the car it leaves; nothing is written. Returns the
+    pooling in force. A fold fitted under it is cached apart."""
+    from ..heat_input import CAR_FACTS
+    from ..warmup_table import CAR_FIT_ALIASES
+
+    if not own:
+        return dict(CAR_FIT_ALIASES)
+    name = own[0]
+    left = CAR_FIT_ALIASES.get(name, name)
+    for raw in own:
+        if raw == name:
+            CAR_FIT_ALIASES.pop(raw, None)
+        else:
+            CAR_FIT_ALIASES[raw] = name
+    if left in CAR_FACTS and name not in CAR_FACTS:
+        CAR_FACTS[name] = CAR_FACTS[left]
+    return dict(CAR_FIT_ALIASES)
+
+
 def _fit_signature(root: Path) -> str:
-    """What a cached fold is of: the dataset's files, the fit's source and
-    the sidecars a fit reads."""
+    """What a cached fold is of: the dataset's files, the fit's source,
+    the sidecars a fit reads and, where it is not the shipped one, the
+    pooling of the cars."""
+    from ..warmup_table import CAR_FIT_ALIASES
+
     h = hashlib.sha256(geo._index_signature(root).encode())
+    if dict(CAR_FIT_ALIASES) != _SHIPPED_POOLING:
+        h.update(repr(sorted(CAR_FIT_ALIASES.items())).encode())
     src = Path(__file__).resolve().parent.parent
     for name in _FIT_SOURCES:
         h.update((src / name).read_bytes())
@@ -3030,6 +3072,55 @@ def paired_by_session(rows: pd.DataFrame, arm: str, base: str = "calculator") ->
     }
 
 
+def fastest_sessions(
+    prod: Production, fraction: float, min_sessions: int = 10
+) -> tuple[list[tuple[str, list[str]]], pd.DataFrame]:
+    """A holdout by pace: per raw car and track with ``min_sessions`` dry
+    sessions in a fit, the fastest ``fraction`` of them by the lap time a
+    driver would type (the session's 25th-percentile flying lap), so that
+    what is asked of a model is a lap time under every session it was
+    trained on at the track. ``(folds, margins)``: one fold per cell
+    (``"car at track"``, the session ids), and per held-out session its
+    typed lap time with ``under_typed`` and ``under_lap``: how far it is
+    under the fastest typed lap time and under the fastest single flying
+    lap left in training at the cell (log ratios; below zero is faster
+    than anything left)."""
+    from ..validate import TARGET_LAP_TIME_QUANTILE
+
+    laps = prod.raw_laps[
+        prod.raw_laps["tire_usable"].astype(bool)
+        & ~prod.raw_laps["is_outlap"].fillna(False).astype(bool)
+    ]
+    typed = laps.groupby("session_id")["on_track_s"].quantile(TARGET_LAP_TIME_QUANTILE)
+    best = laps.groupby("session_id")["lap_time_s"].min()
+    own = prod.sessions[prod.sessions["session_id"].astype(str).isin(prod.trained)].copy()
+    own["condition"] = own["session_id"].astype(str).map(prod.conditions)
+    own = own[own["condition"] == "dry"]
+    own = own.assign(typed=own["session_id"].map(typed), best=own["session_id"].map(best))
+    own = own[np.isfinite(own["typed"])]
+    folds, rows = [], []
+    for (car, track), cell in own.groupby(["car", "track_canonical"], sort=True):
+        if len(cell) < min_sessions:
+            continue
+        cell = cell.sort_values(["typed", "session_id"])
+        n = max(int(np.ceil(fraction * len(cell))), 1)
+        held, left = cell.iloc[:n], cell.iloc[n:]
+        folds.append((f"{car} at {track}", [str(x) for x in held["session_id"]]))
+        for r in held.itertuples():
+            rows.append(
+                {
+                    "session_id": str(r.session_id),
+                    "raw_car": str(car),
+                    "track": str(track),
+                    "typed_s": float(r.typed),
+                    "under_typed": float(np.log(r.typed / left["typed"].min())),
+                    "under_lap": float(np.log(r.typed / left["best"].min())),
+                    "sessions_left": int(len(left)),
+                }
+            )
+    return folds, pd.DataFrame(rows)
+
+
 #: What a worker process of the holdout has loaded: the dataset and the
 #: lap simulation's side, once, however many folds it scores.
 _WORKER: dict = {}
@@ -3038,8 +3129,9 @@ _WORKER: dict = {}
 def _fold_job(job: tuple) -> tuple[int, pd.DataFrame, pd.DataFrame]:
     """One fold of the holdout in a worker process: ``(fold, rows,
     sessions)`` of :func:`holdout_rows`."""
-    root, cache_dir, tracks_dir, folds_dir, fold, ids, labels = job
-    key = (str(root), str(cache_dir), str(tracks_dir), str(folds_dir))
+    root, cache_dir, tracks_dir, folds_dir, fold, ids, labels, split = job
+    split_pooling(tuple(split))
+    key = (str(root), str(cache_dir), str(tracks_dir), str(folds_dir), tuple(split))
     if _WORKER.get("key") != key:
         _WORKER.update(
             key=key,
@@ -3060,6 +3152,8 @@ def check_pressure_holdout(
     n_per_bucket: int = 2,
     min_bucket_size: int = 10,
     workers: int | None = None,
+    split: tuple[str, ...] = (),
+    fastest: float = 0.0,
 ) -> GateReport:
     """The calculator's own evaluation, MAE over folds of held-out
     sessions (``tire-predict-holdout``: the every-session holdout,
@@ -3071,20 +3165,44 @@ def check_pressure_holdout(
     The folds are independent (a fit, then its scoring), so they run side
     by side: ``workers`` processes (half the machine's cores by default,
     a fit and the solver using about two each; one fold needs about 2.3
-    GB), each loading the dataset and the simulation's side once."""
+    GB), each loading the dataset and the simulation's side once.
+
+    ``split`` names raw cars to fit as a pooled car of their own
+    (:func:`split_pooling`): the same folds, with those cars' pressure
+    constants, shares and entries apart from the car they are pooled
+    with. The rows then go to ``holdout_rows__split.parquet``.
+
+    ``fastest`` replaces the folds by a holdout by pace
+    (:func:`fastest_sessions`): per raw car and track the fastest fraction
+    of the dry sessions, one fold a cell, so that every model is asked for
+    a lap time under what it was trained on there
+    (``holdout_rows__fast.parquet``)."""
     import multiprocessing
     import os
     from concurrent.futures import ProcessPoolExecutor
 
     from ..validate import _inferred_compound_labels, _pick_holdout_sessions
 
+    pooling = split_pooling(tuple(split))
     rep = GateReport(
-        "FH", "the standing holdout on simulated heat (`lapsim check-pressure-holdout`)"
+        "FHP" if fastest else "FHS" if split else "FH",
+        "the standing holdout on simulated heat (`lapsim check-pressure-holdout`)"
+        + (f", with {', '.join(split)} fitted apart" if split else "")
+        + (f", the fastest {fastest:.0%} of each cell's dry sessions held out" if fastest else ""),
     )
+    if split:
+        rep.notes.append(f"The pooling of the cars in this run: {pooling}.")
     prod = load_production(root)
     labels = _inferred_compound_labels(root)
     jobs = []
-    for fold in range(max(1, n_folds)):
+    margins = pd.DataFrame()
+    if fastest:
+        by_pace, margins = fastest_sessions(prod, fastest, min_bucket_size)
+        jobs = [
+            (root, cache_dir, tracks_dir, folds_dir, k, ids, labels, tuple(split))
+            for k, (_, ids) in enumerate(by_pace)
+        ]
+    for fold in range(max(1, n_folds) if not fastest else 0):
         ids = _pick_holdout_sessions(
             prod.sessions,
             prod.raw_laps,
@@ -3095,7 +3213,7 @@ def check_pressure_holdout(
         )
         if not ids:
             break
-        jobs.append((root, cache_dir, tracks_dir, folds_dir, fold, ids, labels))
+        jobs.append((root, cache_dir, tracks_dir, folds_dir, fold, ids, labels, tuple(split)))
     cores = os.cpu_count() or 2
     workers = max(1, min(len(jobs), workers or cores // 2))
     all_rows, all_notes = [], []
@@ -3140,8 +3258,9 @@ def check_pressure_holdout(
     if cache_dir is not None:
         out = Path(cache_dir) / "pressure_rows"
         out.mkdir(parents=True, exist_ok=True)
-        rows.to_parquet(out / "holdout_rows.parquet")
-        notes.to_parquet(out / "holdout_sessions.parquet")
+        tag = ("__split" if split else "") + ("__fast" if fastest else "")
+        rows.to_parquet(out / f"holdout_rows{tag}.parquet")
+        notes.to_parquet(out / f"holdout_sessions{tag}.parquet")
     own = rows[rows["arm"] == "calculator"]
     rep.notes.append(
         f"{len(results)} folds (of {n_folds} asked for: the buckets run out) of {n_per_bucket} "
@@ -3163,6 +3282,35 @@ def check_pressure_holdout(
         "on the full dataset). `table`: a precomputed pace table read at the typed lap time. "
         "`direct`: the lap of the typed lap time driven for the asking, in the session's air."
     )
+    if len(margins):
+        per = (
+            margins.groupby(["raw_car", "track"], sort=True)
+            .agg(
+                held_out=("session_id", "size"),
+                left=("sessions_left", "first"),
+                typed_s=("typed_s", "median"),
+                under_typed=("under_typed", "median"),
+                under_lap=("under_lap", "median"),
+                under_every_lap=("under_lap", lambda x: int((x < 0).sum())),
+            )
+            .reset_index()
+        )
+        rep.items.append(
+            GateItem(
+                "The sessions held out by pace",
+                None,
+                f"{len(margins)} sessions in {len(per)} cells, their typed lap time "
+                f"{-100 * margins['under_typed'].median():.1f} % under the fastest typed lap time "
+                f"left in training (median); {int((margins['under_lap'] < 0).sum())} of them under "
+                "every single lap left in training at the cell",
+                "reported: a lap time the models were not trained on",
+                "`under_typed`, `under_lap`: the log of a held-out session's typed lap time over "
+                "the fastest typed lap time, and over the fastest single flying lap, left in "
+                "training at the cell (the cell's median; below zero is faster than anything "
+                "left); `under_every_lap`: the held-out sessions whose typed lap time is under "
+                "every lap left.\n\n" + md_table(per, floats="{:.4f}"),
+            )
+        )
     whole = float(own["resid_bar"].abs().mean())
     rep.items.append(
         GateItem(
@@ -3299,6 +3447,8 @@ __all__ = [
     "cell_table",
     "check_pressure",
     "check_pressure_holdout",
+    "fastest_sessions",
+    "split_pooling",
     "holdout_rows",
     "mae_by_pace",
     "mae_table",
