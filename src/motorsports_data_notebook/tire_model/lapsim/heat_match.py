@@ -59,10 +59,6 @@ FACTOR_MIN_LAPS = 8
 #: The simulated arms of a fold, and the logged one of a layout fold.
 SIM_MODELS = ("fit", "low_power", "other_car")
 OTHER_LAYOUTS = "other_layouts"
-#: #207's fixed limits, kept as reference numbers: in-sample and on the
-#: worst tyre of a cell the car has not run.
-REF_IN_SAMPLE = 0.03
-REF_UNSEEN = 0.05
 
 
 def observed(
@@ -320,9 +316,6 @@ ARM_NAMES = {
 #: the car's typical use of its limit (what is carried to a layout it has
 #: not run), on the arm's car and track.
 CARRIED = {"A*": "A", "B*": "B", "D*": "D"}
-#: #207's reference numbers for a transfer and for the transfers adding up.
-REF_TRANSFER = 0.02
-REF_ADDITIVE = 0.002
 
 
 def fold_track_name(car: str, layout_id: str) -> str:
@@ -450,7 +443,9 @@ def pace_carried(arm_laps: pd.DataFrame, obs: pd.DataFrame) -> pd.DataFrame:
     """The lap time not given (the arms of :data:`CARRIED`): per car,
     layout and arm, over the days' best laps, ``lap_time`` (the median of
     the log of the simulated lap time at the car's typical use over the
-    day's best lap), ``lap_time_size`` (the median of its size) and, per
+    day's best lap), ``lap_time_size`` (the median of its size),
+    ``lap_time_other_day`` (the same size between a day's best lap and
+    another day's best lap at the layout: reality against itself) and, per
     tyre, ``g_<tyre>``: the median of the log of that lap's simulated heat
     over the best lap's own heat in the tyres' frame."""
     if arm_laps.empty or "lap_time_sim_s" not in arm_laps.columns:
@@ -464,7 +459,15 @@ def pace_carried(arm_laps: pd.DataFrame, obs: pd.DataFrame) -> pd.DataFrame:
         for c in CORNERS:
             both[f"g_{c}"] = np.log(both[f"sim_q_{c}"] / both[f"t_{c}"])
     both["lap_time_size"] = both["lap_time"].abs()
-    cols = ["lap_time", "lap_time_size", *G_MEASURES]
+    # reality against itself for a lap time: another day's best lap at the layout
+    both["lap_time_other_day"] = np.nan
+    for _, grp in both.groupby(["car", "layout_id", "arm"], sort=False):
+        best = np.log(grp["lap_time_s"].to_numpy(float))
+        if len(best) > 1:
+            gaps = np.abs(best[:, None] - best[None, :])
+            np.fill_diagonal(gaps, np.nan)
+            both.loc[grp.index, "lap_time_other_day"] = np.nanmedian(gaps, axis=1)
+    cols = ["lap_time", "lap_time_size", "lap_time_other_day", *G_MEASURES]
     cell = ["car", "layout_id", "arm"]
     out = both.groupby(cell, sort=False)[cols].median()
     out.insert(0, "days", both.groupby(cell, sort=False)["date"].nunique())
@@ -517,6 +520,37 @@ def transfers(arm_laps: pd.DataFrame, obs: pd.DataFrame) -> tuple[pd.DataFrame, 
                 }
             )
     return per_lap, pd.DataFrame(rows)
+
+
+CARRIED_NAMES = {
+    "A*": "no lap time given: the car's own fit, its own track",
+    "B*": "no lap time given: the car fitted without the layout, its own track",
+    "D*": "no lap time given: the car fitted without the layout, the track from other cars",
+}
+
+
+def arm_scores(
+    arm_laps: pd.DataFrame, obs: pd.DataFrame, yard: pd.DataFrame, laps: pd.DataFrame
+) -> dict[str, pd.DataFrame]:
+    """Each arm of :func:`transfer_laps` as paired runs against real laps:
+    its cells in gate C3's form in the tyres' frame
+    (:func:`score` on ``g``), by arm, with :data:`OTHER_LAYOUTS` (the
+    car's logged heat at its other layouts, unscaled, on arm D's laps)
+    last. ``laps`` is gate C3's per-lap frame, which says where the car's
+    other layouts are."""
+    out: dict[str, pd.DataFrame] = {}
+    others = pd.DataFrame()
+    for arm in (*ARMS, *CARRIED):
+        own = arm_laps[arm_laps["arm"] == arm]
+        if own.empty:
+            continue
+        errs = errors(own.assign(kind="layout"), obs, where=laps)
+        out[arm] = score(errs[errs["model"] == "fit"], yard, G_MEASURES)
+        if arm == "D":
+            others = score(errs[errs["model"] == OTHER_LAYOUTS], yard, G_MEASURES)
+    if len(others):
+        out[OTHER_LAYOUTS] = others
+    return out
 
 
 def carried_factors(laps: pd.DataFrame, obs: pd.DataFrame) -> pd.DataFrame:
@@ -590,41 +624,46 @@ def transfer_item(
                 "C-A": worst("C-A"),
                 "D-A": worst("D-A"),
                 "adds": worst("D-B-C+A"),
-                "D_worst_tyre": worst("D"),
                 "D_no_lap": int(unsolved.get((car, layout_id), 0)),
             }
         )
     table = pd.DataFrame(cells)
-    # arm D as a held-out lap of gate E2's form, with the car's other layouts beside it
-    arm_d = arm_laps[arm_laps["arm"] == "D"].assign(kind="layout")
-    errs = errors(arm_d, obs, where=laps)
+    # every arm as paired runs: against a logged lap of another day (gate C3's form)
+    scores = arm_scores(arm_laps, obs, yard, laps)
+    base = scores.get("A", pd.DataFrame())
     tallies = []
-    for model in ("fit", OTHER_LAYOUTS):
-        arm = errs[errs["model"] == model]
-        if arm.empty:
-            continue
-        row: dict = {"arm": "D" if model == "fit" else model}
-        for tag, measures in (("production", E_MEASURES), ("tyres_frame", G_MEASURES)):
-            got = tally(score(arm, yard, measures))
-            row[f"{tag}_cells"] = f"{got['passed']} of {got['scored']}"
-            row[f"{tag}_whole"] = f"{got['whole']} of {got['groups']}"
+    for arm, cells_g in scores.items():
+        got = tally(cells_g)
+        row: dict = {
+            "arm": arm,
+            "what": ARM_NAMES.get(arm, CARRIED_NAMES.get(arm, "the car's other layouts, unscaled")),
+            "cells": f"{got['passed']} of {got['scored']}",
+            "whole": f"{got['whole']} of {got['groups']}",
+        }
+        if len(cells_g) and cells_g["scored"].any():
+            own = cells_g[cells_g["scored"]]
+            row["simulated"] = float(own["simulated"].median())
+            row["other_day"] = float(own["other_day"].median())
+        if arm != "A" and len(base) and len(cells_g):
+            keys = ["car", "layout_id", "level", "measure"]
+            both = cells_g.merge(base[keys + ["passed", "scored"]], on=keys, suffixes=("", "_A"))
+            both = both[both["scored"] & both["scored_A"]]
+            row["won_vs_A"] = int((both["passed"] & ~both["passed_A"]).sum())
+            row["lost_vs_A"] = int((~both["passed"] & both["passed_A"]).sum())
         tallies.append(row)
-    seen = table[table["verdict"]]
-    inside = int((table["D_worst_tyre"] <= REF_UNSEEN).sum())
+    by_arm = {r["arm"]: r for r in tallies}
     measured = (
-        f"both unseen (arm D): worst tyre within {REF_UNSEEN:g} in {inside} of {len(table)} "
-        f"cells ({int((seen['D_worst_tyre'] <= REF_UNSEEN).sum())} of {len(seen)} with a "
-        f"verdict), {table['D_worst_tyre'].median():.3f} in the median; the track's transfer "
-        f"C-A up to {table['C-A'].max():.3f} on a tyre, the car's B-A up to "
-        f"{table['B-A'].max():.3f}, their sum against D-A within {table['adds'].max():.4f}"
-        + (
-            "; cells in gate C3's form: "
-            + "; ".join(
-                f"{r['arm']} {r['production_cells']} / {r['tyres_frame_cells']}" for r in tallies
-            )
-            if tallies
-            else ""
+        "cells no further from the logged lap than a logged lap of another day (the tyres' "
+        "frame): "
+        + "; ".join(f"{a} {by_arm[a]['cells']}" for a in (*ARMS, OTHER_LAYOUTS) if a in by_arm)
+        + "; against A, "
+        + "; ".join(
+            f"{a} won {by_arm[a].get('won_vs_A', 0)} lost {by_arm[a].get('lost_vs_A', 0)}"
+            for a in ARMS[1:]
+            if a in by_arm
         )
+        + f"; the car's transfer up to {table['B-A'].max():.3f} on a tyre, the track's up to "
+        f"{table['C-A'].max():.3f}, adding within {table['adds'].max():.4f}"
     )
     detail = (
         "Four arms on every dry build lap of the cell, each solved to the lap's own lap time: "
@@ -632,42 +671,44 @@ def transfer_item(
         + ". The track from other cars is gate B3's saved track of the layout built without "
         "the car's class, its curvature laid on the own track's nodes (the bank and the grade "
         "stay the own track's). Everything here is in the tyres' frame (simulated heat over "
-        "the logged lap's own heat there, no factor), per tyre, lap by lap and then the median "
-        "over days of the day's median. `B-A`, `C-A`, `D-A`: the largest transfer on a tyre "
-        f"(reference {REF_TRANSFER:g}); `adds`: the largest of D-B-C+A (reference "
-        f"{REF_ADDITIVE:g}); `D_worst_tyre`: arm D against the logged lap (reference "
-        f"{REF_UNSEEN:g}). `verdict`: three scored dry days of the car, and three days and 30 "
-        "laps of other cars behind the track. `D_no_lap`: laps arm D has no lap for (under "
-        "the cap of a use of 1 the unseen car on the other cars' track cannot make the lap "
-        "time).\n\n"
+        "the logged lap's own heat there, no factor).\n\n**Each arm against real laps.** A "
+        "cell is a car at a layout at a level of pace on one tyre, passing when the arm's lap "
+        "is no further from the logged lap than a logged lap of another day and like lap time "
+        "is; `simulated` and `other_day` are the two distances in the median scored cell; "
+        "`won_vs_A` and `lost_vs_A` the cells an arm passes and A does not, and the reverse.\n\n"
+        + md_table(pd.DataFrame(tallies), floats="{:.4f}")
+        + "\n\n**The cells, and the transfers between arms** (`B-A`, `C-A`, `D-A`: the largest "
+        "on a tyre of the difference between two arms, lap by lap, the median over days of the "
+        "day's median; `adds`: the largest of D-B-C+A). `verdict`: three scored dry days of "
+        "the car, and three days and 30 laps of other cars behind the track. `D_no_lap`: laps "
+        "arm D has no lap for (under the cap of a use of 1 the unseen car on the other cars' "
+        "track cannot make the lap time).\n\n"
         + md_table(table, floats="{:.4f}")
         + "\n\n**Per tyre** (`what`: an arm's log of simulated over logged heat, or a "
         "transfer between arms).\n\n" + md_table(by_cell, floats="{:.4f}")
     )
-    if tallies:
-        detail += (
-            "\n\n**Arm D in gate C3's form**, beside the car's logged heat at its other "
-            "layouts, unscaled (`production`: through the frame factor carried from the car's "
-            "other layouts).\n\n" + md_table(pd.DataFrame(tallies))
-        )
     carried = pace_carried(arm_laps, obs)
     if len(carried):
         both_unseen = carried[carried["arm"] == "D*"]
-        off = both_unseen[g].abs().max(axis=1)
+        near = int((both_unseen["lap_time_size"] <= both_unseen["lap_time_other_day"]).sum())
         measured += (
-            "; the lap time not given (both unseen, each day's best lap at the car's typical "
-            f"use): lap time off by {both_unseen['lap_time_size'].median():.3f} in the median "
-            f"cell (up to {both_unseen['lap_time_size'].max():.3f}), worst tyre "
-            f"{off.median():.3f} in the median cell (up to {off.max():.3f})"
+            "; the lap time not given (each day's best lap at the car's typical use): "
+            + "; ".join(f"{a} {by_arm[a]['cells']}" for a in CARRIED if a in by_arm)
+            + f" cells; with nothing given the lap time is {both_unseen['lap_time_size'].median():.3f} "
+            f"from the day's best in the median cell where another day's best lap is "
+            f"{both_unseen['lap_time_other_day'].median():.3f} ({near} of {len(both_unseen)} "
+            "cells no further)"
         )
         detail += (
             "\n\n**The lap time not given.** Each day's best lap of the cell is driven at the "
             "car's typical use of its limit, which is what is carried to a layout the car has "
             "not run: `A*` the car's own fit on its own track, `B*` the car fitted without the "
-            "layout, `D*` that car on the track from other cars. `lap_time`: the log of the "
-            "simulated lap time over the day's best lap (the median over days; "
-            "`lap_time_size` the median of its size); `g_<tyre>`: the log of that lap's "
-            "simulated heat over the best lap's own heat in the tyres' frame.\n\n"
+            "layout, `D*` that car on the track from other cars. Their cells are in the table "
+            "of arms above. `lap_time`: the log of the simulated lap time over the day's best "
+            "lap (the median over days; `lap_time_size` the median of its size); "
+            "`lap_time_other_day`: the same between the day's best lap and another day's best "
+            "lap at the layout, which is reality against itself for a lap time; `g_<tyre>`: the "
+            "log of that lap's simulated heat over the best lap's own heat.\n\n"
             + md_table(carried, floats="{:.4f}")
         )
     return [
@@ -675,7 +716,8 @@ def transfer_item(
             "Per-tyre heat on a track from other cars (gate E2 of #207, arms C and D)",
             None,
             measured,
-            "reported, with #207's limits as reference numbers; the lap time is given",
+            "a score in gate C3's form (owner, 2026-11-24: no fixed limits; paired against "
+            "real laps of another day)",
             detail,
         )
     ]
@@ -711,13 +753,9 @@ def report_items(
         f"{int(seen['source'].isna().sum())} without a heat left out"
     )
     items = []
-    for kind, title, ref in (
-        ("day", "Per-tyre heat on held-out days (gate E1 of #207)", REF_IN_SAMPLE),
-        (
-            "layout",
-            "Per-tyre heat at a layout the car was not fitted on (gate E2 of #207, arm B)",
-            REF_UNSEEN,
-        ),
+    for kind, title in (
+        ("day", "Per-tyre heat on held-out days (gate E1 of #207)"),
+        ("layout", "Per-tyre heat at a layout the car was not fitted on (gate E2 of #207, arm B)"),
     ):
         own = errs[errs["kind"] == kind]
         if own.empty:
@@ -738,10 +776,15 @@ def report_items(
                     fit_cells = cells
             tallies.append(row)
         table = signed(own)
-        fit_signed = table[table["model"] == "fit"]
-        worst = fit_signed[list(E_MEASURES)].abs().max(axis=1)
-        inside = int((worst <= ref).sum())
         head = tallies[0] if tallies else {}
+        paired = ""
+        if len(fit_cells) and fit_cells["scored"].any():
+            both = fit_cells[fit_cells["scored"]]
+            paired = (
+                f"; in the median cell the simulated lap is {both['simulated'].median():.3f} "
+                f"from the logged lap and a logged lap of another day "
+                f"{both['other_day'].median():.3f}"
+            )
         detail = (
             "A cell is a car at a layout at a level of pace on one tyre: the size of the log of "
             "simulated over observed heat (the median over days of the day's median lap) "
@@ -793,8 +836,8 @@ def report_items(
                     f"{r['arm']} {r['production_cells']} / {r['tyres_frame_cells']}"
                     for r in tallies[1:]
                 )
-                + f"; worst tyre within {ref:g} (the fixed limit of #207, a reference) in "
-                f"{inside} of {len(fit_signed)} car × layout cells; {left_out}",
+                + paired
+                + f"; {left_out}",
                 "a score in gate C3's form (owner, 2026-11-24): the simulated lap's heat no "
                 "further from the logged lap's than a logged lap of another day is",
                 detail,

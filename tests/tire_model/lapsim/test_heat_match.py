@@ -208,12 +208,21 @@ class TestTransfers:
         )
         (item,) = hm.transfer_item(arms, obs, yard, laps, donors)
         assert "arms C and D" in item.name and item.passed is None
-        assert "worst tyre within 0.05 in 1 of 1 cells (1 of 1 with a verdict)" in item.measured
-        assert "C-A up to 0.015" in item.measured and "within 0.0000" in item.measured
-        assert "other_layouts" in item.detail and "| car | layout_id | days |" in item.detail
+        # every arm is scored against a logged lap of another day; no fixed limit is read
+        assert "no further from the logged lap than a logged lap of another day" in item.measured
+        assert "A 12 of 12" in item.measured and "other_layouts 0 of 12" in item.measured
+        assert (
+            "the track's up to 0.015" in item.measured and "adding within 0.0000" in item.measured
+        )
+        assert "0.05" not in item.measured and "reference" not in item.detail
+        scores = hm.arm_scores(arms, obs, yard, laps)
+        assert list(scores) == ["A", "B", "C", "D", hm.OTHER_LAYOUTS]
+        assert hm.tally(scores["A"])["passed"] == 12  # the logged lap itself
+        assert hm.tally(scores["D"])["passed"] < 12  # 2.5 % off: further than another day
+        assert "| car | layout_id | days |" in item.detail and "won_vs_A" in item.detail
         thin = donors.assign(donor_days=2)
         (listed,) = hm.transfer_item(arms, obs, yard, laps, thin)
-        assert "(0 of 0 with a verdict)" in listed.measured
+        assert "| False |" in listed.detail  # no verdict: two days behind the track
         assert hm.transfer_item(arms.iloc[:0], obs, yard, laps, donors) == []
 
     def test_the_lap_time_not_given(self):
@@ -232,6 +241,13 @@ class TestTransfers:
         # a lap time now fast and now slow: the size is not the signed median
         assert got.loc["D*", "lap_time"] == pytest.approx(np.log(60.9 / 60.0))
         assert got.loc["D*", "lap_time_size"] == pytest.approx(np.log(60.9 / 60.0))
+        # reality against itself: every day's best lap here is the same 60 s
+        assert got.loc["D*", "lap_time_other_day"] == 0.0
+        apart = arms.assign(lap_time_s=np.where(arms["date"] == "d0", 60.0, 60.6))
+        wide = hm.pace_carried(apart, obs).set_index("arm")
+        assert wide.loc["B*", "lap_time_other_day"] == pytest.approx(
+            np.log(60.6 / 60.0) / 2, rel=0.6
+        )
         assert hm.pace_carried(_arm_laps(obs, {"A": 1.0}), obs).empty
 
     def test_the_track_from_other_cars_is_laid_on_the_own_tracks_nodes(self):

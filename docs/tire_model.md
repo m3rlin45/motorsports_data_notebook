@@ -4566,17 +4566,6 @@ of the logged laps' right over left):
   It is placed further below ("The lean to the left turns, placed"):
   not the bank either; the logged cars hold more lateral in their right
   turns. Under the 0.06 at which #206 sends one to the per-corner table.
-- By the fixed limits this gate was first written with (0.03 on the
-  lateral heat, ± 0.06 by side) every scored cell but one would be
-  inside (the Inferno 86 at Motegi, 0.032 on four laps of two days).
-
-**Held out by layout** (the car fitted without the layout, the same
-two measures and yardsticks): 21 of 38 cells, the furthest 0.044, and
-the signed figures within 0.005 of the day folds' at the cells with
-more than a few days (the KK-SII's one day at Fuji, which only a layout
-fold can score: −0.042 in lateral heat). What the car is fitted on
-hardly moves these two measures: they are of the track and of the lap's
-speed, as the gate was meant to be.
 
 The lateral traces are the speed traces' laps row for row (built from
 the same lap list, shapes checked at the build), and gates C2 and C3
@@ -4926,24 +4915,28 @@ a symmetrical car's limit (the owner's); the driver's use by corner,
 which the lean points at (#313); production on the tyres' frame (#255)
 and the table read against production's heat (#207).
 
-**Segment E (#207): the owner's rulings before it is built
-(2026-11-24).** (1) *Production is not retrained yet.* E0, the refit of
-production on GPS-derived heat (#255), is set aside; it is not a step of
-E. The simulation's heat is compared with production's heat as it is
-today (production's chain on the sensor's series) through the frame
-factor above, and one chain is on both sides: production's, unsmoothed,
-which gate D1 holds the simulated side to. (2) *E is scored in gate C3's
-form*: a cell is a car at a layout at a level of pace (P75, P90, P95)
-on one tyre, and it passes when the simulated lap's heat is no further
-from the logged lap's than a logged lap of another day is. The fixed
-limits #207 was written with (0.03, 0.02 and 0.05 per tyre on laps
-within 1.02 × the session best) stay in the reports as reference
-numbers. What the adoption of the simulation is, restated when asked the
-same day: at gate F's last clause, for the entries with no logged laps
-(their heat from a simulated lap, written into `tire_model.json` with a
-`source` flag and shown as an estimate in the calculators); an entry
-with logged laps keeps its logged heat, and the pressure model's own fit
-does not stop.
+**Segment E (#207): the owner's rulings (2026-11-24).** (1) *Production
+is not retrained yet.* E0, the refit of production on GPS-derived heat
+(#255), is set aside; it is not a step of E. The simulation's heat is
+compared with production's heat as it is today (production's chain on
+the sensor's series) through the frame factor above, and one chain is
+on both sides: production's, unsmoothed, which gate D1 holds the
+simulated side to. (2) *E is scored in gate C3's form*: a cell is a car
+at a layout at a level of pace (P75, P90, P95) on one tyre, and it
+passes when the simulated lap's heat is no further from the logged
+lap's than a logged lap of another day is. (3) *No fixed limits at all*
+("get rid of the 5 % all together, use the vs real life paired runs
+like we do elsewhere", after E was first run with #207's 0.03, 0.02 and
+0.05 beside the score): a car with 0.85 of the power was inside 5 % in
+every cell, so the limit told nothing. Every figure of E is a simulated
+lap against the logged lap with a logged lap of another day beside it,
+the transfer arms and the lap time not given included. What the
+adoption of the simulation is, restated when asked the same day: at
+gate F's last clause, for the entries with no logged laps (their heat
+from a simulated lap, written into `tire_model.json` with a `source`
+flag and shown as an estimate in the calculators); an entry with logged
+laps keeps its logged heat, and the pressure model's own fit does not
+stop.
 
 **Gate E1 and arm B of gate E2: a simulated lap's heat per tyre against
 production's (2026-11-24; `heat_match.py`, in gate C3's report).** On
@@ -4974,35 +4967,31 @@ laps three of mixed source are left out.
   and the track's own line; only the car was unseen (fitted on its other
   layouts). The track from other cars (arms C and D) and a lap time that
   is not given are measured further below.
-- **At a layout the car was not fitted on, the simulated heat is within
-  5 % on the worst tyre in ten of ten car × layout cells** (#207's fixed
-  limit for an unseen cell, a reference; six of the ten have the three
-  dry days #207 asks of a verdict, and all six are inside), median worst
-  tyre 2.1 %. The largest misses are in the cells that are only listed:
-  the KK-SII's one day at Fuji (−3.5, −3.7, +1.6, +3.7 % by tyre) and
-  the Inferno 86's fronts at Motegi (−4.3, −3.6 % on two days).
-- **A car with 0.85 of the power is inside in ten of ten as well**
-  (median worst tyre 3.3 %), and another car's parameters in five of ten
-  (4.8 %). So "within 5 %" is not evidence for the car's fit: at a given
-  lap time on the track's own line, a tyre's heat is set mostly by the
-  track and the lap time, and the car's fit is worth about a per cent of
-  it. **What the simulation beats is the car's own logged heat at its
-  other layouts, unscaled**: one cell of ten inside, median worst tyre
-  12.8 %, up to 26 % (the right-hand tyres 20–26 % low at Suzuka; 9–25 %
-  high at Fuji and Motegi), 4 cells of 76. That is the comparison E2 is
-  for.
-- **On held-out days** the fitted car's worst tyre is within 3 %
-  (#207's in-sample limit) in eight of nine cells and in all six with
-  three days; the ninth is the Inferno 86's fronts at Motegi (−5.7,
-  −6.0 % on seven laps of two days). The car with 0.85 of the power is
-  inside in seven of nine, another car's parameters in two.
-- **The count separates the fitted car from another car's parameters
-  and from the other layouts, and not from 15 % less power.** 40 and 41
-  cells against 30 and 27 is, with the four tyres of a lap moving
-  together, about ten groups of 19 against seven: not shown to differ.
-  Against another car's parameters (19 and 13) and the other layouts
-  (4) it is. Per-tyre heat at a matched lap time is blunt, as #207's
-  finding 9 said; the signed table is the result.
+- **The simulated lap is about as far from the logged lap as another
+  day's logged lap is.** In the median cell it is 1.4 % (held-out days)
+  and 1.5 % (a layout the car was not fitted on) from the logged lap's
+  heat on a tyre, where a logged lap of another day and like lap time
+  is 1.3 % (a same-day lap 1.1 %). That is why it passes about half the
+  cells and not all: the bar is reality's own repeatability, and the
+  simulation sits on it.
+- **What it beats, by a wide margin, is the car's own logged heat at its
+  other layouts, unscaled**: 4 cells of 76, 2 to 26 % off (the
+  right-hand tyres 20–26 % low at Suzuka; 9–25 % high at Fuji and
+  Motegi).
+- **It is told from another car's parameters, and not from 15 % less
+  power.** 40 and 41 cells against 19 and 13 for another car's
+  parameters; against 30 and 27 for the car with 0.85 of the power,
+  which with the four tyres of a lap moving together is about ten
+  groups of 19 against seven, not shown to differ. At a given lap time
+  on the track's own line a tyre's heat is set mostly by the track and
+  the lap time; the car's fit is worth a fraction of a per cent of it
+  (0.2 % or less, arms A and B below). Per-tyre heat at a matched lap
+  time is blunt, as #207's finding 9 said.
+- **Where it is furthest**: the Inferno 86's fronts at Motegi (−5.7,
+  −6.0 % on held-out days; −4.3, −3.6 % with the layout held out; two
+  days) and the KK-SII's one day at Fuji (−3.5, −3.7, +1.6, +3.7 % by
+  tyre). Both are cells of one or two days, with no other day to be set
+  against.
 - **The total, written down beforehand as about 1 % low**: in the
   tyres' frame the four-tyre mean is 0.5 to 1.0 % low on the formula
   cars in five of six cells (the KK-SII at Tsukuba level), and not on
@@ -5033,83 +5022,85 @@ one and two days). No other cell has a track from another class of car.
 The track from other cars is gate B3's saved track built without the
 car's class, its curvature laid on the own track's nodes; the bank and
 the grade stay the own track's (the bank is the road's). Four arms on
-every dry build lap of the cell, each solved to the lap's own lap time:
-A the car's own fit on its own track, B the car fitted without the
-layout, C the track from other cars, D both. Everything is in the
-tyres' frame (no factor), per tyre.
+every dry build lap of the cell, each solved to the lap's own lap time,
+and then each day's best lap at the car's typical use with no lap time
+given. Every arm is scored as the fitted car is: its cells against a
+logged lap of another day, in the tyres' frame (no factor).
 
-| cell | B − A (the car) | C − A (the track) | they add within | arm D, worst tyre |
+| arm | cells no further than another day's lap, of 40 | from the logged lap, median cell | another day's lap | cells won / lost against A |
 |---|---|---|---|---|
-| Inferno 86, Fuji (track from the formula cars) | 0.2 % | 0.4 % | 0.01 % | 0.3 % |
-| Inferno 86, Tsukuba (from the formula cars) | 0.0 % | 0.2 % | 0.00 % | 2.0 % |
-| KK-SII, Tsukuba (from the Inferno 86's 37 laps) | 0.1 % | 1.6 % | 0.01 % | 2.8 % |
-| KK-F, Tsukuba (from the Inferno 86's 37 laps) | 0.2 % | 1.5 % | 0.04 % | 2.5 % |
-| *KK-F, Fuji (listed)* | 0.2 % | 0.3 % | 0.01 % | 1.6 % |
-| *KK-SII, Fuji (listed)* | 0.2 % | 0.3 % | 0.02 % | 3.8 % |
+| A: the car's own fit, its own track | 22 | 1.2 % | 1.5 % | |
+| B: the car fitted without the layout | 24 | 1.1 % | 1.5 % | 2 / 0 |
+| C: the track from other cars | 25 | 1.1 % | 1.5 % | 6 / 3 |
+| **D: neither has seen the cell** | **25** | 1.2 % | 1.5 % | 6 / 3 |
+| the car's logged heat at its other layouts, unscaled | 1 | 8.7 % | 1.5 % | 0 / 21 |
+| A\*: no lap time given, own fit and track | 10 | 3.0 % | 1.2 % | 3 / 15 |
+| B\*: no lap time given, the car unseen | 9 | 3.2 % | 1.2 % | 2 / 15 |
+| **D\*: nothing of the cell given** | **4** | 4.6 % | 1.2 % | 2 / 20 |
 
-- **With neither the car nor the track having seen the cell, the worst
-  tyre is within 5 % in six of six cells** (all four with a verdict),
-  2.2 % in the median. In gate C3's form arm D passes 20 of 40 cells in
-  production's frame and 25 of 40 in the tyres' frame, where the car's
-  logged heat at its other layouts, unscaled, passes 4 and 1.
-- **The car's transfer is 0.2 % or less of a tyre's heat and the
-  track's up to 1.6 %**, both inside #207's 2 %, and they add to within
-  0.04 % (0.2 % allowed). The track's is the larger, as written down
-  beforehand: at Tsukuba a track made from the Inferno 86's 37 laps
-  gives the formula cars 0.8 to 1.6 % less heat than their own line
-  does; at Fuji and the other way round it is under 0.4 %. That is
-  gate B3's by-class difference (0.017 at Tsukuba, 0.007 at Fuji)
-  carried into heat.
+- **With the lap time given, not having seen the cell costs nothing
+  that can be told.** The car fitted without the layout on a track from
+  other cars passes 25 cells where the car's own fit on its own track
+  passes 22, and is 1.2 % from the logged lap in the median cell where
+  another day's lap is 1.5 %. Between the arms the car moves a tyre's
+  heat by 0.2 % or less and the track by up to 1.6 % (the formula cars
+  at Tsukuba on a track from the Inferno 86's 37 laps, 0.8 to 1.6 %
+  less heat than on their own line; under 0.4 % at Fuji and the other
+  way round), and the two add to within 0.04 %. That is gate B3's
+  by-class difference (0.017 at Tsukuba, 0.007 at Fuji) carried into
+  heat, and it is of the size of the day-to-day difference itself.
+- **The car's logged heat at its other layouts, unscaled, passes one
+  cell of 40** and is 8.7 % from the logged lap in the median cell.
 - Arm D has no lap for three of the Inferno 86's 111 laps at Fuji:
   under the cap of a use of 1, the car fitted without Fuji cannot make
   their lap times on the other cars' line. They are counted in the
   report (`D_no_lap`) and left out of arm D's figures.
-- Most of arm D's error is therefore arm A's: it is what the simulation
-  misses on a track and a car it knows (the formula cars' left tyres
-  1.4 to 1.7 % low at Tsukuba), not what not having seen the cell adds.
 
 *The lap time not given.* Each day's best lap of the cell is driven at
 the car's typical use of its limit, which is what is carried to a
-layout it has not run: on the car's own fit and track (A\*), the car
-fitted without the layout (B\*), and that car on the track from other
-cars (D\*: nothing of the cell is given).
+layout it has not run (the starred arms above).
 
-| cell, nothing given (D\*) | simulated lap time over the day's best | worst tyre |
-|---|---|---|
-| Inferno 86, Fuji | +0.7 % | 4.3 % low |
-| Inferno 86, Tsukuba | −3.1 % | 9.8 % high |
-| KK-SII, Tsukuba | −0.1 % (0.6 % in size) | 2.3 % |
-| KK-F, Tsukuba | +0.9 % | 5.6 % low |
-| *KK-F, Fuji* | −0.7 % | 1.1 % |
-| *KK-SII, Fuji* | −1.1 % | 2.5 % |
+| cell, nothing given (D\*) | simulated lap time against the day's best | another day's best lap against it | worst tyre's heat |
+|---|---|---|---|
+| Inferno 86, Fuji | 0.7 % slow | 1.4 % | 4.3 % low |
+| Inferno 86, Tsukuba | 3.1 % fast | 4.7 % | 9.8 % high |
+| KK-SII, Tsukuba | 0.6 % (in size) | 0.6 % | 2.3 % |
+| KK-F, Tsukuba | 0.9 % slow | 1.0 % | 5.6 % low |
+| *KK-F, Fuji* | 0.7 % fast | 0.5 % | 1.1 % |
+| *KK-SII, Fuji* | 1.1 % fast | one day | 2.5 % |
 
-- **Two of the four cells with a verdict are outside 5 %** (the
-  Inferno 86 at Tsukuba, the KK-F at Tsukuba) and none of the six is
-  with the lap time given. The lap time is off by 0.8 % in the median
-  cell and up to 3.1 %, the worst tyre by 3.4 % and up to 9.8 %: three
-  to five times the lap-time miss. This is what gate F's whole-chain
-  clause will meet.
-- **Where it comes from differs by cell.** At the Inferno 86 at
+- **The lap time is supplied about as well as days repeat.** With
+  nothing of the cell given the simulated lap time is 0.8 % from the
+  day's best in the median cell, where another day's best lap at the
+  layout is 1.0 % from it; it is no further in three of the five cells
+  that have two days (and within a tenth of a per cent of it in a
+  fourth). The Inferno 86's 3.1 % at Tsukuba is inside the 4.7 % its own
+  four days differ by.
+- **The heat of that lap is not the logged lap's.** D\* passes 4 cells
+  of 40 where D passes 25, and is 4.6 % from the logged lap in the
+  median cell where another day's lap of like lap time is 1.2 %. Heat
+  is steep in lap time (three to five times the lap-time miss), and the
+  yardstick is a lap of *like lap time*: a lap time right to within
+  what days repeat by is not near enough for heat. Even on the car's
+  own fit and track (A\*) it passes 10.
+- **Where the miss comes from differs by cell.** At the Inferno 86 at
   Tsukuba it is the driver's level there: the lap is 2.9 % off on the
-  car's own fit and its own track already (A\*: its best laps use less
-  of the limit than the car's typical use, on four days), and carrying
-  the car and the track adds 0.2 % of lap time. At the other two it is
-  the carrying: the Inferno 86 at Fuji goes from 1.6 % on the worst
-  tyre (A\*) to 2.8 % with the car unseen (B\*) and 4.3 % with the
-  track too (D\*); the KK-F at Tsukuba from 3.4 % to 4.3 % to 5.6 %.
-  A typical use read from the car's other layouts is 0.3 to 0.6 % of
-  lap time away from the one that includes the layout, and the track
-  from other cars moves the lap time by 0.1 to 0.3 % more.
+  car's own fit and its own track already (its best laps use less of
+  the limit than the car's typical use, on four days), and carrying the
+  car and the track adds 0.2 % of lap time. At the Inferno 86 at Fuji
+  and the KK-F at Tsukuba it is the carrying: 1.6, 2.8 and 4.3 % on the
+  worst tyre as the car and then the track become unseen, and 3.4, 4.3
+  and 5.6 %.
 - **The lap compared against is the day's best, and that is not the lap
   production feeds.** The typical use is defined from days' best laps,
   so the simulated lap time is a best-lap pace. A session's
   25th-percentile lap, which is what #207 says F feeds, is 0.8 to 1.5 %
   slower than the day's best on the formula cars and 1.9 to 2.2 % on
   the Inferno 86 (a median lap 1.4 to 3.4 %). A simulated lap time
-  prefilled as it stands would therefore put 3 to 6 % more heat on top
-  of the table above. A typical use for the lap that is fed (the use
-  of a session's 25th-percentile lap) is the way to supply a lap time;
-  it is not built, and is F's to settle (#208).
+  prefilled as it stands would therefore put 3 to 6 % more heat on top.
+  A typical use for the lap that is fed (the use of a session's
+  25th-percentile lap) is the way to supply a lap time; it is not
+  built, and is F's to settle (#208).
 
 **Gate E2's wet clause (2026-11-24; `wet_gate.wet_heat`, an item in
 `lapsim check-wet`).** A wet lap is driven as gate D2 left it (the same
@@ -5126,10 +5117,10 @@ the car is the dry car, in whose fit no wet lap is.
 | *KK-SII, Fuji* | 14 / 1 | 1.5 % | −0.4 % | +0.9 % |
 | *KK-F, Fuji* | 6 / 1 | 3.8 % | −1.9 % | +2.1 % |
 
-The wet laps' heat is within 3.8 % on the worst tyre in six of six
-cells, 1.7 % in the median, with no wet term; the two cells with three
-wet days read 3.6 % and 1.2 %. Against a logged lap of the same wet day
-(the owner's form for the wet) 27 of 48 cells pass. The right-hand
+Against a logged lap of the same wet day (the owner's form for the
+wet) 27 of 48 cells pass, with no wet term; the worst tyre is 1.7 %
+from the logged wet lap in the median cell and 3.8 % at most, and the
+two cells with three wet days read 3.6 % and 1.2 %. The right-hand
 tyres read 0.4 to 2.1 % above the left-hand ones in every cell, the
 same lean as in the dry. The clause as #207 wrote it (the simulation
 "given the cell's neighbours' dry data and wet data from other cells")
