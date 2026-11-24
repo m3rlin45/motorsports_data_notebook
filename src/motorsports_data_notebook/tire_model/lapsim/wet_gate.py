@@ -42,15 +42,18 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from ..heat_input import ShareParams
 from . import car as cm
 from . import car_gate as cg
 from . import car_holdout as ch
 from . import geometry as geo
+from . import holdout as ho
 from . import samples as smp
 from . import solver as sv
 from . import track as trk
 from . import wet
 from .gates import GateItem, GateReport, md_table
+from .heat import CORNERS, sim_heat
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +111,7 @@ def run_wet(
     wet_tracks: dict[str, trk.TrackModel],
     car: str,
     drive: cg.Drive,
+    share: ShareParams | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """``(laps, yardsticks, terms)`` of one car's wet build laps: per lap
     and arm the four measures and the use it solved to; the yardsticks of
@@ -176,6 +180,13 @@ def run_wet(
                     }
                     if got.ok[i]:
                         row.update(ch.lap_stats(layout, got.v_node_ms[i], v_held[i]))
+                        if share is not None:
+                            # the wet lap's heat per tyre (gate E2's wet clause, #207)
+                            sim = sv.lap_from_nodes(
+                                road, cars[i], got.v_node_ms[i], float(got.u[i])
+                            )
+                            for tyre, q in zip(CORNERS, sim_heat(sim, share)):
+                                row[f"sim_q_{tyre}"] = float(q)
                     lap_rows.append(row)
     laps = pd.DataFrame(lap_rows)
     yards = pd.concat(yard_rows, ignore_index=True) if yard_rows else pd.DataFrame()
@@ -206,6 +217,92 @@ def against_null(days: pd.DataFrame, arm: str, measure: str) -> tuple[int, int, 
     return int(both["nearer"].sum()), int(len(both)), both
 
 
+def wet_heat(laps: pd.DataFrame, obs: pd.DataFrame) -> pd.DataFrame:
+    """Per wet build lap of the null arm: ``g_<tyre>``, the log of the
+    simulated lap's heat over the logged wet lap's own heat in the tyres'
+    frame (no factor), with the lap's keys, ``source`` and its heats."""
+    from . import heat_match as hm
+
+    null = laps[laps["arm"] == "A"]
+    both = null.merge(hm.usable(obs), on=["session_id", "lap_num"], how="inner")
+    with np.errstate(divide="ignore", invalid="ignore"):
+        for c in CORNERS:
+            both[f"g_{c}"] = np.log(both[f"sim_q_{c}"] / both[f"t_{c}"])
+    return both.replace([np.inf, -np.inf], np.nan)
+
+
+def wet_heat_items(
+    root: Path,
+    laps: pd.DataFrame,
+    shares: dict[str, ShareParams],
+    rows: pd.DataFrame,
+    *,
+    tracks_dir: Path | None = None,
+    cache_dir: Path | None = None,
+) -> list[GateItem]:
+    """Gate E2's wet clause as a report: the heat of each wet build lap
+    driven as the null drives it (the same car at a lower use on the dry
+    track) against the logged wet lap's own heat in the tyres' frame, per
+    tyre and right less left, with a logged lap of the same wet day
+    beside it (the owner's form for the wet)."""
+    from . import heat_match as hm
+
+    obs = hm.observed(root, laps, shares, tracks_dir=tracks_dir, cache_dir=cache_dir)
+    got = wet_heat(laps, obs)
+    if got.empty:
+        return []
+    g = list(hm.G_MEASURES)
+    cell = ["car", "layout_id"]
+    days = got.groupby(cell + ["date"], sort=False)[g].median()
+    signed = days.groupby(cell, sort=False)[g].median()
+    signed.insert(0, "laps", got.groupby(cell, sort=False).size())
+    signed.insert(1, "days", days.groupby(cell, sort=False).size())
+    signed["mean"] = signed[g].mean(axis=1)
+    signed["right_less_left"] = 0.5 * (
+        signed["g_fr"] + signed["g_rr"] - signed["g_fl"] - signed["g_rl"]
+    )
+    signed["worst"] = signed[g].abs().max(axis=1)
+    signed = signed.reset_index()
+    # the same-day yardstick, per cell
+    parts = []
+    for (car, layout_id), own in got.groupby(cell, sort=False):
+        yard = hm.yardsticks(own.reset_index(drop=True))
+        if len(yard):
+            yard.insert(0, "car", str(car))
+            yard.insert(1, "layout_id", str(layout_id))
+            parts.append(yard)
+    tally = "no laps of one wet day to set a cell against"
+    if parts:
+        sized = got.copy()
+        sized[g] = sized[g].abs()
+        pace = ch.by_pace(sized, pd.concat(parts, ignore_index=True), hm.G_MEASURES)
+        if len(pace):
+            cells = ch.attainment(pace, hm.G_MEASURES)
+            ok = np.isfinite(cells["simulated"]) & np.isfinite(cells["same_day"])
+            passed = ok & (cells["simulated"] <= cells["same_day"])
+            tally = f"{int(passed.sum())} of {int(ok.sum())} cells no further than a same-day lap"
+    three = signed[signed["days"] >= 3]
+    return [
+        GateItem(
+            "The wet laps' heat per tyre (gate E2 of #207, the wet clause)",
+            None,
+            f"worst tyre {signed['worst'].median():.3f} in the median cell (up to "
+            f"{signed['worst'].max():.3f}); the four-tyre mean {signed['mean'].min():+.3f} to "
+            f"{signed['mean'].max():+.3f}, right less left "
+            f"{signed['right_less_left'].min():+.3f} to {signed['right_less_left'].max():+.3f}; "
+            f"{len(three)} cells have three wet days; {tally}",
+            "reported: a wet lap is the same car at a lower use on the dry track (gate D2), "
+            "against the wet lap's own heat in the tyres' frame",
+            "Per car and layout, the median over wet days of the day's median lap of the log of "
+            "simulated over logged heat per tyre; `mean` the four tyres' mean, `right_less_left` "
+            "the right-hand tyres less the left-hand ones, `worst` the largest size. The car is "
+            "the dry car on every dry lap (the wet laps are not in its fit); the lap time is "
+            "the wet lap's own. A cell is scored against a logged lap of the same wet day and "
+            "like lap time (owner, 2026-11-24).\n\n" + md_table(signed, floats="{:.3f}"),
+        )
+    ]
+
+
 def check_wet(
     root: Path,
     *,
@@ -218,6 +315,10 @@ def check_wet(
     tables = cm.as_families(smp.car_tables(root, cache_dir=cache_dir, tracks_dir=tracks_dir))
     rows = cm.as_family(smp.build_laps(geo.clean_lap_index(root, cache_dir=cache_dir)))
     _, fits = cm.table_clauses(root, tables)
+    try:
+        shares: dict[str, ShareParams] | None = ho.production_shares(root)
+    except FileNotFoundError:
+        shares = None
     air = cm.air_state(root, geo.load_sessions(root))
     layouts = sorted(str(k) for k in rows.loc[rows["basis"] == "wet", "layout_id"].unique())
     tracks = {
@@ -236,7 +337,11 @@ def check_wet(
         model = cm.CarModel.load(path)
         work = fits[car][1]
         drive = cg.Drive(model, air=air, shifts=cg.day_shifts(work), gears=cg.day_gears(work))
-        laps, yards, terms = run_wet(tables, rows, tracks, wet_tracks, car, drive)
+        try:
+            share = ho.share_for(car, shares) if shares is not None else None
+        except KeyError:
+            share = None
+        laps, yards, terms = run_wet(tables, rows, tracks, wet_tracks, car, drive, share)
         if laps.empty:
             continue
         lap_parts.append(laps)
@@ -409,5 +514,10 @@ def check_wet(
                 "The day's median lap (every wet build lap of the day), sizes compared. On every "
                 "measure: " + "; ".join(others) + ".\n\n" + md_table(table, floats="{:.4f}"),
             )
+        )
+    # Gate E2's wet clause (#207): the wet laps' heat per tyre, on the null.
+    if shares is not None and "sim_q_fl" in laps.columns:
+        rep.items.extend(
+            wet_heat_items(root, laps, shares, rows, tracks_dir=tracks_dir, cache_dir=cache_dir)
         )
     return rep

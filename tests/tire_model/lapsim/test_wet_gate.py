@@ -153,3 +153,32 @@ def _keyed(laps):
         out[f"{k}_other_day"] = 10.0
         out[f"{k}_same_day"] = 10.0
     return out
+
+
+class TestWetHeat:
+    def test_the_null_laps_heat_against_the_wet_laps_own(self):
+        from motorsports_data_notebook.tire_model.lapsim.heat import CORNERS
+
+        rng = np.random.default_rng(9)
+        rows = []
+        for day in ("w1", "w2", "w3"):
+            for k in range(6):
+                t = np.array([80.0, 85.0, 90.0, 95.0]) * np.exp(rng.normal(0.0, 0.004, 4))
+                key = {"session_id": f"s_{day}", "lap_num": k}
+                lap = {**key, "car": "car", "layout_id": "a", "date": day, "arm": "A"}
+                lap["lap_time_s"] = 70.0 + 0.1 * k
+                seen = {**key, "source": "imu", "hole": False}
+                for i, c in enumerate(CORNERS):
+                    # the simulated wet lap: 3 % too much on the right-hand tyres
+                    lap[f"sim_q_{c}"] = t[i] * (1.03 if c in ("fr", "rr") else 1.0)
+                    seen[f"t_{c}"], seen[f"q_{c}"] = t[i], t[i] * 1.02
+                rows.append((lap, seen))
+        laps = pd.DataFrame([r[0] for r in rows])
+        obs = pd.DataFrame([r[1] for r in rows])
+        other_arm = laps.assign(arm="B", sim_q_fl=1.0)
+        got = wg.wet_heat(pd.concat([laps, other_arm]), obs)
+        assert len(got) == 18  # the null alone
+        assert got["g_fr"].median() == pytest.approx(np.log(1.03), abs=1e-9)
+        assert got["g_fl"].abs().max() < 1e-12
+        obs.loc[0, "hole"] = True
+        assert len(wg.wet_heat(laps, obs)) == 17

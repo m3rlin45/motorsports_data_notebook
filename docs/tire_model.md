@@ -5060,6 +5060,10 @@ tyres' frame (no factor), per tyre.
   does; at Fuji and the other way round it is under 0.4 %. That is
   gate B3's by-class difference (0.017 at Tsukuba, 0.007 at Fuji)
   carried into heat.
+- Arm D has no lap for three of the Inferno 86's 111 laps at Fuji:
+  under the cap of a use of 1, the car fitted without Fuji cannot make
+  their lap times on the other cars' line. They are counted in the
+  report (`D_no_lap`) and left out of arm D's figures.
 - Most of arm D's error is therefore arm A's: it is what the simulation
   misses on a track and a car it knows (the formula cars' left tyres
   1.4 to 1.7 % low at Tsukuba), not what not having seen the cell adds.
@@ -5106,6 +5110,41 @@ cars (D\*: nothing of the cell is given).
   of the table above. A typical use for the lap that is fed (the use
   of a session's 25th-percentile lap) is the way to supply a lap time;
   it is not built, and is F's to settle (#208).
+
+**Gate E2's wet clause (2026-11-24; `wet_gate.wet_heat`, an item in
+`lapsim check-wet`).** A wet lap is driven as gate D2 left it (the same
+car at a lower use on the dry track, at the wet lap's own lap time) and
+its heat set against the logged wet lap's own heat in the tyres' frame;
+the car is the dry car, in whose fit no wet lap is.
+
+| cell | wet laps / days | worst tyre | four-tyre mean | right less left |
+|---|---|---|---|---|
+| Inferno 86, Tsukuba | 41 / 4 | 3.6 % | +2.4 % | +1.2 % |
+| KK-F, Tsukuba | 33 / 4 | 1.2 % | +0.9 % | +0.4 % |
+| *Inferno 86, Sodegaura* | 23 / 2 | 1.1 % | +0.1 % | +1.6 % |
+| *KK-SII, Tsukuba* | 17 / 1 | 1.8 % | +1.1 % | +1.1 % |
+| *KK-SII, Fuji* | 14 / 1 | 1.5 % | −0.4 % | +0.9 % |
+| *KK-F, Fuji* | 6 / 1 | 3.8 % | −1.9 % | +2.1 % |
+
+The wet laps' heat is within 3.8 % on the worst tyre in six of six
+cells, 1.7 % in the median, with no wet term; the two cells with three
+wet days read 3.6 % and 1.2 %. Against a logged lap of the same wet day
+(the owner's form for the wet) 27 of 48 cells pass. The right-hand
+tyres read 0.4 to 2.1 % above the left-hand ones in every cell, the
+same lean as in the dry. The clause as #207 wrote it (the simulation
+"given the cell's neighbours' dry data and wet data from other cells")
+is this with the car's own fit and track; the unseen-car form was not
+run on the wet laps, where the dry arms show the car's transfer at
+0.2 %.
+
+**What is left of E, and what is not built.** E3 (the pace response of
+heat) stays a list: a slope against lap time within a day can be made
+by selection alone (`docs/lapsim_driver_model.md` section 8), and the
+allowance it was to be read against came from a D2 that was replaced.
+E1's reported items on slow laps (1.04–1.12 × the session best) are not
+built: the gates' laps are the build laps, by pace level. E0 is set
+aside by the owner. The lap production feeds (a session's
+25th-percentile lap) is F's.
 
 **Batches, and speed.** The solver works on a batch of laps of one
 track, each with its own car and its own u (`solver.solve_laps`,
