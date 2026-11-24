@@ -178,6 +178,106 @@ def simulated_smoothing(
     return pd.DataFrame(rows)
 
 
+def tyres_frame_lap_heat(
+    root: Path,
+    laps: pd.DataFrame,
+    shares: dict[str, ShareParams],
+    *,
+    tracks_dir: Path | None = None,
+    cache_dir: Path | None = None,
+) -> pd.DataFrame:
+    """The heat of each logged lap of ``laps`` (``session_id, lap_num,
+    car``) **in the frame a simulated lap is in**: the lap's own Doppler
+    lateral as the tyres hold it on the road's bank, and ``dV/dt`` with the
+    grade (what an accelerometer reads along the road), on the position
+    clock, through the chain. ``t_<tyre>`` per lap; laps without geometry,
+    a track or a place in the lap index are left out."""
+    from .heat import series_heat
+
+    index = geo.clean_lap_index(root, cache_dir=cache_dir)
+    spans = index.set_index(["session_id", "lap_num"])[["t_start_s", "t_end_s", "layout_id"]]
+    rows: list[dict] = []
+    tracks: dict[str, object] = {}
+    for sid, grp in laps.groupby("session_id", sort=True):
+        car = str(grp["car"].iloc[0])
+        keys = [(sid, int(n)) for n in grp["lap_num"] if (sid, int(n)) in spans.index]
+        if not keys or car not in shares:
+            continue
+        own = spans.loc[keys].reset_index()
+        own = own[np.isfinite(own["t_start_s"]) & np.isfinite(own["t_end_s"])]
+        if own.empty:
+            continue
+        layout = str(own["layout_id"].iloc[0])
+        if layout not in tracks:
+            try:
+                tracks[layout] = smp.load_track(
+                    root, layout, tracks_dir=tracks_dir, cache_dir=cache_dir
+                )
+            except (ValueError, FileNotFoundError, KeyError):
+                tracks[layout] = None
+        track = tracks[layout]
+        sig = smp.session_signals(root, str(sid), layout) if track is not None else None
+        if sig is None or track is None:
+            continue
+        s, grade, _ = smp.track_position(sig, track, own)  # type: ignore[arg-type]
+        lat = smp.in_tyres_frame(sig, track, s)  # type: ignore[arg-type]
+        along = sig.long_g + np.nan_to_num(grade)
+        t, v = sig.geom.t, np.nan_to_num(sig.geom.speed, nan=0.0)
+        for n, a, b in zip(own["lap_num"], own["t_start_s"], own["t_end_s"]):
+            i0, i1 = np.searchsorted(t, [a, b])
+            q = series_heat(t[i0:i1], v[i0:i1], lat[i0:i1], along[i0:i1], shares[car], a, b)
+            rows.append(
+                {
+                    "session_id": sid,
+                    "lap_num": int(n),
+                    **{f"t_{c}": q[k] for k, c in enumerate(CORNERS)},
+                }
+            )
+    return pd.DataFrame(rows, columns=["session_id", "lap_num"] + [f"t_{c}" for c in CORNERS])
+
+
+def frame_factor(both: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """``(factors, left)``: what brings a heat in the simulated lap's frame
+    to production's (#206's frame clause). ``both`` has, per logged lap,
+    production's chain on the sensor's series (``q_<tyre>``, with
+    ``source``) and the same lap in the simulated lap's frame
+    (``t_<tyre>``), with ``car, layout_id, session_id``.
+
+    ``factors``: per car, layout and source, the per-tyre median over the
+    laps of sensor-frame over tyres'-frame heat (``f_<tyre>``), with
+    ``laps`` and ``sessions``. ``left``: per car and source, what the
+    factor leaves session by session: the median and the 90th percentile
+    over sessions of the size of the session's mean log ratio less its
+    cell's, on the worst tyre."""
+    cols = [f"r_{c}" for c in CORNERS]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        ratio = pd.DataFrame(
+            {f"r_{c}": np.log(both[f"q_{c}"] / both[f"t_{c}"]) for c in CORNERS}, index=both.index
+        )
+    laps = pd.concat([both[["car", "layout_id", "source", "session_id"]], ratio], axis=1)
+    laps = laps.replace([np.inf, -np.inf], np.nan).dropna(subset=cols)
+    cell = ["car", "layout_id", "source"]
+    if laps.empty:
+        return pd.DataFrame(), pd.DataFrame()
+    med = laps.groupby(cell, sort=True)[cols].median()
+    factors = pd.DataFrame(
+        np.exp(med.to_numpy()), index=med.index, columns=[f"f_{c}" for c in CORNERS]
+    )
+    factors.insert(0, "laps", laps.groupby(cell).size())
+    factors.insert(1, "sessions", laps.groupby(cell)["session_id"].nunique())
+    by_session = laps.groupby(cell + ["session_id"], sort=True)[cols].mean().reset_index()
+    centre = by_session[cell].merge(med.reset_index(), on=cell, how="left")[cols].to_numpy()
+    off = by_session[cell + ["session_id"]].assign(
+        worst=np.abs(by_session[cols].to_numpy() - centre).max(axis=1)
+    )
+    left = (
+        off.groupby(["car", "source"])["worst"]
+        .agg(sessions="size", median="median", p90=lambda x: float(np.percentile(x, 90)))
+        .reset_index()
+    )
+    return factors.reset_index(), left
+
+
 def check_heat_chain(
     root: Path,
     *,
@@ -350,6 +450,47 @@ def check_heat_chain(
             ),
         )
     )
+
+    # What brings a simulated lap's heat to production's (#206's frame clause).
+    in_frame = tyres_frame_lap_heat(root, own, shares, tracks_dir=tracks_dir, cache_dir=cache_dir)
+    if len(in_frame):
+        index = geo.clean_lap_index(root, cache_dir=cache_dir)
+        where = index[["session_id", "lap_num", "layout_id"]].drop_duplicates()
+        framed = both.merge(in_frame, on=["session_id", "lap_num"]).merge(
+            where, on=["session_id", "lap_num"]
+        )
+        factors, left = frame_factor(framed)
+        if len(factors):
+            f_cols = [f"f_{c}" for c in CORNERS]
+            imu = factors[factors["source"] == "imu"]
+            span = imu[f_cols].to_numpy() if len(imu) else factors[f_cols].to_numpy()
+            rep.items.append(
+                GateItem(
+                    "The frame factor: production's heat over the same lap in a simulated lap's "
+                    "frame",
+                    None,
+                    f"accelerometer laps {np.nanmin(span):.3f} to {np.nanmax(span):.3f} by car, "
+                    f"layout and tyre; after it a session is off by "
+                    + "; ".join(
+                        f"{r['car']} {r['source']} {r['median']:.3f} median, {r['p90']:.3f} P90"
+                        for r in left.to_dict("records")
+                    ),
+                    "reported",
+                    "A simulated lap is in the tyres' frame on the position clock: the lateral "
+                    "the tyres hold on the road's bank, and `dV/dt` with the grade. Production's "
+                    "tau and K were fitted on the heat of the sensor's series. Where a table's "
+                    "heat has to meet them it is multiplied by this: per production car, layout "
+                    "and source, the per-tyre median over the logged laps of production's chain "
+                    "on the sensor's series over the same lap's Doppler lateral in the tyres' "
+                    "frame and its `dV/dt` with the grade, through the same chain. No simulated "
+                    "lap is in it. It goes away if production is refitted on the tyres'-frame "
+                    "series (#255).\n\n"
+                    + md_table(factors, floats="{:.3f}")
+                    + "\n\n**What it leaves, session by session** (the size of a session's mean "
+                    "log ratio less its cell's, on the worst tyre).\n\n"
+                    + md_table(left, floats="{:.4f}"),
+                )
+            )
     return rep
 
 
@@ -359,6 +500,8 @@ __all__ = [
     "STINT_MAX",
     "chain_lap_heat",
     "check_heat_chain",
+    "frame_factor",
     "production_lap_heat",
     "simulated_smoothing",
+    "tyres_frame_lap_heat",
 ]

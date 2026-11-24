@@ -87,3 +87,37 @@ class TestAgainstProductionsBins:
         assert heat_gate.chain_lap_heat("root", laps, {}).empty
         got = heat_gate.chain_lap_heat("root", laps, {"car": SHARE})
         assert set(got["source"]) == {"gps"}
+
+
+class TestFrameFactor:
+    def test_the_per_tyre_median_per_car_layout_and_source(self):
+        rng = np.random.default_rng(1)
+        rows = []
+        for session, source, lift in (
+            ("s1", "imu", 1.04),
+            ("s2", "imu", 1.06),
+            ("s3", "gps", 1.10),
+        ):
+            for lap in range(20):
+                row = {"car": "FJ", "layout_id": "a", "source": source, "session_id": session}
+                for k, c in enumerate(heat_gate.CORNERS):
+                    base = 100.0 + 10.0 * k
+                    row[f"t_{c}"] = base
+                    row[f"q_{c}"] = base * lift * np.exp(rng.normal(0.0, 0.002))
+                rows.append({**row, "lap_num": lap})
+        factors, left = heat_gate.frame_factor(pd.DataFrame(rows))
+        by = factors.set_index("source")
+        assert by.loc["imu", "laps"] == 40 and by.loc["imu", "sessions"] == 2
+        assert by.loc["imu", "f_fl"] == pytest.approx(1.05, abs=0.011)
+        assert by.loc["gps", "f_rr"] == pytest.approx(1.10, abs=0.003)
+        # the two accelerometer sessions sit a per cent either side of their cell
+        imu = left[left["source"] == "imu"].iloc[0]
+        assert imu["sessions"] == 2 and imu["median"] == pytest.approx(0.0095, abs=0.002)
+        assert left[left["source"] == "gps"].iloc[0]["median"] < 0.002
+
+    def test_laps_without_a_heat_on_either_side_are_left_out(self):
+        row = {"car": "FJ", "layout_id": "a", "source": "imu", "session_id": "s", "lap_num": 1}
+        for c in heat_gate.CORNERS:
+            row[f"q_{c}"], row[f"t_{c}"] = np.nan, 100.0
+        factors, left = heat_gate.frame_factor(pd.DataFrame([row]))
+        assert factors.empty and left.empty

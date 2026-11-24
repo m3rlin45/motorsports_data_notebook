@@ -4563,9 +4563,9 @@ of the logged laps' right over left):
   lean (right less left 0.000 to +0.029 at eight of ten cells, −0.009
   at two). So the simulated car is a little slower through right turns
   than through left ones, relative to the logged car, at most layouts.
-  Why is open (candidates not tested: the side the bank is read on; a
-  car that is not the same both ways). Under the 0.06 at which #206
-  sends one to the per-corner table.
+  It is placed further below ("The lean to the left turns, placed"):
+  not the bank either; the logged cars hold more lateral in their right
+  turns. Under the 0.06 at which #206 sends one to the per-corner table.
 - By the fixed limits this gate was first written with (0.03 on the
   lateral heat, ± 0.06 by side) every scored cell but one would be
   inside (the Inferno 86 at Motegi, 0.032 on four laps of two days).
@@ -4848,9 +4848,83 @@ with the support, what the table assumes and its two fast ends. It is of
 one set of shares and is made again for another; the table itself holds
 laps.
 
-**Still #206's**: what brings a table's heat to production's
-sensor-frame heat where the two must meet (#255); the lean of the
-simulated lateral heat to the left turns.
+**The frame factor (2026-11-24; `heat_gate.frame_factor`, reported by
+`lapsim check-heat-chain`).** #206's frame clause: a simulated lap is in
+the tyres' frame on the position clock (the lateral the tyres hold on
+the road's bank; `dV/dt` with the grade), and production's τ and K were
+fitted on the heat of the sensor's series. Where a table's heat has to
+meet them it is multiplied by the per-tyre median, over the logged laps
+of a production car at a layout from one kind of source, of production's
+chain on the sensor's series over the same lap's own Doppler lateral in
+the tyres' frame and its `dV/dt` with the grade, through the same chain.
+No simulated lap is in it.
+
+| production car, source | factor by layout and tyre | after it, a session is off by (worst tyre; median, 90th percentile) |
+|---|---|---|
+| formula cars, accelerometer | 0.986–1.011 at Suzuka and Tsukuba; 0.925–1.030 at Fuji (the rears 0.93–0.94 on 44 laps of 7 sessions) | 2.0 %, 4.4 % (60 sessions) |
+| formula cars, GPS-derived | 1.057–1.099 | 1.1 %, 2.9 % (36) |
+| Inferno 86, accelerometer | 1.017–1.040 at four layouts | 1.5 %, 5.4 % (63) |
+
+An accelerometer on the road's plane reads what the tyres hold, and the
+formula cars' factor is 1 within about 1 % where they have most laps.
+The formula cars' rears at Fuji (0.93–0.94) are not explained.
+The Inferno 86's accelerometer heat is 2–4 % over the Doppler's, on
+every tyre and layout alike, and a GPS-derived series 6–10 % over it:
+the noise that passes through the positive parts (the smoothing figures
+above). What a factor leaves session by session is what #206 first
+estimated (1.3 % in the median and 5.3 % at the 90th percentile over
+125 sessions). It goes away if production is refitted on the tyres'
+frame (#255); whether a table read against production's heat is right
+after it is #207's gate E1, which needs each fold's shares and is not
+measured here.
+
+**The lean to the left turns, placed (2026-11-24).** The simulated car is
+slow through right turns relative to left ones, against the logged car:
+
+- *At the apex*: with the car and the corner's speed accounted for, the
+  simulated apex speed is 1.4 % (± 0.5 %) lower in right turns than in
+  left turns relative to the logged one (95 corners of gate C3's corner
+  table); seven of ten car and layout cells, Fuji the other way on both
+  formula cars (+2.0 %, +2.9 %).
+- *Not the track's curvature* (the track's line at each logged lap's own
+  speed has no such lean) *and not the bank*: with every road taken as
+  flat the lean is the same (−1.0 % with the bank, −1.0 % without, the
+  mean over the ten cells).
+- *The logged formula cars hold more lateral in right turns, and that is
+  consistent with their lean.* The cornering limit's statistic by side
+  is higher in the right-hand corners by 4.5 % on the KK-SII (8 right
+  corners, 6 left) and 2.7 % on the KK-F (4 and 1); the simulation has
+  one limit for both ways, and 4.5 % of lateral is about 2.2 % of apex
+  speed, against the KK-SII's −2.3 % and −2.5 % at Suzuka and Tsukuba.
+  **The Inferno 86's lean is not accounted for**: its two sides differ
+  by 0.6 % (9 and 6 corners), which is 0.3 % of apex speed, against
+  −0.6 %, −2.2 % and −4.2 % at Fuji, Tsukuba and Motegi.
+- *The owner, 2026-11-24, of the formula cars:* they are symmetrical, so
+  this is the corners and not the car. These circuits run mostly clockwise (58
+  right corners to 37 left), and the corners a driver leans on hardest
+  are mostly rights. Taking the higher side as the limit of a
+  symmetrical car would raise `mu_y` by 2.7 % on the KK-SII (1.541 to
+  1.582) and 0.7 % on the KK-F (1.493 to 1.503, on four corners) and
+  nothing on the Inferno 86, and the max driver's lap by 0.4–0.8 s and
+  0.1–0.2 s; it moves the ceiling only (a logged lap is solved to its
+  lap time) and would not remove the lean. Not applied: it changes the
+  limit's reading ruled on 2026-11-24 and is the owner's to decide.
+- What would remove the lean is the driver using more of the limit in
+  some corners than in others, which is #313's; nothing is fitted by
+  side or by corner here.
+
+**Dropped from #206's first text, with the reason.** The `centroid`
+columns of the pace table: no consumer has named them since E's review.
+Lateral heat by side with the logged lap read by other sensors than the
+Doppler: the tyres' frame on both sides is the ruled frame, the
+accelerometer's chain is held by gate D1's parity, and the frame factor
+above is what separates the sensors.
+
+**Left open when #206 closed**: more wet days before the wet terms can
+be judged again (gate D2 is the instrument); the higher-side reading of
+a symmetrical car's limit (the owner's); the driver's use by corner,
+which the lean points at (#313); production on the tyres' frame (#255)
+and the table read against production's heat (#207).
 
 **Batches, and speed.** The solver works on a batch of laps of one
 track, each with its own car and its own u (`solver.solve_laps`,

@@ -231,7 +231,7 @@ def check_pace_table(
             "driver's, which no knob answers. `use_min` and `use_max`: the support, the car's logged "
             "range of use (at the layout where `run_here`, else over the layouts it has run). "
             "`logged`: the car's dry build laps at the layout; `no_solution`: those faster than "
-            "the lap at a use of 1; `outside`: those the table flags.\n\n"
+            "the table's fastest lap (the knob's end lap); `outside`: those the table flags.\n\n"
             + md_table(got, floats="{:.4f}"),
         )
     )
@@ -272,7 +272,7 @@ def check_pace_table(
     faster = int(got["no_solution"].sum())
     rep.items.append(
         GateItem(
-            "Logged laps faster than the lap at a use of 1",
+            "Logged laps faster than the table's fastest lap",
             None,
             f"{faster} of {int(got['logged'].sum())} dry build laps; "
             f"{int(got['outside'].sum())} flagged outside the support; of "
