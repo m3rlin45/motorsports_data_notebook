@@ -307,3 +307,90 @@ class TestTransferLaps:
         assert got[got["arm"] == "D*"]["lap_time_sim_s"].notna().all()
         # a layout with no track from other cars is not driven
         assert hm.transfer_laps(tables, rows, tracks, {}, "sim", full, SHARE).empty
+
+
+class TestPaceBands:
+    def test_bands_of_a_laps_time_over_its_sessions_best(self):
+        index = pd.DataFrame(
+            {
+                "car": ["car"] * 6 + ["other"],
+                "session_id": ["s1"] * 5 + ["wet", "s1"],
+                "lap_num": range(7),
+                "lap_time_s": [60.0, 60.5, 61.9, 64.0, 70.0, 66.0, 60.0],
+                "clean": [True, True, True, True, True, True, True],
+                "in_build": [True, True, False, False, False, False, True],
+            }
+        )
+        got = hm.band_rows(index, ("car",)).set_index("lap_num")["band"].to_dict()
+        # 61.9 is 3.2 % off the best, 64.0 6.7 %; 70.0 is beyond 12 %; a wet session has no build lap
+        assert got == {0: "fast", 1: "fast", 2: "mid", 3: "slow"}
+        dirty = index.assign(clean=[True, True, False, True, True, True, True])
+        assert 2 not in set(hm.band_rows(dirty, ("car",))["lap_num"])
+
+    def test_cells_against_a_lap_of_the_same_band(self):
+        rng = np.random.default_rng(11)
+        frames, obs_rows = [], []
+        for band, sd, bias, t0 in (("fast", 0.004, 0.0, 60.0), ("slow", 0.02, 0.03, 64.0)):
+            for d in range(3):
+                obs = _obs(rng, "a", f"d{d}", 8, start=1000 * (band == "slow") + 10 * d)
+                # two slow laps are further apart than two fast ones
+                noise = np.exp(rng.normal(0.0, sd, (len(obs), 4)))
+                for k, c in enumerate(CORNERS):
+                    obs[f"t_{c}"] *= noise[:, k]
+                heat = obs[["car", "layout_id", "session_id", "lap_num", "date"]].copy()
+                heat["session_id"] = heat["session_id"] + band
+                obs["session_id"] = obs["session_id"] + band
+                heat["band"] = band
+                heat["lap_time_s"] = t0 + 0.05 * np.arange(len(heat))
+                for c in CORNERS:
+                    heat[f"sim_q_{c}"] = BASE[CORNERS.index(c)] * np.exp(bias)
+                frames.append(heat)
+                obs_rows.append(obs)
+        heat, obs = pd.concat(frames, ignore_index=True), pd.concat(obs_rows, ignore_index=True)
+        by_band, by_cell = hm.band_scores(heat, obs)
+        got = by_band.set_index("band")
+        assert list(got.index) == ["fast", "slow"] and got.loc["fast", "laps"] == 24
+        assert (
+            got.loc["fast", "scored"] == 4 and got.loc["slow", "scored"] == 4
+        )  # one cell, four tyres
+        assert got.loc["slow", "other_day"] > 3 * got.loc["fast", "other_day"]  # the bar widens
+        cell = by_cell.set_index("band")
+        assert cell.loc["slow", "mean"] == pytest.approx(0.03, abs=0.01)  # 3 % high on slow laps
+        assert abs(cell.loc["fast", "mean"]) < 0.005 and cell.loc["fast", "days"] == 3
+        (item,) = hm.band_item(heat, obs)
+        assert "as the lap gets slower" in item.name and "slow (24 laps)" in item.measured
+        assert (
+            hm.band_item(heat.iloc[:0], obs) == [] and hm.band_scores(heat.iloc[:0], obs)[0].empty
+        )
+
+    def test_each_lap_is_solved_to_its_own_lap_time_by_the_cars_own_fit(self, monkeypatch):
+        from motorsports_data_notebook.tire_model.lapsim import car_gate as cg
+        from motorsports_data_notebook.tire_model.lapsim import heat
+        from motorsports_data_notebook.tire_model.lapsim import solver as sv
+
+        from .test_car_gate import CAR, _model, _oval_track
+        from .test_holdout import SHARE
+
+        track = _oval_track()
+        uses = (1.0, 0.9, 0.8)
+        rows = pd.DataFrame(
+            {
+                "car": "car",
+                "raw_car": "car",
+                "layout_id": "oval",
+                "session_id": "s",
+                "lap_num": range(3),
+                "date": "d",
+                "band": ["fast", "mid", "slow"],
+                "lap_time_s": [sv.lap_time(track, CAR, u) for u in uses],
+            }
+        )
+        got = hm.band_heat(rows, {"oval": track}, {"car": cg.Drive(_model())}, {"car": SHARE})
+        assert list(got["band"]) == ["fast", "mid", "slow"]
+        for i, u in enumerate(uses):
+            want = heat.sim_heat(sv.simulate_lap(track, CAR, u), SHARE)
+            assert got["use"].iloc[i] == pytest.approx(u, abs=1e-4)
+            assert got["sim_q_fl"].iloc[i] == pytest.approx(want[0], rel=1e-3)
+        assert got["sim_q_fl"].is_monotonic_decreasing  # a slower lap is a cooler one
+        assert hm.band_heat(rows, {}, {"car": cg.Drive(_model())}, {"car": SHARE}).empty
+        assert hm.band_heat(rows, {"oval": track}, {"car": None}, {"car": SHARE}).empty

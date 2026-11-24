@@ -1865,6 +1865,7 @@ def check_car_holdout(
                     "shifts": shifts,
                     "gears": gears,
                     "air": air,
+                    "index": cm.as_family(geo.clean_lap_index(root, cache_dir=cache_dir)),
                 },
             )
         )
