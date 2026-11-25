@@ -645,3 +645,53 @@ class TestSplitPooling:
             warmup_table.CAR_FIT_ALIASES.update(before)
             heat_input.CAR_FACTS.clear()
             heat_input.CAR_FACTS.update(facts)
+
+
+class TestRedoingTheComparisons:
+    def _rows(self, shift=0.0):
+        rows = []
+        for sid, car, under_typed, under_lap in (
+            ("s1", "KK-F", -0.035, -0.01),
+            ("s2", "KK-F", -0.01, 0.004),
+            ("s3", "KK-SII", -0.025, -0.002),
+        ):
+            for lap in (1, 2):
+                for arm, resid in (("calculator", 0.03), ("table", 0.02 + shift)):
+                    rows.append(
+                        {
+                            "session_id": sid,
+                            "raw_car": car,
+                            "car": "FJ",
+                            "track": "tsukuba",
+                            "condition": "dry",
+                            "lap_num": lap,
+                            "corner": "fl",
+                            "fold": 0,
+                            "arm": arm,
+                            "resid_bar": resid,
+                            "under_typed": under_typed,
+                            "under_lap": under_lap,
+                        }
+                    )
+        return pd.DataFrame(rows)
+
+    def test_a_pace_holdout_by_how_far_under_the_training_pace(self):
+        got = pg.by_margin(self._rows(), ("calculator", "table"))
+        whole = got[got["cell"] == "every cell"].set_index("sessions_of")
+        assert whole.loc["every held-out session", "sessions"] == 3
+        assert whole.loc["under every lap left in training", "sessions"] == 2
+        assert whole.loc["more than 2 % under the training pace", "sessions"] == 2
+        assert whole.loc["more than 3 % under the training pace", "sessions"] == 1
+        assert whole.loc["every held-out session", "table_mae"] == pytest.approx(0.02)
+        assert whole.loc["every held-out session", "table_less_calculator"].startswith("-10.0")
+        # every session is also given per cell
+        assert set(got["cell"]) == {"every cell", "KK-F at tsukuba", "KK-SII at tsukuba"}
+
+    def test_two_runs_of_the_holdout_row_for_row(self):
+        a, b = self._rows(), self._rows(shift=0.01)
+        rep = pg.compare_holdouts(a, b, ("pooled", "split"))
+        text = rep.to_markdown()
+        assert "table 0.0200 → 0.0300 bar" in text and "calculator 0.0300 → 0.0300 bar" in text
+        assert "| KK-F | table | 2 | 10.00 |" in text  # 10 mbar worse on both its sessions
+        empty = pg.compare_holdouts(a, b.assign(fold=9), ("pooled", "split"))
+        assert not empty.passed
