@@ -122,6 +122,7 @@ def lap_heat(bins: LapBins, share: ShareParams) -> np.ndarray:
                         bins.long_neg,
                         bins.v_ms,
                         c,
+                        dt_s=None,  # one lap alone: a rim term at its steady state
                     )
                     * bins.dur_s
                 )

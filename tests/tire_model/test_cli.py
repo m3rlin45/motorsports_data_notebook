@@ -118,3 +118,21 @@ def test_cli_subcommands_are_registered() -> None:
             pass
         except argparse.ArgumentError as e:
             pytest.fail(f"argparse rejected subcommand {argv[0]!r}: {e}")
+
+
+def test_cli_holdout_heat_path_flags_reach_the_fit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``--carcass`` / ``--brake-rim`` (#380) become the folds' HeatPaths; without them
+    the holdout fits production's model (``heat_paths=None``)."""
+    from motorsports_data_notebook.tire_model import validate
+    from motorsports_data_notebook.tire_model.heat_input import HeatPaths
+
+    seen: list[object] = []
+
+    def fake(**kw: object) -> int:
+        seen.append(kw["heat_paths"])
+        return 0
+
+    monkeypatch.setattr(validate, "run_holdout_validation", fake)
+    assert main(["holdout", "--dataset-root", "/nonexistent"]) == 0
+    assert main(["holdout", "--dataset-root", "/nonexistent", "--carcass", "--brake-rim"]) == 0
+    assert seen == [None, HeatPaths(carcass=True, brake_rim=True)]

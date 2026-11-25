@@ -36,6 +36,7 @@ from ..tire_etl.paths import (
 from . import wetness as _wetness
 from .cleaning import clean_laps
 from .energy_balance import P_ATM_BAR, T_ZERO_C_TO_K, t_effective_c, t_road_proxy_c
+from .heat_input import HEAT_PATH_PARAM_NAMES, NO_HEAT_PATHS, HeatPaths
 
 logger = logging.getLogger(__name__)
 
@@ -167,6 +168,7 @@ def build_warmup_table(
     rebuild: bool = False,
     exclude_session_ids: set[str] | None = None,
     write_artifacts: bool = True,
+    heat_paths: HeatPaths | None = None,
 ) -> dict[str, Any]:
     """Fit the energy-balance model (:func:`statespace.fit_physical`) and
     write both artifacts.
@@ -183,6 +185,11 @@ def build_warmup_table(
         If False (used by held-out validation), skip writing
         ``tire_model.json`` and ``warmup_table.parquet`` — return the in-memory
         model dict only.
+    heat_paths
+        Issue #380's heat paths under test (:class:`.heat_input.HeatPaths`;
+        default off). Their fitted constants go into the model's
+        ``heat_input.fitted_by_car`` so the held-out laps' heat is read with
+        them.
 
     Returns the fitted model as a dict (matching the JSON schema) so callers
     can inspect without re-reading the file.
@@ -228,7 +235,7 @@ def build_warmup_table(
     # no track constants.
     from .statespace import fit_physical, lap_heat_frame
 
-    pf = fit_physical(root, laps_for_fit)
+    pf = fit_physical(root, laps_for_fit, paths=heat_paths or NO_HEAT_PATHS)
     tau_by_car_corner_cond = dict(pf.tau)
     k_by_car_corner_cond = dict(pf.k)
     kappa_by_car = dict(pf.kappa)
@@ -267,7 +274,15 @@ def build_warmup_table(
         ),
         "units": {"q": "G*m/s", "K": "K per (G*m/s)", "a": "K/s per (G*m/s)", "g_transfer": "G"},
         "fitted_by_car": {
-            car: {"g_transfer": float(p.g_transfer_front)} for car, p in pf.share.items()
+            car: {
+                "g_transfer": float(p.g_transfer_front),
+                **{
+                    k: float(getattr(p, k))
+                    for k in HEAT_PATH_PARAM_NAMES
+                    if heat_paths is not None and k in heat_paths.free
+                },
+            }
+            for car, p in pf.share.items()
         },
         "car_facts_by_car": {
             car: {"p_f": f.p_f, "brake_bias_front": f.brake_bias_front, "driven": f.driven}
@@ -1050,7 +1065,7 @@ def attach_lap_heat(root: Path, laps: pd.DataFrame, model: dict[str, Any]) -> pd
     hi = model.get("heat_input")
     if not hi or "fitted_by_car" not in hi:
         return laps
-    from .heat_input import PHYSICAL_HEAT_INPUT, CarFacts, ShareParams
+    from .heat_input import PHYSICAL_HEAT_INPUT, CarFacts, ShareParams, heat_path_values
     from .statespace import build_stint_series, lap_heat_share
 
     share: dict[str, ShareParams] = {}
@@ -1070,6 +1085,7 @@ def attach_lap_heat(root: Path, laps: pd.DataFrame, model: dict[str, Any]) -> pd
             eps_drive=float(fitted.get("eps_drive", 1.0)),
             eps_brake=float(fitted.get("eps_brake", 1.0)),
             driven=cf.driven,
+            **heat_path_values(fitted),
         )
     stints = build_stint_series(root, laps, PHYSICAL_HEAT_INPUT)
     lap_q = lap_heat_share(stints, share)

@@ -125,6 +125,13 @@ and rejected (details in §2.6b–c and the history below):
   (ChassisSim form, power laws), **speed-dependent cooling**, and the
   **two-node tread model** for pressure: either worse, or invisible to the
   gas, or both (§2.6b–c).
+- **Carcass-deflection heat `V·r·N` and brake power into the rims**
+  (#380, 2026-11-26). Neither constant holds between a Sodegaura-led and a
+  Fuji-led fit (factors of 4–20, on bounds under the stale mask). Both
+  raise every tyre at Motegi. The front deficit they were meant to
+  explain is not Fuji's alone, and the paths' regressors are alike at
+  Fuji and Sodegaura (§2.6d). Kept as default-off options
+  (`heat_input.HeatPaths`).
 - **Set pressure as a heat factor.** Strong in the data (−7.5 %) but failed
   the instantaneous-pressure and cross-car controls; it may be the driver
   anticipating an unmeasured tyre state. Kept as a harness option only.
@@ -1224,6 +1231,203 @@ variant, which is what led to the speed-pressure correction above
 (§2.2a′) — the within-lap gas swing is mechanical, not thermal. The
 two-node fit should be re-run with κ applied to the gas observable before
 drawing conclusions about the tread constants.
+
+### 2.6d The Inferno 86's fronts at Fuji, and two more heat paths (2026-11-26, #380)
+
+**The question.** The calculator ran the Inferno 86's front tyres at Fuji
+−53 ± 12 mbar low on stints with no stale anchor. That number is
+row-weighted, on the standing folds of 2026-11-25. Sodegaura's fronts and
+every rear read about 0. Two heat paths the model lacks were proposed:
+
+- brake power reaching the gas through the rims (Teodosio, Farroni et al.
+  2021, *Meccanica*, doi 10.1007/s11012-021-01310-w);
+- carcass deflection, `V·(|F| + r·N)` (Kelly & Sharp 2012, via West &
+  Limebeer 2022).
+
+A deficit at one track has the shape of a track constant (§2.0b). A term
+counts only if it predicts the deficit without being fitted at Fuji.
+
+**The rival comes first, and it is not ruled out.** All figures below
+are mbar of lap-end pressure, prediction − TPMS. They cover the Inferno
+86 in the dry, averaged per session and axle, with SEs clustered by date. "Rule A" is
+the committee's stale-anchor patch (3 counts within 60 s,
+`offsets/q3_patch.py`), the rule #371 lands, installed by monkeypatch
+before anything loads and used in fitting and scoring alike. It is not
+#371's code. All of this was read after the Fuji and Sodegaura rows had
+been seen.
+
+| rows | Fuji f | Fuji r | Fuji f − r | Sodegaura f | Sodegaura r | Sodegaura f − r |
+|---|---:|---:|---:|---:|---:|---:|
+| master, clean stints (17 / 16 sessions) | −37 ± 13 | −1 ± 5 | −36 ± 13 | −9 ± 12 | +24 ± 14 | −33 ± 11 |
+| master, clean, after 600 s on track | −48 ± 16 | +1 ± 8 | −49 ± 14 | −5 ± 16 | +39 ± 17 | −44 ± 25 |
+| rule A, every stint (22 / 25) | −21 ± 12 | +3 ± 5 | −24 ± 12 | +9 ± 6 | +18 ± 14 | −9 ± 16 |
+| rule A, clean stints | −18 ± 12 | +5 ± 6 | −23 ± 12 | +6 ± 13 | +26 ± 12 | −21 ± 10 |
+
+- **The front deficit relative to the rears is the same at both tracks.**
+  The Fuji–Sodegaura difference is common to both axles. It is not on the
+  fronts alone. Weighted by rows, long stints dominate: the deficit grows
+  with time on track (Fuji's fronts: −22, −45, −58 mbar over 0–300,
+  300–600 and 600–900 s).
+- **Stale anchors on this car are front-heavy.** 20 of the 28 stint-tyres
+  with a repaired anchor are fronts, 15 of them Sodegaura's. A stale
+  anchor reads high at pit exit, so in training it lowers the fronts' gain.
+  With rule A the Fuji fronts go from −34 to −21 (every stint).
+- **At Sodegaura the front–rear gap differs more between compounds than
+  it differs between the tracks.** Under rule A, every stint:
+
+  | compound | Fuji f − r (sessions / dates) | Sodegaura f − r |
+  |---|---:|---:|
+  | A050 | −69 (1 / 1) | +25 ± 9 (12 / 3) |
+  | A052 | −21 ± 15 (12 / 8) | −65 ± 14 (8 / 3) |
+  | RE-71RS | −23 ± 15 (9 / 4) | −1 ± 8 (5 / 2) |
+
+  At Fuji the A052 and the RE-71RS read alike. The contrast is at
+  Sodegaura, where every A050 session is from 2025 and every A052 one
+  from 2026, so compound and date are the same thing there (3 dates
+  each). On the A052 the gap is larger at Sodegaura than at Fuji. The
+  model's compound multiplier is one number for all four tyres (in
+  `tire_model.json` today: A050 0.98, A052 1.02, RE-71RS 0.98), so it
+  cannot carry a front–rear difference.
+- **Set pressure cannot either.** Front minus rear set pressure is
+  +0.02 bar at both tracks, and a set-pressure factor (§2.6b) would act on
+  all four tyres.
+
+So the lap-end rows show no Fuji-specific front deficit. What remains is
+a car-wide front–rear gap of about −20 mbar under rule A, plus a
+difference between the two tracks common to both axles. Whether
+compound, date or track drives the gap is open: the in-sample fit still
+gives Fuji relatively hotter fronts (K_f/K_r, below).
+
+**What the two paths predict, read off the regressors before fitting.**
+
+- *Brake power into the rims.* Per moving second, the brake power over
+  the front share heat is 0.213 at Fuji and 0.205 at Sodegaura (median
+  over stints). Counting only braking above 0.3 G it is 0.161 / 0.147.
+  With an assumed aerodynamic drag of 0.14 G at 64 m/s (∝ V²) taken out
+  of the logged deceleration it is 0.182 / 0.182. Fuji's stops are bigger, but there are
+  fewer per minute. A rim term of any size adds about the same share of
+  heat at both tracks: it cannot tell Fuji's fronts from Sodegaura's.
+- *Carcass deflection.* Speed over the share heat is 7.30 / 6.02 on the
+  fronts and 6.96 / 5.83 on the rears (Fuji / Sodegaura), about 20 % more
+  at Fuji on both axles. A `V·r·N` term moves Fuji against Sodegaura on
+  both axles alike.
+- *The normal load from the track.* Over a lap, grade, vertical curvature
+  and bank add 1–3 % to the static load on every layout: Fuji +0.9 %
+  vertical and at most +2.2 % from the bank, Sodegaura −0.4 % / +1.0 %.
+  That is a Fuji–Sodegaura contrast of 2.4 % at most, so the term uses the
+  static axle share split by the lateral load share.
+
+**The options** (`heat_input.HeatPaths`, default off; `fit_physical(...,
+paths=)`, `build_warmup_table(..., heat_paths=)`, `validate._fit_fold(...,
+heat_paths=)`, `tire-predict-holdout --carcass / --brake-rim`). Both are
+per-car constants of the force shares (`ShareParams.r_carcass`, `c_rim`,
+`tau_rim_s`), and at 0 the input is production's to the last bit.
+
+- *Carcass.* `q_i += r · V · N_i`, with `N_i = p_A · λ_i`, the static axle
+  share times the same tanh lateral split as the lateral force. `r` is in
+  [0, 3].
+- *Rim.* `q_i += c_rim · y_i`. Here `y_i` is the corner's brake power
+  `V · F_x,i`, split by the brake bias like the braking force, passed
+  through a first-order lag `tau_rim_s` that restarts at each stint.
+  `c_rim` is in [0, 10] and `tau_rim_s` in [30, 3000] s. The rim heats the
+  gas one way; its own loss to the air is the lag.
+
+Synthetic stints recover both (`test_recovers_heat_path_constants`). With
+the paths off, the standing fold 0 fitted with this code equals the
+committee's cached master fold model in every number.
+
+**The gate, written before either path was fitted:**
+
+- **G1, stability.** Refit with the Inferno 86's Fuji and Motegi sessions
+  held out, then with its Sodegaura sessions held out. The constant must
+  be off its bounds in both and within a factor of 1.5 between them.
+- **G2, Motegi.** The term is fitted without Fuji and Motegi. Its
+  predicted shift of the three unscored Motegi dry sessions' fronts (2
+  dates) is reported first. Then each stint's own per-second heat is
+  integrated from pit exit. The term passes if the front MAE improves in
+  2 of 3 sessions and by ≥ 5 mbar in the mean.
+- **G3, the standing holdout.** Only after G1 and G2 pass. It was not
+  run.
+
+**G1 fails for both paths, on master and on rule A.** These are in-memory
+refits (`validate._fit_fold`) that hold out only the Inferno 86's
+sessions at the named tracks. The table gives the Inferno 86's constants;
+the FJ's data are the same in every column.
+
+| fit | without Fuji + Motegi | without Sodegaura |
+|---|---|---|
+| no path, master | g_transfer 2.42, K f/r 9.90 / 11.03 | 4.46, 11.90 / 10.22 |
+| no path, rule A | 3.48, 11.04 / 10.93 | 4.27, 12.25 / 10.29 |
+| carcass, master | r 2.64, g_transfer 2.46, K f/r 1.83 / 2.37 | r 0.55, 3.62, 5.81 / 5.50 |
+| carcass, rule A | **r 3.00 (bound)**, 3.72 | r 0.83, 3.32 |
+| rim, master | c_rim 5.8, τ_rim 88 s, g_transfer 1.15 | c_rim 1.2, τ_rim 2500 s, 4.27 |
+| rim, rule A | c_rim 6.5, **τ_rim 30 s (bound)**, 1.58 | c_rim 0.31, τ_rim 41 s, 4.06 |
+
+- **The carcass constant moves by a factor of 3.6 to 4.8** between the
+  two fits. Where the fit takes it high, the speed term carries most of
+  the heat (K falls five-fold), which is the rolling term §2.6b rejected,
+  in a new form.
+- **The rim constants move by a factor of 5 to 20, and τ_rim by up to 28.**
+  The Sodegaura-led fit wants the rim most and pays for it with
+  g_transfer (2.4 → 1.2 G). The Fuji-led fit, the data the path was meant
+  to explain, hardly wants it (c_rim 0.31 on rule A).
+- **Without either path, the front/rear balance of K already moves with
+  the track mix.** K_f/K_r is 0.90 Sodegaura-led and 1.16 Fuji-led on
+  master, and 1.01 / 1.19 on rule A. g_transfer moves 2.4–3.5 →
+  4.3–4.5 G. Rule A raises the Sodegaura-led fit's K_f by 11 %. What
+  moves the rest is open: the Sodegaura-led fit is half A050 sessions,
+  all from 2025, and that is not tested here.
+
+**Motegi, reported, not a gate (G1 failed).** G2 was run after G1 had
+failed, for the record, so **Motegi's dry sessions are no longer out of
+sample.** The fit holds out Fuji and Motegi. Prediction − TPMS on the
+fronts / rears (mbar), each stint's own per-second heat from pit exit,
+rule A. Rule A masks no Motegi anchor: the anchors are identical on both
+bases, and the bases differ only through the refitted constants. The
+compounds are inferred (`validate._inferred_compound_labels`); no human
+label exists.
+
+| session (compound) | no path | carcass | rim |
+|---|---:|---:|---:|
+| 2025-10-04 a1525 (A052) | −61 / +11 | +3 / +52 | −9 / +21 |
+| 2025-10-04 a1530 (A052) | −105 / +4 | −27 / +58 | −33 / +28 |
+| 2025-11-18 (RE-71RS) | +57 / +45 | +130 / +103 | +155 / +106 |
+
+- **The two A052 sessions show the Fuji pattern: fronts low, rears right.**
+  The RE-71RS session does not, but it reads high on all four tyres, so
+  its small gap says little. That is one date, with inferred labels.
+- **Both paths raise every tyre.** Against the no-path fit:
+  - Fronts get better: carcass −14 mbar MAE, rim −6 (2 of 3 sessions
+    each).
+  - Rears get worse: +47 and +28.
+  - Over all four tyres, the rim is better on the two A052 sessions and
+    worse on the RE-71RS one. The carcass is level, better and worse on
+    the three. By session mean: carcass +16, rim +11 mbar MAE.
+  - On master, the front gains are −29 and −24 and the rear losses +45
+    and +10.
+
+  G2 as written counts the fronts only. It would have passed both paths
+  while the car got worse. A front path has to be scored on all four
+  tyres.
+
+**Verdict.** Neither path is taken: both stay as default-off options.
+Established:
+
+- the lap-end deficit is not specific to Fuji's fronts;
+- brake power and speed, the regressors of the two paths, cannot make
+  the Fuji–Sodegaura front contrast;
+- neither path's constants hold between a Sodegaura-led and a Fuji-led
+  fit.
+
+On master, stale front anchors at Sodegaura deepen the gap.
+
+Open: whether compound, date or track drives the Inferno 86's
+front–rear gap and the track mix's pull on K_f/K_r. A per-axle compound
+multiplier (one more constant per car, compound and axle) is the next
+candidate. It needs its rule written before scoring, a check on data
+not yet seen (Motegi is spent: sessions logged after 2026-11-26, or the
+A052's dates held out one at a time), scoring on all four tyres, and no
+loss on the standing holdout. It is not built here (#380).
 
 ### 2.7 Artifact: `tire_model.json`
 

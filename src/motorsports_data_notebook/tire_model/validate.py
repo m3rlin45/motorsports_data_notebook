@@ -42,6 +42,7 @@ from .predict import (
     predict_cold_pressure,
 )
 from .cleaning import clean_laps
+from .heat_input import HeatPaths
 from .warmup_table import (
     CORNERS as _WT_CORNERS,
     W_ROAD,
@@ -181,6 +182,7 @@ def _collect_holdout_frame(
     n_folds: int,
     inputs: str = "calculator",
     quiet: bool = False,
+    heat_paths: HeatPaths | None = None,
 ) -> tuple[pd.DataFrame | None, int]:
     """Run the k-fold holdout and return ``(residual rows, n session×fold
     holdouts)``. ``None`` rows means no bucket could be held out."""
@@ -219,6 +221,7 @@ def _collect_holdout_frame(
             holdout_ids,
             inputs=inputs,
             inferred_labels=inferred_labels,
+            heat_paths=heat_paths,
         )
         if not fold_df.empty:
             fold_df["fold"] = fold
@@ -429,9 +432,17 @@ class FoldLaps:
 LapInputsFn = Callable[..., tuple[float, float, float, float, float]]
 
 
-def _fit_fold(root: Path, holdout_ids: Iterable[str]) -> dict[str, Any]:
-    """The model fitted without ``holdout_ids``, nothing written."""
-    return build_warmup_table(root, exclude_session_ids=set(holdout_ids), write_artifacts=False)
+def _fit_fold(
+    root: Path, holdout_ids: Iterable[str], heat_paths: HeatPaths | None = None
+) -> dict[str, Any]:
+    """The model fitted without ``holdout_ids``, nothing written; with
+    ``heat_paths`` (issue #380's options under test) when given."""
+    return build_warmup_table(
+        root,
+        exclude_session_ids=set(holdout_ids),
+        write_artifacts=False,
+        heat_paths=heat_paths,
+    )
 
 
 def _fold_constants(
@@ -477,6 +488,7 @@ def _evaluate_fold(
     inferred_labels: dict[str, str] | None = None,
     model: dict[str, Any] | None = None,
     lap_inputs_fn: LapInputsFn | None = None,
+    heat_paths: HeatPaths | None = None,
 ) -> pd.DataFrame:
     """Train a model excluding ``holdout_ids`` and return per-(lap, corner)
     residual rows for the held-out sessions.
@@ -504,7 +516,7 @@ def _evaluate_fold(
     if inputs not in INPUT_MODES:
         raise ValueError(f"inputs must be one of {INPUT_MODES}; got {inputs!r}")
     if model is None:
-        model = _fit_fold(root, holdout_ids)
+        model = _fit_fold(root, holdout_ids, heat_paths)
     prep = _prepare_fold_laps(root, holdout_ids, model, inferred_labels=inferred_labels)
     if prep is None:
         return pd.DataFrame()
@@ -865,12 +877,14 @@ def run_holdout_validation(
     min_bucket_size: int = 10,
     n_folds: int = 1,
     inputs: str = "calculator",
+    heat_paths: HeatPaths | None = None,
 ) -> int:
     """Train on all-minus-held-out, predict per-lap T_hot for held-out sessions.
 
     ``inputs``: see :func:`_evaluate_fold`. The default
     scores what the calculator would have told the driver; ``inputs="oracle"``
     scores the thermal model with the lap's real g² and clock.
+    ``heat_paths``: issue #380's heat paths fitted in every fold (default off).
 
     With ``n_folds == 1`` (default) this is a single deterministic holdout
     — the legacy behavior. With ``n_folds > 1`` it sweeps disjoint
@@ -887,6 +901,7 @@ def run_holdout_validation(
         min_bucket_size=min_bucket_size,
         n_folds=n_folds,
         inputs=inputs,
+        heat_paths=heat_paths,
     )
     if df is None:
         return 1

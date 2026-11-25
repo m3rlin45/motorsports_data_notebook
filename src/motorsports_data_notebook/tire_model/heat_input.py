@@ -335,6 +335,23 @@ class ShareParams:
     eps_brake: float
     driven: str = "rear"
     g_x_transfer: float = float("inf")  # longitudinal transfer scale (G); inf = no transfer
+    # Two further heat paths (issue #380), off at 0; see :data:`HEAT_PATH_PARAM_NAMES`.
+    r_carcass: float = 0.0  # carcass deflection: heat per unit of normal-load share, in G
+    c_rim: float = 0.0  # brake power into the rim, relative to a unit of tyre force
+    tau_rim_s: float = 0.0  # the rim's time constant (s); 0 = the disc heat reaches the gas at once
+
+    def axle_share(self, corner: str) -> float:
+        """The corner's axle's static share of the car's weight."""
+        return self.p_f if corner[0] == "f" else 1.0 - self.p_f
+
+    def load_share(self, lat_pos: np.ndarray, lat_neg: np.ndarray, corner: str) -> np.ndarray:
+        """``N_i / (m·g)``: the corner's normal load as a share of the car's
+        weight, its axle's static share times the same lateral load split
+        ``λ`` the lateral force follows (``lat_pos`` loads the left tyres)."""
+        g_c = self.g_transfer_front if corner[0] == "f" else self.g_transfer_rear
+        side = 1.0 if corner[1] == "l" else -1.0
+        lam = 0.5 * (1.0 + side * (np.tanh(lat_pos / g_c) - np.tanh(lat_neg / g_c)))
+        return np.asarray(self.axle_share(corner) * lam)
 
     def front_lateral_share(self, long_signed: np.ndarray) -> np.ndarray:
         """Front axle's share of the lateral force as a bounded function of the
@@ -376,17 +393,67 @@ def share_heat_rate(
     long_neg: np.ndarray,
     v: np.ndarray,
     corner: str,
+    *,
+    segment_starts: np.ndarray | None = None,
+    dt_s: float | None = 1.0,
 ) -> np.ndarray:
     """``q_i = V · |F_i| / (m·g)`` (G·m/s) from per-second non-negative parts of
     the accelerations (``lat_pos``: right turns, which load the LEFT tyres;
-    ``long_neg``: braking; ``long_pos``: acceleration)."""
+    ``long_neg``: braking; ``long_pos``: acceleration).
+
+    With the heat paths of issue #380 on (``p.r_carcass``, ``p.c_rim``)::
+
+        q_i = V · (|F_i| + r_carcass · N_i) + c_rim · y_i
+
+    ``N_i`` is :meth:`ShareParams.load_share`; ``y_i`` is the corner's brake
+    power ``V · F_x,i`` under braking (the brake bias splits it like the
+    braking force) through the rim's first-order lag ``tau_rim_s``, which
+    restarts from zero at each ``segment_starts`` row (a stint's first second;
+    the whole array is one segment when None). ``dt_s`` is the step of the
+    series in seconds (the fit's 1 Hz bins); None takes the rim at its
+    steady state, the brake power itself, which is what a lap-mean over an
+    uneven clock or a lap taken alone reads (``pace_sim``, ``lapsim``).
+    With both at 0 the arithmetic is the production input's to the last
+    bit."""
     left = corner[1] == "l"
     long_signed = long_pos - long_neg
     fy = lat_pos * p.lateral_share(lat_pos, corner, left, long_signed) + lat_neg * p.lateral_share(
         lat_neg, corner, not left, long_signed
     )
-    fx = long_neg * p.braking_share(long_neg, corner) + long_pos * p.drive_share(corner)
-    return np.asarray(v * np.sqrt(fy * fy + fx * fx))
+    fx_brake = long_neg * p.braking_share(long_neg, corner)
+    fx = fx_brake + long_pos * p.drive_share(corner)
+    q = np.asarray(v * np.sqrt(fy * fy + fx * fx))
+    if p.r_carcass:
+        q = q + p.r_carcass * v * p.load_share(lat_pos, lat_neg, corner)
+    if p.c_rim:
+        u = np.nan_to_num(np.asarray(v * fx_brake, dtype=float), nan=0.0)
+        if p.tau_rim_s > 0 and dt_s is not None:
+            u = first_order_lag(u, p.tau_rim_s, dt_s, segment_starts)
+        q = q + p.c_rim * u
+    return np.asarray(q)
+
+
+def first_order_lag(
+    u: np.ndarray, tau_s: float, dt_s: float, segment_starts: np.ndarray | None = None
+) -> np.ndarray:
+    """``y`` with ``τ·dy/dt = u − y`` on a clock of step ``dt_s``, the input held
+    over each step (exact), starting from ``y = 0`` at the array's start and
+    at every True of ``segment_starts``."""
+    from scipy.signal import lfilter  # type: ignore[import-untyped]
+
+    u = np.asarray(u, dtype=float)
+    d = float(np.exp(-dt_s / tau_s))
+    if segment_starts is None:
+        bounds = np.array([0, len(u)])
+    else:
+        starts = np.flatnonzero(np.asarray(segment_starts, dtype=bool))
+        if len(u) and (len(starts) == 0 or starts[0] != 0):
+            starts = np.r_[0, starts]
+        bounds = np.r_[starts, len(u)]
+    y = np.empty_like(u)
+    for lo, hi in zip(bounds[:-1], bounds[1:]):
+        y[lo:hi] = lfilter([1.0 - d], [1.0, -d], u[lo:hi])
+    return y
 
 
 SHARE_PARAM_NAMES = (
@@ -419,6 +486,46 @@ SHARE_INIT = {
     "eps_brake": 1.0,
     "g_x_transfer": 4.0,
 }
+
+# The heat paths of issue #380, fitted only when asked for (``HeatPaths``):
+# off at 0, so every existing fit keeps its parameters.
+HEAT_PATH_PARAM_NAMES = ("r_carcass", "c_rim", "tau_rim_s")
+HEAT_PATH_BOUNDS = {"r_carcass": (0.0, 3.0), "c_rim": (0.0, 10.0), "tau_rim_s": (30.0, 3000.0)}
+HEAT_PATH_INIT = {"r_carcass": 0.05, "c_rim": 0.3, "tau_rim_s": 300.0}
+
+
+@dataclass(frozen=True)
+class HeatPaths:
+    """Which of issue #380's heat paths the production fit adds (default off).
+
+    ``carcass``: deflection heat ``V · r · N_i``, one ``r`` per car.
+    ``brake_rim``: brake power into the rims, one ``c_rim`` and one rim time
+    constant ``tau_rim_s`` per car. Neither passed its gate (docs §2.6d)."""
+
+    carcass: bool = False
+    brake_rim: bool = False
+
+    @property
+    def free(self) -> tuple[str, ...]:
+        out: tuple[str, ...] = ()
+        if self.carcass:
+            out += ("r_carcass",)
+        if self.brake_rim:
+            out += ("c_rim", "tau_rim_s")
+        return out
+
+    @property
+    def any(self) -> bool:
+        return bool(self.free)
+
+
+NO_HEAT_PATHS = HeatPaths()
+
+
+def heat_path_values(fitted: Mapping[str, float]) -> dict[str, float]:
+    """The heat-path constants a model's ``fitted_by_car`` entry carries
+    (none unless the fit had them on), for :class:`ShareParams`."""
+    return {k: float(fitted[k]) for k in HEAT_PATH_PARAM_NAMES if k in fitted}
 
 
 # ------------------------------------------------------------ production car facts

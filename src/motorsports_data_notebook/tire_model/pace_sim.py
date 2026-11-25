@@ -176,7 +176,14 @@ def corner_heat_means(share: ShareParams, samples: LapSamples) -> np.ndarray:
             float(
                 np.sum(
                     share_heat_rate(
-                        share, lat_pos, lat_neg, long_pos, long_neg, samples.speed_ms, c
+                        share,
+                        lat_pos,
+                        lat_neg,
+                        long_pos,
+                        long_neg,
+                        samples.speed_ms,
+                        c,
+                        dt_s=None,  # raw samples: a rim term at its steady state
                     )
                     * samples.dt_s
                 )

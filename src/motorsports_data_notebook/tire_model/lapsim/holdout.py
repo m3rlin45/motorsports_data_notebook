@@ -43,7 +43,7 @@ import numpy as np
 import pandas as pd
 
 from ...tire_etl.kinematics import G_MS2
-from ..heat_input import CarFacts, ShareParams, share_heat_rate
+from ..heat_input import CarFacts, ShareParams, heat_path_values, share_heat_rate
 from . import bank as bankmod
 from . import geometry as geo
 from . import track as trk
@@ -94,6 +94,7 @@ def shares_of(model: dict) -> dict[str, ShareParams]:
             eps_drive=float(fitted.get("eps_drive", 1.0)),
             eps_brake=float(fitted.get("eps_brake", 1.0)),
             driven=cf.driven,
+            **heat_path_values(fitted),
         )
     for raw, fitted_as in model.get("car_aliases", {}).items():
         if fitted_as in out:
@@ -142,7 +143,10 @@ def tyre_heat(
     dt = ds / np.maximum(speed, 1.0)
     parts = (np.maximum(lat, 0), np.maximum(-lat, 0), np.maximum(long, 0), np.maximum(-long, 0))
     return np.array(
-        [float(np.sum(share_heat_rate(share, *parts, speed, c) * dt) / dt.sum()) for c in CORNERS]
+        [
+            float(np.sum(share_heat_rate(share, *parts, speed, c, dt_s=None) * dt) / dt.sum())
+            for c in CORNERS
+        ]
     )
 
 

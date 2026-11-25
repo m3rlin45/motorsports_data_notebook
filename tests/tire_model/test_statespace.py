@@ -12,6 +12,7 @@ import pytest
 from motorsports_data_notebook.tire_model import statespace as ss
 from motorsports_data_notebook.tire_model.cleaning import mask_stale_session_prefix
 from motorsports_data_notebook.tire_model.energy_balance import P_ATM_BAR, T_ZERO_C_TO_K
+from motorsports_data_notebook.tire_model.heat_input import ShareParams
 from tests._timeseries_fixture import write_session_timeseries
 
 CORNERS = ("fl", "fr", "rl", "rr")
@@ -257,3 +258,148 @@ def test_fit_trains_around_a_discarded_window(tmp_path: Path) -> None:
     comp = ss.lap_heat_components(stints)
     holed = comp[comp["session_id"] == "s_tsukuba"]["lap_num"].unique()
     assert 180 // LAP_S not in holed and 0 in holed
+
+
+# ---------------------------------------------------------------- heat paths (#380)
+
+
+def _share_stints(
+    true_share: ShareParams, n_stints: int = 4, n_s: int = 1500
+) -> list[ss.StintSeries]:
+    """Stints whose gas follows the share model's input under ``true_share``
+    (heat paths included), with speed, cornering and braking varying on
+    different periods so the paths are separable from the force heat."""
+    from motorsports_data_notebook.tire_model.heat_input import share_heat_rate
+
+    a, b = TRUE_K / TRUE_TAU, 1.0 / TRUE_TAU
+    out = []
+    for k in range(n_stints):
+        t = np.arange(n_s, dtype=float)
+        lat = (0.6 + 0.2 * k) * np.sin(2 * np.pi * t / 47.0)
+        lng = 0.5 * np.sin(2 * np.pi * t / (23.0 + 7 * k))
+        v = 20.0 + (12.0 + 4 * k) * np.cos(2 * np.pi * t / (91.0 + 13 * k)) ** 2
+        parts = {
+            "lat_pos": np.maximum(lat, 0.0),
+            "lat_neg": np.maximum(-lat, 0.0),
+            "long_pos": np.maximum(lng, 0.0),
+            "long_neg": np.maximum(-lng, 0.0),
+        }
+        q = np.column_stack(
+            [
+                share_heat_rate(
+                    true_share,
+                    parts["lat_pos"],
+                    parts["lat_neg"],
+                    parts["long_pos"],
+                    parts["long_neg"],
+                    v,
+                    c,
+                )
+                for c in CORNERS
+            ]
+        )
+        T = np.empty((n_s, 4))
+        T_prev = np.full(4, T_START)
+        for i in range(n_s):
+            teq = T_EFF + a * q[i] / b
+            T_prev = teq + (T_prev - teq) * np.exp(-b)
+            T[i] = T_prev
+        lap_ends = np.zeros(n_s, dtype=bool)
+        lap_ends[LAP_S - 1 :: LAP_S] = True
+        obs = np.vstack([np.full((1, 4), T_START), T[:-1]])  # T at the start of each second
+        out.append(
+            ss.StintSeries(
+                session_id=f"s{k}",
+                stint_id=1,
+                car="X",
+                track="t",
+                condition="dry",
+                t_eff_c=T_EFF,
+                g2=q.mean(axis=1),
+                v=v,
+                surf=np.full((n_s, 4), np.nan),
+                surf_zone_range=np.full((n_s, 4), np.nan),
+                obs=obs,
+                anchor_idx=np.zeros(4, dtype=int),
+                t_start=np.full(4, T_START),
+                p_start=np.full(4, P_START),
+                n_laps=int(lap_ends.sum()),
+                lap_ends=lap_ends,
+                **parts,
+            )
+        )
+    return out
+
+
+def _fixed_share(p: ShareParams) -> dict[str, dict[str, float]]:
+    return {
+        "X": {
+            "p_f": p.p_f,
+            "beta0": p.beta0,
+            "beta1": 0.0,
+            "g_x_transfer": float("inf"),
+            "eps_drive": 1.0,
+            "eps_brake": 1.0,
+            "g_transfer_front": p.g_transfer_front,
+        }
+    }
+
+
+@pytest.mark.parametrize(
+    "free,true",
+    [
+        (("r_carcass",), {"r_carcass": 0.15}),
+        (("c_rim", "tau_rim_s"), {"c_rim": 0.6, "tau_rim_s": 150.0}),
+    ],
+)
+def test_recovers_heat_path_constants(free: tuple[str, ...], true: dict[str, float]) -> None:
+    p = ShareParams(
+        p_f=0.53,
+        g_transfer_front=3.0,
+        g_transfer_rear=3.0,
+        beta0=float(np.log(0.65 / 0.35)),
+        beta1=0.0,
+        eps_drive=1.0,
+        eps_brake=1.0,
+        **true,
+    )
+    fit = ss.fit_cells(
+        _share_stints(p),
+        share_a=True,
+        share_b="axle",
+        share_model=True,
+        share_fixed=_fixed_share(p),
+        share_tie_gc=True,
+        free_paths=free,
+    )
+    for name, value in true.items():
+        assert getattr(fit.share["X"], name) == pytest.approx(value, rel=0.03)
+    a, b = fit.ab[("X", "fl", "dry")]
+    assert a / b == pytest.approx(TRUE_K, rel=0.03)
+    assert 1.0 / b == pytest.approx(TRUE_TAU, rel=0.03)
+
+
+def test_heat_paths_off_by_default_in_the_share_fit() -> None:
+    p = ShareParams(
+        p_f=0.53,
+        g_transfer_front=3.0,
+        g_transfer_rear=3.0,
+        beta0=float(np.log(0.65 / 0.35)),
+        beta1=0.0,
+        eps_drive=1.0,
+        eps_brake=1.0,
+    )
+    stints = _share_stints(p, n_stints=2, n_s=600)
+    d = ss._Design(
+        stints, [("X", "dry")], {}, share_model=True, share_fixed=_fixed_share(p), share_b="axle"
+    )
+    assert not any(n.split("|")[-1] in ("r_carcass", "c_rim", "tau_rim_s") for n in d.names)
+    fit = ss.fit_cells(
+        stints,
+        share_a=True,
+        share_b="axle",
+        share_model=True,
+        share_fixed=_fixed_share(p),
+        share_tie_gc=True,
+    )
+    assert (fit.share["X"].r_carcass, fit.share["X"].c_rim) == (0.0, 0.0)

@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from motorsports_data_notebook.tire_model.heat_input import HeatInput
+from motorsports_data_notebook.tire_model.heat_input import HeatInput, ShareParams
 
 
 def test_g2_form_is_the_legacy_proxy() -> None:
@@ -103,3 +103,105 @@ def test_load_transfer_conserves_weight_and_loads_the_outer_tyres() -> None:
     assert q2 == pytest.approx(q * r**2)
     assert corner_heat_rate(h, lat, lng, v, "X", "fl", None, 1.0) == pytest.approx(q)
     assert set(BUILTIN_GEOMETRY) >= {"FJ", "Inferno 86"}
+
+
+# ---------------------------------------------------------------- heat paths (#380)
+
+
+def _share(**kw: float) -> ShareParams:
+    base: dict[str, float] = dict(
+        p_f=0.53,
+        g_transfer_front=3.0,
+        g_transfer_rear=3.0,
+        beta0=float(np.log(0.65 / 0.35)),
+        beta1=0.0,
+        eps_drive=1.0,
+        eps_brake=1.0,
+    )
+    base.update(kw)
+    return ShareParams(**base)
+
+
+def _parts(n: int = 400, seed: int = 0) -> tuple[np.ndarray, ...]:
+    rng = np.random.default_rng(seed)
+    lat = rng.normal(0.0, 0.7, n)
+    lng = rng.normal(0.0, 0.5, n)
+    v = rng.uniform(10.0, 60.0, n)
+    return (
+        np.maximum(lat, 0.0),
+        np.maximum(-lat, 0.0),
+        np.maximum(lng, 0.0),
+        np.maximum(-lng, 0.0),
+        v,
+    )
+
+
+def test_heat_paths_off_leave_the_production_input_unchanged() -> None:
+    from motorsports_data_notebook.tire_model.heat_input import share_heat_rate
+
+    parts = _parts()
+    for c in ("fl", "fr", "rl", "rr"):
+        q0 = share_heat_rate(_share(), *parts, c)
+        q1 = share_heat_rate(_share(r_carcass=0.0, c_rim=0.0, tau_rim_s=300.0), *parts, c)
+        assert np.array_equal(q0, q1)
+
+
+def test_load_share_conserves_weight_and_loads_the_outer_tyres() -> None:
+    p = _share()
+    lat_pos, lat_neg = np.array([0.0, 1.2, 0.0]), np.array([0.0, 0.0, 1.2])
+    shares = {c: p.load_share(lat_pos, lat_neg, c) for c in ("fl", "fr", "rl", "rr")}
+    assert sum(shares.values()) == pytest.approx([1.0, 1.0, 1.0])
+    assert shares["fl"][0] == pytest.approx(0.53 / 2)
+    assert shares["rr"][0] == pytest.approx(0.47 / 2)
+    # a right turn (lat_pos) loads the left tyres, a left turn the right ones
+    assert shares["fl"][1] > shares["fr"][1]
+    assert shares["fr"][2] > shares["fl"][2]
+    assert shares["fl"][1] + shares["fr"][1] == pytest.approx(0.53)
+
+
+def test_carcass_path_adds_speed_times_load() -> None:
+    from motorsports_data_notebook.tire_model.heat_input import share_heat_rate
+
+    parts = _parts()
+    lat_pos, lat_neg, _, _, v = parts
+    p0, p1 = _share(), _share(r_carcass=0.2)
+    for c in ("fl", "rr"):
+        extra = share_heat_rate(p1, *parts, c) - share_heat_rate(p0, *parts, c)
+        assert extra == pytest.approx(0.2 * v * p1.load_share(lat_pos, lat_neg, c))
+
+
+def test_rim_path_is_the_brake_power_through_a_first_order_lag() -> None:
+    from motorsports_data_notebook.tire_model.heat_input import share_heat_rate
+
+    n = 900
+    one = np.ones(n)
+    zero = np.zeros(n)
+    v, brake = 40.0 * one, 0.8 * one  # steady braking at 40 m/s
+    tau = 120.0
+    p0, p1 = _share(), _share(c_rim=0.5, tau_rim_s=tau)
+    for c, bias in (("fl", 0.65), ("rl", 0.35)):
+        power = v * brake * bias / 2.0
+        steady = share_heat_rate(p1, zero, zero, zero, brake, v, c, dt_s=None)
+        assert steady - share_heat_rate(p0, zero, zero, zero, brake, v, c) == pytest.approx(
+            0.5 * power
+        )
+        lagged = share_heat_rate(p1, zero, zero, zero, brake, v, c)
+        rise = (lagged - share_heat_rate(p0, zero, zero, zero, brake, v, c)) / (0.5 * power)
+        t = np.arange(1, n + 1)
+        assert rise == pytest.approx(1.0 - np.exp(-t / tau))
+    # a new segment restarts the rim from cold
+    starts = np.zeros(n, dtype=bool)
+    starts[[0, 450]] = True
+    y = share_heat_rate(p1, zero, zero, zero, brake, v, "fl", segment_starts=starts)
+    y0 = share_heat_rate(p0, zero, zero, zero, brake, v, "fl")
+    assert (y - y0)[450] == pytest.approx((y - y0)[0])
+
+
+def test_first_order_lag_is_exact_for_a_held_input() -> None:
+    from motorsports_data_notebook.tire_model.heat_input import first_order_lag
+
+    u = np.r_[np.ones(50), np.zeros(50)]
+    y = first_order_lag(u, 20.0, 1.0)
+    assert y[49] == pytest.approx(1.0 - np.exp(-50 / 20.0))
+    assert y[99] == pytest.approx(y[49] * np.exp(-50 / 20.0))
+    assert first_order_lag(u, 20.0, 2.0)[49] == pytest.approx(1.0 - np.exp(-100 / 20.0))

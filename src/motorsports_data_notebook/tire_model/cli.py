@@ -220,6 +220,19 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     _add_inputs_args(p_holdout)
+    p_holdout.add_argument(
+        "--carcass",
+        action="store_true",
+        help="Issue #380, under test: fit carcass-deflection heat V*r*N_i (one r per car).",
+    )
+    p_holdout.add_argument(
+        "--brake-rim",
+        action="store_true",
+        help=(
+            "Issue #380, under test: fit brake power into the rims through a lag "
+            "(one gain and one rim time constant per car)."
+        ),
+    )
 
     args = parser.parse_args(argv)
 
@@ -452,14 +465,17 @@ def _cmd_pace_check(args: argparse.Namespace) -> int:
 
 
 def _cmd_holdout(args: argparse.Namespace) -> int:
+    from .heat_input import HeatPaths
     from .validate import run_holdout_validation
 
+    paths = HeatPaths(carcass=args.carcass, brake_rim=args.brake_rim)
     return run_holdout_validation(
         dataset_root=args.dataset_root,
         n_per_bucket=args.n_per_bucket,
         min_bucket_size=args.min_bucket_size,
         n_folds=args.n_folds,
         inputs=args.inputs,
+        heat_paths=paths if paths.any else None,
     )
 
 

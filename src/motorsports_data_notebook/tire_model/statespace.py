@@ -44,6 +44,10 @@ from .heat_input import (
     CAR_FACTS,
     DEFAULT_CAR_FACTS,
     DEFAULT_HEAT_INPUT,
+    HEAT_PATH_BOUNDS,
+    HEAT_PATH_INIT,
+    HEAT_PATH_PARAM_NAMES,
+    NO_HEAT_PATHS,
     PHYSICAL_HEAT_INPUT,
     SHARE_BOUNDS,
     SHARE_INIT,
@@ -51,6 +55,7 @@ from .heat_input import (
     CarFacts,
     CarGeometry,
     HeatInput,
+    HeatPaths,
     ShareParams,
     corner_heat_parts,
     corner_heat_rate,
@@ -630,8 +635,12 @@ class _Design:
         fixed_cool: dict[str, float] | None = None,
         fit_w_road: bool | str = False,
         fit_sun: bool | str = False,
+        free_paths: tuple[str, ...] = (),
     ):
         self.cells = cells
+        # heat-path parameters (#380) fitted per car with the shares; the
+        # others stay at ShareParams' defaults (off)
+        self.free_paths = tuple(free_paths)
         self.fixed_a = fixed_a  # ablation: the gain is not a parameter
         self.fixed_b = fixed_b  # ablation: the cooling rate is not a parameter
         # cooling / sink parameters held at given values (rain cells reuse dry)
@@ -678,8 +687,12 @@ class _Design:
         # (rows, corner, anchor rows): rows whose simulation starts from the
         # measured state at ``anchor rows`` instead of the pit-exit anchor.
         self.reanchors: list[tuple[np.ndarray, int, np.ndarray]] = []
+        stint_first: list[np.ndarray] = []  # True on each stint's first second
         for s in stints:
             n = len(s.g2)
+            first = np.zeros(n, dtype=bool)
+            first[:1] = True
+            stint_first.append(first)
             ss = np.zeros((n, 4), dtype=int)
             tt = np.zeros((n, 4))
             for j in range(4):
@@ -726,6 +739,7 @@ class _Design:
                 logp.append(stint_log_pressure_ratio(s, p_mode))
             n0 += n
         self.g2 = np.concatenate(g2)
+        self.stint_first = np.concatenate(stint_first) if stint_first else np.zeros(0, dtype=bool)
         self.q4 = np.concatenate(q4s)
         self.q4_drive = np.concatenate(q4d)
         self.q4_brake = np.concatenate(q4b)
@@ -774,6 +788,11 @@ class _Design:
                 if car not in self.fixed_share:
                     self.names += [
                         f"sh|{car}|{nme}" for nme in SHARE_PARAM_NAMES if self._share_free(car, nme)
+                    ]
+                    self.names += [
+                        f"sh|{car}|{nme}"
+                        for nme in HEAT_PATH_PARAM_NAMES
+                        if nme in self.free_paths and self._share_free(car, nme)
                     ]
 
     def _b_keys(self) -> tuple[str, ...]:
@@ -851,8 +870,9 @@ class _Design:
                 if car in out:
                     continue
                 vals: dict[str, float] = {}
-                for nme in SHARE_PARAM_NAMES:
-                    if self._share_free(car, nme):
+                for nme in SHARE_PARAM_NAMES + HEAT_PATH_PARAM_NAMES:
+                    path = nme in HEAT_PATH_PARAM_NAMES
+                    if self._share_free(car, nme) and (not path or nme in self.free_paths):
                         vals[nme] = float(x[self.names.index(f"sh|{car}|{nme}")])
                     elif nme in self.share_fixed.get(car, {}):
                         vals[nme] = float(self.share_fixed[car][nme])
@@ -882,6 +902,7 @@ class _Design:
                         self.acc["long_neg"][rows],
                         self.v[rows],
                         c,
+                        segment_starts=self.stint_first[rows],
                     )
             return q
         q = self.q4
@@ -1142,9 +1163,10 @@ class _Design:
                 hil.append(20.0)
             elif nme.startswith("sh|"):
                 key = nme.split("|")[2]
-                x0l.append(SHARE_INIT[key])
-                lol.append(SHARE_BOUNDS[key][0])
-                hil.append(SHARE_BOUNDS[key][1])
+                x0l.append({**SHARE_INIT, **HEAT_PATH_INIT}[key])
+                lo_k, hi_k = {**SHARE_BOUNDS, **HEAT_PATH_BOUNDS}[key]
+                lol.append(lo_k)
+                hil.append(hi_k)
         x0a, loa, hia = np.array(x0l), np.array(lol), np.array(hil)
         if warm:
             # Warm start (solver-space values by parameter name), clipped inside the bounds.
@@ -1315,6 +1337,7 @@ def fit_physical(
     laps_for_fit: pd.DataFrame,
     *,
     facts: dict[str, CarFacts] | None = None,
+    paths: HeatPaths = NO_HEAT_PATHS,
 ) -> PhysicalFit:
     """The production fit (schema v5): ``q_i = V·|F_i|`` with the corner's
     force from bounded shares of the car's accelerations (one lateral
@@ -1324,7 +1347,11 @@ def fit_physical(
     2026-10-09 showed fitted efficiencies absorb circuit-specific braking
     and predict worse on an unseen circuit), one gain per (car, condition),
     cooling per (car, axle, condition), the speed-pressure constant κ per
-    car, and **no track constants**."""
+    car, and **no track constants**.
+
+    ``paths`` adds issue #380's heat paths (carcass deflection, brake power
+    into the rims) as per-car constants of the shares; off by default (an
+    option that failed its gate, docs §2.6d, not production)."""
     from .warmup_table import FitParam
 
     facts_all = dict(CAR_FACTS)
@@ -1354,6 +1381,7 @@ def fit_physical(
         share_fixed=share_fixed,
         share_tie_gc=True,
         driven_by_car={car: f.driven for car, f in used.items()},
+        free_paths=paths.free,
     )
     scored: dict[tuple[str, str, str], int] = {}
     for s in stints:
@@ -1372,6 +1400,11 @@ def fit_physical(
         cf.kappa,
         {c: round(p.g_transfer_front, 2) for c, p in cf.share.items()},
     )
+    if paths.free:
+        logger.info(
+            "heat paths %s",
+            {c: {k: round(getattr(p, k), 4) for k in paths.free} for c, p in cf.share.items()},
+        )
     return PhysicalFit(
         tau=tau,
         k=k,
@@ -1489,6 +1522,7 @@ def fit_cells(
     fit_w_road: bool | str = False,
     fit_sun: bool | str = False,
     fixed_cool: dict[str, float] | None = None,
+    free_paths: tuple[str, ...] = (),
 ) -> CellFit:
     """Fit ``(a, b)`` per (car, corner, condition) on the given stints (dry
     first; rain cells after with ``b_rain ≥ b_dry`` and the per-car
@@ -1497,6 +1531,10 @@ def fit_cells(
     ``p_mode`` enables the pressure dependence of the heat input,
     ``q ∝ (P_ref / P)^n`` with one global exponent ``n`` fitted with the dry
     cells (or fixed at ``p_exp``) and held for the rain cells.
+
+    ``free_paths`` names the heat-path parameters of issue #380
+    (:data:`.heat_input.HEAT_PATH_PARAM_NAMES`) fitted per car with the
+    shares (share model only); the others stay off.
     """
     if p_mode is not None and p_mode not in P_MODES:
         raise ValueError(f"p_mode must be one of {P_MODES}; got {p_mode!r}")
@@ -1542,6 +1580,7 @@ def fit_cells(
         fit_w_road=fit_w_road,
         fit_sun=fit_sun,
         fixed_cool=fixed_cool,
+        free_paths=free_paths,
     )
     x0, lo, hi = d1.bounds({}, warm)
     res = least_squares(
