@@ -3258,7 +3258,7 @@ def check_pressure_holdout(
     if cache_dir is not None:
         out = Path(cache_dir) / "pressure_rows"
         out.mkdir(parents=True, exist_ok=True)
-        tag = ("__split" if split else "") + ("__fast" if fastest else "")
+        tag = ("__split" if split else "") + (f"__fast{round(100 * fastest)}" if fastest else "")
         rows.to_parquet(out / f"holdout_rows{tag}.parquet")
         notes.to_parquet(out / f"holdout_sessions{tag}.parquet")
     own = rows[rows["arm"] == "calculator"]
