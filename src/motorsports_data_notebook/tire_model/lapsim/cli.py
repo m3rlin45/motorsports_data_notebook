@@ -150,6 +150,19 @@ def main(argv: list[str] | None = None) -> int:
         help="Folds scored side by side (default: half the cores; a fold's fit and the "
         "solver use about two each, and a fold needs about 2.3 GB).",
     )
+    p_margins = sub.add_parser(
+        "pressure-pace-margins",
+        help="What `check-pressure-holdout --fastest F` would ask for at several fractions "
+        "(how far under the training pace the held-out sessions are); no fit is made.",
+    )
+    p_margins.add_argument("--fractions", type=float, nargs="+", default=[0.25, 0.5, 0.8, 0.9])
+    p_compare = sub.add_parser(
+        "compare-pressure-holdouts",
+        help="Two saved runs of check-pressure-holdout on the same folds, row for row "
+        "(workspace/lapsim/cache/pressure_rows/holdout_rows<tag>.parquet).",
+    )
+    p_compare.add_argument("--a", default="", help="The first run's tag (default: the plain run).")
+    p_compare.add_argument("--b", default="__split", help="The second run's tag.")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     root = args.dataset_root or default_dataset_root()
@@ -257,6 +270,21 @@ def main(argv: list[str] | None = None) -> int:
             workers=args.workers,
             split=tuple(args.split),
             fastest=args.fastest,
+        )
+    elif args.cmd == "pressure-pace-margins":
+        from . import pressure_gate
+
+        report = pressure_gate.check_pace_margins(root, tuple(args.fractions))
+    elif args.cmd == "compare-pressure-holdouts":
+        import pandas as pd
+
+        from . import pressure_gate
+
+        saved = workspace / "cache" / "pressure_rows"
+        report = pressure_gate.compare_holdouts(
+            pd.read_parquet(saved / f"holdout_rows{args.a}.parquet"),
+            pd.read_parquet(saved / f"holdout_rows{args.b}.parquet"),
+            (f"holdout_rows{args.a}", f"holdout_rows{args.b}"),
         )
     else:  # pragma: no cover - argparse rejects unknown commands
         parser.error(f"unknown command {args.cmd}")

@@ -6074,6 +6074,11 @@ removes.
 
 ## 3. Test methodology
 
+> How the current calculator and the simulation-based one are compared
+> (the standing holdout scored by both, the holdout by pace, the cars
+> fitted apart, gate F at a track the car has not run), with the command
+> for each: [`docs/calculator_evaluation.md`](calculator_evaluation.md).
+
 ### 3.1 Two distinct validations
 
 - **`tire-predict-validate`** — compares predicted cold pressures against

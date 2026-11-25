@@ -3053,6 +3053,177 @@ def mae_by_pace(
     return pd.DataFrame(out)
 
 
+def by_margin(rows: pd.DataFrame, arms: tuple[str, ...] = HOLDOUT_ARMS) -> pd.DataFrame:
+    """A holdout by pace by how far under the training pace a session's
+    lap time is (``rows`` with ``under_typed`` and ``under_lap``,
+    :func:`fastest_sessions`): for every session, those under every lap
+    left in training, and those more than 2 % and 3 % under the fastest
+    typed lap time left, each over every cell and per cell, the arms' MAE
+    and bias (bar) and each simulated arm's per-session difference from
+    the first arm."""
+    picks = (
+        ("every held-out session", rows["under_typed"].notna()),
+        ("under every lap left in training", rows["under_lap"] < 0),
+        ("more than 2 % under the training pace", rows["under_typed"] < -0.02),
+        ("more than 3 % under the training pace", rows["under_typed"] < -0.03),
+    )
+    out = []
+    for label, mask in picks:
+        own = rows[mask]
+        groups = [("every cell", own)]
+        if label == picks[0][0]:
+            groups += [(f"{c} at {t}", g) for (c, t), g in own.groupby(["raw_car", "track"])]
+        for cell, grp in groups:
+            table = mae_table(grp, [], arms)
+            if table.empty:
+                continue
+            top = table[table["tyre"] == "all"].iloc[0]
+            row: dict[str, Any] = {"sessions_of": label, "cell": cell}
+            row["sessions"] = int(_common(grp, arms)["session_id"].nunique())
+            row["rows"] = int(top["rows"])
+            row.update({f"{a}_mae": float(top[f"{a}_mae"]) for a in arms})
+            row.update({f"{a}_bias": float(top[f"{a}_bias"]) for a in arms})
+            for arm in arms[1:]:
+                pair = paired_by_session(grp, arm, base=arms[0])
+                row[f"{arm}_less_{arms[0]}"] = (
+                    f"{1000 * pair['mean']:+.1f} ± {1000 * pair['se']:.1f} "
+                    f"({pair['nearer']} of {pair['sessions']})"
+                )
+            out.append(row)
+    return pd.DataFrame(out)
+
+
+def pace_margins(prod: Production, fractions: tuple[float, ...]) -> pd.DataFrame:
+    """What a holdout by pace asks for at each fraction, before any fit:
+    per raw car and track the sessions held out and left, how far under
+    the fastest typed lap time left the held-out sessions are (median and
+    furthest, per cent) and how many are under every single lap left."""
+    out = []
+    for fraction in fractions:
+        _, m = fastest_sessions(prod, fraction)
+        if m.empty:
+            continue
+        groups = [("every cell", m)] + [
+            (f"{c} at {t}", g) for (c, t), g in m.groupby(["raw_car", "track"], sort=True)
+        ]
+        for cell, grp in groups:
+            out.append(
+                {
+                    "fastest": f"{fraction:.0%}",
+                    "cell": cell,
+                    "held_out": int(len(grp)),
+                    "left": int(grp["sessions_left"].iloc[0]) if cell != "every cell" else None,
+                    "under_typed_median_pct": float(-100.0 * grp["under_typed"].median()),
+                    "under_typed_furthest_pct": float(-100.0 * grp["under_typed"].min()),
+                    "under_every_lap_left": int((grp["under_lap"] < 0).sum()),
+                }
+            )
+    return pd.DataFrame(out)
+
+
+def check_pace_margins(
+    root: Path, fractions: tuple[float, ...] = (0.25, 0.5, 0.8, 0.9)
+) -> GateReport:
+    """`lapsim pressure-pace-margins`: :func:`pace_margins`, to choose a
+    fraction for `check-pressure-holdout --fastest` (no fit is made)."""
+    rep = GateReport("FHM", "what a holdout by pace asks for (`lapsim pressure-pace-margins`)")
+    table = pace_margins(load_production(root), fractions)
+    whole = table[table["cell"] == "every cell"] if len(table) else table
+    rep.items.append(
+        GateItem(
+            "How far under the training pace the held-out sessions are",
+            None,
+            "; ".join(
+                f"{r['fastest']}: {r['held_out']} sessions, {r['under_typed_median_pct']:.1f} % "
+                f"under in the median, {r['under_every_lap_left']} under every lap left"
+                for r in whole.to_dict("records")
+            ),
+            "reported",
+            "Per raw car and track with ten dry sessions in a fit, the fastest fraction of them "
+            "by the lap time a driver would type is held out. `under_typed_*`: how far under "
+            "the fastest typed lap time left in training the held-out sessions' own are; "
+            "`under_every_lap_left`: those under every single flying lap left at the cell.\n\n"
+            + md_table(table, floats="{:.2f}"),
+        )
+    )
+    return rep
+
+
+def compare_holdouts(a: pd.DataFrame, b: pd.DataFrame, names: tuple[str, str]) -> GateReport:
+    """Two runs of the holdout on the same folds, row for row
+    (`lapsim compare-pressure-holdouts`): what a change to the fit does
+    to each calculator (the cars fitted apart against pooled, say). Per
+    raw car, per raw car and condition and over every car, each arm's MAE
+    and bias in the two runs on the rows both have, and per raw car the
+    change session by session."""
+    rep = GateReport("FHC", f"two holdouts on the same rows: {names[0]} against {names[1]}")
+    keys = ["session_id", "lap_num", "corner", "fold", "arm"]
+    extra = [c for c in ("raw_car", "condition") if c in a.columns]
+    both = a[keys + extra + ["resid_bar"]].merge(
+        b[keys + ["resid_bar"]], on=keys, suffixes=("_a", "_b")
+    )
+    both = both.dropna(subset=["resid_bar_a", "resid_bar_b"])
+    rep.notes.append(
+        f"{len(both)} lap × tyre × arm rows in both runs, of {len(a)} and {len(b)}. `a` is "
+        f"{names[0]}, `b` is {names[1]}; MAE and bias in bar."
+    )
+    if both.empty:
+        rep.items.append(GateItem("Rows in both runs", False, "none", "at least one"))
+        return rep
+    both = both.assign(size_a=both["resid_bar_a"].abs(), size_b=both["resid_bar_b"].abs())
+
+    def _table(by: list[str]) -> pd.DataFrame:
+        got = both.groupby(by, sort=True).agg(
+            rows=("size_a", "size"),
+            a_mae=("size_a", "mean"),
+            b_mae=("size_b", "mean"),
+            a_bias=("resid_bar_a", "mean"),
+            b_bias=("resid_bar_b", "mean"),
+        )
+        got["b_less_a_mbar"] = 1000.0 * (got["b_mae"] - got["a_mae"])
+        return got.reset_index()
+
+    paired = []
+    for (car, arm), grp in both.groupby(["raw_car", "arm"], sort=True):
+        per = (grp["size_b"] - grp["size_a"]).groupby(grp["session_id"]).mean()
+        paired.append(
+            {
+                "raw_car": car,
+                "arm": arm,
+                "sessions": int(len(per)),
+                "b_less_a_mbar": float(1000.0 * per.mean()),
+                "se_mbar": (
+                    float(1000.0 * per.std(ddof=1) / np.sqrt(len(per)))
+                    if len(per) > 1
+                    else float("nan")
+                ),
+                "b_better_on": int((per < 0).sum()),
+            }
+        )
+    whole = _table(["arm"])
+    rep.items.append(
+        GateItem(
+            f"Each calculator in the two runs: {names[1]} less {names[0]}",
+            None,
+            "; ".join(
+                f"{r['arm']} {r['a_mae']:.4f} → {r['b_mae']:.4f} bar"
+                for r in whole.to_dict("records")
+            ),
+            "reported",
+            "**Every car.**\n\n"
+            + md_table(whole, floats="{:.4f}")
+            + "\n\n**Per raw car.**\n\n"
+            + md_table(_table(["raw_car", "arm"]), floats="{:.4f}")
+            + "\n\n**Per raw car and condition.**\n\n"
+            + md_table(_table(["raw_car", "condition", "arm"]), floats="{:.4f}")
+            + "\n\n**Session by session** (the mean over a raw car's sessions of the change in "
+            "its mean absolute residual, and its standard error).\n\n"
+            + md_table(pd.DataFrame(paired), floats="{:.2f}"),
+        )
+    )
+    return rep
+
+
 def paired_by_session(rows: pd.DataFrame, arm: str, base: str = "calculator") -> dict:
     """``arm``'s mean absolute residual less ``base``'s, per held-out
     session on the rows both have: its mean over sessions, the standard
@@ -3255,6 +3426,10 @@ def check_pressure_holdout(
     rows = rows.merge(lap_time, on=["session_id", "lap_num"], how="left").merge(
         notes[["session_id", "raw_car"]].drop_duplicates("session_id"), on="session_id", how="left"
     )
+    if len(margins):
+        rows = rows.merge(
+            margins[["session_id", "under_typed", "under_lap"]], on="session_id", how="left"
+        )
     if cache_dir is not None:
         out = Path(cache_dir) / "pressure_rows"
         out.mkdir(parents=True, exist_ok=True)
@@ -3406,6 +3581,28 @@ def check_pressure_holdout(
                 + md_table(dry, floats="{:.4f}"),
             )
         )
+    if "under_lap" in rows.columns:
+        under = by_margin(rows, arms)
+        if len(under):
+            rep.items.append(
+                GateItem(
+                    "By how far the lap time asked for is under the training pace",
+                    None,
+                    "; ".join(
+                        f"{r['sessions_of']} ({r['sessions']} sessions): "
+                        + ", ".join(f"{a} {r[f'{a}_mae']:.4f}" for a in arms[:3])
+                        for r in under[under["cell"] == "every cell"].to_dict("records")
+                    ),
+                    "reported: a lap time the models were not trained on at the track",
+                    "The same rows, kept where the held-out session's typed lap time is under "
+                    "every single lap left in training at its cell, and more than 2 % and 3 % "
+                    "under the fastest typed lap time left. MAE and bias in bar on the rows "
+                    "every arm has; `<arm>_less_calculator`: the arm's mean absolute residual "
+                    "less the current calculator's per session (mbar, mean ± its standard "
+                    "error), with the sessions on which the arm is nearer the TPMS.\n\n"
+                    + md_table(under, floats="{:.4f}"),
+                )
+            )
     if {"table", "direct"} <= set(arms):
         keys = ["session_id", "lap_num", "corner", "fold"]
         both = _common(rows, ("table", "direct"))
@@ -3446,7 +3643,11 @@ __all__ = [
     "cell_sessions",
     "cell_table",
     "check_pressure",
+    "by_margin",
+    "check_pace_margins",
     "check_pressure_holdout",
+    "compare_holdouts",
+    "pace_margins",
     "fastest_sessions",
     "split_pooling",
     "holdout_rows",

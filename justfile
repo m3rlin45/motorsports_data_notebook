@@ -124,6 +124,27 @@ tire-predict-holdout *ARGS:
 tire-lapsim *ARGS:
     uv run python -m motorsports_data_notebook.tire_model.lapsim.cli {{ARGS}}
 
+# Every comparison of the simulation-based calculator with the current one, in order
+# (docs/calculator_evaluation.md says what each measures). The first run fits about fifty
+# folds of the pressure model (an hour or so); later runs read them from
+# workspace/lapsim/cache/pressure_folds/. Reports: workspace/lapsim/reports/F*.md
+tire-sim-compare:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ulimit -v 10000000
+    run() { uv run python -m motorsports_data_notebook.tire_model.lapsim.cli "$@" > /dev/null; }
+    run check-pressure                                   # F: a track the car has not run, and beside
+    run check-pressure-holdout                           # FH: the standing holdout, MAE over folds
+    run check-pressure-holdout --split KK-F KK-F-V2      # FHS: the KK-F fitted apart
+    run compare-pressure-holdouts --a "" --b __split     # FHC: pooled against split, row for row
+    run pressure-pace-margins                            # FHM: what a holdout by pace asks for
+    for f in 0.25 0.5 0.8 0.9; do
+        run check-pressure-holdout --fastest "$f"        # FHP: a lap time under the training pace
+        cp workspace/lapsim/reports/FHP_pressure_holdout_pace.md \
+           "workspace/lapsim/reports/FHP_pressure_holdout_pace_$f.md"
+    done
+    ls -1 workspace/lapsim/reports/F*.md
+
 # Run the tire pressure calculator web app tests (parity vs. Python fixture)
 tire-web-test:
     node --test 'tire_pressure_calculator/web/tests/*.test.mjs'
