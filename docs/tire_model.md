@@ -5916,6 +5916,52 @@ the cell (by 0.0 to 1.0 %).
   sessions cannot make under the cap of a use of 1. The table answers it
   from its fastest knot, flagged; a direct simulation has no lap to give.
 
+*The same with most of the sessions held out* (the owner, 2026-11-25:
+"you can create the real test by splitting the data properly so that we
+hold out a lot of sessions"; `--fastest 0.5`, `0.8`, `0.9`). Holding out
+more of a cell's fastest dry sessions leaves only its slowest in every
+model, and the held-out lap times go well under them:
+
+| fastest held out | sessions | under the fastest typed lap time left (median; furthest) | under every lap left | left per cell at the track | current | pace table | direct |
+|---|---|---|---|---|---|---|---|
+| 25 % | 28 | 0.5 %; 2.4 % | 6 | 8 to 22 | 0.0387 | 0.0401 | 0.0403 |
+| 50 % | 53 | 0.8 %; 3.7 % | 16 | 5 to 15 | 0.0411 | 0.0423 | 0.0427 |
+| 80 % | 85 | 2.0 %; 5.8 % | 62 | 2 to 6 | 0.0459 | 0.0481 | 0.0485 |
+| 90 % | 95 | 2.8 %; 5.9 % | 80 | 1 to 3 | 0.0456 | 0.0472 | 0.0480 |
+
+(hot-pressure MAE in bar on the rows every arm has.) Per session, the
+simulation less the current calculator: +0.9 ± 0.5 and +1.1 ± 0.6 mbar
+(table, direct) at 50 %, +1.2 ± 0.7 and +1.4 ± 0.7 at 80 %, +1.0 ± 0.6
+and +1.6 ± 0.7 at 90 %.
+
+- **The simulation is not a lot better at a lap time nothing was trained
+  on; it is about 1 to 1.5 mbar behind at every split, as in the standing
+  folds.** On the sessions under every single lap left in training: 61
+  sessions at 80 % (0.0441 against 0.0466 and 0.0472) and 79 at 90 %
+  (0.0447 against 0.0465 and 0.0475).
+- **Where the extrapolation is longest it is level.** On the sessions
+  more than 3 % under their training pace: 13 at the 80 % split, 0.0559
+  against 0.0551 and 0.0552 (−0.2 ± 2.2 and −1.4 ± 2.5 mbar a session);
+  39 at the 90 % split, 0.0463 against 0.0461 and 0.0473 (−0.7 ± 1.1 and
+  0.0 ± 1.3).
+- **It differs by cell, the same way at every split.** At 80 %: the
+  Inferno 86 at Fuji is nearer with the simulation (0.0648 against 0.0611
+  and 0.0606; −2.5 ± 1.6 and −4.0 ± 1.7 mbar, nearer on 14 of 20
+  sessions); at Sodegaura further (0.0546 against 0.0597 and 0.0604;
+  +3.7 ± 1.7); the FJ at Tsukuba further (0.0370 against 0.0399 and
+  0.0406; +2.3 ± 0.8); the FJ at Suzuka level, and at 90 %, with one
+  session left there, the current calculator is off by +22 mbar in the
+  mean where the simulation is at −4 (0.0399 against 0.0352).
+- **The direct lap runs out before the table does.** One of the Inferno
+  86's Fuji sessions has no directly driven lap at every split (the car
+  fitted from the slow sessions cannot make the lap time under the cap);
+  the table answers it flagged, and flags 9 of 85 and 17 of 95 as outside
+  its support.
+- What this test is: a pace not seen *at that track*. The car's sessions
+  at its other tracks stay in every model, and at 80 and 90 % a cell's
+  training is a handful of its slowest dry sessions, which may be slow
+  for reasons that are not pace.
+
 **Batches, and speed.** The solver works on a batch of laps of one
 track, each with its own car and its own u (`solver.solve_laps`,
 `solver.drive_laps`; one lap is a batch of one), in two forms that give
