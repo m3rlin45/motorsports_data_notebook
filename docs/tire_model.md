@@ -292,7 +292,13 @@ notes-validation loaders, `statespace._session_timeseries`):
 3. **Lap usability** (`tire_usable` / `exclude_reason`): out-laps need
    60 s of rolling time, in-laps are excluded, laps shorter than 30 s or
    slower than 1.4× the stint's best are dropped, and a lap needs a TPMS
-   pressure range above 0.003 bar on at least one corner.
+   pressure range above 0.003 bar on at least one corner. The stint's best
+   is of its flying laps only, out-laps and in-laps left out (#391,
+   2026-11-26). A short partial in-lap had been the "best" of 15 stints in
+   the dataset. In the TPMS sessions it dropped all 13 flying laps of the
+   Inferno 86's a0837 (Sodegaura, 2025-07-24: a 54.6 s in-lap against 79 s
+   laps), and on 2026-11-25 all four of the KK-F-V2's a0436 (72.4 s against
+   113.7 s).
 4. **A corner losing gas** (`cleaning.drifting_tpms`, #373, 2026-11-26;
    §1.0a″): a tyre whose amount of gas falls against its siblings' through
    a session (a leak, or a transducer that drifts) has its TPMS columns
