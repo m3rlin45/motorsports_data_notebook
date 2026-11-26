@@ -1742,6 +1742,19 @@ itself. Weather-driven tire choices use
 declarative ``condition_seeds`` in the sidecar (KK-SII: all-dry session ⇒
 DRY tires, all-wet ⇒ WET; damp/mixed left to the classifier — the EM
 independently recovers the known 2026-04-04 rain day as WET at ≥0.998).
+A seed belongs to the tyres a car runs, so the sidecar lists it per raw
+car and it is matched on the car the session names (``raw_car``), not on
+the fit's pooled car (#393, 2026-11-26): the KK-SII, the KK-F and the
+KK-F-V2 run the same FJ slick and rain tyre and carry the same seed. Until
+then the KK-SII's seed reached the KK-F and the KK-F-V2 only through
+``CAR_FIT_ALIASES``, which the sidecar's comment denied ("the KK-F is
+deliberately not seeded"), ``infer-compounds`` never applied (its seeds
+were not aliased, so no FJ session was seeded there) and ``--split KK-F
+KK-F-V2`` silently dropped for the split cars (that experiment's KK-F ran
+with no DRY/WET seed). Every one of the 20 seeded KK-F-family sessions (29
+with 2026-11-25's) has the seed its pace supports (dry at 0.98–1.03 × the
+car's dry pace, wet at 1.09–1.12); the session the comment worried about (a0381, slicks on a track the wetness model calls wet) carries a
+notes label, and a written label beats a seed.
 Soft assignments are training-only; held-out evaluation uses human/seed
 labels exclusively. ``just tire-model infer-compounds`` audits every
 latent assignment for human review.

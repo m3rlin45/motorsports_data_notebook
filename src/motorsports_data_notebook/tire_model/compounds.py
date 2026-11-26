@@ -73,10 +73,12 @@ def normalize_compound(raw: object) -> str | None:
 def load_condition_seeds(dataset_root: Path) -> dict[str, dict[str, str]]:
     """The sidecar's declarative ``condition_seeds`` block.
 
-    Maps ``car -> {track_condition -> compound}`` for cars whose tire
-    choice follows the weather (e.g. the KK-SII's DRY/WET tires): an
-    all-dry session seeds as the dry tire, an all-wet one as the wet
-    tire, and mixed/damp sessions are left for signature inference.
+    Maps ``raw car -> {track_condition -> compound}`` for cars whose tire
+    choice follows the weather (the FJ cars' DRY/WET tires): an all-dry
+    session seeds as the dry tire, an all-wet one as the wet tire, and
+    mixed/damp sessions are left for signature inference. Keyed by the car
+    the session names, not the pooled fit car
+    (:func:`.compound_infer.apply_condition_seeds`).
     """
     import yaml
 
