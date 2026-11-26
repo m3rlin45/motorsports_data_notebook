@@ -10,9 +10,13 @@ here, at training time, so a cleaning rule can change without re-extracting.
 
 Three steps, in the order the model applies them:
 
-1. :func:`mask_stale_session_prefix` — a TPMS module that is asleep at
-   roll-out reports its stored value until it wakes; that stale prefix is
-   masked per corner.
+1. :func:`mask_stale_tpms` — a TPMS module that is asleep at roll-out
+   reports its stored value until it wakes; that stale prefix is masked per
+   corner (:func:`mask_stale_session_prefix`), and so is the stale packet a
+   stint starts with after a stop in the session
+   (:func:`mask_stale_stint_starts`). Both consumers of the streams read
+   them through it: the lap aggregates below and the per-second fit
+   (``statespace._session_timeseries``).
 2. :func:`recompute_tpms_lap_aggregates` — the per-lap TPMS summary columns
    (start / end / min / max / mean, rise rate, first-valid time) are rebuilt
    from the masked timeseries, so an out-lap's ``tpms_*_start`` — the stint
@@ -46,6 +50,17 @@ logger = logging.getLogger(__name__)
 CORNERS = ("fl", "fr", "rl", "rr")
 TPMS_STATS = ("start", "end", "min", "max", "mean")
 TPMS_TS_COLUMNS = [f"tpms_press_{c}_bar" for c in CORNERS] + [f"tpms_temp_{c}_c" for c in CORNERS]
+
+#: One count of the TPMS pressure reading: 31.3 ± 0.2 mbar, read from the
+#: streams of every TPMS kit in the dataset (logged to 0.01 bar, so a count
+#: shows as a step of 0.03 or 0.04 bar; #371).
+TPMS_PRESSURE_STEP_BAR = 0.0313
+#: :func:`mask_stale_stint_starts`: a stint's first pressure change of this
+#: many counts or more ...
+STALE_RESTART_MIN_STEPS = 3
+#: ... within this many seconds of the stint's first reading shows that the
+#: readings before it were a held packet.
+STALE_RESTART_WINDOW_S = 60.0
 
 
 def tpms_lap_columns() -> list[str]:
@@ -140,6 +155,86 @@ def mask_stale_session_prefix(ts: pa.Table) -> pa.Table:
     return new_table
 
 
+def mask_stale_stint_starts(
+    ts: pa.Table,
+    *,
+    min_steps: int = STALE_RESTART_MIN_STEPS,
+    window_s: float = STALE_RESTART_WINDOW_S,
+) -> pa.Table:
+    """Mask the held packet a stint starts with after a stop (#371, rule A).
+
+    The modules go silent while the car stands and wake once it rolls at
+    20–30 km/h; until then the logger keeps re-sending the last packet it
+    had, the hot pressure of the pit entry. :func:`mask_stale_session_prefix`
+    catches that once, at the start of the recording; a stop in the middle
+    of a session starts a new stint on such a packet.
+
+    Per stint and corner, on the stint's first lap (the lowest ``lap_num``
+    with its ``stint_id``): take the corner's finite pressure samples in
+    time order and find the first one that differs from the first. If it
+    differs by ``min_steps`` counts of :data:`TPMS_PRESSURE_STEP_BAR` or more
+    (more than half a count short of it, so the threshold sits between two
+    quantised step sizes) within ``window_s`` of the first sample, every
+    earlier sample of that lap is masked on both of the corner's streams
+    (the stint's anchor pairs them). Three counts need a true change of more than
+    two, about 65 mbar or 8 K of gas, which the tyre cannot make in a minute;
+    two counts a hot restart can. Pressure is unmasked at its own first
+    change, not at the temperature's, so the stint's anchor is the first
+    fresh pressure, read at its own time.
+
+    ``ts`` needs ``stint_id``, ``lap_num`` and ``t_session_s`` beside the
+    TPMS columns; it is returned with the same columns.
+    """
+    missing = [c for c in ("stint_id", "lap_num", "t_session_s") if c not in ts.schema.names]
+    if missing:
+        raise ValueError(f"the TPMS table lacks {missing}")
+    stint = ts.column("stint_id").to_numpy(zero_copy_only=False)
+    lap = ts.column("lap_num").to_numpy(zero_copy_only=False)
+    t = ts.column("t_session_s").to_numpy(zero_copy_only=False).astype(np.float64)
+    keyed = pd.DataFrame({"stint": stint, "lap": lap}).dropna()
+    first_laps = keyed.groupby("stint")["lap"].min().to_numpy()
+    in_lap = {ln: lap == ln for ln in first_laps}
+    threshold = (min_steps - 0.5) * TPMS_PRESSURE_STEP_BAR
+    new_table = ts
+    for c in CORNERS:
+        p_name, t_name = f"tpms_press_{c}_bar", f"tpms_temp_{c}_c"
+        if p_name not in new_table.schema.names:
+            continue
+        p = new_table.column(p_name).to_numpy(zero_copy_only=False).astype(np.float64)
+        stale = np.zeros(p.size, dtype=bool)
+        for ln, rows in in_lap.items():
+            idx = np.flatnonzero(rows & np.isfinite(p))
+            if idx.size < 2:
+                continue
+            idx = idx[np.argsort(t[idx], kind="stable")]
+            changed = np.flatnonzero(p[idx] != p[idx[0]])
+            if not changed.size:
+                continue
+            first, fresh = idx[0], idx[changed[0]]
+            if abs(p[fresh] - p[first]) >= threshold and t[fresh] - t[first] <= window_s:
+                stale |= rows & (t < t[fresh])
+        if not stale.any():
+            continue
+        for n in (p_name, t_name):
+            if n not in new_table.schema.names:
+                continue
+            idx_col = new_table.schema.get_field_index(n)
+            field = new_table.schema.field(idx_col)
+            arr = new_table.column(idx_col).to_numpy(zero_copy_only=False).astype(np.float64)
+            arr[stale] = np.nan
+            new_col = pa.array(arr.astype(field.type.to_pandas_dtype()), type=field.type)
+            new_table = new_table.set_column(idx_col, n, new_col)
+    return new_table
+
+
+def mask_stale_tpms(ts: pa.Table) -> pa.Table:
+    """Every stale-TPMS rule, in order: the recording's wake-up prefix
+    (:func:`mask_stale_session_prefix`), then the held packet at the start
+    of each stint (:func:`mask_stale_stint_starts`). The one entry point for
+    every consumer of the masked streams; ``ts`` as the latter needs it."""
+    return mask_stale_stint_starts(mask_stale_session_prefix(ts))
+
+
 # --------------------------------------------- 2. per-lap TPMS aggregates
 
 
@@ -159,7 +254,7 @@ def load_tpms_timeseries(root: Path, session_id: str) -> pa.Table | None:
     if not tpms or "lap_num" not in ts.schema.names:
         return None
     cols = ["lap_num"] + (["t_lap_s"] if "t_lap_s" in ts.schema.names else []) + tpms
-    return mask_stale_session_prefix(ts.select(cols))
+    return mask_stale_tpms(ts.select(["stint_id", "t_session_s"] + cols)).select(cols)
 
 
 def recompute_tpms_lap_aggregates(laps: pd.DataFrame, ts: pa.Table) -> pd.DataFrame:

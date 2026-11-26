@@ -275,10 +275,18 @@ samples and laps the model learns from lives in
 model loads the data (`warmup_table._load_filtered_laps`, the holdout and
 notes-validation loaders, `statespace._session_timeseries`):
 
-1. **Stale TPMS prefix.** A module asleep at roll-out repeats its stored
-   value bit-exactly until it wakes; the first change on either of a
-   corner's two streams proves the module awake, and everything before it
-   is masked on both streams.
+1. **Stale TPMS readings** (`cleaning.mask_stale_tpms`, the one entry
+   point for both consumers of the streams: the lap aggregates and the
+   per-second fit's loader; §1.0a′).
+   - *At the start of the recording* (`mask_stale_session_prefix`). A
+     module asleep at roll-out repeats its stored value bit-exactly until
+     it wakes; the first change on either of a corner's two streams proves
+     the module awake, and everything before it is masked on both streams.
+   - *At the start of every stint* (`mask_stale_stint_starts`, #371,
+     2026-11-26). On the stint's first lap, a first pressure change of 3
+     counts or more within 60 s of the first sample masks every earlier
+     sample of the lap on both streams; the pressure is unmasked at its own
+     first change, not at the temperature's.
 2. **Per-lap TPMS summaries rebuilt** from the masked streams, so an
    out-lap's `tpms_*_start` — the stint anchor — is the first live reading.
 3. **Lap usability** (`tire_usable` / `exclude_reason`): out-laps need
@@ -292,6 +300,165 @@ channels, storage layout) changes. `just tire-clean-laps` materialises the
 cleaned table for DuckDB queries. Before schema 4 the extractor applied
 steps 1 and 3 and committed the result, which is why the 2026-10 anchor
 fix first looked like a dataset rebuild.
+
+### 1.0a′ The stale packet at a stint's start (#371, 2026-11-26)
+
+**The mechanism** (measured on the raw streams of the 128 held-out sessions
+by the 2026-11 committee). The sensors go silent at rest: during 1–5 min
+stops a pressure change is logged in 0–12 % of stops, though the tyres are
+cooling. They wake once the car passes about 20–30 km/h; the impossible
+jumps (85 mbar or more within seconds) arrive a median 7 s and 36 m after
+roll-out, and at the start of a recording a corner's first change comes a
+median 9 s and a p99 of 131 s after the car first passes 20 km/h. Until then
+the logger keeps the last reading it had: every value change falls on a
+multiple of 0.8 s, a 1.25 Hz CAN value sampled and held (the KK-SII's kit
+is named as the Trailbrake TPMS in `builtin_profiles.yaml`; the Inferno
+86's is not named but behaves the same). After a stop in the middle of a
+session the next stint therefore starts on the hot pressure of the pit
+entry (in 8 of 39 held-out cases exactly the previous stint's last
+reading), and the session-start rule, which ran once per recording, took it
+as the stint's anchor and over-predicted the stint from lap 1. It also
+unmasked both streams at the first change of either, and the two do not
+always refresh together: on the Inferno 86 about one pressure reveal in six
+came after the temperature had refreshed, a median 27 s later (a1603 FR held
+1.41 bar until 43.6 s while its temperature updated at 22 s). **One count of
+the pressure reading is 31.3 ± 0.2 mbar**, logged to 0.01 bar, so it shows
+as a step of 0.03 or 0.04 bar, on every kit in the dataset (not the 32.6
+mbar of some of the committee's notes).
+
+**The rule** (rule A, pre-registered by the committee; the owner's choice,
+2026-11-26: "3 step rule is ok, go with that"). After the session-start
+rule, per stint and corner, on the stint's first lap (the lowest `lap_num`
+with its `stint_id`): take the corner's finite pressure samples in time
+order and the first that differs from the first. If it differs by 3 counts
+or more (`TPMS_PRESSURE_STEP_BAR` × 2.5 = 78 mbar, between the logged
+two-count steps of 0.06–0.07 bar and the three-count ones of 0.09–0.10)
+within 60 s of the first sample, every earlier sample of the lap is masked
+on both streams, so the pressure is unmasked at its own first change.
+Three counts need a true change of more than two, about 65 mbar or 8 K of
+gas within a minute, which the single-node model does not allow (τ 250–640
+s); two counts a hot restart can make. This implementation masks the same
+57 stint × tyres in 30 sessions as the committee's patch (193 at 2 counts,
+37 at 4), 47 of them on the Inferno 86: 22 start a stint after a stop, and
+35 are on a session's first lap, which the session-start rule had let
+through (16 of them because the temperature refreshed first).
+
+**The first-lap anchor's time** (`warmup_table._compute_stint_anchor`,
+changed with the mask). When a stint has no out-lap reading, the anchor
+falls back to the first lap with a reading, and its start reading was
+stamped at that lap's start; a reading first valid mid-lap had its value at
+the wrong time, by up to a lap. It is now stamped as a pit exit's is: at its
+own first-valid time on the rolling clock, less any standstill, from the
+lap's start. A correctness fix, kept on principle (its measured effect is
+below).
+
+**Measured in the tyres' frame** (2026-11-27). On #376 and its refit, the
+standing holdout's 15 folds were refitted with the same fold ids, #388's
+count of flying laps, and the same 5,751 rows. MAE in mbar, #376 → rule A;
+the SE is session-clustered / date-clustered:
+- current calculator 43.60 → 37.53 (paired −6.07, SE 2.15 / 1.71; per
+  session −4.80 ± 1.31 by date; nearer on 87 of 128 sessions);
+- pace table 43.76 → 37.57 (−6.18 ± 2.13 / 1.68);
+- direct 43.84 → 37.68 (−6.16).
+
+By car, current calculator:
+- FJ 35.18 → 31.19, Inferno 86 54.99 → 46.11;
+- raw cars: KK-SII 31.34 → 29.68, KK-F 42.57 → 34.08.
+
+By condition:
+- dry 43.19 → 36.67 and damp 75.1 → 44.4;
+- wet 37.73 → 40.33 loses (+2.60 ± 1.20 / 1.22), as it did in the sensor's
+  frame.
+
+The table's gap to the current calculator goes from +0.16 to +0.04. The
+numbers below are the sensor frame's, measured before #376 and before #388.
+
+**Measured** (the standing holdout, `check-pressure-holdout`, every fold
+refitted; 15 folds, 128 sessions, the same fold ids in every run; MAE of the
+hot pressure in mbar; the change against before #371 is the paired per-row
+change with a date-clustered SE and a session-bootstrap 95 % interval; MDE
+≈ 2.8 × 0.06 × the rms change of the predictions):
+
+| | rows | current | pace table | direct | FJ (current) | Inferno 86 (current) |
+|---|---|---|---|---|---|---|
+| before #371 | 5,751 | 43.71 | 44.64 | 44.74 | 35.29 | 55.11 |
+| rule A, anchor stamp as before | 5,751 | 37.47 | 38.38 | 38.50 | 31.20 | 45.96 |
+| **rule A with the stamp fix (as committed)** | 5,751 | **37.48** | **38.40** | **38.52** | 31.18 | 46.00 |
+| either-stream rule with the stamp fix | 5,751 | 40.66 | 41.51 | 41.60 | 31.14 | 53.53 |
+| rule C with the stamp fix | 5,702 | 37.86 | 38.48 | 38.58 | 31.52 | 46.32 |
+
+- Before → rule A as committed, on the same 5,751 rows: current −6.23 mbar
+  (SE 1.73, bootstrap −10.45 to −2.34, MDE 6.2; better on 78 of 128
+  sessions), pace table −6.24 (SE 1.73). Bias +7.0 → +3.8 mbar. By raw car:
+  KK-SII 31.76 → 30.03, KK-F 42.06 → 33.38, Inferno 86 55.11 → 46.00. Damp
+  rows 73.2 → 40.4, dry 43.4 → 36.8; wet rows lose, 37.7 → 40.1.
+  `tire-predict-holdout --n-folds 20` gives the calculator arm's rows and
+  per-corner MAE and bias exactly (checked on the either-stream code below;
+  the scoring is the same code).
+- The stamp fix alone: +0.00 ± 0.02 mbar (pace table +0.02 ± 0.03),
+  predictions moved by 0.6 mbar rms: under rule A few stints' first live
+  reading falls past the out-lap.
+- The simulation-based calculator's gap to the current one: +0.93 before,
+  +0.93 after.
+- Within-stint slope of a tyre's hot pressure (laps ≥ 3) on its pit-exit
+  deviation from its siblings: 0.32 before, 0.42 after (112 stints; the
+  committee had predicted 0.7 or more).
+- The fitted constants, fold by fold (median over the 15 folds, before →
+  after): the FJ's speed-pressure κ 5.7e-7 → 5.0e-7, the Inferno 86's
+  1.03e-5 → 9.0e-6; g_transfer 2.49 → 2.55 (FJ) and 3.89 → 4.92 (Inferno 86).
+- Most of the gain exists because the holdout takes the TPMS's first
+  reading as the pressure the driver typed; in use the driver sets the
+  pressure with a gauge. The part from the refitted constants, which
+  carries to real use, was −0.95 (not significant) of the −6.0 on the
+  committee's rows, which also found that the refit takes out most of a
+  bias: the constants had been fitted on stale anchors (the session's own
+  heat under-predicted by 7.7 mbar on masked anchors, 2.8 after the
+  refit).
+
+**Two other rules measured beside it**, built on the owner's account of the
+sensors (a sensor reports the last reading it had until it wakes; until a
+value has changed once it is stale, likely too high):
+- *Rule C*: per stint and corner, both streams masked before the later of
+  the two streams' first changes, of any size, with no timer; a stream that
+  never changes in the stint drops the stint × tyre. 38.25 with the old
+  anchor stamp (+0.68 ± 1.09 against rule A on the rows both score, all of
+  it in the 69 held-out stint × tyres whose out-lap it masked entirely),
+  37.86 with the stamp fix. It drops 188 stint × tyres and holds an anchor
+  for a temperature that ticks over by a single count long after the
+  pressure (198 of 748 stint × tyres, a median 68 s, a 1 °C step in 193 of
+  them).
+- *The either-stream rule* ("if either changes, it is live"): per stint and
+  corner, both streams masked before the first change of either; 40.66 with
+  the stamp fix (−3.05 against before, SE 1.28; +3.19 against rule A, SE
+  1.49). Its known exception is a pressure still held when the temperature
+  refreshes, which it keeps: 22 stint × tyres in the dataset have a first
+  pressure change of 3 counts or more after the temperature's (21 on the
+  Inferno 86), 15 of them held out (14 on the Inferno 86, 226 rows), and
+  their rows score 123.0 mbar under it against 62.0 under rule A (120.4
+  before), 2.4 of its 3.2 mbar deficit to rule A. Under it, and under it
+  only, the FJ's speed-pressure κ collapses in every fold (a median 5.7e-7
+  before, 9e-10 under it; rule A's and rule C's full-data fits keep 5.4e-7),
+  which is not diagnosed.
+The owner chose rule A on these numbers.
+
+**a4512 RR** (Sodegaura, wet, 2026-02-07; not among the held-out sessions),
+the committee's one misfire, which rule A keeps and the owner accepted. The
+pressure holds 1.88 bar from the first sample, the temperature refreshes at
+8.3 s, the pressure reads 1.79 at 19.5 s (three counts) and climbs back to
+1.82–1.85. Rule A anchors the stint at 1.79 bar at 19.5 s. Scored out of
+sample (a fold holding out a4512 alone, refitted), RR's MAE is 15.8 mbar
+before #371 (anchored at 1.88 bar from 8.3 s), 91.8 under rule A as
+committed (91.7 with the old stamp), 73.3 / 71.8 under rule C without and
+with the stamp fix, and 15.5 under the either-stream rule. The masking moves
+the anchor's time with its value, so it is not the committee's value-only
+repair (16 → 86 there), but the 1.88 bar reading was the better anchor.
+
+**What it moves.** The frozen streams (a corner flat for a whole session,
+among them 15 sessions flat on all four corners: the KK-SII on sensorless
+wheels on 2026-08-09, a0216/a0219/a0222; eight KK-SII sessions at Suzuka on
+2026-09-21 and three on 2026-10-03/04; the Inferno 86's 2025-07-22 test)
+were masked whole by the session-start rule before #371 and still are: they
+are out of training and scoring, and the blacklist is not needed for them.
 
 ### 1.0b Layouts by measured lap length, one row per recording (schema 5, 2026-10-30)
 
@@ -900,13 +1067,14 @@ and the gas agree, and that reading together with the set pressure defines
 the anchor state. The predicted "hot temperature" the calculators display
 is therefore a gas temperature and reads lower than the dash early in a
 stint; the hot *pressure* is the number to trust. Pressure is reported in
-0.03 bar steps (≈ 3.6 K of gas temperature at 2.5 bar absolute), so the
-per-lap target is noisier than the TPMS temperature; the stale-prefix
-mask and per-corner wake rule keep the anchor clean: a module that fell
-asleep hot on an earlier run reports that stored value until it wakes,
-and taking it as the anchor put the Sodegaura 2026-10-10 rear axle
-0.4–0.5 bar high, +43 °C on every lap of that stint. With native-rate
-storage the first unmasked sample is the module's first live packet.
+steps of 31.3 mbar, logged as 0.03 or 0.04 bar (≈ 3.6 K of gas temperature
+at 2.5 bar absolute), so the per-lap target is noisier than the TPMS
+temperature; the stale-TPMS masks (§1.0a, §1.0a′) keep the anchor clean: a
+module that fell asleep hot on an earlier run reports that stored value
+until it wakes, and taking it as the anchor put the Sodegaura 2026-10-10
+rear axle 0.4–0.5 bar high, +43 °C on every lap of that stint. With
+native-rate storage the first unmasked sample is the module's first live
+packet.
 Since dataset schema 4 all of this runs at training time
 (`tire_model/cleaning.py`, §1.0a), not in the extractor.
 
