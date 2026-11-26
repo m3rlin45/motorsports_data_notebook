@@ -36,6 +36,7 @@ from ..tire_etl.paths import (
 from . import wetness as _wetness
 from .cleaning import clean_laps
 from .energy_balance import P_ATM_BAR, T_ZERO_C_TO_K, t_effective_c, t_road_proxy_c
+from .predict import RAW_CAR_TABLES
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,26 @@ SCHEMA_VERSION = 5
 # tire_model.json as ``car_aliases`` so predictors keep accepting the raw car
 # names.
 CAR_FIT_ALIASES = {"KK-F": "FJ", "KK-F-V2": "FJ", "KK-SII": "FJ"}
+
+# The logged entries (typical heat per tyre and its pace curve, typical lap
+# time, typical out-lap) are also written per raw car, for every raw car the
+# map above pools under another name: tables ``*_by_track_raw_car_cond``
+# beside the pooled ``*_by_track_car_cond``, the same rows with ``car`` the car
+# the session names (#383). The predictors read a raw car's own entry where it
+# has one at the (track, condition) and the pooled car's otherwise; every
+# constant (K, tau, kappa, shares, compound K, corner defaults) stays pooled.
+# A pooled entry at a cell that one raw car seldom runs rests on the other
+# car's laps, a bias the per-raw-car simulation does not have.
+# The table names are ``predict.RAW_CAR_TABLES``.
+RAW_CAR_ENTRIES = True
+# The guard (rule (b), chosen 2026-11-26): a raw car's own entry is
+# written only where it rests on at least RAW_CAR_MIN_SESSIONS training
+# sessions and has a pace curve (RAW_CAR_NEEDS_CURVE); elsewhere the raw car
+# reads the pooled entry. On the standing holdout's folds it changes no
+# scored session (docs §2.5a); it drops the thin entries no held-out session
+# read (the KK-SII's damp at Tsukuba: one session, no curve).
+RAW_CAR_MIN_SESSIONS = 2
+RAW_CAR_NEEDS_CURVE = True
 
 
 # Energy-balance config (see plan)
@@ -284,6 +305,9 @@ def _build_warmup_table(
         key: (float(np.mean(list(per.values()))), n) for key, (per, n) in q_corner_lookup.items()
     }
     outlap_lookup, outlap_corner_lookup = _build_outlap_typ_with_corners(laps_for_fit)
+    raw_car_entries = (
+        _build_raw_car_entries(root, flying, laps_for_fit, pf.share) if RAW_CAR_ENTRIES else None
+    )
     heat_input_block = {
         "form": (
             "q_i = V * sqrt(F_y,i^2 + F_x,i^2) [G*m/s]: force x slip fraction x speed. "
@@ -373,6 +397,7 @@ def _build_warmup_table(
         heat_input_block=heat_input_block,
         q_corner_lookup=q_corner_lookup,
         outlap_corner_lookup=outlap_corner_lookup,
+        raw_car_entries=raw_car_entries,
     )
 
     if write_artifacts:
@@ -386,10 +411,15 @@ def _build_warmup_table(
 
 
 def apply_car_aliases(laps: pd.DataFrame) -> pd.DataFrame:
-    """Map aliased car labels (see CAR_FIT_ALIASES) onto their pooled name."""
+    """Map aliased car labels (see CAR_FIT_ALIASES) onto their pooled name.
+
+    The car as the session names it stays beside it as ``raw_car``: the
+    logged entries are also keyed by it (:data:`RAW_CAR_ENTRIES`)."""
     if laps.empty or "car" not in laps.columns:
         return laps
     df = laps.copy()
+    if "raw_car" not in df.columns:
+        df["raw_car"] = df["car"]
     df["car"] = df["car"].replace(CAR_FIT_ALIASES)
     return df
 
@@ -1206,6 +1236,79 @@ def _build_corner_defaults(
     return out
 
 
+@dataclass
+class EntryLookups:
+    """What one set of entry tables is written from (:func:`_entry_tables`):
+    per (track, car, condition) the heat (corner mean, laps), the typical
+    lap time, the out-lap, the pace curve and the per-tyre heats."""
+
+    g2: dict[tuple[str, str, str], tuple[float, int]]
+    lap_time: dict[tuple[str, str, str], tuple[float, int]]
+    outlap: dict[tuple[str, str, str], tuple[float, float, int]]
+    curves: dict[tuple[str, str, str], dict]
+    q_corner: dict[tuple[str, str, str], tuple[dict[str, float], int]]
+    outlap_corner: dict[tuple[str, str, str], dict[str, float]]
+
+
+def _raw_car_rows(laps: pd.DataFrame) -> pd.DataFrame:
+    """The laps of the raw cars that are pooled under another name, with
+    ``car`` the raw car (empty without a ``raw_car`` column)."""
+    if laps.empty or "raw_car" not in laps.columns:
+        return laps.iloc[0:0]
+    own = laps[laps["raw_car"].notna() & (laps["raw_car"] != laps["car"])].copy()
+    own["car"] = own["raw_car"]
+    return own
+
+
+def _build_raw_car_entries(
+    root: Path,
+    flying: pd.DataFrame,
+    laps_for_fit: pd.DataFrame,
+    share_by_car: dict[str, Any],
+) -> EntryLookups:
+    """The logged entries per raw car (:data:`RAW_CAR_ENTRIES`): the pooled
+    entries' own builders on each raw car's laps alone, the pace curve
+    through the pooled car's shares (the constants stay pooled).
+
+    A raw car answers a (track, condition) with its own heat, typical lap
+    time and pace curve together, so a lap time or an out-lap is kept only
+    where the raw car has a heat there; without one the predictors read the
+    pooled car's entry whole. The heat itself is kept only where it rests on
+    at least :data:`RAW_CAR_MIN_SESSIONS` training sessions and has a pace
+    curve (:data:`RAW_CAR_NEEDS_CURVE`), the guard."""
+    from .pace_sim import build_pace_model
+
+    raw_flying = _raw_car_rows(flying)
+    raw_fit = _raw_car_rows(laps_for_fit)
+    q_corner = _build_q_typ_per_corner(_flying_laps(raw_fit))
+    pooled_of = dict(zip(raw_fit["raw_car"], laps_for_fit.loc[raw_fit.index, "car"]))
+    shares = {raw: share_by_car[p] for raw, p in pooled_of.items() if p in share_by_car}
+    curves = build_pace_model(root, _flying_laps(raw_fit), shares) if len(raw_fit) else {}
+    if len(raw_fit):
+        sessions = (
+            _flying_laps(raw_fit)
+            .groupby(["track_canonical", "car", "condition"])["session_id"]
+            .nunique()
+        )
+        q_corner = {
+            key: v
+            for key, v in q_corner.items()
+            if int(sessions.get(key, 0)) >= RAW_CAR_MIN_SESSIONS
+            and (key in curves or not RAW_CAR_NEEDS_CURVE)
+        }
+    g2 = {key: (float(np.mean(list(per.values()))), n) for key, (per, n) in q_corner.items()}
+    lap_time = {k: v for k, v in _build_lap_time_typ(raw_flying).items() if k in g2}
+    outlap, outlap_corner = _build_outlap_typ_with_corners(raw_fit)
+    return EntryLookups(
+        g2=g2,
+        lap_time=lap_time,
+        outlap={k: v for k, v in outlap.items() if k in g2},
+        curves={k: v for k, v in curves.items() if k in g2},
+        q_corner=q_corner,
+        outlap_corner={k: v for k, v in outlap_corner.items() if k in g2},
+    )
+
+
 def _laps_for_fit(
     laps: pd.DataFrame,
     g2_lookup: dict[tuple[str, str, str], tuple[float, int]],
@@ -1273,6 +1376,61 @@ def _data_through_for_fit(laps: "pd.DataFrame") -> tuple[str | None, str | None]
     return newest_date, local_str
 
 
+def _entry_tables(lookups: EntryLookups) -> dict[str, list[dict[str, Any]]]:
+    """The three entry tables of the artifact, keyed by their pooled names:
+    the heat per tyre with its pace curve, the out-lap and the typical lap
+    time per (track, car, condition)."""
+
+    def _g2_entry(track: str, car: str, cond: str, value: float, n: int) -> dict[str, Any]:
+        entry: dict[str, Any] = {
+            "track_canonical": track,
+            "car": car,
+            "condition": cond,
+            "g2_typ": value,
+            "n_laps_used": n,
+        }
+        curve = lookups.curves.get((track, car, cond))
+        if curve is not None:
+            entry["g2_vs_lap_time"] = curve
+        per = lookups.q_corner.get((track, car, cond))
+        if per is not None:
+            entry["q_typ_by_corner"] = {c: float(v) for c, v in sorted(per[0].items())}
+        return entry
+
+    return {
+        "g2_typ_by_track_car_cond": [
+            _g2_entry(track, car, cond, value, n)
+            for (track, car, cond), (value, n) in sorted(lookups.g2.items())
+        ],
+        "outlap_typ_by_track_car_cond": [
+            {
+                "track_canonical": track,
+                "car": car,
+                "condition": cond,
+                "outlap_moving_s": mv,
+                "outlap_g2": g2,
+                "n_laps_used": n,
+                **(
+                    {"outlap_q_by_corner": lookups.outlap_corner[(track, car, cond)]}
+                    if (track, car, cond) in lookups.outlap_corner
+                    else {}
+                ),
+            }
+            for (track, car, cond), (mv, g2, n) in sorted(lookups.outlap.items())
+        ],
+        "lap_time_typ_by_track_car_cond": [
+            {
+                "track_canonical": track,
+                "car": car,
+                "condition": cond,
+                "lap_time_typ_s": value,
+                "n_laps_used": n,
+            }
+            for (track, car, cond), (value, n) in sorted(lookups.lap_time.items())
+        ],
+    }
+
+
 def _assemble_model(
     *,
     tau_by_car_corner_cond: dict[tuple[str, str, str], FitParam],
@@ -1294,6 +1452,7 @@ def _assemble_model(
     heat_input_block: dict[str, Any] | None = None,
     q_corner_lookup: dict[tuple[str, str, str], tuple[dict[str, float], int]] | None = None,
     outlap_corner_lookup: dict[tuple[str, str, str], dict[str, float]] | None = None,
+    raw_car_entries: EntryLookups | None = None,
 ) -> dict[str, Any]:
     """Build the in-memory model dict that matches the JSON artifact schema.
 
@@ -1304,27 +1463,25 @@ def _assemble_model(
     Version 2 keyed K and τ_sec by (car, corner, condition) and the ⟨g²⟩ +
     lap_time_typ lookups by (track, car, condition).
     """
-    g2_curves = g2_curves or {}
     k_by_compound = k_by_compound or {}
     compound_multipliers = compound_multipliers or {}
     corner_defaults = corner_defaults or {}
     hot_pressure_targets = hot_pressure_targets or {}
-
-    def _g2_entry(track: str, car: str, cond: str, value: float, n: int) -> dict[str, Any]:
-        entry: dict[str, Any] = {
-            "track_canonical": track,
-            "car": car,
-            "condition": cond,
-            "g2_typ": value,
-            "n_laps_used": n,
+    entries = _entry_tables(
+        EntryLookups(
+            g2=g2_lookup,
+            lap_time=lap_time_lookup,
+            outlap=outlap_lookup or {},
+            curves=g2_curves or {},
+            q_corner=q_corner_lookup or {},
+            outlap_corner=outlap_corner_lookup or {},
+        )
+    )
+    raw_tables: dict[str, list[dict[str, Any]]] = {}
+    if raw_car_entries is not None:
+        raw_tables = {
+            RAW_CAR_TABLES[name]: rows for name, rows in _entry_tables(raw_car_entries).items()
         }
-        curve = g2_curves.get((track, car, cond))
-        if curve is not None:
-            entry["g2_vs_lap_time"] = curve
-        per = (q_corner_lookup or {}).get((track, car, cond))
-        if per is not None:
-            entry["q_typ_by_corner"] = {c: float(v) for c, v in sorted(per[0].items())}
-        return entry
 
     fit_at = datetime.now(tz=timezone.utc).isoformat(timespec="seconds")
 
@@ -1483,10 +1640,7 @@ def _assemble_model(
             }
             for (car, corner, cond), fp in sorted(k_by_car_corner_cond.items())
         ],
-        "g2_typ_by_track_car_cond": [
-            _g2_entry(track, car, cond, value, n)
-            for (track, car, cond), (value, n) in sorted(g2_lookup.items())
-        ],
+        "g2_typ_by_track_car_cond": entries["g2_typ_by_track_car_cond"],
         # Compound decomposition: K_effective = K_base × m[compound].
         # The multipliers document the fitted per-compound ratios; the table
         # below carries the ready-to-use products.
@@ -1534,32 +1688,14 @@ def _assemble_model(
         # rolling time and g², integrated first from the typed pit-exit
         # temperature. Consumers without this table treat the out-lap as
         # zero-length (pre-v0.26 behaviour).
-        "outlap_typ_by_track_car_cond": [
-            {
-                "track_canonical": track,
-                "car": car,
-                "condition": cond,
-                "outlap_moving_s": mv,
-                "outlap_g2": g2,
-                "n_laps_used": n,
-                **(
-                    {"outlap_q_by_corner": (outlap_corner_lookup or {})[(track, car, cond)]}
-                    if (track, car, cond) in (outlap_corner_lookup or {})
-                    else {}
-                ),
-            }
-            for (track, car, cond), (mv, g2, n) in sorted((outlap_lookup or {}).items())
-        ],
-        "lap_time_typ_by_track_car_cond": [
-            {
-                "track_canonical": track,
-                "car": car,
-                "condition": cond,
-                "lap_time_typ_s": value,
-                "n_laps_used": n,
-            }
-            for (track, car, cond), (value, n) in sorted(lap_time_lookup.items())
-        ],
+        "outlap_typ_by_track_car_cond": entries["outlap_typ_by_track_car_cond"],
+        "lap_time_typ_by_track_car_cond": entries["lap_time_typ_by_track_car_cond"],
+        # The same entries per raw car where CAR_FIT_ALIASES pools the car
+        # under another name (#383; RAW_CAR_ENTRIES). A predictor given a raw
+        # car reads its row at each step of the condition chain before the
+        # pooled car's; consumers that do not know these tables read the
+        # pooled entries as before.
+        **raw_tables,
         "fallback_order_for_K": [
             ["car", "corner", "condition"],
             ["car", "corner"],

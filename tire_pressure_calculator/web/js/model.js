@@ -17,6 +17,15 @@ export const T_ZERO_C_TO_K = 273.15;
 // an informational `heat_input` block (ignored here). Older artifacts
 // carried K values fitted against c_track and are no longer loadable.
 export const SUPPORTED_SCHEMA_VERSION = 5;
+
+// The entry tables per raw car beside the pooled ones (#383; additive in
+// schema 5): the same rows, `car` the car the session names, for each raw
+// car `car_aliases` pools under another name. Mirrors predict.py.
+export const RAW_CAR_TABLES = {
+  g2_typ_by_track_car_cond: 'g2_typ_by_track_raw_car_cond',
+  lap_time_typ_by_track_car_cond: 'lap_time_typ_by_track_raw_car_cond',
+  outlap_typ_by_track_car_cond: 'outlap_typ_by_track_raw_car_cond',
+};
 export const MIN_SUPPORTED_SCHEMA_VERSION = 5;
 
 // C# Math.Round uses banker's rounding (half to even); mirror it so the
@@ -155,8 +164,38 @@ export class TireModel {
     this.dto = dto;
   }
 
-  get availableCars() {
+  // The cars the model's constants were fitted as (FJ, Inferno 86).
+  get fittedCars() {
     return [...new Set(this.dto.tau_sec_by_car_corner_cond.map((r) => r.car))].sort();
+  }
+
+  isFittedCar(car) { return this.fittedCars.includes(car); }
+
+  // The cars offered for selection: the fitted cars, with a pooled car
+  // whose raw cars have their own entries in the artifact (#383) listed as
+  // those raw cars (KK-SII, KK-F, KK-F-V2 in place of FJ). An artifact
+  // without raw-car rows offers the fitted cars, as before.
+  get availableCars() {
+    const fitted = this.fittedCars;
+    const aliases = this.dto.car_aliases ?? {};
+    const split = new Set((this.dto[RAW_CAR_TABLES.g2_typ_by_track_car_cond] ?? [])
+      .map((r) => r.car)
+      .filter((raw) => this.resolveCar(raw) !== raw && fitted.includes(this.resolveCar(raw)))
+      .map((raw) => this.resolveCar(raw)));
+    const raws = Object.keys(aliases).filter((raw) => aliases[raw] !== raw && split.has(aliases[raw]));
+    return [...fitted.filter((c) => !split.has(c)), ...raws].sort();
+  }
+
+  // The car to select for a saved one: kept where it is offered; a fitted
+  // (pooled) name saved before its raw cars were listed keeps working on
+  // the pooled entries; a raw name the artifact does not list resolves to
+  // its pooled car, as before. null for a car the model does not know.
+  selectableCar(saved) {
+    if (!saved) return null;
+    const offered = this.availableCars;
+    if (offered.includes(saved) || this.isFittedCar(saved)) return saved;
+    const pooled = this.resolveCar(saved);
+    return offered.includes(pooled) || this.isFittedCar(pooled) ? pooled : null;
   }
 
   // Newest session that fed the fit, for the footer: the display-ready
@@ -178,6 +217,34 @@ export class TireModel {
     return (aliases && Object.prototype.hasOwnProperty.call(aliases, car)) ? aliases[car] : car;
   }
 
+  // The row of an entry table (g2 / lap time / out-lap) that answers
+  // (track, car, condition): a raw car's own row in the table's raw-car
+  // sibling (`*_by_track_raw_car_cond`, #383) where it has one, else the
+  // fitted car's. Mirrors predict.py's _entry_row.
+  entryRow(table, track, car, condition) {
+    const fit = this.resolveCar(car);
+    const match = (who) => (r) =>
+      r.track_canonical === track && r.car === who && r.condition === condition;
+    if (fit !== car) {
+      const own = (this.dto[RAW_CAR_TABLES[table]] ?? []).find(match(car));
+      if (own) return own;
+    }
+    return (this.dto[table] ?? []).find(match(fit)) ?? null;
+  }
+
+  // Every condition's row at `track` for the car whose entries answer
+  // there: the raw car's own where it has any, else the fitted car's (the
+  // track_car_pooled fallback).
+  entryRowsAtTrack(table, track, car) {
+    const fit = this.resolveCar(car);
+    if (fit !== car) {
+      const own = (this.dto[RAW_CAR_TABLES[table]] ?? []).filter(
+        (r) => r.track_canonical === track && r.car === car);
+      if (own.length > 0) return own;
+    }
+    return (this.dto[table] ?? []).filter((r) => r.track_canonical === track && r.car === fit);
+  }
+
   get availableTracks() {
     // Every track with observed data (a typical heat input).
     const observed = this.dto.g2_typ_by_track_car_cond.map((r) => r.track_canonical);
@@ -191,7 +258,10 @@ export class TireModel {
   get deltaSunMaxC() { return this.dto.energy_balance.t_road_proxy.delta_sun_max_c; }
   get pAtmBar() { return this.dto.gay_lussac.p_atm_bar; }
 
+  // The constants (tau, K, compound K, corner defaults, hot-pressure
+  // targets) are the fitted car's: a raw name resolves through car_aliases.
   lookupTau(car, corner, condition) {
+    car = this.resolveCar(car);
     const rows = this.dto.tau_sec_by_car_corner_cond;
     for (const cond of conditionChain(condition)) {
       const hit = rows.find((r) => r.car === car && r.corner === corner && r.condition === cond);
@@ -223,6 +293,7 @@ export class TireModel {
   }
 
   lookupK(car, corner, condition) {
+    car = this.resolveCar(car);
     const rows = this.dto.K_buckets;
     for (const cond of conditionChain(condition)) {
       const hit = rows.find(
@@ -261,17 +332,17 @@ export class TireModel {
   // when `corner` is given and the entry carries q_typ_by_corner). Pooled
   // fallbacks average the same per-corner value over the pooled rows.
   lookupG2(track, car, condition, corner = null) {
-    const rows = this.dto.g2_typ_by_track_car_cond;
+    const table = 'g2_typ_by_track_car_cond';
+    const rows = this.dto[table];
     const value = (r) => perCornerOr(r.q_typ_by_corner, corner, r.g2_typ);
     for (const cond of conditionChain(condition)) {
-      const hit = rows.find(
-        (r) => r.track_canonical === track && r.car === car && r.condition === cond);
+      const hit = this.entryRow(table, track, car, cond);
       if (hit) {
         const source = cond === condition ? 'exact' : `fallback(${cond})`;
         return { value: value(hit), nLapsUsed: hit.n_laps_used, source };
       }
     }
-    const sameTC = rows.filter((r) => r.track_canonical === track && r.car === car);
+    const sameTC = this.entryRowsAtTrack(table, track, car);
     if (sameTC.length > 0) {
       return {
         value: average(sameTC, value),
@@ -295,6 +366,7 @@ export class TireModel {
 
   // Distinct compounds fitted for a car, for UI enumeration.
   availableCompounds(car) {
+    car = this.resolveCar(car);
     const rows = this.dto.K_by_car_compound_corner_cond ?? [];
     return [...new Set(rows.filter((r) => r.car === car).map((r) => r.compound))].sort();
   }
@@ -302,6 +374,7 @@ export class TireModel {
   // Compound-specific K via the condition chain, or null when the artifact
   // has no fitted bucket (caller falls back to the pooled K).
   lookupCompoundK(car, compound, corner, condition) {
+    car = this.resolveCar(car);
     const rows = this.dto.K_by_car_compound_corner_cond ?? [];
     for (const cond of conditionChain(condition)) {
       const hit = rows.find(
@@ -324,6 +397,7 @@ export class TireModel {
   // condition chain; null when the artifact has no entry (caller keeps its
   // static defaults).
   lookupCornerDefaults(car, corner, condition) {
+    car = this.resolveCar(car);
     const rows = this.dto.corner_defaults_by_car_corner_cond ?? [];
     for (const cond of conditionChain(condition)) {
       const hit = rows.find(
@@ -345,6 +419,7 @@ export class TireModel {
   // none for that pair (caller falls back to the measured median).
   lookupTargetHotPressure(car, compound) {
     if (!compound) return null;
+    car = this.resolveCar(car);
     const rows = this.dto.target_hot_pressure_by_car_compound ?? [];
     const hit = rows.find((r) => r.car === car && r.compound === compound);
     return hit ? { targetHotPressureBar: hit.target_hot_pressure_bar } : null;
@@ -353,10 +428,8 @@ export class TireModel {
   // ---- Target-lap-time pace scaling (schema v3) ----
 
   lookupG2PaceCurve(track, car, condition) {
-    const rows = this.dto.g2_typ_by_track_car_cond;
     for (const cond of conditionChain(condition)) {
-      const hit = rows.find(
-        (r) => r.track_canonical === track && r.car === car && r.condition === cond);
+      const hit = this.entryRow('g2_typ_by_track_car_cond', track, car, cond);
       if (hit) return hit.g2_vs_lap_time ?? null;
     }
     return null;
@@ -396,17 +469,17 @@ export class TireModel {
   // `corner`, a v5 outlap_q_by_corner entry supplies that corner's heat
   // input instead of outlap_g2.
   lookupOutlap(track, car, condition, corner = null) {
-    const rows = this.dto.outlap_typ_by_track_car_cond ?? [];
+    const table = 'outlap_typ_by_track_car_cond';
+    const rows = this.dto[table] ?? [];
     const g2 = (r) => perCornerOr(r.outlap_q_by_corner, corner, r.outlap_g2);
     for (const cond of conditionChain(condition)) {
-      const hit = rows.find(
-        (r) => r.track_canonical === track && r.car === car && r.condition === cond);
+      const hit = this.entryRow(table, track, car, cond);
       if (hit) {
         const source = cond === condition ? 'exact' : `fallback(${cond})`;
         return { movingS: hit.outlap_moving_s, g2: g2(hit), nLapsUsed: hit.n_laps_used, source };
       }
     }
-    const sameTC = rows.filter((r) => r.track_canonical === track && r.car === car);
+    const sameTC = this.entryRowsAtTrack(table, track, car);
     if (sameTC.length > 0) {
       return {
         movingS: average(sameTC, (r) => r.outlap_moving_s), g2: average(sameTC, g2),
@@ -424,16 +497,16 @@ export class TireModel {
   }
 
   lookupLapTime(track, car, condition) {
-    const rows = this.dto.lap_time_typ_by_track_car_cond;
+    const table = 'lap_time_typ_by_track_car_cond';
+    const rows = this.dto[table];
     for (const cond of conditionChain(condition)) {
-      const hit = rows.find(
-        (r) => r.track_canonical === track && r.car === car && r.condition === cond);
+      const hit = this.entryRow(table, track, car, cond);
       if (hit) {
         const source = cond === condition ? 'exact' : `fallback(${cond})`;
         return { valueSeconds: hit.lap_time_typ_s, nLapsUsed: hit.n_laps_used, source };
       }
     }
-    const sameTC = rows.filter((r) => r.track_canonical === track && r.car === car);
+    const sameTC = this.entryRowsAtTrack(table, track, car);
     if (sameTC.length > 0) {
       return {
         valueSeconds: average(sameTC, (r) => r.lap_time_typ_s),
@@ -465,6 +538,10 @@ export function predictCorner(model, {
     throw new RangeError(`track_condition must be dry/damp/wet; got '${condition}'`);
   }
 
+  // The constants are the car the model was fitted as; the entries (heat,
+  // pace curve, lap time, out-lap) are a raw car's own where the artifact
+  // has them (#383).
+  const entryCar = car;
   car = model.resolveCar(car);
 
   // One tire on all four corners — the compound applies to every corner.
@@ -476,8 +553,8 @@ export function predictCorner(model, {
   const tau = model.lookupTau(car, corner, cond);
   // The circuit enters only through its per-corner heat input (v5 has no
   // track constant); entries without the map fall back to the mean.
-  const g2 = model.lookupG2(track, car, cond, corner);
-  const lap = model.lookupLapTime(track, car, cond);
+  const g2 = model.lookupG2(track, entryCar, cond, corner);
+  const lap = model.lookupLapTime(track, entryCar, cond);
 
   // T_road: user-supplied -> sun-cover proxy -> fall back to T_air.
   const tRoadC = trackTempC ?? tRoadProxyC(
@@ -499,7 +576,7 @@ export function predictCorner(model, {
     if (!(targetLapTimeS > 0)) {
       throw new RangeError(`target lap time must be > 0; got ${targetLapTimeS}`);
     }
-    const pace = model.g2PaceScale(track, car, cond, lap.valueSeconds, targetLapTimeS, corner);
+    const pace = model.g2PaceScale(track, entryCar, cond, lap.valueSeconds, targetLapTimeS, corner);
     g2Scale = pace.scale;
     g2PaceSource = pace.source;
     g2Value *= g2Scale;
@@ -512,7 +589,7 @@ export function predictCorner(model, {
   let outlapG2 = 0.0;
   let outlapSource = null;
   if (includeOutlap) {
-    const o = model.lookupOutlap(track, car, cond, corner);
+    const o = model.lookupOutlap(track, entryCar, cond, corner);
     if (o) { outlapS = o.movingS; outlapG2 = o.g2; outlapSource = o.source; }
     if (outlapTimeS !== null && outlapTimeS !== undefined) {
       if (!(outlapTimeS >= 0)) throw new RangeError(`outlap time must be >= 0; got ${outlapTimeS}`);

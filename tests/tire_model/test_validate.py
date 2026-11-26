@@ -511,3 +511,28 @@ def test_a_pit_exit_anchor_is_fed_the_flying_laps_after_the_out_lap() -> None:
     integrates by itself: N is the flying-lap number, as before."""
     fed, _ = _fed(_stint(12.0, "pit_exit", out_lap=True))
     assert fed == [(1, 1, True), (2, 2, True), (3, 3, True)]
+
+
+def test_score_fold_laps_reads_the_raw_cars_own_entry() -> None:
+    """A held-out lap is answered by its raw car's own entry where the
+    model has one (#383) and by the pooled car's otherwise; the constants
+    are the pooled car's either way."""
+    model = _harness_model()
+    model["car_aliases"] = {"r1": "c", "r2": "c"}
+    model["g2_typ_by_track_raw_car_cond"] = [
+        dict(model["g2_typ_by_track_car_cond"][0], car="r1", q_typ_by_corner={"fl": 8.0})
+    ]
+    model["lap_time_typ_by_track_raw_car_cond"] = [
+        dict(model["lap_time_typ_by_track_car_cond"][0], car="r1")
+    ]
+    prep = _harness_laps()
+    prep.flying["raw_car"] = prep.flying["session_id"].map({"s1": "r1", "s2": "r2"})
+    got = _score_fold_laps(prep, model)
+    used = got.groupby("session_id")["g2_used"].unique().to_dict()
+    assert list(used["s1"]) == [8.0] and list(used["s2"]) == [4.0]
+    assert (got["car"] == "c").all()
+    # without the raw car's tables every session reads the pooled entry, as before
+    bare = {k: v for k, v in model.items() if not k.endswith("_by_track_raw_car_cond")}
+    pd.testing.assert_frame_equal(
+        _score_fold_laps(prep, bare), _score_fold_laps(prep, _harness_model())
+    )

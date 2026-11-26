@@ -491,3 +491,141 @@ def test_first_lap_anchor_is_stamped_at_the_readings_own_time() -> None:
     assert (out["anchor_kind_fl"] == "first_lap").all()
     assert (out["t_anchor_fl"] == 140.0).all()
     assert (out["t_start_fl"] == 33.0).all() and (out["p_start_fl"] == 1.42).all()
+
+
+def _two_raw_car_laps() -> pd.DataFrame:
+    """Flying laps and a pit out-lap of two raw cars pooled as one ("P") at
+    track "t", plus a car that is not pooled ("solo"); the raw cars drive
+    with different heats and lap times."""
+    rows = []
+    for raw, q, lap_s, sessions in (
+        ("A", 1.0, 60.0, 1),
+        ("B", 2.0, 70.0, 3),
+        ("solo", 3.0, 80.0, 1),
+    ):
+        for s in range(sessions):
+            for i in range(6):
+                rows.append(
+                    {
+                        "session_id": f"{raw}{s}",
+                        "stint_id": 1,
+                        "lap_num": i,
+                        "track_canonical": "t",
+                        "car": raw,
+                        "condition": "dry",
+                        "is_outlap": i == 0,
+                        "outlap_from_pit": i == 0,
+                        "moving_s": lap_s,
+                        "heat_proxy": lap_s * q,
+                        "on_track_s": lap_s,
+                        **{f"q_lap_{c}": q if i else q / 4 for c in wt.CORNERS},
+                    }
+                )
+    laps = pd.DataFrame(rows)
+    return laps.assign(raw_car=laps["car"], car=laps["car"].replace({"A": "P", "B": "P"}))
+
+
+def test_raw_car_entries_are_each_raw_cars_own_and_leave_the_pooled_tables(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    # the builders, with the guard off (A has one session and neither car a curve)
+    monkeypatch.setattr(wt, "RAW_CAR_MIN_SESSIONS", 1)
+    monkeypatch.setattr(wt, "RAW_CAR_NEEDS_CURVE", False)
+    laps = _two_raw_car_laps()
+    raw = wt._build_raw_car_entries(tmp_path, wt._flying_laps(laps), laps, {})
+    # one entry per raw car pooled under another name; the car that is not
+    # pooled has only its pooled entry
+    assert sorted(raw.g2) == [("t", "A", "dry"), ("t", "B", "dry")]
+    assert raw.g2[("t", "A", "dry")] == (pytest.approx(1.0), 5)
+    assert raw.g2[("t", "B", "dry")] == (pytest.approx(2.0), 15)
+    assert raw.lap_time[("t", "A", "dry")] == (60.0, 5)
+    assert raw.outlap[("t", "B", "dry")][0] == 70.0
+    assert raw.outlap_corner[("t", "A", "dry")]["fl"] == pytest.approx(0.25)
+    # the pooled entry is the mix the raw entries take apart (B's laps outnumber A's)
+    pooled = wt._build_q_typ_per_corner(wt._flying_laps(laps))
+    assert pooled[("t", "P", "dry")][0]["fl"] == pytest.approx(2.0)
+
+    def assemble(raw_entries):  # type: ignore[no-untyped-def]
+        return wt._assemble_model(
+            tau_by_car_corner_cond={},
+            k_by_car_corner_cond={},
+            g2_lookup={("t", "P", "dry"): (2.0, 20)},
+            lap_time_lookup=wt._build_lap_time_typ(wt._flying_laps(laps)),
+            bucket_n_samples={},
+            q_corner_lookup=pooled,
+            raw_car_entries=raw_entries,
+        )
+
+    with_raw, without = assemble(raw), assemble(None)
+    assert [r["car"] for r in with_raw["g2_typ_by_track_raw_car_cond"]] == ["A", "B"]
+    assert [r["car"] for r in with_raw["lap_time_typ_by_track_raw_car_cond"]] == ["A", "B"]
+    assert with_raw["g2_typ_by_track_raw_car_cond"][0]["q_typ_by_corner"]["rr"] == 1.0
+    assert "g2_typ_by_track_raw_car_cond" not in without
+    # the pooled tables are the same rows with and without the raw cars'
+    for name in (
+        "g2_typ_by_track_car_cond",
+        "lap_time_typ_by_track_car_cond",
+        "outlap_typ_by_track_car_cond",
+    ):
+        assert with_raw[name] == without[name]
+
+
+def test_raw_car_pace_curves_go_through_the_pooled_cars_shares(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """A raw car's curve is its own laps simulated through the shares of
+    the car it is pooled under (the constants stay pooled)."""
+    from motorsports_data_notebook.tire_model import pace_sim
+
+    seen = {}
+
+    def fake(root, laps, share_by_car):  # type: ignore[no-untyped-def]
+        seen["cars"] = sorted(set(laps["car"]))
+        seen["shares"] = share_by_car
+        return {(t, c, k): {"lap_time_s": [1.0], "g2": [1.0]} for t, c, k in [("t", "B", "dry")]}
+
+    monkeypatch.setattr(pace_sim, "build_pace_model", fake)
+    laps = _two_raw_car_laps()
+    raw = wt._build_raw_car_entries(tmp_path, wt._flying_laps(laps), laps, {"P": "p-share"})
+    assert seen == {"cars": ["A", "B"], "shares": {"A": "p-share", "B": "p-share"}}
+    assert list(raw.curves) == [("t", "B", "dry")]
+
+
+def test_apply_car_aliases_keeps_the_raw_car() -> None:
+    laps = pd.DataFrame({"car": ["KK-F", "KK-SII", "Inferno 86"]})
+    got = wt.apply_car_aliases(laps)
+    assert list(got["car"]) == ["FJ", "FJ", "Inferno 86"]
+    assert list(got["raw_car"]) == ["KK-F", "KK-SII", "Inferno 86"]
+
+
+def test_raw_car_entries_need_two_sessions_and_a_pace_curve(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """The guard (rule (b)): a raw car has its own entry only with at least
+    two training sessions behind it and a pace curve; without them it has
+    none (heat, lap time, out-lap or curve), so it reads the pooled one."""
+    from motorsports_data_notebook.tire_model import pace_sim
+
+    assert wt.RAW_CAR_MIN_SESSIONS == 2 and wt.RAW_CAR_NEEDS_CURVE
+    laps = _two_raw_car_laps()  # A: 1 session, B: 3
+    curves: dict = {}
+    monkeypatch.setattr(pace_sim, "build_pace_model", lambda root, laps, shares: dict(curves))
+
+    def build():  # type: ignore[no-untyped-def]
+        return wt._build_raw_car_entries(tmp_path, wt._flying_laps(laps), laps, {"P": "s"})
+
+    # both with a curve: A rests on one session, so only B has its own entry
+    curves.update(
+        {key: {"lap_time_s": [1.0], "g2": [1.0]} for key in [("t", "A", "dry"), ("t", "B", "dry")]}
+    )
+    both = build()
+    assert sorted(both.g2) == sorted(both.lap_time) == sorted(both.outlap) == [("t", "B", "dry")]
+    assert (
+        sorted(both.curves)
+        == sorted(both.q_corner)
+        == sorted(both.outlap_corner)
+        == [("t", "B", "dry")]
+    )
+    # B without a curve: neither car has its own entry
+    del curves[("t", "B", "dry")]
+    none = build()
+    assert none.g2 == none.lap_time == none.outlap == none.curves == none.q_corner == {}
+    # the guard off: every raw car with a heat has its own entry
+    monkeypatch.setattr(wt, "RAW_CAR_MIN_SESSIONS", 1)
+    monkeypatch.setattr(wt, "RAW_CAR_NEEDS_CURVE", False)
+    every = build()
+    assert sorted(every.g2) == [("t", "A", "dry"), ("t", "B", "dry")]

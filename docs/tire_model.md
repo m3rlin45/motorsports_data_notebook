@@ -293,6 +293,10 @@ notes-validation loaders, `statespace._session_timeseries`):
    60 s of rolling time, in-laps are excluded, laps shorter than 30 s or
    slower than 1.4× the stint's best are dropped, and a lap needs a TPMS
    pressure range above 0.003 bar on at least one corner.
+4. **A corner losing gas** (`cleaning.drifting_tpms`, #373, 2026-11-26;
+   §1.0a″): a tyre whose amount of gas falls against its siblings' through
+   a session (a leak, or a transducer that drifts) has its TPMS columns
+   masked for that session, at training and scoring alike.
 
 A cleaning change is therefore a code change plus a retrain; the dataset
 is re-extracted only when the extractor's own output (lap splitting,
@@ -459,6 +463,72 @@ wheels on 2026-08-09, a0216/a0219/a0222; eight KK-SII sessions at Suzuka on
 2026-09-21 and three on 2026-10-03/04; the Inferno 86's 2025-07-22 test)
 were masked whole by the session-start rule before #371 and still are: they
 are out of training and scoring, and the blacklist is not needed for them.
+
+### 1.0a″ A corner losing gas (#373, 2026-11-26)
+
+The Inferno 86's front-left TPMS loses gas, or its transducer drifts,
+through both Sodegaura sessions of 2025-10-05 (a1599, a1603): at a steady
+70 °C its pressure falls from 1.454 to 1.395 bar over a1599 while the front
+right holds 1.477–1.480, and it starts a1603 at 1.16 bar and 41 °C where
+the front right reads 1.22 bar at 44 °C (the notes say all four were set to
+1.4 bar cold).
+No prediction-time input can know it, so the rows are dropped at cleaning,
+not modelled.
+
+**The screen** (`cleaning.gas_drift_screen`). The amount of gas in a tyre
+goes as `(P + 1.013) / (T + 273.15)`; on steady laps it changes only by a
+leak or a drifting transducer, and the session's other tyres share whatever
+the sensors have in common. Per session, over its usable laps on which all
+four tyres read a finite mean and a temperature range within the lap of
+1 °C or less: each tyre's log amount of gas, less the mean of the other
+three tyres', fitted linearly against the session's on-track clock, times
+the span: the tyre's change over the session in %. A session is judged on 8
+steady laps or more over 15 min or more (the committee's screen, except
+that the clock counts every lap of the session, not only the usable ones).
+
+**The threshold, fixed before scoring from the sound tyres** (the issue's
+−4 % was set after seeing the values). Over every screened tyre-session of
+the dataset, the centre is the median change and the scale 1.4826 × the
+median absolute deviation (robust, so a leaking tyre does not widen it). A
+tyre is flagged when its change is below the centre less z scales, z being
+the one-sided Bonferroni quantile at which a sound tyre anywhere among the
+N screened tyre-sessions is flagged by chance with probability 5 % at most
+(`DRIFT_FALSE_FLAG_RATE`; z = Φ⁻¹(1 − 0.05 / N)), and when its reference is
+sound: each of the other three tyres' change against the remaining two lies
+within z scales of the centre. Only a loss is flagged. On the dataset of
+2026-11-26: 45 sessions screened, N = 180, centre +0.02 %, scale 0.80 %,
+z = 3.45, threshold −2.73 %. Flagged: a1603 FL (−4.28 %, its siblings within
+0.24 % of each other) and a1599 FL (−3.20 %, within 0.24 %). The next three
+are KK-SII tyres at Tsukuba, at −2.69 % (a0082 RR, 0.04 % short of the
+threshold, 9 steady laps), −2.24 % and −2.10 %.
+
+**No sound tyre flagged.** Both flags are the front left of 2025-10-05,
+whose loss is in its own stream (above; its gas amount at steady
+temperature −2.7 % over a1599 where the front right's is +0.2 %). One
+warning on the screen's reach: with only 8 steady laps a session is near
+the edge of what it can judge. a1329 FR (2025-08-16, Sodegaura, 8 steady
+laps over 22.5 min) reads −1.85 % on the cleaning as committed, but −3.75 %
+(and flagged) under the either-stream stale mask of §1.0a′, where its first
+lap's readings change; its own stream shows no loss (it holds 1.55–1.56 bar
+at 76–77 °C over the last six laps, and its gas amount at the end of the
+session is 0.4 % above the session before's).
+
+**Measured** (the standing holdout refitted on top of §1.0a′'s rule A as
+committed, the same 15 folds and 128 sessions). The flag takes out 100 lap ×
+tyre rows (a1599 FL 56, a1603 FL 44) that score 107.2 mbar (bias +103.4)
+for the current calculator:
+
+| hot-pressure MAE, mbar | rows | current | pace table | direct | Inferno 86 (current) |
+|---|---|---|---|---|---|
+| rule A (§1.0a′) | 5,751 | 37.48 | 38.40 | 38.52 | 46.00 |
+| rule A and the drift flag | 5,651 | 36.12 | 37.10 | 37.22 | 43.10 |
+
+On the 5,651 rows both score, the refit without the two corners moves the
+current calculator by −0.12 mbar (date-clustered SE 0.25, bootstrap −0.56 to
++0.28; the pace table −0.14 ± 0.27): the pooled gain is the rows left out,
+not a better model of the rest. The gap of the simulation-based calculator
+to the current one is unchanged (+1.00 → +0.98 on those rows). The FJ's
+rows are untouched (31.18).
 
 ### 1.0b Layouts by measured lap length, one row per recording (schema 5, 2026-10-30)
 
@@ -1202,6 +1272,116 @@ The energy-balance framing means the **track signal is captured by the
 per-corner ⟨q⟩ data, not by a fitted constant** — that's why the model is
 track-independent at fit time and transfers to circuits it has never seen.
 
+### 2.5a Logged entries per raw car (#383, measured 2026-11-26)
+
+The FJ pools the KK-SII, the KK-F and the KK-F-V2 (`CAR_FIT_ALIASES`) for
+every fitted quantity. The *entries* (the typical heat per tyre and its pace
+curve, the typical lap time, the out-lap) were pooled too, so where one raw
+car seldom runs a (track, condition) its entry rests on the other car's laps.
+In the committee's thinning draws (#370) a logged entry resting on one
+session of the other raw car was 1.65 ± 0.60 mbar per session worse than the
+simulation, against 0.36 for one session of the same car on another date.
+
+**What is built.** `warmup_table.RAW_CAR_ENTRIES` writes the three entry
+tables again per raw car (`*_by_track_raw_car_cond`, §2.7), from the pooled
+entries' own builders on each raw car's laps alone (the pace curve through
+the pooled car's shares). A raw car has a row only where it has its own heat
+at the cell; its lap time, curve and out-lap come with it. The lookups
+(`predict._entry_row`, the web and C# ports alike) walk the condition chain
+and at each step read the raw car's own row before the pooled car's, so the
+condition comes first: a KK-F damp session with no KK-F damp entry reads the
+FJ damp entry, not the KK-F dry one. Each table walks the chain alone, so an
+out-lap can come from another step than the heat. The `track_car_pooled`
+step reads the raw car's rows at the track first; the track and global
+fallbacks average the pooled rows only. K, tau, kappa, the shares, the
+compound K and the corner defaults stay pooled. An artifact without the
+tables reads exactly as before (the committed one: every raw name gives its
+pooled car's prediction, `test_predict`). The standing holdout scores each
+held-out lap by its raw car (`validate._score_fold_laps`); a simulated entry
+placed for a pooled car answers its raw cars too (`pressure.place` takes
+their rows out of the cell), so the simulated arms are unchanged (fold 0:
+`table`, `direct` and `direct_setup` row for row). Gate F's recommendations
+still read the pooled entries.
+
+**The gate, written before scoring** (in the commit): on the standing
+holdout's 15 folds, one fit per fold, arm A with the pooled entries only
+(today) and arm B with the raw cars' own first. Hard checks: A reproduces
+the standing holdout, the unexposed sessions are identical, the simulated
+arms unshadowed. Adopt if B ≤ A pooled, the 57 exposed sessions' mean
+per-session B − A ≤ 0, the KK-F's damp sessions at Tsukuba (the cell that
+lost 22 mbar when the KK-F was fitted apart, constants and all) no worse than
++2 mbar, and no exposed raw car × condition cell worse than +3 mbar.
+
+**Exposure.** 57 of the 128 held-out sessions answer from a bucket holding
+another raw car in training, all at Tsukuba; the other 71 (the Inferno 86,
+the KK-SII at Suzuka and Fuji) are identical in A and B.
+
+**Result** (hot-pressure MAE, mbar; ± the date-clustered SE of the paired
+difference; MDE = 2.8 × 0.06 × the rms change in predictions, #386):
+
+| set | sessions | MAE A | MAE B | B − A | rms ΔP | MDE |
+|---|---|---|---|---|---|---|
+| pooled | 128 | 43.71 | 43.53 | −0.18 ± 0.15 | 2.4 | 0.41 |
+| FJ | 75 | 35.29 | 34.98 | −0.31 ± 0.25 | 3.2 | 0.54 |
+| exposed | 57 | 35.23 | 34.87 | −0.36 ± 0.29 | 3.5 | 0.58 |
+| KK-SII | 53 | 31.76 | 31.22 | −0.54 ± 0.34 | 3.5 | |
+| KK-F | 22 | 42.06 | 42.19 | +0.13 ± 0.30 | 2.7 | |
+| KK-SII Tsukuba dry | 29 | 30.73 | 29.72 | −1.01 ± 0.24 | 3.6 | |
+| KK-SII Tsukuba wet | 6 | 31.03 | 32.27 | +1.24 ± 1.82 | 5.1 | |
+| KK-F Tsukuba dry | 11 | 34.94 | 35.32 | +0.38 ± 0.38 | 2.8 | |
+| KK-F Tsukuba wet | 7 | 32.84 | 32.43 | −0.41 ± 0.74 | 3.5 | |
+| KK-F Tsukuba damp | 4 | 73.16 | 73.13 | −0.03 ± 0.03 | 1.0 | |
+
+- Every clause of the gate passes: B better on 34 of the 57 exposed
+  sessions and worse on 23; the KK-F's damp cell does not move (its pooled
+  damp entry was 60 of 64 laps the KK-F's own); the worst cell is +1.2.
+  The size is the committee's reasoned −0.1 and under the MDE: the holdout
+  does not resolve it.
+- By #386's reading: first-order term −0.25 (between cell × tyre −0.71,
+  within +0.46), curvature +0.07. A random-sign placebo of the same size
+  (the change flipped per fold × raw car × track × condition × tyre, 119
+  units, 4,000 draws) averages +0.07 (sd 0.10); the observed −0.18 is below
+  99.6 % of the draws. The gain is the between-cell term, in the direction
+  the mechanism predicts (the KK-SII's predictions fall, the KK-F's rise,
+  each toward its own car), which is also the direction of the cell biases
+  (+15 and −12 mbar), so the TPMS cannot tell a better heat from a bias
+  moved the right way.
+- Leakage (#386: most held-out sessions have a same-day session in
+  training): on the 13 exposed sessions whose raw car has no same-date
+  session in the training cell, −0.70 ± 0.31; on the 44 that have one,
+  −0.23 ± 0.38.
+- The fits are those of the standing holdout: A reproduces its rows (folds
+  0–1 to 1e-15 bar, folds 2–14 within 0.04 mbar, which is the fit's thread
+  count, not this change: the branch's fit at two threads is the cached
+  fold's, and master's fit path at eight is the branch's).
+
+**Decision.** On by the owner (2026-11-26: "ok, do it with the retrain"),
+by the gate written beforehand, which passed; the gain is under what the
+holdout resolves. Until a retrain writes the tables nothing changes. After
+one, the raw names read their own entries in every predictor (the Python
+CLI, the web and C# ports, the parity fixture's KK-SII cases), and the
+calculators' car picker lists the raw cars (Inferno 86, KK-F, KK-F-V2,
+KK-SII) in place of the FJ; a saved FJ keeps working on the pooled entries
+and stays in the list while it is selected; an artifact without the tables
+lists the pooled cars as before. The constants and the prefills (compounds,
+corner defaults, hot-pressure targets) resolve a raw name to the FJ.
+
+**The guard** (rule (b), chosen 2026-11-26): a raw car's own entry is
+written only where it rests on at least two training sessions and has a
+pace curve (`warmup_table.RAW_CAR_MIN_SESSIONS`, `RAW_CAR_NEEDS_CURVE`);
+elsewhere the raw car reads the pooled entry. The gate above was scored
+with the guard off, and the guard changes none of its rows: in every one
+of the 15 fold models the raw entries without a curve are the KK-SII's damp
+ones at Suzuka and at Tsukuba, and taking them out leaves every lookup of
+every held-out session (heat and out-lap per tyre, lap time, curve)
+unchanged; the raw entries the held-out sessions read rest on two
+training sessions (the KK-F's damp at Tsukuba) or more, each with a curve.
+In the full fit on the committed data it drops the KK-SII's damp entry at
+Tsukuba (one session, 4 laps, no pace curve; the pooled one
+holds 5 sessions, 60 of its 64 laps the KK-F's), so that cell reads the
+pooled entry. The KK-F-V2's dry entry there (3 sessions, 38 laps) was not
+measured by the holdout; it is written if it has a curve.
+
 ### 2.6 Fitting procedure
 
 One pass, `statespace.fit_physical` (§2.0, §2.6a): the per-second fit of the
@@ -1418,15 +1598,27 @@ Fitted tables:
 - `outlap_typ_by_track_car_cond` — typical out-lap rolling time and g² per
   bucket (schema v4, §2.2b); consumers without it treat the out-lap as
   zero-length
+- `g2_typ_by_track_raw_car_cond`, `lap_time_typ_by_track_raw_car_cond`,
+  `outlap_typ_by_track_raw_car_cond` — the same three entries per *raw*
+  car, for each car `car_aliases` pools under another name (additive in
+  schema 5, `warmup_table.RAW_CAR_ENTRIES`, §2.5a): the same row shape with
+  `car` the car the session names. A raw car has a row only where it has
+  its own heat at the (track, condition) on at least two training sessions
+  with a pace curve (the guard), and its lap time and pace curve come with
+  it. Consumers that do not know the tables read the pooled
+  entries as before
 - `rain_thermal` — how rain τ/K are fitted (τ bound, session minimum; §2.9)
 
 Config + provenance:
 
 - `car_aliases` — raw car label → pooled fit label (e.g. `KK-F` / `KK-F-V2`
   / `KK-SII` → `FJ`: near-identical FJ-series machines on the same tires
-  train one car; the KK-F-V2 is the KK-F with a new intake). All predictors resolve an input car through this map before any
-  lookup, so raw names keep working; the fitted tables carry only pooled
-  labels.
+  train one car; the KK-F-V2 is the KK-F with a new intake). Every
+  constant is looked up by the pooled label, so raw names keep working;
+  the entries (heat, pace curve, lap time, out-lap) are read for a raw car
+  from its own rows first, at each step of the condition chain, then from
+  the pooled car's (§2.5a). The track and global fallbacks average the
+  pooled rows only.
 - `g2_lap_time_model` — pace-scaling method (`uniform_scaled_lap_shares`), physics fallback exponent, multiplier clamp
 - `energy_balance` — the `w_road` config + T_road proxy formula
 - `gay_lussac`, `conditions`, `corners`, `priors_when_no_fit`,
