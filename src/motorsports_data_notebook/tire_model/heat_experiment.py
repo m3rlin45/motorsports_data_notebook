@@ -76,9 +76,10 @@ def prepare_laps_for_fit(root: Path) -> pd.DataFrame:
         _load_weather,
         load_sensor_blacklist,
     )
+    from .wetness import load_condition_overrides
 
     laps = _load_filtered_laps(root)
-    laps = _attach_weather(laps, _load_weather(root))
+    laps = _attach_weather(laps, _load_weather(root), load_condition_overrides(root))
     laps = _compute_stint_clock(laps)
     laps, _ = _apply_blacklist(laps, load_sensor_blacklist(root))
     laps = _compute_stint_anchor(laps)

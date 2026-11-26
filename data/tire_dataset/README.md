@@ -139,6 +139,13 @@ deltas show up in PR diffs.
   re-extracts the affected recordings on the next `just tire-etl`. The file's
   header says how to recognise a mislabelled recording (its channel set is the
   other car's).
+- `condition_overrides.yaml` — human-curated, the owner's word on a track
+  day's condition (dry / damp / wet) over the label the weather archive's
+  surface water balance gives (`tire_model/wetness.py`; #395). One entry per
+  track day (`track` as `sessions.track_canonical`, `date`, `condition`,
+  `evidence`); it is read at training time, by the fit, the holdout and the lap
+  simulation alike, never by the extractor, so editing it needs a retrain and
+  no re-extract.
 - `session_notes/YYYY-MM-DD.json` — one `claude -p` (Sonnet) call per track day
   over the day's run-notes `.txt` file(s) from the OneDrive notes folder and
   every logged session's `comment`; the model matches notes blocks to sessions
