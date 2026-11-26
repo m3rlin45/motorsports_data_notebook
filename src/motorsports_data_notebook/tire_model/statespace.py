@@ -183,18 +183,35 @@ class SessionSeries:
     surf: pd.DataFrame | None
 
 
-@lru_cache(maxsize=4)
 def _session_timeseries(root_str: str, session_id: str) -> SessionSeries | None:
+    """The session's :class:`SessionSeries` with its heat input in the
+    frame in force (:mod:`.heat_frame`: the tyres' frame by default, the
+    sensor's series inside ``using("sensor")``)."""
+    from .heat_frame import current
+
+    return _session_timeseries_in(root_str, session_id, current())
+
+
+@lru_cache(maxsize=4)
+def _session_timeseries_in(root_str: str, session_id: str, frame: str) -> SessionSeries | None:
     from ..tire_etl.dataset import load_group
-    from ..tire_etl.kinematics import load_kinematics
+    from .heat_frame import load_heat_kinematics
 
     root = Path(root_str)
-    kin = load_kinematics(root, session_id)
+    kin = load_heat_kinematics(root, session_id, frame)
     if kin is None or "lap_num" not in kin.schema.names:
         return None
     kin_cols = [
         c
-        for c in ("t_session_s", "lap_num", "speed_ms", "lat_g", "long_g", "lat_source")
+        for c in (
+            "t_session_s",
+            "lap_num",
+            "speed_ms",
+            "lat_g",
+            "long_g",
+            "lat_source",
+            "sensor_source",
+        )
         if c in kin.schema.names
     ]
     kin_df: pd.DataFrame = kin.select(kin_cols).to_pandas()

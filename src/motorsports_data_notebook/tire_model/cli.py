@@ -37,6 +37,19 @@ def _add_inputs_args(p: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_heat_frame_arg(p: argparse.ArgumentParser) -> None:
+    p.add_argument(
+        "--heat-frame",
+        choices=("tyres", "sensor"),
+        default="tyres",
+        help=(
+            "tyres (default): every session's heat input rebuilt from its GPS laid on the "
+            "committed track, the frame a simulated lap is in (#376). sensor: the sensor "
+            "verdict's series (accelerometer or GPS-derived fallback), for comparison."
+        ),
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="tire-model", description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -51,6 +64,7 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Force rebuild (currently always rebuilds; flag reserved for future)",
     )
+    _add_heat_frame_arg(p_build)
 
     p_predict = sub.add_parser(
         "predict",
@@ -220,6 +234,7 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     _add_inputs_args(p_holdout)
+    _add_heat_frame_arg(p_holdout)
 
     args = parser.parse_args(argv)
 
@@ -333,7 +348,7 @@ def _cmd_infer_compounds(args: argparse.Namespace) -> int:
 def _cmd_build(args: argparse.Namespace) -> int:
     root = args.dataset_root or default_dataset_root()
     logger.info("Building tire model artifacts at %s", root)
-    model = build_warmup_table(root, rebuild=args.rebuild)
+    model = build_warmup_table(root, rebuild=args.rebuild, heat_frame=args.heat_frame)
     n_k = len(model["K_buckets"])
     n_tau = len(model["tau_sec_by_car_corner_cond"])
     n_g2 = len(model["g2_typ_by_track_car_cond"])
@@ -460,6 +475,7 @@ def _cmd_holdout(args: argparse.Namespace) -> int:
         min_bucket_size=args.min_bucket_size,
         n_folds=args.n_folds,
         inputs=args.inputs,
+        heat_frame=args.heat_frame,
     )
 
 

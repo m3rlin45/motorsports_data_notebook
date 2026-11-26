@@ -15,6 +15,7 @@ import argparse
 import logging
 import sys
 from pathlib import Path
+from typing import Any
 
 from ...tire_etl.paths import default_dataset_root, repo_root
 
@@ -150,6 +151,15 @@ def main(argv: list[str] | None = None) -> int:
         help="Folds scored side by side (default: half the cores; a fold's fit and the "
         "solver use about two each, and a fold needs about 2.3 GB).",
     )
+    p_holdout.add_argument(
+        "--heat-frame",
+        choices=("tyres", "sensor"),
+        default="tyres",
+        help="tyres (default): every fold fitted, and the calculator's entries built, on heat "
+        "rebuilt from GPS and the committed track, the simulated laps served with no frame "
+        "factor (#376). sensor: the pressure model fitted on the sensor verdict's series, the "
+        "simulated laps brought to it by a frame factor (for comparison).",
+    )
     p_margins = sub.add_parser(
         "pressure-pace-margins",
         help="What `check-pressure-holdout --fastest F` would ask for at several fractions "
@@ -170,6 +180,36 @@ def main(argv: list[str] | None = None) -> int:
     tracks = args.tracks_dir or default_tracks()
     folds = workspace / "tracks" / "folds"
 
+    from contextlib import nullcontext
+
+    from ..heat_frame import model_frame, using
+
+    # The gates compare with production, so they read heat in the frame of the
+    # committed tire_model.json (#376); the standing holdout has its own
+    # --heat-frame (the tyres' frame by default) and sets it per fold.
+    own_frame = args.cmd in ("check-pressure-holdout", "compare-pressure-holdouts")
+    frame = None if own_frame else model_frame(root)
+    if frame is not None:
+        logging.getLogger(__name__).info("heat frame: %s (the committed model's)", frame)
+    with nullcontext() if frame is None else using(frame):
+        report = _run(args, parser, root, workspace, tracks, folds)
+    from . import gates
+
+    path = gates.write_report(report, workspace / "reports")
+    print(report.to_markdown())
+    print(f"report: {path}")
+    return 0 if report.passed else 1
+
+
+def _run(
+    args: argparse.Namespace,
+    parser: argparse.ArgumentParser,
+    root: Path,
+    workspace: Path,
+    tracks: Path,
+    folds: Path,
+) -> Any:
+    """The report of the command ``args.cmd``."""
     from . import gates
 
     if args.cmd == "check-geometry":
@@ -270,6 +310,7 @@ def main(argv: list[str] | None = None) -> int:
             workers=args.workers,
             split=tuple(args.split),
             fastest=args.fastest,
+            heat_frame=args.heat_frame,
         )
     elif args.cmd == "pressure-pace-margins":
         from . import pressure_gate
@@ -288,10 +329,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     else:  # pragma: no cover - argparse rejects unknown commands
         parser.error(f"unknown command {args.cmd}")
-    path = gates.write_report(report, workspace / "reports")
-    print(report.to_markdown())
-    print(f"report: {path}")
-    return 0 if report.passed else 1
+    return report
 
 
 if __name__ == "__main__":

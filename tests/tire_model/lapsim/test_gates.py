@@ -129,6 +129,34 @@ class TestCli:
         assert (tmp_path / "ws" / "cache" / "lap_index.parquet").exists()
         assert "# B1: " in capsys.readouterr().out
 
+    @pytest.mark.parametrize(
+        ("model", "cmd", "want"),
+        [
+            ({"heat_input": {"form": "x"}}, "check-geometry", "sensor"),  # fitted before #376
+            ({"heat_input": {"frame": "tyres"}}, "check-geometry", "tyres"),
+            ({"heat_input": {"form": "x"}}, "check-pressure-holdout", "tyres"),  # its own flag
+        ],
+    )
+    def test_a_gate_reads_heat_in_the_committed_models_frame(
+        self, monkeypatch, tmp_path, model, cmd, want
+    ):
+        import json
+
+        from motorsports_data_notebook.tire_model import heat_frame
+
+        (tmp_path / "tire_model.json").write_text(json.dumps(model))
+        seen = []
+
+        def run(*args):
+            seen.append(heat_frame.current())
+            return gates.GateReport("B1", "t")
+
+        monkeypatch.setattr(cli, "_run", run)
+        monkeypatch.setattr(gates, "write_report", lambda rep, out: out / "r.md")
+        argv = ["--dataset-root", str(tmp_path), "--workspace", str(tmp_path / "ws"), cmd]
+        assert cli.main(argv) == 0
+        assert seen == [want] and heat_frame.current() == heat_frame.TYRES
+
 
 class TestBankAgainstSensor:
     def test_the_slope_the_roll_and_the_rest(self):

@@ -95,18 +95,22 @@ _SAMPLE_CACHE: dict[str, dict[tuple[str, int], LapSamples]] = {}
 
 def load_lap_samples(root: Path) -> dict[tuple[str, int], LapSamples]:
     """Per-(session_id, lap_num) samples of every session's validated
-    kinematics (:func:`~..tire_etl.kinematics.load_kinematics`: speed and
-    the chosen lateral / longitudinal g on the sensor's own clock), cached."""
-    from ..tire_etl.kinematics import load_kinematics
+    kinematics on the kinematics clock, in the heat frame in force
+    (:func:`~.heat_frame.load_heat_kinematics`: speed and the lateral /
+    longitudinal g, the tyres' frame by default), cached per frame. A
+    dataset the frame cannot be built for at all is an error
+    (:class:`~.heat_frame.HeatFrameError`), not a skipped file."""
+    from .heat_frame import HeatFrameError, current, load_heat_kinematics
 
-    key = str(Path(root).resolve())
+    frame = current()
+    key = f"{Path(root).resolve()}|{frame}"
     cached = _SAMPLE_CACHE.get(key)
     if cached is not None:
         return cached
     out: dict[tuple[str, int], LapSamples] = {}
     for f in sorted((Path(root) / "timeseries").glob("*/*.parquet")):
         try:
-            kin = load_kinematics(Path(root), f.stem)
+            kin = load_heat_kinematics(Path(root), f.stem, frame)
             if kin is None or not set(_TS_COLUMNS).issubset(kin.schema.names):
                 continue
             ts = kin.select(_TS_COLUMNS).to_pandas()
@@ -118,6 +122,8 @@ def load_lap_samples(root: Path) -> dict[tuple[str, int], LapSamples]:
                 ts = ts[~ts["lap_num"].isin(holed)]
                 for lap_num, names in ts.groupby("lap_num")["_source"].unique().items():
                     lap_source[int(lap_num)] = str(names[0]) if len(names) == 1 else "mixed"
+        except HeatFrameError:
+            raise
         except Exception:  # noqa: BLE001 — one unreadable file shouldn't kill the build
             logger.warning("pace model: failed to read %s — skipping", f)
             continue

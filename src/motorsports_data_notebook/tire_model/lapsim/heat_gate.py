@@ -95,6 +95,13 @@ def _sensor_laps(root: Path, laps: pd.DataFrame, cars: Iterable[str] | None = No
         lng_all = kin["long_g"].to_numpy(float)
         has_source = "lat_source" in kin.columns
         src_all = kin["lat_source"].to_numpy() if has_source else np.full(len(kin), "imu")
+        # the kind of sensor the session logged with, as a label: in the tyres'
+        # frame (#376) the heat is GPS-derived and the verdict is carried beside
+        kind_all = (
+            kin["sensor_source"].fillna("").to_numpy()
+            if "sensor_source" in kin.columns
+            else src_all
+        )
         step = float(np.median(np.diff(t_all))) if len(t_all) > 1 else 0.02
         lat_lp, lng_lp = _smooth(lat_all, t_all), _smooth(lng_all, t_all)
         for lap_num in sorted(int(x) for x in grp["lap_num"].unique()):
@@ -104,7 +111,7 @@ def _sensor_laps(root: Path, laps: pd.DataFrame, cars: Iterable[str] | None = No
             t, v = t_all[on], v_all[on]
             kinds = {str(s) for s in src_all[on]}
             hole = "discard" in kinds
-            moving_kinds = kinds - {"discard"}
+            moving_kinds = {str(s) for s in kind_all[on]} - {"discard", ""}
             # a second through a discarded window has no known heat: its
             # samples are left out, and the lap then lacks coverage
             keep = (np.nan_to_num(v, nan=0.0) > MOVING_SPEED_MS) & (src_all[on] != "discard")
