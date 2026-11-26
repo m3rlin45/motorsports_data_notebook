@@ -413,3 +413,101 @@ def test_evaluate_fold_does_not_fit_when_given_the_fold_model(monkeypatch, tmp_p
     got = validate._evaluate_fold(tmp_path, ["s1", "s2"], model=model)
     assert asked == [model]
     pd.testing.assert_frame_equal(got, _score_fold_laps(prep, model))
+
+
+# ---------- the calculator's N on a first-lap anchor (#374) ----------
+
+
+def _stint(t_anchor: float, kind: str = "first_lap", *, out_lap: bool = False) -> FoldLaps:
+    """One stint of four 60 s laps (lap 0 is the stint's first lap: an
+    out-lap from the pits when ``out_lap``, else a flying lap), front left
+    anchored at ``t_anchor`` on the stint clock; the scored laps are 1–3."""
+    rows = []
+    for n in range(4):
+        rows.append(
+            {
+                "session_id": "s1",
+                "track_canonical": "t",
+                "car": "c",
+                "condition": "dry",
+                "lap_num": 10 + n,
+                "stint_id": 0,
+                "lap_within_stint": n,
+                "is_outlap": out_lap and n == 0,
+                "_is_out": out_lap and n == 0,
+                "t_cum_s": 60.0 * (n + 1),
+                "on_track_s": 60.0,
+                "moving_s": 60.0,
+                "t_eff_c": 20.0,
+                "heat_proxy": float("nan"),
+                "q_lap_fl": 4.0,
+                "t_gas_fl_end": 30.0,
+                "tpms_temp_fl_end": 30.0,
+                "t_anchor_fl": t_anchor,
+                "t_start_fl": 20.0,
+                "anchor_kind_fl": kind,
+                "p_start_fl": 1.5,
+                "tpms_press_fl_end": 1.6,
+            }
+        )
+    full = pd.DataFrame(rows)
+    return FoldLaps(
+        flying=full[full["lap_within_stint"] > 0].reset_index(drop=True),
+        full=full,
+        label_by_session={},
+        session_lap_time={"s1": 60.0},
+        stint_outlap={},
+        kappa_by_car={},
+    )
+
+
+def _fed(prep: FoldLaps) -> tuple[list[tuple[int, int, bool]], pd.DataFrame]:
+    """``[(lap_within_stint, N fed, with_outlap)]`` per scored lap, and the rows."""
+    seen: list[tuple[int, bool]] = []
+
+    def source(model, track, car, cond, n, lap_time_s, *, with_outlap, corner=None):  # type: ignore[no-untyped-def]
+        seen.append((n, with_outlap))
+        return 4.0, n * lap_time_s, 1.0, 0.0, 0.0
+
+    got = _score_fold_laps(prep, _harness_model(), lap_inputs_fn=source)
+    laps = got["lap_within_stint"].tolist()
+    return [(lap, n, out) for lap, (n, out) in zip(laps, seen)], got
+
+
+def test_a_stint_anchored_at_its_first_laps_start_is_fed_that_lap_too() -> None:
+    """No pit-exit reading and the first lap's start reading as the anchor:
+    by the end of lap N the tyre has run N + 1 laps from the reading, and
+    the calculator, whose clock starts at the reading, is fed N + 1."""
+    fed, rows = _fed(_stint(0.0))
+    assert fed == [(1, 2, False), (2, 3, False), (3, 4, False)]
+    assert rows["n_flying"].tolist() == [2, 3, 4]
+    # the calculator's clock is then the stint's: N laps of the typed 60 s
+    assert (rows["t_used_s"] == rows["t_cum_s"] - rows["t_anchor_s"]).all()
+    # the same when the first lap is an out-lap that did not leave the pits
+    fed_out, _ = _fed(_stint(0.0, out_lap=True))
+    assert fed_out == fed
+
+
+def test_a_stint_anchored_at_its_first_laps_end_keeps_its_lap_number() -> None:
+    """The first lap's end reading (or the next lap's start reading, whose
+    time is a few hundredths of a second off the stint clock) leaves that
+    lap behind the anchor: N is the lap number."""
+    want = [(1, 1, False), (2, 2, False), (3, 3, False)]
+    assert _fed(_stint(60.0))[0] == want
+    assert _fed(_stint(59.98))[0] == want
+
+
+def test_a_lap_ending_on_a_later_anchor_is_not_scored() -> None:
+    """An anchor at lap 2's start: lap 1 ends on it (the anchor's own lap)
+    and is not scored, in either inputs mode; the laps after count from it."""
+    fed, _ = _fed(_stint(119.97))
+    assert fed == [(2, 1, False), (3, 2, False)]
+    oracle = _score_fold_laps(_stint(119.97), _harness_model(), inputs="oracle")
+    assert oracle["lap_within_stint"].tolist() == [2, 3]
+
+
+def test_a_pit_exit_anchor_is_fed_the_flying_laps_after_the_out_lap() -> None:
+    """A pit-exit reading is inside the out-lap, which the calculator
+    integrates by itself: N is the flying-lap number, as before."""
+    fed, _ = _fed(_stint(12.0, "pit_exit", out_lap=True))
+    assert fed == [(1, 1, True), (2, 2, True), (3, 3, True)]
