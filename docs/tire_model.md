@@ -293,6 +293,10 @@ notes-validation loaders, `statespace._session_timeseries`):
    60 s of rolling time, in-laps are excluded, laps shorter than 30 s or
    slower than 1.4× the stint's best are dropped, and a lap needs a TPMS
    pressure range above 0.003 bar on at least one corner.
+4. **A corner losing gas** (`cleaning.drifting_tpms`, #373, 2026-11-26;
+   §1.0a″): a tyre whose amount of gas falls against its siblings' through
+   a session (a leak, or a transducer that drifts) has its TPMS columns
+   masked for that session, at training and scoring alike.
 
 A cleaning change is therefore a code change plus a retrain; the dataset
 is re-extracted only when the extractor's own output (lap splitting,
@@ -459,6 +463,72 @@ wheels on 2026-08-09, a0216/a0219/a0222; eight KK-SII sessions at Suzuka on
 2026-09-21 and three on 2026-10-03/04; the Inferno 86's 2025-07-22 test)
 were masked whole by the session-start rule before #371 and still are: they
 are out of training and scoring, and the blacklist is not needed for them.
+
+### 1.0a″ A corner losing gas (#373, 2026-11-26)
+
+The Inferno 86's front-left TPMS loses gas, or its transducer drifts,
+through both Sodegaura sessions of 2025-10-05 (a1599, a1603): at a steady
+70 °C its pressure falls from 1.454 to 1.395 bar over a1599 while the front
+right holds 1.477–1.480, and it starts a1603 at 1.16 bar and 41 °C where
+the front right reads 1.22 bar at 44 °C (the notes say all four were set to
+1.4 bar cold).
+No prediction-time input can know it, so the rows are dropped at cleaning,
+not modelled.
+
+**The screen** (`cleaning.gas_drift_screen`). The amount of gas in a tyre
+goes as `(P + 1.013) / (T + 273.15)`; on steady laps it changes only by a
+leak or a drifting transducer, and the session's other tyres share whatever
+the sensors have in common. Per session, over its usable laps on which all
+four tyres read a finite mean and a temperature range within the lap of
+1 °C or less: each tyre's log amount of gas, less the mean of the other
+three tyres', fitted linearly against the session's on-track clock, times
+the span: the tyre's change over the session in %. A session is judged on 8
+steady laps or more over 15 min or more (the committee's screen, except
+that the clock counts every lap of the session, not only the usable ones).
+
+**The threshold, fixed before scoring from the sound tyres** (the issue's
+−4 % was set after seeing the values). Over every screened tyre-session of
+the dataset, the centre is the median change and the scale 1.4826 × the
+median absolute deviation (robust, so a leaking tyre does not widen it). A
+tyre is flagged when its change is below the centre less z scales, z being
+the one-sided Bonferroni quantile at which a sound tyre anywhere among the
+N screened tyre-sessions is flagged by chance with probability 5 % at most
+(`DRIFT_FALSE_FLAG_RATE`; z = Φ⁻¹(1 − 0.05 / N)), and when its reference is
+sound: each of the other three tyres' change against the remaining two lies
+within z scales of the centre. Only a loss is flagged. On the dataset of
+2026-11-26: 45 sessions screened, N = 180, centre +0.02 %, scale 0.80 %,
+z = 3.45, threshold −2.73 %. Flagged: a1603 FL (−4.28 %, its siblings within
+0.24 % of each other) and a1599 FL (−3.20 %, within 0.24 %). The next three
+are KK-SII tyres at Tsukuba, at −2.69 % (a0082 RR, 0.04 % short of the
+threshold, 9 steady laps), −2.24 % and −2.10 %.
+
+**No sound tyre flagged.** Both flags are the front left of 2025-10-05,
+whose loss is in its own stream (above; its gas amount at steady
+temperature −2.7 % over a1599 where the front right's is +0.2 %). One
+warning on the screen's reach: with only 8 steady laps a session is near
+the edge of what it can judge. a1329 FR (2025-08-16, Sodegaura, 8 steady
+laps over 22.5 min) reads −1.85 % on the cleaning as committed, but −3.75 %
+(and flagged) under the either-stream stale mask of §1.0a′, where its first
+lap's readings change; its own stream shows no loss (it holds 1.55–1.56 bar
+at 76–77 °C over the last six laps, and its gas amount at the end of the
+session is 0.4 % above the session before's).
+
+**Measured** (the standing holdout refitted on top of §1.0a′'s rule A as
+committed, the same 15 folds and 128 sessions). The flag takes out 100 lap ×
+tyre rows (a1599 FL 56, a1603 FL 44) that score 107.2 mbar (bias +103.4)
+for the current calculator:
+
+| hot-pressure MAE, mbar | rows | current | pace table | direct | Inferno 86 (current) |
+|---|---|---|---|---|---|
+| rule A (§1.0a′) | 5,751 | 37.48 | 38.40 | 38.52 | 46.00 |
+| rule A and the drift flag | 5,651 | 36.12 | 37.10 | 37.22 | 43.10 |
+
+On the 5,651 rows both score, the refit without the two corners moves the
+current calculator by −0.12 mbar (date-clustered SE 0.25, bootstrap −0.56 to
++0.28; the pace table −0.14 ± 0.27): the pooled gain is the rows left out,
+not a better model of the rest. The gap of the simulation-based calculator
+to the current one is unchanged (+1.00 → +0.98 on those rows). The FJ's
+rows are untouched (31.18).
 
 ### 1.0b Layouts by measured lap length, one row per recording (schema 5, 2026-10-30)
 
