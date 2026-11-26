@@ -181,6 +181,7 @@ def _collect_holdout_frame(
     n_folds: int,
     inputs: str = "calculator",
     quiet: bool = False,
+    heat_frame: str | None = None,
 ) -> tuple[pd.DataFrame | None, int]:
     """Run the k-fold holdout and return ``(residual rows, n session×fold
     holdouts)``. ``None`` rows means no bucket could be held out."""
@@ -219,6 +220,7 @@ def _collect_holdout_frame(
             holdout_ids,
             inputs=inputs,
             inferred_labels=inferred_labels,
+            heat_frame=heat_frame,
         )
         if not fold_df.empty:
             fold_df["fold"] = fold
@@ -429,9 +431,19 @@ class FoldLaps:
 LapInputsFn = Callable[..., tuple[float, float, float, float, float]]
 
 
-def _fit_fold(root: Path, holdout_ids: Iterable[str]) -> dict[str, Any]:
-    """The model fitted without ``holdout_ids``, nothing written."""
-    return build_warmup_table(root, exclude_session_ids=set(holdout_ids), write_artifacts=False)
+def _fit_fold(
+    root: Path, holdout_ids: Iterable[str], heat_frame: str | None = None
+) -> dict[str, Any]:
+    """The model fitted without ``holdout_ids``, nothing written, on heat in
+    ``heat_frame`` (:mod:`.heat_frame`; None: the frame in force)."""
+    from .heat_frame import resolve
+
+    return build_warmup_table(
+        root,
+        exclude_session_ids=set(holdout_ids),
+        write_artifacts=False,
+        heat_frame=resolve(heat_frame),
+    )
 
 
 def _fold_constants(
@@ -477,6 +489,7 @@ def _evaluate_fold(
     inferred_labels: dict[str, str] | None = None,
     model: dict[str, Any] | None = None,
     lap_inputs_fn: LapInputsFn | None = None,
+    heat_frame: str | None = None,
 ) -> pd.DataFrame:
     """Train a model excluding ``holdout_ids`` and return per-(lap, corner)
     residual rows for the held-out sessions.
@@ -500,12 +513,14 @@ def _evaluate_fold(
     several heat sources are then scored on one fit (#208's harness; fit a
     fold once, :func:`_prepare_fold_laps` once and :func:`_score_fold_laps`
     per source). ``lap_inputs_fn`` stands in for
-    :func:`_calculator_lap_inputs`.
+    :func:`_calculator_lap_inputs`. ``heat_frame`` is the frame the fold is
+    fitted in when ``model`` is not given (:mod:`.heat_frame`); the held-out
+    laps are prepared in the frame of the model they are scored with.
     """
     if inputs not in INPUT_MODES:
         raise ValueError(f"inputs must be one of {INPUT_MODES}; got {inputs!r}")
     if model is None:
-        model = _fit_fold(root, holdout_ids)
+        model = _fit_fold(root, holdout_ids, heat_frame=heat_frame)
     prep = _prepare_fold_laps(root, holdout_ids, model, inferred_labels=inferred_labels)
     if prep is None:
         return pd.DataFrame()
@@ -920,6 +935,7 @@ def run_holdout_validation(
     min_bucket_size: int = 10,
     n_folds: int = 1,
     inputs: str = "calculator",
+    heat_frame: str | None = None,
 ) -> int:
     """Train on all-minus-held-out, predict per-lap T_hot for held-out sessions.
 
@@ -942,6 +958,7 @@ def run_holdout_validation(
         min_bucket_size=min_bucket_size,
         n_folds=n_folds,
         inputs=inputs,
+        heat_frame=heat_frame,
     )
     if df is None:
         return 1
@@ -1050,7 +1067,11 @@ def run_pace_check(dataset_root: Path | None = None) -> int:
     laps = _compute_delta_t(laps)
     laps = _laps_for_fit(laps, _build_g2_typ(laps))
     laps = _flying_laps(attach_lap_heat(root, laps, model))
-    frame = fast_lap_check(laps, load_lap_samples(root), share)
+    from .heat_frame import frame_of, using
+
+    with using(frame_of(model)):  # the samples in the frame the model was fitted in
+        samples = load_lap_samples(root)
+    frame = fast_lap_check(laps, samples, share)
     if frame.empty:
         print("pace-check: no session has both reference laps and clean faster laps.")
         return 0

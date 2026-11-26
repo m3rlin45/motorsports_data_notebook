@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
+import pytest
 
+from motorsports_data_notebook.tire_model import heat_frame
 from motorsports_data_notebook.tire_model.heat_input import CarFacts, ShareParams
 from tests._timeseries_fixture import write_session_timeseries
 from motorsports_data_notebook.tire_model.pace_sim import (
@@ -23,6 +26,15 @@ from motorsports_data_notebook.tire_model.pace_sim import (
     scaled_lap,
     summarize_fast_lap_check,
 )
+
+
+@pytest.fixture(autouse=True)
+def _sensor_frame() -> Iterator[None]:
+    """These synthetic sessions carry an accelerometer-like series and no GPS
+    family or sessions table, so they are fitted in the sensor's frame: what
+    is tested is the fit, which reads either frame alike (#376)."""
+    with heat_frame.using(heat_frame.SENSOR):
+        yield
 
 
 def _share(g_transfer: float = 2.0) -> ShareParams:
