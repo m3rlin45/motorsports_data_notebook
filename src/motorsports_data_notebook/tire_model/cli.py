@@ -285,6 +285,7 @@ def _cmd_infer_compounds(args: argparse.Namespace) -> int:
         build_warmup_table,
         load_sensor_blacklist,
     )
+    from .wetness import load_condition_overrides
 
     root = Path(args.dataset_root) if args.dataset_root else default_dataset_root()
     model = build_warmup_table(root, write_artifacts=False)
@@ -295,7 +296,7 @@ def _cmd_infer_compounds(args: argparse.Namespace) -> int:
         for d in model["tau_sec_by_car_corner_cond"]
     }
     laps = _load_filtered_laps(root)
-    laps = _attach_weather(laps, _load_weather(root))
+    laps = _attach_weather(laps, _load_weather(root), load_condition_overrides(root))
     laps = _compute_stint_clock(laps)
     laps, _ = _apply_blacklist(laps, load_sensor_blacklist(root), warn_on_unknown=False)
     laps = _compute_stint_anchor(laps)  # anchors carry the set pressure the EM prior uses
@@ -516,10 +517,11 @@ def _cmd_audit_sensors(args: argparse.Namespace) -> int:
         detect_suspect_corners,
         load_sensor_blacklist,
     )
+    from .wetness import load_condition_overrides
 
     root = args.dataset_root or default_dataset_root()
     laps = _load_filtered_laps(root)
-    laps = _attach_weather(laps, _load_weather(root))
+    laps = _attach_weather(laps, _load_weather(root), load_condition_overrides(root))
     laps = _compute_stint_clock(laps)
     candidates = detect_suspect_corners(laps)
 

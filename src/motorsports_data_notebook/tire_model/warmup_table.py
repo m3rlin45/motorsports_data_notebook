@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -37,6 +38,7 @@ from . import wetness as _wetness
 from .cleaning import clean_laps
 from .energy_balance import P_ATM_BAR, T_ZERO_C_TO_K, t_effective_c, t_road_proxy_c
 from .predict import RAW_CAR_TABLES
+from .wetness import load_condition_overrides
 
 logger = logging.getLogger(__name__)
 
@@ -250,7 +252,7 @@ def _build_warmup_table(
             len(laps),
         )
     weather = _load_weather(root)
-    laps = _attach_weather(laps, weather)
+    laps = _attach_weather(laps, weather, load_condition_overrides(root))
     laps = _compute_stint_clock(laps)
     blacklist_pairs = load_sensor_blacklist(root)
     laps, blacklist_applied = _apply_blacklist(laps, blacklist_pairs)
@@ -340,8 +342,8 @@ def _build_warmup_table(
 
     # Compound-aware K: multi-task fit with partial supervision. The
     # compound-assignment task is supervised where labels exist (sidecar +
-    # notes, plus weather-driven condition seeds like the KK-SII's
-    # DRY/WET) and latent elsewhere; the temperature-regression task
+    # notes, plus weather-driven condition seeds like the FJ cars'
+    # DRY/WET, matched on the raw car) and latent elsewhere; the temperature-regression task
     # shares the per-compound K parameters. Solved jointly by EM
     # (mixture of regressions with pinned responsibilities). Soft
     # assignments are training-only — held-out evaluation uses human/seed
@@ -355,7 +357,7 @@ def _build_warmup_table(
             ~compound_labels["session_id"].isin(exclude_session_ids)
         ].reset_index(drop=True)
     compound_labels = apply_condition_seeds(
-        compound_labels, laps_for_fit, alias_condition_seeds(load_condition_seeds(root))
+        compound_labels, laps_for_fit, load_condition_seeds(root)
     )
     k_em, em_assignments, compound_multipliers = fit_compounds_em(
         laps_for_fit, compound_labels, tau_by_car_corner_cond
@@ -424,21 +426,6 @@ def apply_car_aliases(laps: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def alias_condition_seeds(seeds: dict[str, dict[str, str]]) -> dict[str, dict[str, str]]:
-    """Re-key the sidecar's condition_seeds through CAR_FIT_ALIASES.
-
-    The sidecar records seeds against the raw car name (e.g. "KK-SII");
-    after aliasing the laps carry the pooled label, so the seeds must be
-    pooled the same way for :func:`compound_infer.apply_condition_seeds`
-    to match them.
-    """
-    out: dict[str, dict[str, str]] = {}
-    for car, mapping in seeds.items():
-        key = CAR_FIT_ALIASES.get(car, car)
-        out.setdefault(key, {}).update(mapping)
-    return out
-
-
 def _load_filtered_laps(root: Path) -> pd.DataFrame:
     """Read laps + sessions, clean, filter to ok + has_tpms + tire_usable.
 
@@ -503,7 +490,11 @@ def _load_weather(root: Path) -> pd.DataFrame:
     return pd.concat(rows, ignore_index=True)
 
 
-def _attach_weather(laps: pd.DataFrame, weather: pd.DataFrame) -> pd.DataFrame:
+def _attach_weather(
+    laps: pd.DataFrame,
+    weather: pd.DataFrame,
+    overrides: Mapping[tuple[str, str], str] | None,
+) -> pd.DataFrame:
     """Join hourly weather onto laps and derive the track condition.
 
     ``t_air_c`` and ``cloud_cover`` are the instantaneous values of the hour
@@ -511,8 +502,19 @@ def _attach_weather(laps: pd.DataFrame, weather: pd.DataFrame) -> pd.DataFrame:
     preceding-hour sum) is kept for reference. ``condition`` comes from the
     surface water balance in :mod:`.wetness`: the film depth on the track at
     roll-out and over the run (``track_wetness_start_mm``,
-    ``track_wetness_run_max_mm``), classified by :func:`wetness.classify_wetness`.
+    ``track_wetness_run_max_mm``), classified by :func:`wetness.classify_wetness`,
+    and then the owner's word where ``overrides``
+    (:func:`wetness.load_condition_overrides` of the same root) lists the day
+    (#395). Every caller passes them, so the fit, the folds and the scoring
+    read one label.
     """
+    from .wetness import (
+        apply_condition_overrides,
+        classify_wetness,
+        session_wetness,
+        surface_water_series,
+    )
+
     if weather.empty:
         laps["t_air_c"] = np.nan
         laps["cloud_cover"] = np.nan
@@ -520,8 +522,7 @@ def _attach_weather(laps: pd.DataFrame, weather: pd.DataFrame) -> pd.DataFrame:
         laps["track_wetness_start_mm"] = np.nan
         laps["track_wetness_run_max_mm"] = np.nan
         laps["condition"] = "unknown"
-        return laps
-    from .wetness import classify_wetness, session_wetness, surface_water_series
+        return apply_condition_overrides(laps, overrides)
 
     laps = laps.copy()
     starts = pd.to_datetime(laps["session_start_utc"], utc=True)
@@ -559,7 +560,7 @@ def _attach_weather(laps: pd.DataFrame, weather: pd.DataFrame) -> pd.DataFrame:
         lambda s: feats.get(str(s), {}).get("depth_run_max_mm", np.nan)
     )
     out["condition"] = out["track_wetness_run_max_mm"].apply(classify_wetness)
-    return out
+    return apply_condition_overrides(out, overrides)
 
 
 def _is_outlap_col(df: pd.DataFrame) -> pd.Series:

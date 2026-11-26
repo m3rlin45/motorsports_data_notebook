@@ -292,7 +292,13 @@ notes-validation loaders, `statespace._session_timeseries`):
 3. **Lap usability** (`tire_usable` / `exclude_reason`): out-laps need
    60 s of rolling time, in-laps are excluded, laps shorter than 30 s or
    slower than 1.4× the stint's best are dropped, and a lap needs a TPMS
-   pressure range above 0.003 bar on at least one corner.
+   pressure range above 0.003 bar on at least one corner. The stint's best
+   is of its flying laps only, out-laps and in-laps left out (#391,
+   2026-11-26). A short partial in-lap had been the "best" of 15 stints in
+   the dataset. In the TPMS sessions it dropped all 13 flying laps of the
+   Inferno 86's a0837 (Sodegaura, 2025-07-24: a 54.6 s in-lap against 79 s
+   laps), and on 2026-11-25 all four of the KK-F-V2's a0436 (72.4 s against
+   113.7 s).
 4. **A corner losing gas** (`cleaning.drifting_tpms`, #373, 2026-11-26;
    §1.0a″): a tyre whose amount of gas falls against its siblings' through
    a session (a leak, or a transducer that drifts) has its TPMS columns
@@ -1742,6 +1748,19 @@ itself. Weather-driven tire choices use
 declarative ``condition_seeds`` in the sidecar (KK-SII: all-dry session ⇒
 DRY tires, all-wet ⇒ WET; damp/mixed left to the classifier — the EM
 independently recovers the known 2026-04-04 rain day as WET at ≥0.998).
+A seed belongs to the tyres a car runs, so the sidecar lists it per raw
+car and it is matched on the car the session names (``raw_car``), not on
+the fit's pooled car (#393, 2026-11-26): the KK-SII, the KK-F and the
+KK-F-V2 run the same FJ slick and rain tyre and carry the same seed. Until
+then the KK-SII's seed reached the KK-F and the KK-F-V2 only through
+``CAR_FIT_ALIASES``, which the sidecar's comment denied ("the KK-F is
+deliberately not seeded"), ``infer-compounds`` never applied (its seeds
+were not aliased, so no FJ session was seeded there) and ``--split KK-F
+KK-F-V2`` silently dropped for the split cars (that experiment's KK-F ran
+with no DRY/WET seed). Every one of the 20 seeded KK-F-family sessions (29
+with 2026-11-25's) has the seed its pace supports (dry at 0.98–1.03 × the
+car's dry pace, wet at 1.09–1.12); the session the comment worried about (a0381, slicks on a track the wetness model calls wet) carries a
+notes label, and a written label beats a seed.
 Soft assignments are training-only; held-out evaluation uses human/seed
 labels exclusively. ``just tire-model infer-compounds`` audits every
 latent assignment for human review.
@@ -1798,6 +1817,47 @@ not the rain rate of one hour (`tire_model/wetness.py`):
 
 The condition's definition for the *user* is unchanged: at prediction time
 they say how wet the track is.
+
+**The owner's word over the archive (#395, 2026-11-26).** The archive is a
+reanalysis grid, and at the damp boundary its label is no better than a guess.
+The water balance called the KK-F-V2's dry Fuji afternoon of 2026-11-25 damp
+(a0434–a0441: 0.2–0.5 mm/h at 12–15 JST, a film of 0.07–0.24 mm), on the
+day's fastest laps; the owner, who was there, says the track was dry all day.
+Against the run notes, on 187 sessions with the 2026-11-25 ones:
+
+- where the notes give dry or wet, the archive agrees (2 of 2, 13 of 13);
+- all 12 disagreements are sessions the notes call damp, which the archive
+  labels dry (6: Fuji 2025-11-01, Sodegaura 2026-08-15 "rained part way
+  through") or wet (6, at a film of 0.58 mm or more);
+- the archive's damp has one written confirmation (a0385, "slightly damp,
+  slicks", the KK-F at Tsukuba on 2026-10-25) and now five refutations.
+
+Lap pace does not tell dry from damp either: 8 of the 13 noted-damp sessions
+are within 2 % of the car's dry pace at the layout (a0385 at 0.996 of it, the
+fastest of its day). So no rule on pace, on notes alone or on the film
+threshold was taken; each would relabel sessions already in training whose
+truth nobody has written down, and is the owner's call:
+
+- `DAMP_FILM_MM` raised to 0.25–0.30 separates 2026-11-25 (≤ 0.242 mm) from
+  a0385 (0.314 mm) and turns 5–6 other unverified sessions dry;
+- "damp needs a note" turns 10 other unnoted damp sessions dry (about 30 of
+  187 sessions have a written condition at all);
+- "notes outrank the archive" relabels 12 sessions, and two noted "snow"
+  have no category.
+
+Instead `data/tire_dataset/condition_overrides.yaml` holds the owner's word
+per track day (`track`, `date`, `condition`, `evidence`).
+`wetness.apply_condition_overrides` puts it over the computed label wherever
+the label is made: `warmup_table._attach_weather` (the fit, the holdout's
+folds and their scoring, every caller passing
+`wetness.load_condition_overrides` of its root) and the lap simulation's
+`geometry.session_conditions` (its lap index is keyed on the file's bytes, and
+the fold cache lists it in `pressure_gate._FIT_SIDECARS`). The film depths
+stay as computed. Its one entry, Fuji 2026-11-25 dry, relabels exactly the
+five sessions (damp → dry) and nothing else; none of them is in the dataset
+before the 2026-11-25 refresh, so the standing holdout on the committed data
+is unchanged by construction.
+
 
 **Where the condition enters.** ⟨g²⟩, lap_time_typ and the corner defaults
 are per condition (drivers go slower and pull less g in the rain; those are
