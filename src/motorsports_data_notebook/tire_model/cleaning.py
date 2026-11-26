@@ -373,8 +373,10 @@ def apply_filters(
     ``laps`` must contain :data:`FILTER_INPUT_COLUMNS` plus per-corner
     ``tpms_press_{c}_min`` / ``_max``; ``moving_s`` when out-laps are kept.
     The best lap used for the "too slow" rule is per ``(session_id, stint_id)``
-    when a ``session_id`` column is present, else per ``stint_id``. A pyarrow
-    table in gives a pyarrow table back.
+    when a ``session_id`` column is present, else per ``stint_id``, and is
+    taken over the flying laps only: an out-lap or an in-lap is a partial lap,
+    and a short in-lap as the "best" would drop every real lap of its stint
+    (#391). A pyarrow table in gives a pyarrow table back.
     """
     cfg = cfg or FilterConfig()
     is_table = isinstance(laps, pa.Table)
@@ -394,11 +396,12 @@ def apply_filters(
         )
         keys = list(zip(session_ids.tolist(), stint_ids.tolist()))
 
-        # Per-stint best lap time (ignoring NaN and out-laps).
+        # Per-stint best lap time over the flying laps (ignoring NaN, out-laps
+        # and in-laps, which are partial laps).
         best_by_stint: dict[tuple, float] = {}
         for i in range(n):
             t = lap_time[i]
-            if is_outlap[i] or np.isnan(t) or t < cfg.min_lap_time_s:
+            if is_outlap[i] or is_inlap[i] or np.isnan(t) or t < cfg.min_lap_time_s:
                 continue
             if keys[i] not in best_by_stint or t < best_by_stint[keys[i]]:
                 best_by_stint[keys[i]] = t

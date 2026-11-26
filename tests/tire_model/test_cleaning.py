@@ -136,6 +136,22 @@ def test_slow_relative_to_best_excluded() -> None:
     assert reasons[1] == "lap_too_slow"
 
 
+def test_a_short_inlap_is_not_the_stints_best() -> None:
+    """#391 (KK-F-V2, Fuji, 2026-11-25, a0436): a 72 s partial in-lap after
+    four 114 s laps. The in-lap is not a flying lap, so the stint's best is
+    the fastest of the four, and none of them is too slow."""
+    t = _laps(
+        [_base_lap(lap_num=i + 1, lap_time_s=s) for i, s in enumerate((114.8, 114.8, 113.8, 113.7))]
+        + [_base_lap(lap_num=5, lap_time_s=72.4, is_inlap=True)]
+        + [_base_lap(lap_num=6, lap_time_s=200.0)]
+    )
+    reasons = apply_filters(t, FilterConfig()).column("exclude_reason").to_pylist()
+    assert reasons == [None, None, None, None, "inlap", "lap_too_slow"]
+    # Kept in-laps still do not set the best.
+    kept = apply_filters(t, FilterConfig(exclude_inlap=False))
+    assert kept.column("exclude_reason").to_pylist()[:5] == [None] * 5
+
+
 def test_empty_table() -> None:
     t = pa.table(
         {
