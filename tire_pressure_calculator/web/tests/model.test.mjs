@@ -359,6 +359,150 @@ test('car aliases resolve raw names to the pooled label', () => {
   assert.equal(model.resolveCar('Inferno 86'), 'Inferno 86');
 });
 
+// A synthetic v5 model whose 'Car' pools two raw cars, RawA and RawB:
+// RawA has its own dry entry at 'synth' (heat, lap time, pace curve,
+// out-lap), RawB has none; the pooled car also has a damp entry.
+function rawCarModel() {
+  const dto = syntheticV5Model();
+  dto.car_aliases = { RawA: 'Car', RawB: 'Car' };
+  dto.g2_typ_by_track_car_cond.push({
+    track_canonical: 'synth', car: 'Car', condition: 'damp', g2_typ: 0.6, n_laps_used: 10,
+  });
+  dto.lap_time_typ_by_track_car_cond.push({
+    track_canonical: 'synth', car: 'Car', condition: 'damp', lap_time_typ_s: 65.0, n_laps_used: 10,
+  });
+  dto.g2_typ_by_track_raw_car_cond = [{
+    track_canonical: 'synth', car: 'RawA', condition: 'dry', g2_typ: 1.2, n_laps_used: 4,
+    g2_vs_lap_time: { lap_time_s: [50, 70], g2: [2.0, 1.0], n_laps: 4 },
+  }];
+  dto.lap_time_typ_by_track_raw_car_cond = [
+    { track_canonical: 'synth', car: 'RawA', condition: 'dry', lap_time_typ_s: 58.0, n_laps_used: 4 },
+  ];
+  dto.outlap_typ_by_track_raw_car_cond = [{
+    track_canonical: 'synth', car: 'RawA', condition: 'dry',
+    outlap_moving_s: 80, outlap_g2: 0.5, n_laps_used: 2,
+  }];
+  return dto;
+}
+
+test('raw-car entries: a raw car reads its own entry and the pooled constants', () => {
+  const model = new TireModel(rawCarModel());
+  const args = {
+    track: 'synth', condition: 'dry', lapWithinStint: 5, ambientTempC: 20,
+    cloudCoverPct: 100, targetHotPressureBar: 1.8, corner: 'fl', targetLapTimeS: 60,
+  };
+  const own = predictCorner(model, { ...args, car: 'RawA' });
+  const pooled = predictCorner(model, { ...args, car: 'Car' });
+  // its own heat along its own curve, anchored at its own lap time (1.6 at 58 s)
+  assert.ok(Math.abs(own.g2Typ - 1.2 * 1.5 / 1.6) < 1e-12);
+  assert.equal(own.lapTimeTypS, 58.0);
+  assert.equal(own.g2PaceSource, 'curve');
+  assert.equal(own.outlapTimeS, 80);
+  assert.equal(own.outlapG2, 0.5);
+  assert.equal(pooled.lapTimeTypS, 60.0);
+  assert.equal(pooled.outlapTimeS, 90);
+  // the constants are the pooled car's whichever name is given
+  assert.equal(own.kSourceBucket, pooled.kSourceBucket);
+  assert.equal(own.kKelvinPerG2, pooled.kKelvinPerG2);
+  assert.equal(own.tauSec, pooled.tauSec);
+  // a raw car without its own entry reads the pooled one
+  assert.deepEqual(predictCorner(model, { ...args, car: 'RawB' }), pooled);
+  // the condition chain comes first: RawA's damp is the pooled damp entry
+  const damp = predictCorner(model, { ...args, car: 'RawA', condition: 'damp' });
+  const pooledDamp = predictCorner(model, { ...args, car: 'Car', condition: 'damp' });
+  assert.equal(damp.lapTimeTypS, 65.0);
+  assert.equal(damp.lapTimeTypS, pooledDamp.lapTimeTypS);
+  // ... and each table walks the chain alone: no damp out-lap anywhere, so
+  // the dry step reads RawA's own out-lap before the pooled one
+  assert.equal(damp.outlapSource, 'fallback(dry)');
+  assert.equal(damp.outlapTimeS, 80);
+  assert.equal(pooledDamp.outlapTimeS, 90);
+});
+
+test('raw-car entries: without the tables a raw car is its pooled car, and track fallbacks read pooled rows', () => {
+  const dto = rawCarModel();
+  const bare = { ...dto };
+  delete bare.g2_typ_by_track_raw_car_cond;
+  delete bare.lap_time_typ_by_track_raw_car_cond;
+  delete bare.outlap_typ_by_track_raw_car_cond;
+  const withRaw = new TireModel(dto);
+  const without = new TireModel(bare);
+  const args = {
+    track: 'synth', condition: 'wet', lapWithinStint: 3, ambientTempC: 15,
+    cloudCoverPct: 50, targetHotPressureBar: 1.8, corner: 'rr', targetLapTimeS: 55,
+  };
+  assert.deepEqual(predictCorner(without, { ...args, car: 'RawA' }),
+    predictCorner(without, { ...args, car: 'Car' }));
+  // a car with no entry at the track averages the pooled rows only
+  assert.deepEqual(withRaw.lookupG2('synth', 'Nobody', 'dry'), without.lookupG2('synth', 'Nobody', 'dry'));
+  assert.equal(withRaw.lookupLapTime('synth', 'Nobody', 'dry').source, 'track_pooled');
+});
+
+// The committed artifact with a KK-SII entry of its own at Tsukuba (dry):
+// the pooled FJ row's heat x 0.8 and lap time + 1 s.
+function withKKSIIEntry() {
+  const dto = structuredClone(modelDto);
+  const pick = (rows) => rows.find(
+    (r) => r.track_canonical === 'tsukuba_2000' && r.car === 'FJ' && r.condition === 'dry');
+  const g2 = structuredClone(pick(dto.g2_typ_by_track_car_cond));
+  g2.car = 'KK-SII';
+  g2.g2_typ *= 0.8;
+  if (g2.q_typ_by_corner) for (const c of Object.keys(g2.q_typ_by_corner)) g2.q_typ_by_corner[c] *= 0.8;
+  const lap = { ...pick(dto.lap_time_typ_by_track_car_cond), car: 'KK-SII' };
+  lap.lap_time_typ_s += 1.0;
+  dto.g2_typ_by_track_raw_car_cond = [g2];
+  dto.lap_time_typ_by_track_raw_car_cond = [lap];
+  dto.outlap_typ_by_track_raw_car_cond = [];
+  return dto;
+}
+
+test('picker: raw cars replace their pooled car only when the artifact has raw-car rows', () => {
+  const today = new TireModel(modelDto);
+  assert.deepEqual(today.availableCars, today.fittedCars);
+  assert.ok(today.availableCars.includes('FJ'));
+  // a raw name saved before pooling still lands on its pooled car
+  assert.equal(today.selectableCar('KK-SII'), 'FJ');
+  assert.equal(today.selectableCar('FJ'), 'FJ');
+
+  const split = new TireModel(withKKSIIEntry());
+  assert.deepEqual(split.availableCars, ['Inferno 86', 'KK-F', 'KK-F-V2', 'KK-SII']);
+  assert.deepEqual(split.fittedCars, today.fittedCars);
+  // a saved raw name is kept; a saved FJ keeps working; unknown cars are not
+  assert.equal(split.selectableCar('KK-SII'), 'KK-SII');
+  assert.equal(split.selectableCar('KK-F-V2'), 'KK-F-V2');
+  assert.equal(split.selectableCar('FJ'), 'FJ');
+  assert.equal(split.selectableCar('Nobody'), null);
+  // the constants and the prefills resolve a raw name to the pooled car
+  assert.deepEqual(split.availableCompounds('KK-F'), split.availableCompounds('FJ'));
+  assert.deepEqual(split.lookupCornerDefaults('KK-SII', 'fl', 'dry'),
+    split.lookupCornerDefaults('FJ', 'fl', 'dry'));
+  assert.deepEqual(split.lookupTargetHotPressure('KK-SII', 'DRY'),
+    split.lookupTargetHotPressure('FJ', 'DRY'));
+  assert.deepEqual(split.lookupK('KK-SII', 'fl', 'dry'), split.lookupK('FJ', 'fl', 'dry'));
+});
+
+test('a saved KK-SII predicts from its own rows when the artifact has them', () => {
+  const args = {
+    track: 'tsukuba_2000', condition: 'dry', lapWithinStint: 5, ambientTempC: 18,
+    cloudCoverPct: 50, targetHotPressureBar: 1.7, corner: 'fl',
+  };
+  const today = new TireModel(modelDto);
+  const split = new TireModel(withKKSIIEntry());
+  const kksii = predictCorner(split, { ...args, car: split.selectableCar('KK-SII') });
+  const fj = predictCorner(split, { ...args, car: 'FJ' });
+  // today the KK-SII is the FJ, exactly
+  assert.deepEqual(predictCorner(today, { ...args, car: 'KK-SII' }), predictCorner(today, { ...args, car: 'FJ' }));
+  assert.deepEqual(fj, predictCorner(today, { ...args, car: 'FJ' }));
+  // with its own rows it reads them, on the FJ's constants
+  assert.equal(kksii.lapTimeTypS, fj.lapTimeTypS + 1.0);
+  assert.ok(Math.abs(kksii.g2Typ - 0.8 * fj.g2Typ) < 1e-12);
+  assert.equal(kksii.kKelvinPerG2, fj.kKelvinPerG2);
+  assert.equal(kksii.tauSec, fj.tauSec);
+  assert.ok(kksii.coldPressureBar > fj.coldPressureBar, 'less heat, a higher cold pressure');
+  // the KK-F has no row of its own there and reads the FJ's
+  assert.deepEqual(predictCorner(split, { ...args, car: 'KK-F' }), fj);
+});
+
 test('g2PaceScale: curve ratio anchored at typical, exponent fallback, clamps', () => {
   const model = new TireModel(modelDto);
   const track = model.availableTracks.find(

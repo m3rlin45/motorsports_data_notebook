@@ -49,6 +49,10 @@ public sealed class CircuitPredictor
             throw new ArgumentException(
                 $"track_condition must be dry/damp/wet; got '{condition}'", nameof(condition));
 
+        // The constants are the car the model was fitted as; the entries
+        // (heat, pace curve, lap time, out-lap) are a raw car's own where the
+        // artifact has them (#383).
+        var entryCar = car;
         car = _model.ResolveCar(car);
 
         // One tire on all four corners — the compound applies to every corner.
@@ -58,8 +62,8 @@ public sealed class CircuitPredictor
         var tau = _model.LookupTau(car, corner, cond);
         // The circuit enters only through its per-corner heat input (v5 has
         // no track constant); entries without the map fall back to the mean.
-        var g2 = _model.LookupG2(track, car, cond, corner);
-        var lap = _model.LookupLapTime(track, car, cond);
+        var g2 = _model.LookupG2(track, entryCar, cond, corner);
+        var lap = _model.LookupLapTime(track, entryCar, cond);
 
         // T_road: user-supplied → sun-cover proxy → fall back to T_air.
         double tRoadC = trackTempC ?? EnergyBalance.TRoadProxyC(
@@ -84,7 +88,7 @@ public sealed class CircuitPredictor
             if (target <= 0)
                 throw new ArgumentOutOfRangeException(
                     nameof(targetLapTimeS), target, "target lap time must be > 0");
-            var pace = _model.ComputeG2PaceScale(track, car, cond, lap.ValueSeconds, target, corner);
+            var pace = _model.ComputeG2PaceScale(track, entryCar, cond, lap.ValueSeconds, target, corner);
             g2Scale = pace.Scale;
             g2PaceSource = pace.Source;
             g2Value *= g2Scale;
@@ -98,7 +102,7 @@ public sealed class CircuitPredictor
         string? outlapSource = null;
         if (includeOutlap)
         {
-            if (_model.LookupOutlap(track, car, cond, corner) is OutlapLookup o)
+            if (_model.LookupOutlap(track, entryCar, cond, corner) is OutlapLookup o)
             {
                 outlapS = o.MovingSeconds;
                 outlapG2 = o.G2;

@@ -42,13 +42,93 @@ public sealed class TireModel
         : Dto.FitAtUtc is { Length: >= 10 } iso ? iso[..10]
         : null;
 
-    public IReadOnlyList<string> AvailableCars => Dto.TauSecByCarCornerCond
-        .Select(r => r.Car).Distinct().OrderBy(s => s).ToList();
+    /// <summary>The cars the model's constants were fitted as (FJ, Inferno 86).</summary>
+    public IReadOnlyList<string> FittedCars => Dto.TauSecByCarCornerCond
+        .Select(r => r.Car).Distinct().OrderBy(s => s, StringComparer.Ordinal).ToList();
+
+    public bool IsFittedCar(string car) => FittedCars.Contains(car);
+
+    /// <summary>
+    /// The cars offered for selection: the fitted cars, with a pooled car
+    /// whose raw cars have their own entries in the artifact (#383) listed
+    /// as those raw cars (KK-SII, KK-F, KK-F-V2 in place of FJ). An artifact
+    /// without raw-car rows offers the fitted cars, as before. Mirrors the
+    /// web app's <c>availableCars</c>.
+    /// </summary>
+    public IReadOnlyList<string> AvailableCars
+    {
+        get
+        {
+            var fitted = FittedCars;
+            var split = (Dto.G2TypByTrackRawCarCond ?? Array.Empty<G2EntryDto>())
+                .Select(r => r.Car)
+                .Where(raw => ResolveCar(raw) != raw && fitted.Contains(ResolveCar(raw)))
+                .Select(ResolveCar)
+                .ToHashSet();
+            var raws = (Dto.CarAliases ?? new Dictionary<string, string>())
+                .Where(kv => kv.Value != kv.Key && split.Contains(kv.Value))
+                .Select(kv => kv.Key);
+            return fitted.Where(c => !split.Contains(c)).Concat(raws)
+                .OrderBy(s => s, StringComparer.Ordinal).ToList();
+        }
+    }
+
+    /// <summary>
+    /// The car to select for a saved one: kept where it is offered; a
+    /// fitted (pooled) name saved before its raw cars were listed keeps
+    /// working on the pooled entries; a raw name the artifact does not list
+    /// resolves to its pooled car, as before. Null for a car the model does
+    /// not know. Mirrors the web app's <c>selectableCar</c>.
+    /// </summary>
+    public string? SelectableCar(string? saved)
+    {
+        if (saved is null) return null;
+        var offered = AvailableCars;
+        if (offered.Contains(saved) || IsFittedCar(saved)) return saved;
+        var pooled = ResolveCar(saved);
+        return offered.Contains(pooled) || IsFittedCar(pooled) ? pooled : null;
+    }
 
     /// <summary>Resolve an alias-pooled car name (e.g. KK-F / KK-SII → FJ)
     /// onto the label the model was fitted with. Unknown cars pass through.</summary>
     public string ResolveCar(string car) =>
         Dto.CarAliases is { } aliases && aliases.TryGetValue(car, out var pooled) ? pooled : car;
+
+    /// <summary>
+    /// The row of an entry table that answers (track, car, condition): a raw
+    /// car's own row in the raw-car table (<paramref name="rawRows"/>, #383)
+    /// where it has one, else the fitted car's in <paramref name="rows"/>.
+    /// <paramref name="car"/> may be either name. Mirrors predict.py's
+    /// <c>_entry_row</c>.
+    /// </summary>
+    private T? EntryRow<T>(IReadOnlyList<T>? rows, IReadOnlyList<T>? rawRows,
+        string track, string car, string condition) where T : class, IEntryRow
+    {
+        var fit = ResolveCar(car);
+        if (fit != car && rawRows is not null)
+        {
+            var own = rawRows.FirstOrDefault(
+                r => r.TrackCanonical == track && r.Car == car && r.Condition == condition);
+            if (own is not null) return own;
+        }
+        return rows?.FirstOrDefault(
+            r => r.TrackCanonical == track && r.Car == fit && r.Condition == condition);
+    }
+
+    /// <summary>Every condition's row at <paramref name="track"/> for the car
+    /// whose entries answer there: the raw car's own where it has any, else
+    /// the fitted car's (the track_car_pooled fallback).</summary>
+    private List<T> EntryRowsAtTrack<T>(IReadOnlyList<T>? rows, IReadOnlyList<T>? rawRows,
+        string track, string car) where T : class, IEntryRow
+    {
+        var fit = ResolveCar(car);
+        if (fit != car && rawRows is not null)
+        {
+            var own = rawRows.Where(r => r.TrackCanonical == track && r.Car == car).ToList();
+            if (own.Count > 0) return own;
+        }
+        return rows?.Where(r => r.TrackCanonical == track && r.Car == fit).ToList() ?? new List<T>();
+    }
 
     // Every track with observed data (a typical heat input).
     public IReadOnlyList<string> AvailableTracks => Dto.G2TypByTrackCarCond
@@ -86,8 +166,11 @@ public sealed class TireModel
 
     // ---- Lookups ----
 
+    // The constants (tau, K, compound K, corner defaults, hot-pressure
+    // targets) are the fitted car's: a raw name resolves through CarAliases.
     public TauLookup LookupTau(string car, string corner, string condition)
     {
+        car = ResolveCar(car);
         foreach (var cond in ConditionChain(condition))
         {
             var hit = Dto.TauSecByCarCornerCond.FirstOrDefault(
@@ -118,6 +201,7 @@ public sealed class TireModel
 
     public KLookup LookupK(string car, string corner, string condition)
     {
+        car = ResolveCar(car);
         foreach (var cond in ConditionChain(condition))
         {
             var hit = Dto.KBuckets.FirstOrDefault(
@@ -151,15 +235,19 @@ public sealed class TireModel
     /// <summary>Distinct compounds fitted for a car, for UI enumeration.
     /// One tire runs on all four corners — the choice is forced, so an
     /// empty list means the car predates compound labeling.</summary>
-    public IReadOnlyList<string> AvailableCompounds(string car) =>
-        (Dto.KByCarCompoundCornerCond ?? Array.Empty<KCompoundEntryDto>())
+    public IReadOnlyList<string> AvailableCompounds(string car)
+    {
+        car = ResolveCar(car);
+        return (Dto.KByCarCompoundCornerCond ?? Array.Empty<KCompoundEntryDto>())
             .Where(r => r.Car == car).Select(r => r.Compound)
             .Distinct().OrderBy(s => s).ToList();
+    }
 
     /// <summary>Compound-specific K via the condition chain, or null when
     /// the artifact has no fitted bucket (caller falls back to pooled K).</summary>
     public KLookup? LookupCompoundK(string car, string compound, string corner, string condition)
     {
+        car = ResolveCar(car);
         var rows = Dto.KByCarCompoundCornerCond ?? Array.Empty<KCompoundEntryDto>();
         foreach (var cond in ConditionChain(condition))
         {
@@ -180,6 +268,7 @@ public sealed class TireModel
     /// entry (caller keeps its static defaults).</summary>
     public CornerDefaultsLookup? LookupCornerDefaults(string car, string corner, string condition)
     {
+        car = ResolveCar(car);
         var rows = Dto.CornerDefaultsByCarCornerCond ?? Array.Empty<CornerDefaultsEntryDto>();
         foreach (var cond in ConditionChain(condition))
         {
@@ -200,6 +289,7 @@ public sealed class TireModel
     public double? LookupTargetHotPressure(string car, string? compound)
     {
         if (compound is null) return null;
+        car = ResolveCar(car);
         var rows = Dto.TargetHotPressureByCarCompound ?? Array.Empty<TargetHotPressureEntryDto>();
         return rows.FirstOrDefault(r => r.Car == car && r.Compound == compound)?.TargetHotPressureBar;
     }
@@ -225,16 +315,15 @@ public sealed class TireModel
 
         foreach (var cond in ConditionChain(condition))
         {
-            var hit = Dto.G2TypByTrackCarCond.FirstOrDefault(
-                r => r.TrackCanonical == track && r.Car == car && r.Condition == cond);
+            var hit = EntryRow(Dto.G2TypByTrackCarCond, Dto.G2TypByTrackRawCarCond, track, car, cond);
             if (hit is not null)
             {
                 var tag = cond == condition ? "exact" : $"fallback({cond})";
                 return new G2Lookup(Value(hit), hit.NLapsUsed, tag);
             }
         }
-        var sameTC = Dto.G2TypByTrackCarCond.Where(
-            r => r.TrackCanonical == track && r.Car == car).ToList();
+        var sameTC = EntryRowsAtTrack(
+            Dto.G2TypByTrackCarCond, Dto.G2TypByTrackRawCarCond, track, car);
         if (sameTC.Count > 0)
         {
             return new G2Lookup(sameTC.Average(Value),
@@ -277,8 +366,7 @@ public sealed class TireModel
     {
         foreach (var cond in ConditionChain(condition))
         {
-            var hit = Dto.G2TypByTrackCarCond.FirstOrDefault(
-                r => r.TrackCanonical == track && r.Car == car && r.Condition == cond);
+            var hit = EntryRow(Dto.G2TypByTrackCarCond, Dto.G2TypByTrackRawCarCond, track, car, cond);
             if (hit is not null) return hit.G2VsLapTime;
         }
         return null;
@@ -331,21 +419,20 @@ public sealed class TireModel
     /// </summary>
     public OutlapLookup? LookupOutlap(string track, string car, string condition, string? corner = null)
     {
-        var rows = Dto.OutlapTypByTrackCarCond;
-        if (rows is null || rows.Count == 0) return null;
+        var rows = Dto.OutlapTypByTrackCarCond ?? Array.Empty<OutlapEntryDto>();
+        if (rows.Count == 0 && (Dto.OutlapTypByTrackRawCarCond?.Count ?? 0) == 0) return null;
         double G2(OutlapEntryDto r) => PerCornerOr(r.OutlapQByCorner, corner, r.OutlapG2);
 
         foreach (var cond in ConditionChain(condition))
         {
-            var hit = rows.FirstOrDefault(
-                r => r.TrackCanonical == track && r.Car == car && r.Condition == cond);
+            var hit = EntryRow(rows, Dto.OutlapTypByTrackRawCarCond, track, car, cond);
             if (hit is not null)
             {
                 var tag = cond == condition ? "exact" : $"fallback({cond})";
                 return new OutlapLookup(hit.OutlapMovingS, G2(hit), hit.NLapsUsed, tag);
             }
         }
-        var sameTC = rows.Where(r => r.TrackCanonical == track && r.Car == car).ToList();
+        var sameTC = EntryRowsAtTrack(rows, Dto.OutlapTypByTrackRawCarCond, track, car);
         if (sameTC.Count > 0)
         {
             return new OutlapLookup(sameTC.Average(r => r.OutlapMovingS), sameTC.Average(G2),
@@ -364,16 +451,16 @@ public sealed class TireModel
     {
         foreach (var cond in ConditionChain(condition))
         {
-            var hit = Dto.LapTimeTypByTrackCarCond.FirstOrDefault(
-                r => r.TrackCanonical == track && r.Car == car && r.Condition == cond);
+            var hit = EntryRow(
+                Dto.LapTimeTypByTrackCarCond, Dto.LapTimeTypByTrackRawCarCond, track, car, cond);
             if (hit is not null)
             {
                 var tag = cond == condition ? "exact" : $"fallback({cond})";
                 return new LapTimeLookup(hit.LapTimeTypS, hit.NLapsUsed, tag);
             }
         }
-        var sameTC = Dto.LapTimeTypByTrackCarCond.Where(
-            r => r.TrackCanonical == track && r.Car == car).ToList();
+        var sameTC = EntryRowsAtTrack(
+            Dto.LapTimeTypByTrackCarCond, Dto.LapTimeTypByTrackRawCarCond, track, car);
         if (sameTC.Count > 0)
         {
             return new LapTimeLookup(sameTC.Average(r => r.LapTimeTypS),

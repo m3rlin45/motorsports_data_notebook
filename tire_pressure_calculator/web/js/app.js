@@ -711,14 +711,17 @@ async function init() {
   if (model !== null) {
     const p = settings.Prediction;
     if (!p.Track || !model.availableTracks.includes(p.Track)) p.Track = model.availableTracks[0] ?? null;
-    // Resolve alias-pooled car names so a car saved before pooling
-    // (e.g. "KK-SII" -> "FJ") lands on its pooled entry, not the default.
-    if (p.Car) p.Car = model.resolveCar(p.Car);
-    if (!p.Car || !model.availableCars.includes(p.Car)) p.Car = model.availableCars[0] ?? null;
+    // A saved car is kept where the model offers it; a pooled name saved
+    // before its raw cars were listed (FJ) keeps working and stays in the
+    // list while selected; a raw name the model does not list resolves to
+    // its pooled car (e.g. "KK-SII" -> "FJ" on an artifact without raw-car
+    // entries).
+    p.Car = model.selectableCar(p.Car) ?? model.availableCars[0] ?? null;
+    const cars = p.Car && !model.availableCars.includes(p.Car)
+      ? [...model.availableCars, p.Car] : model.availableCars;
     fillSelect(els.trackSelect,
       model.availableTracks.map((v) => ({ value: v, label: v })), p.Track);
-    fillSelect(els.carSelect,
-      model.availableCars.map((v) => ({ value: v, label: v })), p.Car);
+    fillSelect(els.carSelect, cars.map((v) => ({ value: v, label: v })), p.Car);
     fillCompoundSelects();
     if (p.TargetLapTimeS === null) snapTargetLap();
     if (p.CloudCoverPct === null) p.CloudCoverPct = 50;

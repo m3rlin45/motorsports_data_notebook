@@ -386,7 +386,9 @@ def _calculator_lap_inputs(
     ``N × target``, and the
     bucket's typical out-lap segment (zero when ``with_outlap`` is False —
     the stint's anchor was not a pit exit, so the clock starts at the
-    reading and ``flying_lap_n`` counts the laps from it).
+    reading and ``flying_lap_n`` counts the laps from it). ``car`` is the
+    car the driver selects: a raw car reads its own entries where the model
+    has them (``predict._entry_row``).
     """
     lap_time_typ_s, _n, _src = _lookup_lap_time(model, track, car, condition)
     g2_typ, _n2, _src2 = _lookup_g2(model, track, car, condition, corner)
@@ -729,6 +731,10 @@ def _score_fold_laps(
     for _, lap in all_laps.iterrows():
         track = lap["track_canonical"]
         car = lap["car"]
+        # the car the session names reads its own entries (#383); the
+        # constants are the pooled car's
+        raw = lap.get("raw_car")
+        entry_car = str(raw) if isinstance(raw, str) and raw else car
         cond = lap.get("condition", "dry")
         if cond == "unknown":
             cond = "dry"  # held-out evaluation defaults to dry when condition unknown
@@ -797,7 +803,7 @@ def _score_fold_laps(
                 g2_c, t_fly, g2_scale, out_s, out_g2 = lap_inputs(
                     model,
                     track,
-                    car,
+                    entry_car,
                     cond,
                     n_flying,
                     float(session_lap_time.get(lap["session_id"], lap["on_track_s"])),

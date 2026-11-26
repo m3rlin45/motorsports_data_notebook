@@ -370,12 +370,14 @@ public class MainViewModel : INotifyPropertyChanged
         _mode = _tireModel is null ? AppMode.Manual : _settings.Mode;
         _selectedTrack = _settings.Prediction.Track is string t1 && AvailableTracks.Contains(t1) ? t1
             : AvailableTracks.FirstOrDefault();
-        // Resolve alias-pooled car names so a car saved before pooling
-        // (e.g. "KK-SII" -> "FJ") lands on its pooled entry, not the default.
-        var savedCar = _settings.Prediction.Car is string c0 && _tireModel is not null
-            ? _tireModel.ResolveCar(c0) : _settings.Prediction.Car;
-        _selectedCar = savedCar is string c1 && AvailableCars.Contains(c1) ? c1
-            : AvailableCars.FirstOrDefault();
+        // A saved car is kept where the model offers it; a pooled name saved
+        // before its raw cars were listed (FJ) keeps working and stays in the
+        // list while selected; a raw name the model does not list resolves
+        // to its pooled car (e.g. "KK-SII" -> "FJ" on an artifact without
+        // raw-car entries). Mirrors the web app.
+        var savedCar = _tireModel?.SelectableCar(_settings.Prediction.Car);
+        if (savedCar is not null && !AvailableCars.Contains(savedCar)) AvailableCars.Add(savedCar);
+        _selectedCar = savedCar ?? AvailableCars.FirstOrDefault();
         _selectedCondition = _settings.Prediction.Condition;
         _lapWithinStint = _settings.Prediction.LapWithinStint;
         _ambientTempC = _settings.Prediction.AmbientTempC;
