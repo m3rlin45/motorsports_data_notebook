@@ -1356,7 +1356,7 @@ def score_cell(
                             "lap_num": got["lap_num"],
                             "corner": got["corner"],
                             "arm": a["arm"],
-                            "flying_lap": got["lap_within_stint"],
+                            "flying_lap": got["n_flying"],
                             "pit_exit": got["anchor_kind"] == "pit_exit",
                             "resid_mbar": 1000.0 * got["resid_bar"],
                             "after_dropped": got["after_dropped"].fillna(False).astype(bool),
