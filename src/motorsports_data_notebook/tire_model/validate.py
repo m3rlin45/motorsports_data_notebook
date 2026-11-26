@@ -386,8 +386,8 @@ def _calculator_lap_inputs(
     scaled along the corner's simulated-lap pace curve, the flying clock
     ``N × target``, and the
     bucket's typical out-lap segment (zero when ``with_outlap`` is False —
-    the stint's anchor was not a pit exit, so the clock starts at the first
-    flying lap as before).
+    the stint's anchor was not a pit exit, so the clock starts at the
+    reading and ``flying_lap_n`` counts the laps from it).
     """
     lap_time_typ_s, _n, _src = _lookup_lap_time(model, track, car, condition)
     g2_typ, _n2, _src2 = _lookup_g2(model, track, car, condition, corner)
@@ -501,7 +501,8 @@ def _evaluate_fold(
       valid TPMS reading), then the bucket's ⟨g²⟩ scaled by the pace curve
       at the session's median lap time for ``N × lap time`` of flying laps.
       Stints without a usable pit-exit out-lap anchor on their first lap as
-      before (``anchor_kind == "first_lap"``).
+      before (``anchor_kind == "first_lap"``) and are fed the laps driven
+      after that reading (:func:`_laps_from_anchor`).
     - ``"oracle"``: the measured out-lap and the lap's own measured g² and
       clock from the same anchor — the thermal model's accuracy given the
       real driving, an upper bound on what the calculator can do.
@@ -592,7 +593,8 @@ def _prepare_fold_laps(
     # Score the flying laps (the out-lap, lap_within_stint 0 when present, is
     # the anchor's own lap). With pit-exit anchors N = lap_within_stint is
     # the calculator's lap number; for first-lap anchors the first scored
-    # lap is the one after the anchor lap, as in the v0 reports.
+    # lap is the one after the anchor lap, as in the v0 reports, and N
+    # counts the laps from the anchor (``_laps_from_anchor``).
     all_laps["_is_out"] = (
         all_laps["is_outlap"].fillna(False).astype(bool)
         if "is_outlap" in all_laps.columns
@@ -649,6 +651,45 @@ def _prepare_fold_laps(
     )
 
 
+def _laps_from_anchor(full: pd.DataFrame) -> Callable[[str, int, int, float], int]:
+    """``(session_id, stint_id, lap_within_stint, t_anchor) -> N``: how many
+    of the stint's laps, up to and including that one, were driven after a
+    first-lap anchor (``full``: every lap of the stint, the out-lap among
+    them). That is the calculator's N for such a stint: with no pit-exit
+    reading its clock starts at the reading, so the laps are counted from
+    the anchor's lap boundary (#374). An anchor at the start of the stint's
+    first lap has that lap ahead of it, so lap ``lap_within_stint`` is the
+    ``lap_within_stint + 1``-th; one at that lap's end has not.
+
+    The laps are counted from the lap boundary nearest the anchor: a lap
+    counts when its middle on the stint clock is past it. A start reading
+    is placed by the lap's on-track time while the stint clock adds rolling
+    time, so a reading at a boundary can be a few hundredths of a second
+    off it, and a reading placed inside a lap goes to the nearer end of
+    that lap. A lap whose end is nearer the anchor than its middle is the
+    anchor's own lap (N = 0) and is not scored."""
+    from .warmup_table import _rolling_time_s
+
+    laps = pd.DataFrame(
+        {
+            "session_id": full["session_id"].astype(str).to_numpy(),
+            "stint_id": full["stint_id"].astype(int).to_numpy(),
+            "n": full["lap_within_stint"].to_numpy(dtype=int),
+            "mid": (full["t_cum_s"] - 0.5 * _rolling_time_s(full)).to_numpy(dtype=float),
+        }
+    )
+    by_stint = {
+        (str(sid), int(stint)): (grp["n"].to_numpy(), grp["mid"].to_numpy())  # type: ignore[call-overload]
+        for (sid, stint), grp in laps.groupby(["session_id", "stint_id"], sort=False)
+    }
+
+    def count(session_id: str, stint_id: int, lap_within_stint: int, t_anchor: float) -> int:
+        n, m = by_stint[(str(session_id), int(stint_id))]
+        return int(np.count_nonzero((n <= lap_within_stint) & (m > t_anchor)))
+
+    return count
+
+
 def _score_fold_laps(
     prep: FoldLaps,
     model: dict[str, Any],
@@ -670,6 +711,7 @@ def _score_fold_laps(
     session_lap_time = prep.session_lap_time
     stint_outlap = prep.stint_outlap
     kappa_by_car = prep.kappa_by_car
+    laps_from_anchor = _laps_from_anchor(prep.full)
     # Build per-(track, car) lookups from the held-out model
     g2_lookup = {
         (d["track_canonical"], d["car"], d["condition"]): d["g2_typ"]
@@ -726,17 +768,29 @@ def _score_fold_laps(
                 continue
             anchor_kind = str(lap.get(f"anchor_kind_{c}") or "first_lap")
             pit_exit = anchor_kind == "pit_exit"
+            # The calculator's N: the flying laps after the out-lap from a
+            # pit-exit reading; from a first-lap anchor, the laps driven
+            # after the reading, counted from its lap boundary (#374).
+            n_flying = (
+                int(lap["lap_within_stint"])
+                if pit_exit
+                else laps_from_anchor(
+                    lap["session_id"],
+                    int(lap["stint_id"]),
+                    int(lap["lap_within_stint"]),
+                    float(t_anchor),
+                )
+            )
+            if n_flying < 1:
+                # the anchor's own lap: it ends at (or within half a lap of) the reading
+                continue
             t_start_used = float(t_start)
             out_info = stint_outlap.get((lap["session_id"], lap["stint_id"]))
             if inputs == "calculator":
                 # The driver types the pit-exit temperature; the calculator
                 # integrates the bucket's typical out-lap, then N flying laps
                 # at the pace-scaled bucket g². Without a pit-exit anchor the
-                # clock starts at the first flying lap (first_lap anchors are
-                # on that lap's start).
-                n_flying = (
-                    int(lap["lap_within_stint"]) if pit_exit else int(lap["lap_within_stint"])
-                )
+                # clock starts at the reading, and N counts the laps from it.
                 g2_c, t_fly, g2_scale, out_s, out_g2 = lap_inputs(
                     model,
                     track,
@@ -813,6 +867,7 @@ def _score_fold_laps(
                     "lap_num": int(lap["lap_num"]),
                     "stint_id": int(lap["stint_id"]),
                     "lap_within_stint": int(lap["lap_within_stint"]),
+                    "n_flying": n_flying,
                     "t_cum_s": t_cum_s,
                     "t_anchor_s": float(t_anchor),
                     "t_start_c": t_start_used,

@@ -6314,7 +6314,10 @@ removes.
   the v0 reports; the stint's first finite TPMS reading is the initial
   condition for every scored lap — the same information a driver supplies
   as "Current °C" at roll-out. Laps at or before a corner's anchor are
-  skipped.
+  skipped, and so is a first-lap anchor's own lap: a lap whose middle on
+  the stint clock is not past the reading (the lap before a start
+  reading, whose end the stint clock puts a few hundredths of a second
+  after it).
 - **Compound.** The driver always selects the tire, so held-out sessions
   use the human or seed label where one exists and otherwise the compound
   the EM infers for that session on the full dataset (argmax, laps- and
@@ -6334,7 +6337,24 @@ removes.
   stood in by the out-lap's first valid TPMS reading at pit exit (the
   start fields are always filled in practice; leaving them blank was
   measured at +1.2 °C MAE and dropped as an option). Stints without a
-  pit-exit out-lap anchor on their first lap as before.
+  pit-exit out-lap anchor on their first lap as before, with no out-lap
+  segment, and N counts the laps driven from that reading, from its lap
+  boundary: anchored at the start of the stint's first lap, the end of
+  `lap_within_stint` = N is N + 1 laps from it; anchored at that lap's
+  end (or the next lap's start), N. A first lap that is an out-lap but
+  did not leave the pits counts as one of the N (#374). Until 2026-11-26
+  they were fed N = `lap_within_stint`, one lap short when anchored at
+  the first lap's start. On the standing holdout (15 folds, 5,751 rows),
+  545 rows from 17 sessions are on first-lap anchors. The fix moves N by
+  +1 on 481 of them and by −1 on 5 (anchored at lap 2's start), and
+  leaves 59 as they were. The bias on those rows goes from +2.3 to +11.4
+  mbar, so the short clock was hiding an over-prediction. MAE on those
+  rows goes from 39.3 to 40.1 mbar; pooled, from 43.71 to 43.79 mbar
+  (per session +0.05 ± 0.13, date-clustered, against an MDE of 0.7).
+  Every pit-exit row is unchanged. The simulation-based arms of
+  `check-pressure-holdout` move alike (table 44.64 → 44.73, direct 44.74
+  → 44.83 mbar), so their gap to the current calculator stays at +0.9
+  and +1.0 mbar.
   `--inputs oracle` instead feeds the lap's own
   measured g², its actual cumulative on-track time and the measured anchor:
   that is the thermal model's accuracy given the real driving, an upper
