@@ -153,6 +153,35 @@ class TestApplyConditionSeeds:
         out = apply_condition_seeds(labels, laps, {"KK-SII": {"dry": "DRY"}})
         assert len(out) == 1 and out.iloc[0].compound_front == "WET"
 
+    def test_seeds_match_the_raw_car_not_the_pooled_one(self):
+        """#393: a seed belongs to the tyres a raw car runs; the fit's pooling
+        (``car`` = FJ) does not move it."""
+        laps = pd.DataFrame(
+            {
+                "session_id": ["f1", "f2", "s1"],
+                "car": ["FJ", "FJ", "FJ"],
+                "raw_car": ["KK-F", "KK-F-V2", "KK-SII"],
+                "condition": ["dry", "wet", "dry"],
+            }
+        )
+        labels = pd.DataFrame(columns=["session_id", "compound", "source"])
+        out = apply_condition_seeds(labels, laps, {"KK-F": {"dry": "DRY", "wet": "WET"}})
+        assert dict(zip(out.session_id, out.compound)) == {"f1": "DRY"}
+        pooled = apply_condition_seeds(labels, laps, {"FJ": {"dry": "DRY"}})
+        assert pooled.empty
+
+    def test_the_committed_seeds_cover_every_fj_car_alike(self):
+        """The KK-SII, the KK-F and the KK-F-V2 run the same DRY/WET pair, so
+        every raw car the fit pools as the FJ carries the same seed."""
+        from motorsports_data_notebook.tire_etl.paths import default_dataset_root
+        from motorsports_data_notebook.tire_model.compounds import load_condition_seeds
+        from motorsports_data_notebook.tire_model.warmup_table import CAR_FIT_ALIASES
+
+        seeds = load_condition_seeds(default_dataset_root())
+        fj = sorted(raw for raw, pooled in CAR_FIT_ALIASES.items() if pooled == "FJ")
+        assert fj == ["KK-F", "KK-F-V2", "KK-SII"]
+        assert all(seeds.get(car) == {"dry": "DRY", "wet": "WET"} for car in fj)
+
 
 def test_set_pressure_prior_resolves_a_thermally_ambiguous_session() -> None:
     """Compounds are run at characteristic cold pressures. A noisy session

@@ -472,17 +472,24 @@ def apply_condition_seeds(
     """Expand declarative condition seeds into per-session labels.
 
     ``seeds`` (from the sidecar's ``condition_seeds`` block) maps
-    ``car -> {condition -> compound}`` — e.g. every all-dry KK-SII session
+    ``raw car -> {condition -> compound}`` — e.g. every all-dry KK-SII session
     seeds as DRY tires, every all-wet one as WET. Sessions with mixed or
     unlisted conditions are left alone, and existing labels always win.
+
+    A seed is a property of the tyres a car runs, so it is listed per raw
+    car and matched on the car the session names: the laps' ``raw_car``
+    (kept beside the pooled car by ``warmup_table.apply_car_aliases``) when
+    the frame has it, else ``car``. How the fit pools the cars does not move
+    a seed (#393).
     """
     if not seeds or laps.empty:
         return labels
     have = set(labels["session_id"]) if not labels.empty else set()
+    car_col = "raw_car" if "raw_car" in laps.columns else "car"
     lp = laps[laps["condition"] != "unknown"]
-    conds = lp.groupby(["session_id", "car"])["condition"].agg(set).reset_index()
+    conds = lp.groupby(["session_id", car_col])["condition"].agg(set).reset_index()
     rows = []
-    for sid, car, condset in zip(conds["session_id"], conds["car"], conds["condition"]):
+    for sid, car, condset in zip(conds["session_id"], conds[car_col], conds["condition"]):
         if sid in have or len(condset) != 1:
             continue
         mapping = seeds.get(str(car))

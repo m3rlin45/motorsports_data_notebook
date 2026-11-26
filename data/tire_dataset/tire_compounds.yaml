@@ -24,12 +24,21 @@ wheel_sets:
 # Weather-driven tire choices: cars whose compound follows the conditions.
 # An all-dry session seeds as the dry tire, an all-wet session as the wet
 # tire; damp/mixed sessions are left to the notes / comments / inference.
-# The KK-SII's sessions carry no notes or comments naming the tire, so
-# these seeds are the FJ's only WET anchors. The KK-F is deliberately not
-# seeded: on 2026-10-25 it qualified on slicks on a track the wetness model
-# calls wet, and its comments name the tire anyway.
+# A seed belongs to the tyres a car runs, so it is listed per raw car and
+# matched on the car the session names, whatever the fit pools it with
+# (#393). The KK-SII, the KK-F and the KK-F-V2 run the same pair, the FJ
+# slick (DRY) and rain tyre (WET), and their files seldom name the tire, so
+# these seeds are their DRY/WET anchors. A written label always beats a
+# seed: on 2026-10-25 the KK-F qualified on slicks on a track the wetness
+# model calls wet, and the notes say so (a0381, DRY).
 condition_seeds:
   KK-SII:
+    dry: DRY
+    wet: WET
+  KK-F:
+    dry: DRY
+    wet: WET
+  KK-F-V2:
     dry: DRY
     wet: WET
 
