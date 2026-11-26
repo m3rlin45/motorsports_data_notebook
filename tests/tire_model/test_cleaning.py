@@ -16,12 +16,16 @@ from motorsports_data_notebook.tire_etl.aggregates import compute_corner_aggrega
 from motorsports_data_notebook.tire_etl.dataset import load_group
 from tests._timeseries_fixture import write_session_timeseries
 from motorsports_data_notebook.tire_model.cleaning import (
+    DRIFT_MIN_SCREENED,
     TPMS_PRESSURE_STEP_BAR,
     FilterConfig,
     _stale_prefix_len,
     apply_filters,
     clean_laps,
+    drifting_tpms,
+    gas_drift_screen,
     load_tpms_timeseries,
+    mask_corner_sessions,
     mask_stale_session_prefix,
     mask_stale_stint_starts,
     mask_stale_tpms,
@@ -578,3 +582,96 @@ def test_both_consumers_mask_the_same_samples(tmp_path) -> None:
         np.testing.assert_array_equal(np.isnan(a), np.isnan(b))
         np.testing.assert_array_equal(a[~np.isnan(a)], b[~np.isnan(b)])
         assert int(np.isnan(a).sum()) == 25  # 11 by the session-start mask, 14 by rule A
+
+
+# ------------------------------------------------- a corner losing gas (#373)
+
+
+def _steady_session(sid: str, loss_pct: dict[str, float], n: int = 12, lap_s: float = 100.0):
+    """A session of ``n`` steady laps at 73 °C; each tyre in ``loss_pct`` loses
+    that share of its gas, linearly over the session."""
+    rows = []
+    for i in range(n):
+        row = {"session_id": sid, "lap_num": i, "on_track_s": lap_s, "tire_usable": True}
+        for c, base in zip(("fl", "fr", "rl", "rr"), (1.46, 1.48, 1.40, 1.42)):
+            frac = 1.0 - loss_pct.get(c, 0.0) / 100.0 * i / (n - 1)
+            row[f"tpms_press_{c}_mean"] = (base + 1.013) * frac - 1.013
+            row[f"tpms_temp_{c}_mean"] = 73.0
+            row[f"tpms_temp_{c}_min"] = 73.0
+            row[f"tpms_temp_{c}_max"] = 74.0
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def test_gas_drift_screen_reads_a_tyre_losing_gas_against_its_siblings() -> None:
+    """a1603 FL: the front left loses gas through the session at a steady
+    temperature while the other three hold. The change is read against the
+    mean of the other three, over the span of the steady laps."""
+    screen = gas_drift_screen(_steady_session("a1603", {"fl": 4.0}))
+    by = screen.set_index("corner")
+    # FL's log amount of gas falls by ln(0.96) against the other three, and
+    # each of those rises by a third of that against a mean that holds FL
+    assert by.loc["fl", "change_pct"] == pytest.approx(100 * np.log(0.96), rel=0.03)
+    for c in ("fr", "rl", "rr"):
+        assert by.loc[c, "change_pct"] == pytest.approx(-100 * np.log(0.96) / 3, rel=0.03)
+    # FL's siblings, each against the remaining two, do not move
+    assert max(abs(x) for x in by.loc["fl", "sibling_changes_pct"]) < 1e-9
+    assert (screen["n_steady"] == 12).all() and (screen["span_s"] == 1100.0).all()
+
+
+def test_gas_drift_screen_needs_enough_steady_laps() -> None:
+    short = _steady_session("s", {}, n=7)
+    assert gas_drift_screen(short).empty
+    brief = _steady_session("s", {}, n=12, lap_s=60.0)  # 11 x 60 s span < 15 min
+    assert gas_drift_screen(brief).empty
+    unsteady = _steady_session("s", {})
+    unsteady.loc[::2, "tpms_temp_rr_max"] = 76.0  # RR warming on every other lap
+    assert gas_drift_screen(unsteady).empty
+
+
+def _population(n_sound: int, leaks: dict[str, dict[str, float]]) -> pd.DataFrame:
+    rng = np.random.default_rng(3)
+    parts = [
+        _steady_session(
+            f"sound{i:02d}", {c: float(rng.normal(0, 0.5)) for c in ("fl", "fr", "rl", "rr")}
+        )
+        for i in range(n_sound)
+    ]
+    parts += [_steady_session(sid, loss) for sid, loss in leaks.items()]
+    return pd.concat(parts, ignore_index=True)
+
+
+def test_drifting_tpms_flags_a_leak_and_no_sound_tyre() -> None:
+    laps = _population(20, {"leak": {"fl": 6.0}})
+    flags = drifting_tpms(gas_drift_screen(laps))
+    hit = flags[flags["flagged"]]
+    assert list(zip(hit["session_id"], hit["corner"])) == [("leak", "fl")]
+    # the threshold comes from the sound tyres' spread, not a fixed number
+    assert flags["threshold_pct"].nunique() == 1 and flags["threshold_pct"].iloc[0] < 0
+
+
+def test_drifting_tpms_wants_a_sound_reference() -> None:
+    """Two tyres of one session drifting: the other three are not a sound
+    reference for either, so nothing in that session is flagged."""
+    laps = _population(20, {"two": {"fl": 6.0, "fr": 6.0}})
+    flags = drifting_tpms(gas_drift_screen(laps))
+    assert not flags.loc[flags["session_id"] == "two", "flagged"].any()
+
+
+def test_drifting_tpms_flags_nothing_on_too_few_sessions() -> None:
+    laps = _population(2, {"leak": {"fl": 6.0}})
+    screen = gas_drift_screen(laps)
+    assert len(screen) < DRIFT_MIN_SCREENED
+    assert not drifting_tpms(screen)["flagged"].any()
+
+
+def test_mask_corner_sessions_masks_that_corner_in_that_session_only() -> None:
+    laps = pd.concat(
+        [_steady_session("a", {}), _steady_session("b", {})], ignore_index=True
+    ).assign(tpms_press_fl_start=1.4, tpms_temp_fl_start=30.0, tpms_temp_fr_start=31.0)
+    out = mask_corner_sessions(laps, {("a", "fl")})
+    a, b = out["session_id"] == "a", out["session_id"] == "b"
+    for col in ("tpms_press_fl_mean", "tpms_press_fl_start", "tpms_temp_fl_start"):
+        assert out.loc[a, col].isna().all() and out.loc[b, col].notna().all()
+    assert out.loc[a, "tpms_temp_fr_start"].notna().all()
+    assert out.loc[a, "tire_usable"].all()
