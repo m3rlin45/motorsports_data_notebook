@@ -42,6 +42,7 @@ from .predict import (
     predict_cold_pressure,
 )
 from .cleaning import clean_laps
+from .wetness import load_condition_overrides
 from .warmup_table import (
     CORNERS as _WT_CORNERS,
     W_ROAD,
@@ -236,7 +237,9 @@ def _session_conditions(root: Path) -> dict[str, str]:
     weather classification the fit uses (see ``warmup_table._attach_weather``)."""
     from .warmup_table import _attach_weather, _load_filtered_laps, _load_weather
 
-    laps = _attach_weather(_load_filtered_laps(root), _load_weather(root))
+    laps = _attach_weather(
+        _load_filtered_laps(root), _load_weather(root), load_condition_overrides(root)
+    )
     first = laps.drop_duplicates("session_id")
     return dict(zip(first["session_id"], first["condition"]))
 
@@ -349,7 +352,9 @@ def _inferred_compound_labels(root: Path) -> dict[str, str]:
         )
         for d in model["tau_sec_by_car_corner_cond"]
     }
-    laps = _attach_weather(_load_filtered_laps(root), _load_weather(root))
+    laps = _attach_weather(
+        _load_filtered_laps(root), _load_weather(root), load_condition_overrides(root)
+    )
     laps = _compute_stint_clock(laps)
     laps, _ = _apply_blacklist(laps, load_sensor_blacklist(root), warn_on_unknown=False)
     laps = _compute_stint_anchor(laps)
@@ -568,7 +573,7 @@ def _prepare_fold_laps(
     if all_laps.empty:
         return None
     weather = _load_weather(root)
-    all_laps = _attach_weather(all_laps, weather)
+    all_laps = _attach_weather(all_laps, weather, load_condition_overrides(root))
     all_laps = _compute_stint_clock(all_laps)
     # Apply the same blacklist used at training — don't grade predictions
     # against channels we already know are broken. Held-out laps are a
@@ -1066,7 +1071,9 @@ def run_pace_check(dataset_root: Path | None = None) -> int:
             driven=cf.driven,
         )
 
-    laps = _attach_weather(_load_filtered_laps(root), _load_weather(root))
+    laps = _attach_weather(
+        _load_filtered_laps(root), _load_weather(root), load_condition_overrides(root)
+    )
     laps = _compute_stint_clock(laps)
     laps, _ = _apply_blacklist(laps, load_sensor_blacklist(root), warn_on_unknown=False)
     laps = _compute_stint_anchor(laps)

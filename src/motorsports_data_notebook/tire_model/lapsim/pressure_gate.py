@@ -118,7 +118,12 @@ _TYRES_SOURCES = (
     "lapsim/bank.py",
     "lapsim/track.py",
 )
-_FIT_SIDECARS = ("sensor_blacklist.yaml", "tire_compounds.yaml", "session_overrides.yaml")
+_FIT_SIDECARS = (
+    "sensor_blacklist.yaml",
+    "tire_compounds.yaml",
+    "session_overrides.yaml",
+    "condition_overrides.yaml",
+)
 
 
 def _shipped_aliases() -> dict[str, str]:

@@ -1,0 +1,40 @@
+# Track condition overrides — human-curated, the owner's word on a day's
+# track over the weather archive's label.
+#
+# A session's condition (dry / damp / wet) is computed at training time from
+# the Open-Meteo archive by a surface water balance (tire_model/wetness.py):
+# the film of water the hourly rain leaves on the asphalt during the run. The
+# archive is a reanalysis grid, not a gauge at the circuit. Where it carries a
+# trace of rain (0.1–0.5 mm/h) the modelled film lands at the damp boundary,
+# and there the label is no better than a guess (#395): against the run notes
+# it agrees on every dry (2/2) and wet (13/13) session, and every one of the
+# 12 sessions the notes call damp it labels dry (6) or wet (6). Lap pace does
+# not tell either: 8 of those 13 noted-damp sessions are within 2 % of the
+# car's dry pace.
+#
+# An entry here puts the owner's word over the computed label for every
+# session at that track on that day (tire_model/wetness.py
+# apply_condition_overrides), in the fit, the holdout's folds and scoring,
+# and the lap simulation alike. The film depths stay as computed. Nothing
+# here is read by the extractor; editing the file needs a retrain, not a
+# re-extract.
+#
+# One entry per track day:
+#   track:     the canonical track, as sessions.track_canonical spells it
+#   date:      the track day, YYYY-MM-DD (sessions.date)
+#   condition: dry, damp or wet
+#   evidence:  who says so, and what the archive said
+
+days:
+  - track: fuji
+    date: 2026-11-25
+    condition: dry
+    evidence: >-
+      The owner, who was there (said on 2026-11-26): the track was dry all
+      day. The archive has 0.2–0.5 mm/h at 12–15 JST, which the water
+      balance turns into a film of 0.07–0.24 mm and a damp label for the
+      KK-F-V2's afternoon sessions (a0434, a0436, a0438, a0440, a0441).
+      Those sessions hold the day's fastest laps (112.2–114.4 s against
+      113.2–116.9 s in the morning's dry ones). The archive refetched on
+      2026-11-27 reads the same. There are no run notes for the day and none
+      of its ten files carries a comment.
