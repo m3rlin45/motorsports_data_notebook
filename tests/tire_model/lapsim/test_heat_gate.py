@@ -157,6 +157,21 @@ class TestBinsBeforeTheShares:
         b = heat.lap_heat(bins[("s", 3)][0], other)
         assert np.abs(np.log(a / b)).max() > 0.02
 
+    def test_in_the_tyres_frame_the_kind_is_the_sensor_verdicts_label(self, monkeypatch):
+        kin = _kin(discard=(545.0, 548.0))
+        kin["sensor_source"] = kin["lat_source"].where(kin["lat_source"] != "discard", "imu")
+        kin["sensor_source"] = kin["sensor_source"].astype(object)
+        kin.loc[kin["lap_num"] == 4, "sensor_source"] = "gps_channel"
+        kin["lat_source"] = np.where(kin["lat_source"] == "discard", "discard", "tyres")
+        monkeypatch.setattr(
+            ss, "_session_timeseries", lambda root, sid: ss.SessionSeries(kin, None, None)
+        )
+        laps = pd.DataFrame({"session_id": "s", "lap_num": [3, 4], "car": "car"})
+        bins = heat_gate.sensor_lap_bins("root", laps)
+        # the label is the logger's sensor; the hole is the tyres' frame's own
+        assert bins[("s", 3)][1:] == ("imu", False)
+        assert bins[("s", 4)][1:] == ("gps", True)  # the discarded window is in lap 4
+
     def test_the_bins_need_no_shares_for_the_car(self, monkeypatch):
         kin = _kin(gps=True)
         monkeypatch.setattr(
