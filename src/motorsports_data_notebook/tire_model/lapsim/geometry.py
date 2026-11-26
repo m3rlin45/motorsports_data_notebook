@@ -74,6 +74,7 @@ from ...tire_etl.kinematics import (
 )
 from ...tire_etl.layouts import VENUES, Gate, GpsTrace, Layout, Venue, gate_crossings
 from ...tire_etl.paths import laps_dir, sessions_dir, timeseries_dir
+from ..wetness import CONDITION_OVERRIDES_FILE
 from . import _kernel
 
 logger = logging.getLogger(__name__)
@@ -916,9 +917,17 @@ def load_laps(root: Path, columns: list[str] | None = None) -> pd.DataFrame:
 
 def session_conditions(root: Path, sessions: pd.DataFrame, laps: pd.DataFrame) -> pd.Series:
     """``session_id -> dry / damp / wet / unknown`` from the production
-    wetness model (the surface water balance over the hourly weather)."""
+    wetness model (the surface water balance over the hourly weather), with
+    the owner's word over it where ``condition_overrides.yaml`` lists the day
+    (:func:`..wetness.apply_condition_overrides`, #395)."""
     from ..warmup_table import _load_weather
-    from ..wetness import classify_wetness, session_wetness, surface_water_series
+    from ..wetness import (
+        apply_condition_overrides,
+        classify_wetness,
+        load_condition_overrides,
+        session_wetness,
+        surface_water_series,
+    )
 
     weather = _load_weather(root)
     out: dict[str, str] = {}
@@ -938,7 +947,20 @@ def session_conditions(root: Path, sessions: pd.DataFrame, laps: pd.DataFrame) -
             continue
         feats = session_wetness(series, start, float(duration.get(sid, 0.0)))
         out[str(sid)] = classify_wetness(feats["depth_run_max_mm"])
-    return pd.Series(out, name="condition")
+    labelled = apply_condition_overrides(
+        pd.DataFrame(
+            {
+                "session_id": sessions["session_id"].astype(str).to_numpy(),
+                "track_canonical": sessions["track_canonical"].to_numpy(),
+                "date": sessions["date"].to_numpy(),
+                "condition": [out[str(sid)] for sid in sessions["session_id"]],
+            }
+        ),
+        load_condition_overrides(root),
+    )
+    return pd.Series(
+        dict(zip(labelled["session_id"], labelled["condition"])), name="condition", dtype=object
+    )
 
 
 def _reference_pace(bests: np.ndarray) -> float:
@@ -1110,6 +1132,11 @@ def _index_signature(root: Path) -> str:
     for f in files:
         st = f.stat()
         h.update(f"{f.name}:{st.st_mtime_ns}:{st.st_size};".encode())
+    # The index carries each session's condition label, which the owner's
+    # overrides set (#395); the file's bytes key it, and nothing when absent.
+    overrides = Path(root) / CONDITION_OVERRIDES_FILE
+    if overrides.exists():
+        h.update(overrides.read_bytes())
     return h.hexdigest()
 
 

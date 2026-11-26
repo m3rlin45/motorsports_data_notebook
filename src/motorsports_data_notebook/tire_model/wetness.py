@@ -27,12 +27,22 @@ the model understands:
 
 The evaporation coefficient and the storage depth are physical priors, not
 fits; the sensitivity to the coefficient is documented in docs/tire_model.md.
-All functions here are pure.
+
+The archive is a reanalysis grid, and at the damp boundary it is wrong both
+ways (#395): it called the dry Fuji afternoon of 2026-11-25 damp, and it
+called sessions dry and wet that the run notes call damp. Where the owner
+knows a day's track, ``condition_overrides.yaml`` in the dataset says so, and
+:func:`apply_condition_overrides` puts that over the computed label, at
+training time and for every consumer of the label. The film depths stay as
+computed. Every function here is pure except :func:`load_condition_overrides`,
+which reads that file.
 """
 
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -165,3 +175,73 @@ def classify_wetness(depth_run_max_mm: float | None) -> str:
     if depth_run_max_mm >= DAMP_FILM_MM:
         return "damp"
     return "dry"
+
+
+# ---------------------------------------------------------- the owner's word
+
+#: The sidecar in the dataset root that overrides a day's computed label.
+CONDITION_OVERRIDES_FILE = "condition_overrides.yaml"
+#: What an override may set a day to.
+CONDITION_LABELS = ("dry", "damp", "wet")
+
+
+def load_condition_overrides(dataset_root: Path) -> dict[tuple[str, str], str]:
+    """``(track_canonical, local date YYYY-MM-DD) -> condition`` from the
+    dataset's :data:`CONDITION_OVERRIDES_FILE`; empty without the file.
+
+    Each entry of its ``days`` list names a ``track`` (the canonical track,
+    as ``sessions.track_canonical`` spells it), a ``date`` (the track day,
+    as ``sessions.date``), a ``condition`` (one of :data:`CONDITION_LABELS`)
+    and the ``evidence``. A malformed entry raises ``ValueError``: a typo
+    must not leave the archive's label standing unnoticed.
+    """
+    path = Path(dataset_root) / CONDITION_OVERRIDES_FILE
+    if not path.exists():
+        return {}
+    import yaml
+
+    doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    out: dict[tuple[str, str], str] = {}
+    for i, entry in enumerate(doc.get("days") or []):
+        if not isinstance(entry, dict):
+            raise ValueError(f"{path}: days[{i}] is not a mapping")
+        track = str(entry.get("track") or "").strip()
+        day = str(entry.get("date") or "").strip()
+        condition = str(entry.get("condition") or "").strip().lower()
+        evidence = str(entry.get("evidence") or "").strip()
+        if not track or not evidence:
+            raise ValueError(f"{path}: days[{i}] needs a track and the evidence")
+        try:
+            day = pd.Timestamp(day).strftime("%Y-%m-%d")
+        except ValueError as exc:
+            raise ValueError(f"{path}: days[{i}] has no valid date ({day!r})") from exc
+        if condition not in CONDITION_LABELS:
+            raise ValueError(
+                f"{path}: days[{i}] condition {condition!r} is not one of {CONDITION_LABELS}"
+            )
+        if (track, day) in out:
+            raise ValueError(f"{path}: {track} {day} is listed twice")
+        out[(track, day)] = condition
+    return out
+
+
+def apply_condition_overrides(
+    frame: pd.DataFrame, overrides: Mapping[tuple[str, str], str] | None
+) -> pd.DataFrame:
+    """``frame`` with ``condition`` replaced on the overridden days.
+
+    ``frame`` needs ``track_canonical``, ``date`` and ``condition`` (laps or
+    sessions alike); rows of a listed (track, date) take the listed
+    condition, every other row is returned as it was.
+    """
+    if not overrides or frame.empty:
+        return frame
+    days = pd.to_datetime(frame["date"]).dt.strftime("%Y-%m-%d")
+    keys = list(zip(frame["track_canonical"].astype(str), days))
+    new = [overrides.get(k) for k in keys]
+    hit = np.array([c is not None for c in new], dtype=bool)
+    if not hit.any():
+        return frame
+    out = frame.copy()
+    out["condition"] = np.where(hit, np.array(new, dtype=object), out["condition"].to_numpy())
+    return out

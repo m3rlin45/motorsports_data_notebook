@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -37,6 +38,7 @@ from . import wetness as _wetness
 from .cleaning import clean_laps
 from .energy_balance import P_ATM_BAR, T_ZERO_C_TO_K, t_effective_c, t_road_proxy_c
 from .predict import RAW_CAR_TABLES
+from .wetness import load_condition_overrides
 
 logger = logging.getLogger(__name__)
 
@@ -250,7 +252,7 @@ def _build_warmup_table(
             len(laps),
         )
     weather = _load_weather(root)
-    laps = _attach_weather(laps, weather)
+    laps = _attach_weather(laps, weather, load_condition_overrides(root))
     laps = _compute_stint_clock(laps)
     blacklist_pairs = load_sensor_blacklist(root)
     laps, blacklist_applied = _apply_blacklist(laps, blacklist_pairs)
@@ -503,7 +505,11 @@ def _load_weather(root: Path) -> pd.DataFrame:
     return pd.concat(rows, ignore_index=True)
 
 
-def _attach_weather(laps: pd.DataFrame, weather: pd.DataFrame) -> pd.DataFrame:
+def _attach_weather(
+    laps: pd.DataFrame,
+    weather: pd.DataFrame,
+    overrides: Mapping[tuple[str, str], str] | None,
+) -> pd.DataFrame:
     """Join hourly weather onto laps and derive the track condition.
 
     ``t_air_c`` and ``cloud_cover`` are the instantaneous values of the hour
@@ -511,8 +517,19 @@ def _attach_weather(laps: pd.DataFrame, weather: pd.DataFrame) -> pd.DataFrame:
     preceding-hour sum) is kept for reference. ``condition`` comes from the
     surface water balance in :mod:`.wetness`: the film depth on the track at
     roll-out and over the run (``track_wetness_start_mm``,
-    ``track_wetness_run_max_mm``), classified by :func:`wetness.classify_wetness`.
+    ``track_wetness_run_max_mm``), classified by :func:`wetness.classify_wetness`,
+    and then the owner's word where ``overrides``
+    (:func:`wetness.load_condition_overrides` of the same root) lists the day
+    (#395). Every caller passes them, so the fit, the folds and the scoring
+    read one label.
     """
+    from .wetness import (
+        apply_condition_overrides,
+        classify_wetness,
+        session_wetness,
+        surface_water_series,
+    )
+
     if weather.empty:
         laps["t_air_c"] = np.nan
         laps["cloud_cover"] = np.nan
@@ -520,8 +537,7 @@ def _attach_weather(laps: pd.DataFrame, weather: pd.DataFrame) -> pd.DataFrame:
         laps["track_wetness_start_mm"] = np.nan
         laps["track_wetness_run_max_mm"] = np.nan
         laps["condition"] = "unknown"
-        return laps
-    from .wetness import classify_wetness, session_wetness, surface_water_series
+        return apply_condition_overrides(laps, overrides)
 
     laps = laps.copy()
     starts = pd.to_datetime(laps["session_start_utc"], utc=True)
@@ -559,7 +575,7 @@ def _attach_weather(laps: pd.DataFrame, weather: pd.DataFrame) -> pd.DataFrame:
         lambda s: feats.get(str(s), {}).get("depth_run_max_mm", np.nan)
     )
     out["condition"] = out["track_wetness_run_max_mm"].apply(classify_wetness)
-    return out
+    return apply_condition_overrides(out, overrides)
 
 
 def _is_outlap_col(df: pd.DataFrame) -> pd.Series:
