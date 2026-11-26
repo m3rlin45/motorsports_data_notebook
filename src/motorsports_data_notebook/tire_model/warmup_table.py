@@ -167,6 +167,7 @@ def build_warmup_table(
     rebuild: bool = False,
     exclude_session_ids: set[str] | None = None,
     write_artifacts: bool = True,
+    heat_frame: str | None = None,
 ) -> dict[str, Any]:
     """Fit the energy-balance model (:func:`statespace.fit_physical`) and
     write both artifacts.
@@ -183,10 +184,38 @@ def build_warmup_table(
         If False (used by held-out validation), skip writing
         ``tire_model.json`` and ``warmup_table.parquet`` — return the in-memory
         model dict only.
+    heat_frame
+        The frame of the heat input every part of the fit reads
+        (:mod:`.heat_frame`; None: the frame in force, ``tyres`` outside
+        any ``using``): ``tyres`` (rebuilt from GPS and the committed track,
+        the frame a simulated lap is in; recorded as ``heat_input.frame``
+        with what fell back, ``frame_fallbacks``) or ``sensor`` (the sensor
+        verdict's series, for comparison).
 
     Returns the fitted model as a dict (matching the JSON schema) so callers
     can inspect without re-reading the file.
     """
+    from .heat_frame import resolve, using
+
+    with using(resolve(heat_frame)):
+        return _build_warmup_table(
+            dataset_root,
+            rebuild=rebuild,
+            exclude_session_ids=exclude_session_ids,
+            write_artifacts=write_artifacts,
+        )
+
+
+def _build_warmup_table(
+    dataset_root: Path | None = None,
+    *,
+    rebuild: bool = False,
+    exclude_session_ids: set[str] | None = None,
+    write_artifacts: bool = True,
+) -> dict[str, Any]:
+    """:func:`build_warmup_table` in the heat frame in force."""
+    from .heat_frame import SENSOR, current
+
     root = Path(dataset_root) if dataset_root else default_dataset_root()
 
     laps = _load_filtered_laps(root)
@@ -275,6 +304,15 @@ def build_warmup_table(
         },
         "shared": "gain per (car, condition); cooling per (car, axle, condition); no track constants",
     }
+    if current() != SENSOR:
+        # the frame of every heat this model's constants and entries are in (#376),
+        # and what of the fit's sessions it could not build as such
+        from .heat_frame import fallbacks
+
+        heat_input_block["frame"] = current()
+        heat_input_block["frame_fallbacks"] = fallbacks(
+            {str(s) for s in laps_for_fit["session_id"].unique()}
+        )
 
     # Compound-aware K: multi-task fit with partial supervision. The
     # compound-assignment task is supervised where labels exist (sidecar +
@@ -1050,6 +1088,7 @@ def attach_lap_heat(root: Path, laps: pd.DataFrame, model: dict[str, Any]) -> pd
     hi = model.get("heat_input")
     if not hi or "fitted_by_car" not in hi:
         return laps
+    from .heat_frame import frame_of, using
     from .heat_input import PHYSICAL_HEAT_INPUT, CarFacts, ShareParams
     from .statespace import build_stint_series, lap_heat_share
 
@@ -1071,7 +1110,8 @@ def attach_lap_heat(root: Path, laps: pd.DataFrame, model: dict[str, Any]) -> pd
             eps_brake=float(fitted.get("eps_brake", 1.0)),
             driven=cf.driven,
         )
-    stints = build_stint_series(root, laps, PHYSICAL_HEAT_INPUT)
+    with using(frame_of(model)):  # the laps' heat in the frame the model was fitted in
+        stints = build_stint_series(root, laps, PHYSICAL_HEAT_INPUT)
     lap_q = lap_heat_share(stints, share)
     if lap_q.empty:
         return laps

@@ -83,12 +83,13 @@ class TestFolds:
 
         fits: list[list[str]] = []
 
-        def fit(root, ids):
+        def fit(root, ids, heat_frame="tyres"):
             fits.append(sorted(ids))
             return {"value": 1.0 / 3.0, "left_out": sorted(ids)}
 
         monkeypatch.setattr(validate, "_fit_fold", fit)
         monkeypatch.setattr(pg, "_fit_signature", lambda root: "sig")
+        monkeypatch.setattr(pg, "_tyres_signature", lambda: "tyres")
         first = pg.fold_model(tmp_path, ["b", "a"], tmp_path / "cache")
         again = pg.fold_model(tmp_path, ["a", "b"], tmp_path / "cache")
         assert fits == [["a", "b"]] and again == first
