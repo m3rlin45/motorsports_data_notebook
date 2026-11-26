@@ -444,3 +444,50 @@ def test_committed_hot_pressure_targets_match_the_team_numbers() -> None:
         ("Inferno 86", "RE-71RS"): 2.0,
         ("Inferno 86", "A050"): 1.5,
     }
+
+
+def test_first_lap_anchor_is_stamped_at_the_readings_own_time() -> None:
+    """#371: when the masked TPMS streams leave a stint's out-lap without a
+    reading, the anchor is the next lap's first live reading, which comes
+    mid-lap. It is placed at its own first-valid time on the rolling clock
+    (from the lap's start, less any standstill), not at the lap's start."""
+    base = {"session_id": "s", "car": "FJ", "stint_id": 1}
+    laps = pd.DataFrame(
+        [
+            {
+                **base,
+                "lap_num": 0,
+                "is_outlap": True,
+                "outlap_from_pit": True,
+                "on_track_s": 150.0,
+                "moving_s": 100.0,
+                "t_cum_s": 100.0,
+                "tpms_temp_fl_start": np.nan,
+                "tpms_temp_fl_end": np.nan,
+                "tpms_press_fl_start": np.nan,
+                "tpms_temp_fl_first_valid_s": np.nan,
+            },
+            {
+                **base,
+                "lap_num": 1,
+                "is_outlap": False,
+                "outlap_from_pit": False,
+                "on_track_s": 60.0,
+                "moving_s": 60.0,
+                "t_cum_s": 160.0,
+                "tpms_temp_fl_start": 33.0,
+                "tpms_temp_fl_end": 38.0,
+                "tpms_press_fl_start": 1.42,
+                "tpms_temp_fl_first_valid_s": 40.0,
+            },
+        ]
+    )
+    for c in ("fr", "rl", "rr"):
+        laps[f"tpms_temp_{c}_start"] = np.nan
+        laps[f"tpms_temp_{c}_end"] = np.nan
+        laps[f"tpms_press_{c}_start"] = np.nan
+        laps[f"tpms_temp_{c}_first_valid_s"] = np.nan
+    out = wt._compute_stint_anchor(laps)
+    assert (out["anchor_kind_fl"] == "first_lap").all()
+    assert (out["t_anchor_fl"] == 140.0).all()
+    assert (out["t_start_fl"] == 33.0).all() and (out["p_start_fl"] == 1.42).all()

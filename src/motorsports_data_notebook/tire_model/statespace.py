@@ -37,7 +37,7 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import least_squares  # type: ignore[import-untyped]
 
-from .cleaning import mask_stale_session_prefix
+from .cleaning import mask_stale_tpms
 from .energy_balance import P_ATM_BAR, T_ZERO_C_TO_K, speed_pressure_factor
 from .heat_input import (
     BUILTIN_GEOMETRY,
@@ -219,11 +219,12 @@ def _session_timeseries_in(root_str: str, session_id: str, frame: str) -> Sessio
     tpms = load_group(root, session_id, "tpms", columns=tpms_cols)
     tpms_df: pd.DataFrame | None = None
     if tpms is not None:
-        # The dataset is raw: mask the stale TPMS prefix / wake-up step here.
-        # Temperatures are read only so the per-corner wake rule can see
-        # both streams of a module; the fit itself uses the pressure.
+        # The dataset is raw: mask the stale TPMS readings here, by the same
+        # rules as the lap aggregates (the wake-up prefix and each stint's
+        # held first packet). Temperatures are read only so the per-corner
+        # rules can see both streams of a module; the fit uses the pressure.
         keep = ["t_session_s", "lap_num"] + [c for c in tpms_cols if c in tpms.schema.names]
-        tpms_df = mask_stale_session_prefix(tpms.select(keep)).to_pandas()
+        tpms_df = mask_stale_tpms(tpms.select(["stint_id"] + keep)).select(keep).to_pandas()
     surf = load_group(root, session_id, "surface")
     surf_df: pd.DataFrame | None = None
     if surf is not None:

@@ -583,8 +583,11 @@ def _compute_stint_anchor(laps: pd.DataFrame) -> pd.DataFrame:
       first lap(s), the pre-schema-v3 behaviour. The warmup curve is integrated from that point:
     ``T(t) = T_eff + K·c·g²·(1 − e^{−(t−t_a)/τ}) + (T_a − T_eff)·e^{−(t−t_a)/τ}``.
 
-    Candidates in order: the first lap's start reading (t_a = 0), its end
-    reading (t_a = on_track_s), then the next lap's start/end, and so on —
+    Candidates in order: the first lap's start reading (t_a = its own
+    first-valid time on the rolling clock, as for a pit exit: the masked
+    TPMS streams of :func:`cleaning.mask_stale_tpms` can start mid-lap),
+    its end reading (t_a = the lap's end), then the next lap's start/end,
+    and so on —
     TPMS channels are NaN for the first samples of nearly every session
     (stale-prefix masking in the ETL), so the anchor is often a few seconds
     to one lap in. Laps at or before the anchor cannot be scored and are
@@ -608,6 +611,7 @@ def _compute_stint_anchor(laps: pd.DataFrame) -> pd.DataFrame:
         for c in CORNERS:
             start_col, end_col = f"tpms_temp_{c}_start", f"tpms_temp_{c}_end"
             p_start_col, p_end_col = f"tpms_press_{c}_start", f"tpms_press_{c}_end"
+            fv_col = f"tpms_temp_{c}_first_valid_s"
             anchor: tuple[float, float, float] | None = None
             kind = "first_lap"
             if (
@@ -616,7 +620,6 @@ def _compute_stint_anchor(laps: pd.DataFrame) -> pd.DataFrame:
                 and start_col in grp.columns
                 and pd.notna(first[start_col])
             ):
-                fv_col = f"tpms_temp_{c}_first_valid_s"
                 first_valid = float(first[fv_col]) if fv_col in grp.columns else 0.0
                 if not np.isfinite(first_valid):
                     first_valid = 0.0
@@ -640,7 +643,24 @@ def _compute_stint_anchor(laps: pd.DataFrame) -> pd.DataFrame:
                     p_s = (
                         getattr(row, p_start_col, np.nan) if p_start_col in grp.columns else np.nan
                     )
-                    anchor = (t_begin, float(t_s), float(p_s) if pd.notna(p_s) else np.nan)
+                    # The reading's own time (#371), as for a pit exit: its
+                    # lap-relative first-valid time less the standstill
+                    # before the car moved, from the lap's start.
+                    fv = getattr(row, fv_col, np.nan) if fv_col in grp.columns else np.nan
+                    moving = (
+                        getattr(row, "moving_s", np.nan) if "moving_s" in grp.columns else np.nan
+                    )
+                    wait = (
+                        max(float(getattr(row, "on_track_s")) - float(moving), 0.0)
+                        if pd.notna(moving)
+                        else 0.0
+                    )
+                    lag = max(float(fv) - wait, 0.0) if pd.notna(fv) else 0.0
+                    anchor = (
+                        min(t_begin + lag, t_end),
+                        float(t_s),
+                        float(p_s) if pd.notna(p_s) else np.nan,
+                    )
                     break
                 if pd.notna(t_e):
                     p_e = getattr(row, p_end_col, np.nan) if p_end_col in grp.columns else np.nan
