@@ -107,6 +107,16 @@ _FIT_SOURCES = (
     "cleaning.py",
     "wetness.py",
     "solar.py",
+    "heat_frame.py",
+)
+#: What a fold fitted in the tyres' frame is made by beside them (#376): the
+#: rebuilding of the series from GPS and the track, and the committed tracks.
+_TYRES_SOURCES = (
+    "lapsim/tyres_frame.py",
+    "lapsim/geometry.py",
+    "lapsim/frame.py",
+    "lapsim/bank.py",
+    "lapsim/track.py",
 )
 _FIT_SIDECARS = ("sensor_blacklist.yaml", "tire_compounds.yaml", "session_overrides.yaml")
 
@@ -241,21 +251,44 @@ def _fit_signature(root: Path) -> str:
     return h.hexdigest()
 
 
-def fold_model(root: Path, ids: list[str], cache_dir: Path | None = None) -> dict[str, Any]:
+def _tyres_signature() -> str:
+    """What a fit in the tyres' frame reads beside :func:`_fit_signature`:
+    the code that rebuilds the series and the committed tracks' bytes."""
+    from ..heat_frame import default_tracks_dir
+
+    h = hashlib.sha256(b"heat-frame:tyres")
+    src = Path(__file__).resolve().parent.parent
+    for name in _TYRES_SOURCES:
+        h.update((src / name).read_bytes())
+    tracks = default_tracks_dir()
+    for f in sorted(tracks.glob("*.json")) if tracks.exists() else []:
+        h.update(f.name.encode())
+        h.update(f.read_bytes())
+    return h.hexdigest()
+
+
+def fold_model(
+    root: Path, ids: list[str], cache_dir: Path | None = None, heat_frame: str | None = None
+) -> dict[str, Any]:
     """The pressure model fitted without ``ids``, nothing written under
-    the dataset. With ``cache_dir`` the fit is kept there, keyed by the
-    sessions left out and :func:`_fit_signature`: a fold is fitted once
-    however often its arms are scored."""
+    the dataset, on heat in ``heat_frame`` (:mod:`..heat_frame`; None: the
+    frame in force). With ``cache_dir`` the fit is kept there, keyed by the
+    sessions left out, :func:`_fit_signature` and, in the tyres' frame,
+    :func:`_tyres_signature`: a fold is fitted once however often its arms
+    are scored."""
+    from ..heat_frame import SENSOR, resolve
     from ..validate import _fit_fold
 
+    heat_frame = resolve(heat_frame)
     path = None
     if cache_dir is not None:
-        key = hashlib.sha256(("\n".join(sorted(ids)) + _fit_signature(root)).encode()).hexdigest()
+        sig = _fit_signature(root) + ("" if heat_frame == SENSOR else _tyres_signature())
+        key = hashlib.sha256(("\n".join(sorted(ids)) + sig).encode()).hexdigest()
         path = Path(cache_dir) / "pressure_folds" / f"{key[:24]}.json"
         if path.exists():
             model: dict[str, Any] = json.loads(path.read_text())
             return model
-    model = _fit_fold(root, ids)
+    model = _fit_fold(root, ids, heat_frame)
     if path is not None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(model))
@@ -723,7 +756,7 @@ def sim_cell(sim: Sim, raw_car: str, layout_id: str, share: ShareParams) -> SimC
     heats = pr.heats_frame(
         build[["session_id", "lap_num", "layout_id"]], sim.sensor, sim.tyres, share
     )
-    factors = pr.frame_factors(heats)
+    factors = unit_factors(heats) if heats_in_tyres_frame() else pr.frame_factors(heats)
     usable = heats[~heats["hole"].astype(bool)] if len(heats) else heats
     donors = donor_laps(sim, raw_car, layout_id)
     neither = donor_track(sim, raw_car, layout_id) is not None
@@ -860,8 +893,13 @@ def seen_cell(
     heats = pr.heats_frame(
         build[["session_id", "lap_num", "layout_id"]], sim.sensor, sim.tyres, share
     )
-    factors = pr.frame_factors(heats[heats["layout_id"] != layout_id]) if len(heats) else {}
-    factors.update(pr.frame_factors(heats[heats["layout_id"] == layout_id]) if len(heats) else {})
+    if heats_in_tyres_frame():
+        factors = unit_factors(heats)
+    else:
+        factors = pr.frame_factors(heats[heats["layout_id"] != layout_id]) if len(heats) else {}
+        factors.update(
+            pr.frame_factors(heats[heats["layout_id"] == layout_id]) if len(heats) else {}
+        )
     return SimCell(
         family=family,
         layout_id=layout_id,
@@ -1819,8 +1857,19 @@ def check_pressure(
     # the calculator as shipped: tire_model.json, every day in its fit
     shipped, shipped_t = None, None
     artifact = Path(root) / "tire_model.json"
-    if dates and artifact.exists():
-        model = json.loads(artifact.read_text())
+    from ..heat_frame import current, frame_of
+
+    shipped_model = json.loads(artifact.read_text()) if dates and artifact.exists() else None
+    if shipped_model is not None and frame_of(shipped_model) != current():
+        # its entries and the days' heat would be in two frames (#376)
+        rep.notes.append(
+            f"The model as shipped is not scored: it is in the {frame_of(shipped_model)} frame "
+            f"and this run in the {current()} frame (`lapsim check-pressure` reads the "
+            "committed model's)."
+        )
+        shipped_model = None
+    if shipped_model is not None:
+        model = shipped_model
         every = _prepare_fold_laps(prod.root, sorted(prod.trained), model)
         parts_a, parts_b = [], []
         for pooled, track in folds:
@@ -2881,12 +2930,45 @@ ARM_NAMES = {
 }
 
 
+def heats_in_tyres_frame() -> bool:
+    """Is the heat handed out now in the tyres' frame (:mod:`..heat_frame`)?
+    Then a simulated lap is already in the logged laps' frame."""
+    from ..heat_frame import TYRES, current
+
+    return current() == TYRES
+
+
+def unit_factors(heats: pd.DataFrame) -> dict[str, np.ndarray]:
+    """A frame factor of 1 for every kind of source (and none named): the
+    factors of a cell whose logged heat is in the tyres' frame (#376)."""
+    kinds = {"", "imu", "gps", "mixed"}
+    if len(heats) and "source" in heats.columns:
+        kinds |= {str(k) for k in heats["source"].unique()}
+    return {k: np.ones(len(CORNERS)) for k in sorted(kinds)}
+
+
+def served_factor(
+    model: dict[str, Any], factors: dict[str, np.ndarray], source: str
+) -> np.ndarray | None:
+    """The frame factor a simulated entry is served with under ``model``:
+    1 on every tyre when the model's heat is in the tyres' frame (#376: the
+    simulated lap is in that frame, and the session's kind of sensor is read
+    by nothing), else the cell's factor for the session's kind of source
+    (None where it has none)."""
+    from ..heat_frame import TYRES, frame_of
+
+    if frame_of(model) == TYRES:
+        return np.ones(len(CORNERS))
+    return factors.get(source)
+
+
 def holdout_rows(
     prod: Production,
     sim: Sim,
     ids: list[str],
     labels: dict[str, str],
     cache_dir: Path | None,
+    heat_frame: str | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """One fold of production's holdout scored on one fit by every arm of
     :data:`HOLDOUT_ARMS`: ``(rows, sessions)``. ``rows`` are
@@ -2902,10 +2984,23 @@ def holdout_rows(
     shift point and gears as well. A wet or damp session is the same car
     at a lower use on the dry track (gate D2: no wet term). ``sessions``
     says per held-out session which arms have an entry and, where one has
-    none, why."""
+    none, why.
+
+    With ``heat_frame="tyres"`` the fold is fitted on heat in the tyres'
+    frame (#376), its logged entries are of the same series, and every
+    simulated entry is served with a frame factor of 1: the sensor kind of
+    a session (``source``, still reported) is read by nothing. The frame in
+    force must be the fold's (``sim``'s logged laps were read in it; the
+    worker sets both, :func:`_fold_job`): a mixed run is an error."""
+    from ..heat_frame import HeatFrameError, current, frame_of
     from ..validate import _prepare_fold_laps, _score_fold_laps
 
-    model = fold_model(prod.root, ids, cache_dir)
+    model = fold_model(prod.root, ids, cache_dir, heat_frame=heat_frame)
+    if frame_of(model) != current():
+        raise HeatFrameError(
+            f"a fold fitted in the {frame_of(model)} frame scored with heat in the {current()} "
+            "frame: run it inside heat_frame.using(<the fold's frame>)"
+        )
     prep = _prepare_fold_laps(prod.root, ids, model, inferred_labels=labels)
     if prep is None:
         return pd.DataFrame(), pd.DataFrame()
@@ -2947,7 +3042,7 @@ def holdout_rows(
                     sim, raw_car, layout_id, shares[pooled], held, tracks[layout_id], memo
                 )
             cell = cells[key]
-            factor = None if cell is None else cell.factors.get(source)
+            factor = None if cell is None else served_factor(model, cell.factors, source)
             if cell is None:
                 note["why"] = "no car model"
             elif factor is None:
@@ -3299,17 +3394,23 @@ _WORKER: dict = {}
 
 def _fold_job(job: tuple) -> tuple[int, pd.DataFrame, pd.DataFrame]:
     """One fold of the holdout in a worker process: ``(fold, rows,
-    sessions)`` of :func:`holdout_rows`."""
-    root, cache_dir, tracks_dir, folds_dir, fold, ids, labels, split = job
+    sessions)`` of :func:`holdout_rows`, every heat (the simulation's logged
+    laps among them) in the run's frame."""
+    from ..heat_frame import using
+
+    root, cache_dir, tracks_dir, folds_dir, fold, ids, labels, split, heat_frame = job
     split_pooling(tuple(split))
-    key = (str(root), str(cache_dir), str(tracks_dir), str(folds_dir), tuple(split))
-    if _WORKER.get("key") != key:
-        _WORKER.update(
-            key=key,
-            prod=load_production(root),
-            sim=load_sim(root, cache_dir=cache_dir, tracks_dir=tracks_dir, folds_dir=folds_dir),
+    key = (str(root), str(cache_dir), str(tracks_dir), str(folds_dir), tuple(split), heat_frame)
+    with using(heat_frame):
+        if _WORKER.get("key") != key:
+            _WORKER.update(
+                key=key,
+                prod=load_production(root),
+                sim=load_sim(root, cache_dir=cache_dir, tracks_dir=tracks_dir, folds_dir=folds_dir),
+            )
+        rows, notes = holdout_rows(
+            _WORKER["prod"], _WORKER["sim"], ids, labels, cache_dir, heat_frame=heat_frame
         )
-    rows, notes = holdout_rows(_WORKER["prod"], _WORKER["sim"], ids, labels, cache_dir)
     return fold, rows, notes
 
 
@@ -3325,6 +3426,7 @@ def check_pressure_holdout(
     workers: int | None = None,
     split: tuple[str, ...] = (),
     fastest: float = 0.0,
+    heat_frame: str | None = None,
 ) -> GateReport:
     """The calculator's own evaluation, MAE over folds of held-out
     sessions (``tire-predict-holdout``: the every-session holdout,
@@ -3347,19 +3449,31 @@ def check_pressure_holdout(
     (:func:`fastest_sessions`): per raw car and track the fastest fraction
     of the dry sessions, one fold a cell, so that every model is asked for
     a lap time under what it was trained on there
-    (``holdout_rows__fast.parquet``)."""
+    (``holdout_rows__fast.parquet``).
+
+    ``heat_frame`` is the frame every fold is fitted in, and the
+    calculator's logged entries are built in (None: the frame in force,
+    ``tyres`` outside any ``using``): ``tyres`` (#376) serves the simulated
+    laps with no frame factor; ``sensor`` fits on the sensor
+    verdict's series and brings the simulated laps to it by a frame factor
+    per kind of source (for comparison; ``holdout_rows__sensor.parquet``)."""
     import multiprocessing
     import os
     from concurrent.futures import ProcessPoolExecutor
 
     from ..validate import _inferred_compound_labels, _pick_holdout_sessions
 
+    from ..heat_frame import SENSOR, resolve
+
+    heat_frame = resolve(heat_frame)  # concrete: the workers are other processes
+    sensor = heat_frame == SENSOR
     pooling = split_pooling(tuple(split))
     rep = GateReport(
-        "FHP" if fastest else "FHS" if split else "FH",
+        ("FHP" if fastest else "FHS" if split else "FH") + ("_sensor" if sensor else ""),
         "the standing holdout on simulated heat (`lapsim check-pressure-holdout`)"
         + (f", with {', '.join(split)} fitted apart" if split else "")
-        + (f", the fastest {fastest:.0%} of each cell's dry sessions held out" if fastest else ""),
+        + (f", the fastest {fastest:.0%} of each cell's dry sessions held out" if fastest else "")
+        + (", the heat in the sensor's frame and a frame factor" if sensor else ""),
     )
     if split:
         rep.notes.append(f"The pooling of the cars in this run: {pooling}.")
@@ -3370,7 +3484,7 @@ def check_pressure_holdout(
     if fastest:
         by_pace, margins = fastest_sessions(prod, fastest, min_bucket_size)
         jobs = [
-            (root, cache_dir, tracks_dir, folds_dir, k, ids, labels, tuple(split))
+            (root, cache_dir, tracks_dir, folds_dir, k, ids, labels, tuple(split), heat_frame)
             for k, (_, ids) in enumerate(by_pace)
         ]
     for fold in range(max(1, n_folds) if not fastest else 0):
@@ -3384,7 +3498,9 @@ def check_pressure_holdout(
         )
         if not ids:
             break
-        jobs.append((root, cache_dir, tracks_dir, folds_dir, fold, ids, labels, tuple(split)))
+        jobs.append(
+            (root, cache_dir, tracks_dir, folds_dir, fold, ids, labels, tuple(split), heat_frame)
+        )
     cores = os.cpu_count() or 2
     workers = max(1, min(len(jobs), workers or cores // 2))
     all_rows, all_notes = [], []
@@ -3433,7 +3549,11 @@ def check_pressure_holdout(
     if cache_dir is not None:
         out = Path(cache_dir) / "pressure_rows"
         out.mkdir(parents=True, exist_ok=True)
-        tag = ("__split" if split else "") + (f"__fast{round(100 * fastest)}" if fastest else "")
+        tag = (
+            ("__split" if split else "")
+            + (f"__fast{round(100 * fastest)}" if fastest else "")
+            + ("__sensor" if sensor else "")
+        )
         rows.to_parquet(out / f"holdout_rows{tag}.parquet")
         notes.to_parquet(out / f"holdout_sessions{tag}.parquet")
     own = rows[rows["arm"] == "calculator"]

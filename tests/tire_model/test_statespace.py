@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 
 import numpy as np
@@ -9,6 +10,7 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 
+from motorsports_data_notebook.tire_model import heat_frame
 from motorsports_data_notebook.tire_model import statespace as ss
 from motorsports_data_notebook.tire_model.cleaning import mask_stale_session_prefix
 from motorsports_data_notebook.tire_model.energy_balance import P_ATM_BAR, T_ZERO_C_TO_K
@@ -22,6 +24,15 @@ T_START = 28.0
 P_START = 1.80
 LAP_S = 60
 HZ = 5
+
+
+@pytest.fixture(autouse=True)
+def _sensor_frame() -> Iterator[None]:
+    """These synthetic sessions carry an accelerometer-like series and no GPS
+    family or sessions table, so they are fitted in the sensor's frame: what
+    is tested is the fit, which reads either frame alike (#376)."""
+    with heat_frame.using(heat_frame.SENSOR):
+        yield
 
 
 def _make_stint(

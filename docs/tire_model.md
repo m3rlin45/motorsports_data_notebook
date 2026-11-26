@@ -5962,6 +5962,210 @@ and +1.6 ± 0.7 at 90 %.
   training is a handful of its slowest dry sessions, which may be slow
   for reasons that are not pace.
 
+**Heat in the tyres' frame, so that no frame factor exists (#376;
+2026-11-26; the default since the owner's promotion the same day).** The
+pressure model's heat had been the sensor verdict's series, the
+accelerometer or a GPS-derived fallback per 20 s window. A simulated lap
+therefore had to be brought onto that series by a frame factor per (car,
+layout, kind of source). The holdout read that factor by the held-out
+session's own kind of sensor, which no driver knows before a session.
+The pressure model now rebuilds every session's heat input in the frame
+a simulated lap is in, so that the fit and the simulated lap meet with a
+factor of 1 and no sensor verdict is read by any heat. The sensor's
+series is kept for comparison (`--heat-frame sensor`), and only there
+does a frame factor exist: every frame factor quoted earlier in §2.12
+(gates D1, E1/E2 and F) is a sensor-frame run from before 2026-11-26.
+
+- **The series** (`lapsim/tyres_frame.py`, query time, nothing in the
+  extractor):
+  - **Lateral:** what the tyres hold on the road's bank, `V·Δψ/Δt / g`
+    from the Doppler course (`frame.ground_series`) through
+    `bank.to_tyres_frame`.
+  - **Longitudinal:** `ΔV/Δt / g` plus the track's grade, on the
+    position clock, from the committed track JSON.
+  - **Coverage:** the whole session, out-lap, in-lap and pit lane
+    included.
+  - **Laying a fix on the track:** each fix goes onto the track's line
+    by its nearest node (a KD-tree) and `track.project_onto`. A fix more
+    than 15 m from the line (pit lane, paddock), or on a layout without
+    a committed track, is in the ground frame with bank and grade 0.
+  - **Standing still:** the car's own acceleration is 0 where it
+    stands.
+  - **Gaps:** a row between two usable values at most 1.0 s apart
+    (`FILL_MAX_S`, one bin of the chain) is linear between them. The
+    Doppler course is undefined for a few fixes now and then, and each of
+    its 0.5 s differences then lacks a value for about 0.3 s, at speed.
+  - **Edges:** a row before the session's first, or after its last,
+    usable value by at most 1.0 s holds it (a file that starts or ends at
+    speed).
+  - **Holes:** a longer stretch, and any stretch over a fix the extractor
+    marked as a GPS spike, is a hole.
+  - **Holes left:** across the pooled cars' 175 TPMS sessions, 40 laps in
+    19 sessions, all real GPS gaps or discard windows.
+    - Without the bridging and the edges (the first version, 2026-11-26,
+      found by the KK-F-V2 Fuji test) it was 149 laps in 97 sessions,
+      the last lap of a file that ends at speed among them.
+  - **Clock:** it is handed to the fit on the kinematics clock
+    (`tyres_kinematics`: `load_kinematics`' own rows with `lat_g` and
+    `long_g` replaced, source `tyres`, `on_line` per row).
+  - **Check against the existing chain:** per lap it reads within
+    0.1–0.5 % of the gates' `heat_gate.tyres_frame_lap_bins` on eight
+    sessions (four layouts, both kinds of sensor). The difference is the
+    kinematics clock against the position clock in the 1 s bins.
+  - **What the logged series reads over it:** the frame factors, again.
+    Logged over this series is 1.025 / 1.026 / 1.051 / 1.050 on an
+    Inferno 86 Sodegaura session, 1.07 / 1.07 / 1.06 / 1.06 on a KK-SII
+    GPS session at Tsukuba, and 1.00 / 1.07 / 0.90 / 0.94 on a KK-SII IMU
+    session at Fuji: the FJ's low IMU rears at Fuji are the
+    accelerometer.
+- **The switch** (`tire_model/heat_frame.py`):
+  - The frame in force is `tyres` outside any `heat_frame.using(...)`;
+    `using("sensor")` makes every kinematics load of the fit and of the
+    holdout's preparation hand out the sensor's series instead
+    (`statespace._session_timeseries`, cached per frame;
+    `pace_sim.load_lap_samples`). A `heat_frame=None` argument means the
+    frame in force.
+  - `build_warmup_table(..., heat_frame=)` and
+    `validate._fit_fold(..., heat_frame=)` fit on it.
+  - The model records `heat_input.frame` (absent: `sensor`, so a sensor
+    fit is byte for byte what it was: fold 0 refitted equals its cached
+    model in every key but `fit_at_utc`).
+  - `attach_lap_heat` reads the frame from the model it is given.
+  - `pressure_gate.served_factor` is 1 on every tyre for such a model.
+  - A tyres-frame fold has its own cache key (`_tyres_signature`: the
+    code that builds the series and the tracks' bytes).
+  - CLI: `--heat-frame tyres|sensor` (default `tyres`) on
+    `tire-predict-holdout`, `tire-build-warmup-table` and `tire-lapsim
+    check-pressure-holdout` (rows in `holdout_rows.parquet`, the sensor's
+    in `holdout_rows__sensor.parquet`; before the promotion the default
+    run's rows were the sensor's and the tyres' run wrote
+    `holdout_rows__tyres.parquet`).
+  - The other lap-sim gates compare with production, so they read heat
+    in the frame of the committed `tire_model.json`
+    (`heat_frame.model_frame`): the sensor's until it is retrained in
+    this frame. `holdout_rows` refuses a fold whose frame is not the one
+    in force, and gate F leaves the model as shipped unscored when its
+    frame is not the run's.
+  - **The kind of sensor is a label only.** `tyres_kinematics` keeps the
+    sensor verdict's `lat_source` as `sensor_source`, which
+    `heat_gate.sensor_lap_bins` reports as the lap's `source` (imu / gps
+    / mixed): the holdout's rows by kind of logger and gate F's pairing
+    "of the same kind of source" read it, no heat does, and every kind
+    is served a factor of 1.
+- **Where the frame cannot be built** (`heat_frame.fallbacks`, recorded
+  in the model as `heat_input.frame_fallbacks`, with a warning once per
+  layout or session):
+  - a layout with no committed track in `data/lapsim/tracks/` (today
+    `motegi_east`, `fuji_short`, `suzuka_west` and `minami`; two
+    one-lap sessions among them reach the fit's laps, an Inferno 86's at
+    `fuji_short` and one at `motegi_east`, pooled into their venue's
+    entry) is in the ground frame with bank and grade 0;
+  - a session with no layout or no GPS geometry has no heat in this
+    frame and is left out of the fit (the four with no layout today have
+    no track either and were never in it);
+  - a dataset with no sessions table is a `HeatFrameError`, never a
+    skipped file.
+- **Cost:** a fold fits in about 70 s against 44 s (1.5 GB). The
+  15-fold `check-pressure-holdout --heat-frame tyres` takes 12 min 14 s
+  on four workers, at 2.4 GB a worker.
+
+The gate, written in #376 before any tyres-frame row was scored:
+- the 15 standing folds refitted on this series (fold ids identical to
+  the sensor run), the table served with a factor of 1, the
+  calculator's entries from the same series;
+- both calculators within ±0.30 mbar of their current values:
+  - the calculator against 43.71;
+  - the table against today's table with a source-blind factor
+    (simfix's `table_gm`, 44.08), with 44.64 reported beside;
+- κ_FJ's sd across the folds below today's;
+- the FJ-at-Fuji rear bias not grown by more than 1 mbar.
+
+"Today" in these tables is the standing holdout of 2026-11-25, which
+predates #388's count of a first-lap anchor's flying laps; the tyres'
+frame runs are on master with #388, so a step from one to the other is
+#388 plus #376.
+
+| check | today | tyres' frame | |
+|---|---|---|---|
+| calculator MAE (mbar) | 43.71 | 43.60 (paired −0.11 ± 0.22 session / 0.26 date) | pass |
+| table, factor 1 | 44.08 (`table_gm`; 44.64 as served) | 43.76 (paired −0.32 ± 0.19 / 0.22) | **fail**, 0.02 past the band on the good side |
+| κ_FJ across 15 folds | sd 2.51e-7, 9e-10 to 1.14e-6 | sd 2.55e-7, 2.2e-7 to 1.36e-6 | **fail** |
+| FJ Fuji rears, bias (51 rows, wet) | calculator −49.96, table −41.72 | −44.56, −41.51 | pass |
+
+The first version of the series (2026-11-26, without the bridging and
+the edges) read 43.66, 43.80 (−0.28: inside the band), sd 2.54e-7, and
+−44.97 / −41.93. Its table check passed, the κ check failed.
+
+- **κ:** it no longer runs into 0 on any fold, but its spread did not
+  shrink. #255's reading, that κ_FJ follows the fleet's GPS share, is
+  not borne out by the spread.
+- **The table:** it improved by more than the band allowed. The band was
+  written for a change expected to be about 0, so it fails by the
+  letter.
+
+**The gap the simulation has to the calculator.** Each row is a
+simulation minus the calculator, in mbar, per lap and tyre, on the same
+rows; ± is session-clustered / date-clustered SE; in brackets, the
+sessions where the simulation is better.
+- "both D fixes" is today's table with a source-blind factor and the
+  cell's own logged out-lap (simfix's `tl_gm`).
+- The logged-out-lap columns are read off the holdout's rows by an
+  out-lap swap (simfix's `outlap_swap.py`); they are not yet an arm of
+  `check-pressure-holdout`.
+- Under #376 it is the table at a factor of 1 with the tyres'-frame
+  fold's logged out-lap: the factor fix is moot.
+
+| | today, both D fixes | tyres' frame, logged out-lap | tyres' frame, table as served |
+|---|---|---|---|
+| pooled | +0.12 ± 0.15 / 0.22 (65 of 128) | −0.04 ± 0.14 / 0.19 (56 of 128) | +0.16 ± 0.22 / 0.23 (today +0.93) |
+| Inferno 86 | +0.21 | +0.22 | +0.39 |
+| KK-SII | −0.37 | −0.47 | −0.14 |
+| KK-F | +0.89 | +0.21 | +0.22 |
+| FJ, GPS-logged sessions | +0.10 | −0.40 | +0.05 |
+| FJ, IMU-logged sessions | +0.03 | −0.10 | −0.08 |
+
+Pooled MAE:
+
+| | calculator | simulation (logged out-lap) | table as served | direct |
+|---|---|---|---|---|
+| today | 43.71 | 43.83 | 44.64 | 44.74 |
+| tyres' frame | 43.60 | 43.56 | 43.76 | 43.84 |
+| first version (2026-11-26) | 43.66 | 43.59 | 43.80 | 43.88 |
+
+Per car the calculator reads 55.11 → 54.99 (Inferno 86), 31.76 → 31.34
+(KK-SII) and 42.06 → 42.57 (KK-F). The simulation with the logged
+out-lap reads 55.31 → 55.22, 31.40 → 30.87 and 42.95 → 42.78.
+
+What the numbers say:
+- **The gap closes.** With both calculators on tyres'-frame heat the
+  simulation is at parity with the calculator, nominally 0.04 mbar
+  ahead (0.07 on the first version).
+- **Within noise.** The MDE for a change of this size in the
+  predictions (rms 6 mbar) is about 1.0 mbar, and the gap's own SE is
+  0.14–0.19.
+- **The two calculators move closer.** Their row-by-row prediction
+  difference is 3.8 mbar rms, against 4.3.
+- **The constants absorb the level.** K rises 2–5 % on every car and
+  axle (the tyres'-frame heat is that much below the sensor heat on
+  average). τ moves under 1 %, except the Inferno 86's dry fronts
+  (−2.9 %).
+- **This holdout can exercise only what it does.** The option's value
+  is that a simulated entry needs no factor and no verdict at a layout
+  or sensor setup it has not seen. The holdout tests seen cells.
+
+**Promotion.** The owner turned the tyres' frame on by default on
+2026-11-26, on these numbers with the gate at 2 of 4. The retrain on it
+moves K by +2 to +5 %, every logged entry's heat by the same, the pace
+curves, and κ; `schema_version` stays 5 (the calculators read none of
+the new keys).
+
+**The unseen Fuji day** (the KK-F-V2 on 2026-11-25, all dry, not in any
+fit; mbar): the cold-pressure advice with the lap time typed is 1.5 from
+the day's own for the simulation against 3.6 for the current calculator
+(4 days); prefilled, 2.5 against 19.3; the hot pressure 51.5 against
+51.9. GPS and IMU heat now agree within 1 % on it, against 7–10 %
+before.
+
 **Batches, and speed.** The solver works on a batch of laps of one
 track, each with its own car and its own u (`solver.solve_laps`,
 `solver.drive_laps`; one lap is a batch of one), in two forms that give
