@@ -342,8 +342,8 @@ def _build_warmup_table(
 
     # Compound-aware K: multi-task fit with partial supervision. The
     # compound-assignment task is supervised where labels exist (sidecar +
-    # notes, plus weather-driven condition seeds like the KK-SII's
-    # DRY/WET) and latent elsewhere; the temperature-regression task
+    # notes, plus weather-driven condition seeds like the FJ cars'
+    # DRY/WET, matched on the raw car) and latent elsewhere; the temperature-regression task
     # shares the per-compound K parameters. Solved jointly by EM
     # (mixture of regressions with pinned responsibilities). Soft
     # assignments are training-only — held-out evaluation uses human/seed
@@ -357,7 +357,7 @@ def _build_warmup_table(
             ~compound_labels["session_id"].isin(exclude_session_ids)
         ].reset_index(drop=True)
     compound_labels = apply_condition_seeds(
-        compound_labels, laps_for_fit, alias_condition_seeds(load_condition_seeds(root))
+        compound_labels, laps_for_fit, load_condition_seeds(root)
     )
     k_em, em_assignments, compound_multipliers = fit_compounds_em(
         laps_for_fit, compound_labels, tau_by_car_corner_cond
@@ -424,21 +424,6 @@ def apply_car_aliases(laps: pd.DataFrame) -> pd.DataFrame:
         df["raw_car"] = df["car"]
     df["car"] = df["car"].replace(CAR_FIT_ALIASES)
     return df
-
-
-def alias_condition_seeds(seeds: dict[str, dict[str, str]]) -> dict[str, dict[str, str]]:
-    """Re-key the sidecar's condition_seeds through CAR_FIT_ALIASES.
-
-    The sidecar records seeds against the raw car name (e.g. "KK-SII");
-    after aliasing the laps carry the pooled label, so the seeds must be
-    pooled the same way for :func:`compound_infer.apply_condition_seeds`
-    to match them.
-    """
-    out: dict[str, dict[str, str]] = {}
-    for car, mapping in seeds.items():
-        key = CAR_FIT_ALIASES.get(car, car)
-        out.setdefault(key, {}).update(mapping)
-    return out
 
 
 def _load_filtered_laps(root: Path) -> pd.DataFrame:

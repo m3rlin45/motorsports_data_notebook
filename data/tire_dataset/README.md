@@ -156,7 +156,7 @@ deltas show up in PR diffs.
   about (`source_file` / `note_session_index` / `match_confidence` when a notes
   block matched; the session's `comment` is carried along).
 - `tire_compounds.yaml` — compound exceptions for sessions the notes / comment
-  parse cannot label (plus the wheel-set map and the KK-SII weather seeds).
+  parse cannot label (plus the wheel-set map and the FJ cars' weather seeds, per raw car).
 - `hot_pressure_targets.yaml` — team target hot pressure per (car, compound),
   bar; the calculators prefill each corner's target from it, copied into
   `tire_model.json` (`target_hot_pressure_by_car_compound`) by the model build.
