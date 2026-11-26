@@ -263,6 +263,92 @@ public class CircuitPredictorTests
         Assert.Equal(fl.ColdPressureBar, rr.ColdPressureBar);
     }
 
+    // ---------- Logged entries per raw car (#383) ----------
+
+    // SyntheticV5Model's "Car" pooling two raw cars, RawA and RawB: RawA has
+    // its own dry entry at "synth" (heat, lap time, pace curve, out-lap),
+    // RawB has none; the pooled car also has a damp entry. Same numbers as
+    // the Python and web tests.
+    private static TireModel RawCarModel(bool withRawTables = true)
+    {
+        var dto = SyntheticV5Model(withPerCorner: false).Dto;
+        dto = dto with
+        {
+            CarAliases = new Dictionary<string, string> { ["RawA"] = "Car", ["RawB"] = "Car" },
+            G2TypByTrackCarCond = dto.G2TypByTrackCarCond
+                .Append(new G2EntryDto("synth", "Car", "damp", 0.6, 10)).ToList(),
+            LapTimeTypByTrackCarCond = dto.LapTimeTypByTrackCarCond
+                .Append(new LapTimeEntryDto("synth", "Car", "damp", 65.0, 10)).ToList(),
+            G2TypByTrackRawCarCond = withRawTables
+                ? new[]
+                {
+                    new G2EntryDto("synth", "RawA", "dry", 1.2, 4,
+                        G2VsLapTime: new G2CurveDto(new[] { 50.0, 70.0 }, new[] { 2.0, 1.0 }, 4)),
+                }
+                : null,
+            LapTimeTypByTrackRawCarCond = withRawTables
+                ? new[] { new LapTimeEntryDto("synth", "RawA", "dry", 58.0, 4) }
+                : null,
+            OutlapTypByTrackRawCarCond = withRawTables
+                ? new[] { new OutlapEntryDto("synth", "RawA", "dry", 80.0, 0.5, 2) }
+                : null,
+        };
+        return new TireModel(dto);
+    }
+
+    private static CornerPrediction PredictRaw(
+        CircuitPredictor p, string car, string condition = "dry", string track = "synth") => p.Predict(
+            track: track, car: car, condition: condition,
+            lapWithinStint: 5, ambientTempC: 20.0,
+            trackTempC: null, cloudCoverPct: 100.0,
+            corner: "fl", targetHotPressureBar: 1.8,
+            targetLapTimeS: 60.0);
+
+    [Fact]
+    public void Predict_RawCar_ReadsItsOwnEntryAndThePooledConstants()
+    {
+        var p = new CircuitPredictor(RawCarModel());
+        var own = PredictRaw(p, "RawA");
+        var pooled = PredictRaw(p, "Car");
+        // its own heat along its own curve, anchored at its own lap time (1.6 at 58 s)
+        Assert.Equal(1.2 * 1.5 / 1.6, own.G2Typ, precision: 12);
+        Assert.Equal(58.0, own.LapTimeTypS);
+        Assert.Equal("curve", own.G2PaceSource);
+        Assert.Equal(80.0, own.OutlapTimeS);
+        Assert.Equal(0.5, own.OutlapG2);
+        Assert.Equal(60.0, pooled.LapTimeTypS);
+        Assert.Equal(90.0, pooled.OutlapTimeS);
+        // the constants are the pooled car's whichever name is given
+        Assert.Equal(pooled.KSourceBucket, own.KSourceBucket);
+        Assert.Equal(pooled.KKelvinPerG2, own.KKelvinPerG2);
+        Assert.Equal(pooled.TauSec, own.TauSec);
+        // a raw car without its own entry reads the pooled one
+        Assert.Equal(pooled, PredictRaw(p, "RawB"));
+        // the condition chain comes first: RawA's damp is the pooled damp entry ...
+        var damp = PredictRaw(p, "RawA", "damp");
+        var pooledDamp = PredictRaw(p, "Car", "damp");
+        Assert.Equal(65.0, damp.LapTimeTypS);
+        Assert.Equal(pooledDamp.LapTimeTypS, damp.LapTimeTypS);
+        // ... and each table walks the chain alone: no damp out-lap anywhere,
+        // so the dry step reads RawA's own out-lap before the pooled one
+        Assert.Equal("fallback(dry)", damp.OutlapSource);
+        Assert.Equal(80.0, damp.OutlapTimeS);
+        Assert.Equal(90.0, pooledDamp.OutlapTimeS);
+    }
+
+    [Fact]
+    public void Predict_RawCar_WithoutTheTablesIsItsPooledCar()
+    {
+        var without = new CircuitPredictor(RawCarModel(withRawTables: false));
+        foreach (var cond in new[] { "dry", "damp", "wet" })
+            Assert.Equal(PredictRaw(without, "Car", cond), PredictRaw(without, "RawA", cond));
+        // a car with no entry at the track averages the pooled rows only
+        var withRaw = RawCarModel();
+        var bare = RawCarModel(withRawTables: false);
+        Assert.Equal(bare.LookupG2("synth", "Nobody", "dry"), withRaw.LookupG2("synth", "Nobody", "dry"));
+        Assert.Equal("track_pooled", withRaw.LookupLapTime("synth", "Nobody", "dry").Source);
+    }
+
     // ---------- Fixture DTOs (private; only used by the parity test) ----------
 
     private sealed record FixtureCase(

@@ -1578,7 +1578,9 @@ def tally(att: pd.DataFrame) -> dict:
 def identity_check(model: dict[str, Any], prep: Any) -> tuple[bool, int]:
     """An entry read from the fold's model and placed again is the rows it
     was read from, and the holdout scored on that model is the holdout,
-    bit for bit: ``(same, rows)``."""
+    bit for bit: ``(same, rows)``. The raw cars' own rows are left in place
+    (``place(..., raw=False)``)."""
+    from ..predict import RAW_CAR_TABLES
     from ..validate import _score_fold_laps
 
     placed = model
@@ -1586,9 +1588,10 @@ def identity_check(model: dict[str, Any], prep: Any) -> tuple[bool, int]:
         key = (r["track_canonical"], r["car"], r["condition"])
         entry = pr.entry_of(placed, *key)
         if entry is not None:
-            placed = pr.place(placed, *key, entry)
+            placed = pr.place(placed, *key, entry, raw=False)
     tables = ("g2_typ_by_track_car_cond", "lap_time_typ_by_track_car_cond")
     same = all(placed[t] == model[t] for t in tables)
+    same &= all(placed.get(t) == model.get(t) for t in RAW_CAR_TABLES.values())
     same &= placed.get("outlap_typ_by_track_car_cond") == model.get("outlap_typ_by_track_car_cond")
     before = _score_fold_laps(prep, model)
     after = _score_fold_laps(prep, placed)

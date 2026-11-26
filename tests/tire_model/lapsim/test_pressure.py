@@ -144,6 +144,37 @@ class TestEntries:
         assert pr.entry_of(bare, "a", "c", "dry") is None
         assert _lookup_lap_time(bare, "a", "c", "dry")[2] == "global"
 
+    def test_a_placed_entry_answers_the_cell_for_the_raw_cars_too(self):
+        """The raw cars' own rows at the cell (#383) are taken out with the
+        cell's, so a session scored by its raw car reads the placed entry;
+        ``raw=False`` leaves them, and every other cell's are kept."""
+        from motorsports_data_notebook.tire_model.validate import _calculator_lap_inputs
+
+        model = _fold_model()
+        model["car_aliases"] = {"r": "c"}
+        own = dict(model["g2_typ_by_track_car_cond"][0], car="r", g2_typ=9.0)
+        own["q_typ_by_corner"] = {c: 9.0 for c in TYRES}
+        model["g2_typ_by_track_raw_car_cond"] = [own, dict(own, track_canonical="b")]
+        model["lap_time_typ_by_track_raw_car_cond"] = [
+            dict(model["lap_time_typ_by_track_car_cond"][0], car="r")
+        ]
+        model["outlap_typ_by_track_raw_car_cond"] = []
+        assert _calculator_lap_inputs(model, "a", "r", "dry", 1, 60.0, with_outlap=False)[0] == 9.0
+        new = pr.Entry(lap_time_s=60.0, q=np.array([1.0, 2.0, 3.0, 4.0]), source="sim")
+        placed = pr.place(model, "a", "c", "dry", new)
+        g2 = _calculator_lap_inputs(
+            placed, "a", "r", "dry", 1, 60.0, with_outlap=False, corner="fl"
+        )
+        assert g2[0] == 1.0
+        assert [r["track_canonical"] for r in placed["g2_typ_by_track_raw_car_cond"]] == ["b"]
+        assert placed["lap_time_typ_by_track_raw_car_cond"] == []
+        kept = pr.place(model, "a", "c", "dry", new, raw=False)
+        assert kept["g2_typ_by_track_raw_car_cond"] == model["g2_typ_by_track_raw_car_cond"]
+        bare = pr.without_entry(model, "a", "c", "dry")
+        assert [r["track_canonical"] for r in bare["g2_typ_by_track_raw_car_cond"]] == ["b"]
+        # a model without raw-car tables gains none
+        assert "g2_typ_by_track_raw_car_cond" not in pr.place(_fold_model(), "a", "c", "dry", new)
+
     def test_scaled_and_fed_at_another_lap_time(self):
         entry = pr.entry_of(_fold_model(), "a", "c", "dry")
         up = entry.scaled(1.05)
