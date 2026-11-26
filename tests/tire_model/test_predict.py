@@ -841,3 +841,150 @@ def test_schema_v5_per_corner_intensity_is_used_with_fallback() -> None:
         _model=_minimal_model(),
     )
     assert len({round(p.g2_typ, 9) for p in plain.values()}) == 1
+
+
+# ---------- logged entries per raw car (#383) ----------
+
+
+def _raw_car_model() -> dict:
+    """``_minimal_model`` with ToyCar the pooled name of two raw cars, RawA
+    and RawB; RawA has its own dry entry at track_a (heat, lap time, a
+    pace curve, an out-lap) and nothing in the damp, RawB none."""
+    model = dict(_minimal_model())
+    model["car_aliases"] = {"RawA": "ToyCar", "RawB": "ToyCar"}
+    model["outlap_typ_by_track_car_cond"] = [
+        {
+            "track_canonical": "track_a",
+            "car": "ToyCar",
+            "condition": "dry",
+            "outlap_moving_s": 90.0,
+            "outlap_g2": 0.3,
+            "n_laps_used": 12,
+        },
+    ]
+    model["g2_typ_by_track_raw_car_cond"] = [
+        {
+            "track_canonical": "track_a",
+            "car": "RawA",
+            "condition": "dry",
+            "g2_typ": 1.2,
+            "n_laps_used": 20,
+            "g2_vs_lap_time": {"lap_time_s": [50.0, 70.0], "g2": [2.0, 1.0]},
+        },
+    ]
+    model["lap_time_typ_by_track_raw_car_cond"] = [
+        {
+            "track_canonical": "track_a",
+            "car": "RawA",
+            "condition": "dry",
+            "lap_time_typ_s": 58.0,
+            "n_laps_used": 20,
+        },
+    ]
+    model["outlap_typ_by_track_raw_car_cond"] = [
+        {
+            "track_canonical": "track_a",
+            "car": "RawA",
+            "condition": "dry",
+            "outlap_moving_s": 80.0,
+            "outlap_g2": 0.5,
+            "n_laps_used": 4,
+        },
+    ]
+    return model
+
+
+def _predict(model: dict, car: str, **kw) -> Prediction:  # type: ignore[no-untyped-def]
+    return predict_cold_pressure(
+        track=kw.pop("track", "track_a"),
+        car=car,
+        lap_within_stint=3,
+        target_hot_pressure_bar={c: 1.95 for c in CORNERS},
+        ambient_temp_c=15.0,
+        _model=model,
+        **kw,
+    )["fl"]
+
+
+def test_a_raw_car_reads_its_own_entry_and_the_pooled_constants() -> None:
+    model = _raw_car_model()
+    own = _predict(model, "RawA", target_lap_time_s=60.0)
+    pooled = _predict(model, "ToyCar", target_lap_time_s=60.0)
+    # its own heat along its own curve, anchored at its own lap time (1.6 at 58 s)
+    assert own.g2_typ == pytest.approx(1.2 * 1.5 / 1.6)
+    assert own.lap_time_typ_s == 58.0 and own.g2_pace_source == "curve"
+    assert own.outlap_time_s == 80.0 and own.outlap_g2 == 0.5
+    assert pooled.g2_typ == pytest.approx(0.9) and pooled.lap_time_typ_s == 60.0
+    assert pooled.outlap_time_s == 90.0
+    # the constants are the pooled car's whichever name is given
+    assert own.K_source_bucket == pooled.K_source_bucket == ("ToyCar", "fl", "dry")
+    assert own.K_kelvin_per_g2 == pooled.K_kelvin_per_g2 and own.tau_sec == pooled.tau_sec
+
+
+def test_a_raw_car_without_its_own_entry_reads_the_pooled_one() -> None:
+    model = _raw_car_model()
+    for kw in ({}, {"track": "track_b"}, {"track_condition": "damp"}):
+        assert _predict(model, "RawB", **kw) == _predict(model, "ToyCar", **kw)
+    # the condition chain comes first: RawA's damp reads the pooled damp
+    # entry, not its own dry one ...
+    damp = _predict(model, "RawA", track_condition="damp")
+    pooled = _predict(model, "ToyCar", track_condition="damp")
+    assert damp.g2_typ == pooled.g2_typ == pytest.approx(0.6)
+    assert damp.lap_time_typ_s == pooled.lap_time_typ_s == 65.0
+    # ... and each table walks the chain alone: with no damp out-lap at all,
+    # the dry step reads RawA's own out-lap before the pooled one
+    assert damp.outlap_source == pooled.outlap_source == "fallback(dry)"
+    assert (damp.outlap_time_s, pooled.outlap_time_s) == (80.0, 90.0)
+
+
+def test_an_artifact_without_raw_car_tables_answers_a_raw_car_as_before() -> None:
+    model = _raw_car_model()
+    for name in (
+        "g2_typ_by_track_raw_car_cond",
+        "lap_time_typ_by_track_raw_car_cond",
+        "outlap_typ_by_track_raw_car_cond",
+    ):
+        del model[name]
+    for kw in ({}, {"target_lap_time_s": 55.0}, {"track_condition": "wet"}, {"track": "x"}):
+        assert _predict(model, "RawA", **kw) == _predict(model, "ToyCar", **kw)
+
+
+def test_the_track_fallbacks_average_the_pooled_entries_only() -> None:
+    """A car with no entry at a track reads the mean of the pooled entries
+    there; the raw cars' rows are not counted twice."""
+    from motorsports_data_notebook.tire_model.predict import _lookup_g2, _lookup_lap_time
+
+    model = _raw_car_model()
+    bare = {k: v for k, v in model.items() if not k.endswith("_by_track_raw_car_cond")}
+    for m in (model, bare):
+        assert _lookup_g2(m, "track_a", "Nobody", "dry") == _lookup_g2(
+            bare, "track_a", "Nobody", "dry"
+        )
+        assert _lookup_lap_time(m, "track_a", "Nobody", "dry")[2] == "track_pooled"
+    # a raw car whose own rows at the track are in another condition reads them first
+    model["g2_typ_by_track_raw_car_cond"][0]["condition"] = "damp"
+    model["lap_time_typ_by_track_raw_car_cond"][0]["condition"] = "damp"
+    model["g2_typ_by_track_car_cond"] = [
+        r for r in model["g2_typ_by_track_car_cond"] if r["track_canonical"] != "track_a"
+    ] + [dict(r, condition="damp") for r in _minimal_model()["g2_typ_by_track_car_cond"][:1]]
+    value, _n, source = _lookup_g2(model, "track_a", "RawA", "dry")
+    assert source == "track_car_pooled" and value == pytest.approx(1.2)
+
+
+def test_the_committed_artifact_answers_each_raw_car_as_its_pooled_car() -> None:
+    """Until a retrain writes the raw-car tables, a raw car name gives the
+    pooled car's prediction everywhere, as the calculators have always had it."""
+    from motorsports_data_notebook.tire_etl.paths import default_dataset_root
+
+    path = default_dataset_root() / "tire_model.json"
+    if not path.exists():
+        pytest.skip("no committed tire_model.json")
+    model = json.loads(path.read_text())
+    if any(name.endswith("_by_track_raw_car_cond") for name in model):
+        pytest.skip("the committed artifact has raw-car entries")
+    tracks = sorted({r["track_canonical"] for r in model["g2_typ_by_track_car_cond"]})
+    for raw, pooled in model["car_aliases"].items():
+        for track in tracks:
+            for cond in ("dry", "damp", "wet"):
+                kw = dict(track=track, track_condition=cond, target_lap_time_s=70.0)
+                assert _predict(model, raw, **kw) == _predict(model, pooled, **kw)

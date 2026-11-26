@@ -27,6 +27,15 @@ from .energy_balance import (
 
 CORNERS = ("fl", "fr", "rl", "rr")
 
+#: The entry tables per raw car beside the pooled ones (#383,
+#: ``warmup_table.RAW_CAR_ENTRIES``): the same rows, ``car`` the car the
+#: session names, for each raw car ``car_aliases`` pools under another name.
+RAW_CAR_TABLES = {
+    "g2_typ_by_track_car_cond": "g2_typ_by_track_raw_car_cond",
+    "lap_time_typ_by_track_car_cond": "lap_time_typ_by_track_raw_car_cond",
+    "outlap_typ_by_track_car_cond": "outlap_typ_by_track_raw_car_cond",
+}
+
 
 @dataclass(frozen=True)
 class Prediction:
@@ -88,6 +97,48 @@ _CONDITION_FALLBACK = {
 
 def _condition_chain(condition: str) -> tuple[str, ...]:
     return _CONDITION_FALLBACK.get(condition, (condition, "dry"))
+
+
+def fitted_car(model: dict[str, Any], car: str) -> str:
+    """The car the model's constants were fitted as: a raw car pooled
+    under another name (``car_aliases``, e.g. KK-F → FJ) resolves to it,
+    any other name passes through."""
+    return str(model.get("car_aliases", {}).get(car, car))
+
+
+def _entry_row(
+    model: dict[str, Any], table: str, track: str, car: str, condition: str
+) -> dict[str, Any] | None:
+    """The row of entry table ``table`` that answers (track, car,
+    condition): a raw car's own row (:data:`RAW_CAR_TABLES`) where it has
+    one, else the fitted car's. ``car`` may be either name; an artifact
+    without raw-car tables reads the fitted car's row, as before."""
+    fit = fitted_car(model, car)
+    names = [(RAW_CAR_TABLES[table], car)] if fit != car else []
+    for name, who in names + [(table, fit)]:
+        rows: list[dict[str, Any]] = model.get(name) or []
+        for r in rows:
+            if r["track_canonical"] == track and r["car"] == who and r["condition"] == condition:
+                return r
+    return None
+
+
+def _entry_rows_at_track(
+    model: dict[str, Any], table: str, track: str, car: str
+) -> list[dict[str, Any]]:
+    """Every condition's row of ``table`` at ``track`` for the car whose
+    entries answer there: the raw car's own where it has any, else the
+    fitted car's (the ``track_car_pooled`` fallback)."""
+    fit = fitted_car(model, car)
+    if fit != car:
+        own = [
+            r
+            for r in model.get(RAW_CAR_TABLES[table]) or []
+            if r["track_canonical"] == track and r["car"] == car
+        ]
+        if own:
+            return own
+    return [r for r in model.get(table) or [] if r["track_canonical"] == track and r["car"] == fit]
 
 
 def _lookup_tau(
@@ -172,19 +223,22 @@ def _lookup_g2(
 
     Fallback walks the condition chain ((wet) → damp → dry, (damp) → dry,
     (dry) → dry), then (track, car) pooled across conditions, then (track),
-    then global.
+    then global. A raw car (``car_aliases``) reads its own entry before the
+    pooled car's at each of the first two steps (:func:`_entry_row`); the
+    track and global steps average the pooled rows.
     """
-    table = model["g2_typ_by_track_car_cond"]
+    name = "g2_typ_by_track_car_cond"
+    table = model[name]
     for cond in _condition_chain(condition):
-        for r in table:
-            if r["track_canonical"] == track and r["car"] == car and r["condition"] == cond:
-                tag = "exact" if cond == condition else f"fallback({cond})"
-                return (
-                    _corner_value(r, "q_typ_by_corner", "g2_typ", corner),
-                    int(r["n_laps_used"]),
-                    tag,
-                )
-    same_tc = [r for r in table if r["track_canonical"] == track and r["car"] == car]
+        r = _entry_row(model, name, track, car, cond)
+        if r is not None:
+            tag = "exact" if cond == condition else f"fallback({cond})"
+            return (
+                _corner_value(r, "q_typ_by_corner", "g2_typ", corner),
+                int(r["n_laps_used"]),
+                tag,
+            )
+    same_tc = _entry_rows_at_track(model, name, track, car)
     if same_tc:
         vals = [_corner_value(r, "q_typ_by_corner", "g2_typ", corner) for r in same_tc]
         n = sum(int(r["n_laps_used"]) for r in same_tc)
@@ -247,13 +301,14 @@ def _interp_clamped(x: float, xs: list[float], ys: list[float]) -> float:
 def _lookup_g2_pace_curve(
     model: dict[str, Any], track: str, car: str, condition: str
 ) -> dict[str, Any] | None:
-    """The bucket's simulated-lap ``g2_vs_lap_time`` curve, via the condition chain."""
-    table = model.get("g2_typ_by_track_car_cond", [])
+    """The bucket's simulated-lap ``g2_vs_lap_time`` curve, via the condition
+    chain: the curve of the row :func:`_lookup_g2` reads (a raw car's own
+    where it has an entry there)."""
     for cond in _condition_chain(condition):
-        for r in table:
-            if r["track_canonical"] == track and r["car"] == car and r["condition"] == cond:
-                curve = r.get("g2_vs_lap_time")
-                return curve if isinstance(curve, dict) else None
+        r = _entry_row(model, "g2_typ_by_track_car_cond", track, car, cond)
+        if r is not None:
+            curve = r.get("g2_vs_lap_time")
+            return curve if isinstance(curve, dict) else None
     return None
 
 
@@ -304,19 +359,21 @@ def _lookup_outlap(
     """Typical out-lap ``(moving_s, g2, n, source)`` for the bucket, walking
     the condition chain, then (track, car) pooled, then (track) pooled.
     ``None`` when the artifact has no out-lap table or no data for the
-    track (the out-lap is then treated as zero-length)."""
-    table = model.get("outlap_typ_by_track_car_cond") or []
+    track (the out-lap is then treated as zero-length). A raw car reads
+    its own out-lap first, as :func:`_lookup_g2` does."""
+    name = "outlap_typ_by_track_car_cond"
+    table = model.get(name) or []
     for cond in _condition_chain(condition):
-        for r in table:
-            if r["track_canonical"] == track and r["car"] == car and r["condition"] == cond:
-                tag = "exact" if cond == condition else f"fallback({cond})"
-                return (
-                    float(r["outlap_moving_s"]),
-                    _corner_value(r, "outlap_q_by_corner", "outlap_g2", corner),
-                    int(r["n_laps_used"]),
-                    tag,
-                )
-    same_tc = [r for r in table if r["track_canonical"] == track and r["car"] == car]
+        r = _entry_row(model, name, track, car, cond)
+        if r is not None:
+            tag = "exact" if cond == condition else f"fallback({cond})"
+            return (
+                float(r["outlap_moving_s"]),
+                _corner_value(r, "outlap_q_by_corner", "outlap_g2", corner),
+                int(r["n_laps_used"]),
+                tag,
+            )
+    same_tc = _entry_rows_at_track(model, name, track, car)
     if same_tc:
         n = sum(int(r["n_laps_used"]) for r in same_tc)
         return (
@@ -346,13 +403,16 @@ def _lookup_outlap(
 def _lookup_lap_time(
     model: dict[str, Any], track: str, car: str, condition: str
 ) -> tuple[float, int, str]:
-    table = model["lap_time_typ_by_track_car_cond"]
+    """Typical lap time ``(seconds, n, source)``, by the chain of
+    :func:`_lookup_g2` (a raw car's own entry first)."""
+    name = "lap_time_typ_by_track_car_cond"
+    table = model[name]
     for cond in _condition_chain(condition):
-        for r in table:
-            if r["track_canonical"] == track and r["car"] == car and r["condition"] == cond:
-                tag = "exact" if cond == condition else f"fallback({cond})"
-                return float(r["lap_time_typ_s"]), int(r["n_laps_used"]), tag
-    same_tc = [r for r in table if r["track_canonical"] == track and r["car"] == car]
+        r = _entry_row(model, name, track, car, cond)
+        if r is not None:
+            tag = "exact" if cond == condition else f"fallback({cond})"
+            return float(r["lap_time_typ_s"]), int(r["n_laps_used"]), tag
+    same_tc = _entry_rows_at_track(model, name, track, car)
     if same_tc:
         vals = [r["lap_time_typ_s"] for r in same_tc]
         n = sum(int(r["n_laps_used"]) for r in same_tc)
@@ -427,16 +487,18 @@ def predict_cold_pressure(
     """
     model = _model if _model is not None else _load_model(dataset_root)
 
-    # Alias-pooled cars (e.g. KK-F / KK-SII -> FJ): resolve the raw car
-    # name onto the label the model was fitted with.
-    car = model.get("car_aliases", {}).get(car, car)
+    # Alias-pooled cars (e.g. KK-F / KK-SII -> FJ): the constants are the
+    # label the model was fitted with; the entries (heat, pace curve, lap
+    # time, out-lap) are the raw car's own where the artifact has them.
+    entry_car = car
+    car = fitted_car(model, car)
 
     cond = str(track_condition or "dry").lower()
     if cond not in {"dry", "damp", "wet"}:
         raise ValueError(f"track_condition must be one of dry/damp/wet; got {track_condition!r}")
 
     # Lookups (all condition-aware where applicable)
-    lap_time_typ_s, lt_n, _lt_source = _lookup_lap_time(model, track, car, cond)
+    lap_time_typ_s, lt_n, _lt_source = _lookup_lap_time(model, track, entry_car, cond)
     if lap_time_typ_override_s is not None:
         lap_time_typ_s = float(lap_time_typ_override_s)
     w_road = float(model["energy_balance"]["w_road"])
@@ -486,20 +548,20 @@ def predict_cold_pressure(
         target_hot = float(target_hot_pressure_bar[corner])
         # Driving intensity for this corner (schema v5: per corner; older
         # artifacts carry one value for all four), scaled by the pace target.
-        g2_typ, g2_n, _g2_source = _lookup_g2(model, track, car, cond, corner)
+        g2_typ, g2_n, _g2_source = _lookup_g2(model, track, entry_car, cond, corner)
         if g2_typ_override is not None:
             g2_typ = float(g2_typ_override)
         g2_scale = 1.0
         if target is not None:
             g2_scale, g2_pace_source = _g2_pace_scale(
-                model, track, car, cond, lap_time_typ_s, target, corner
+                model, track, entry_car, cond, lap_time_typ_s, target, corner
             )
         g2_typ = g2_typ * g2_scale
         out_time_s = 0.0
         out_g2 = 0.0
         out_src: str | None = None
         if include_outlap:
-            hit_out = _lookup_outlap(model, track, car, cond, corner)
+            hit_out = _lookup_outlap(model, track, entry_car, cond, corner)
             if hit_out is not None:
                 out_time_s, out_g2, _out_n, out_src = hit_out
             if outlap_time_s is not None:

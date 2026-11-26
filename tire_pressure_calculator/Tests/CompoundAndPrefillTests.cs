@@ -57,6 +57,107 @@ public class CompoundAndPrefillTests : IDisposable
         Assert.Equal(pooled.KKelvinPerG2, Predict("rr", "SLICKS9000").KKelvinPerG2);
     }
 
+    // ---------- The raw cars in the picker (#383) ----------
+
+    // The bundled artifact with a KK-SII entry of its own at Tsukuba (dry):
+    // the pooled FJ row's heat x 0.8 and lap time + 1 s.
+    private static TireModel WithKKSIIEntry()
+    {
+        var dto = Model.Dto;
+        var g2 = dto.G2TypByTrackCarCond.Single(
+            r => r.TrackCanonical == "tsukuba_2000" && r.Car == "FJ" && r.Condition == "dry");
+        var lap = dto.LapTimeTypByTrackCarCond.Single(
+            r => r.TrackCanonical == "tsukuba_2000" && r.Car == "FJ" && r.Condition == "dry");
+        var own = g2 with
+        {
+            Car = "KK-SII",
+            G2Typ = g2.G2Typ * 0.8,
+            QTypByCorner = g2.QTypByCorner?.ToDictionary(kv => kv.Key, kv => kv.Value * 0.8),
+        };
+        return new TireModel(dto with
+        {
+            G2TypByTrackRawCarCond = new[] { own },
+            LapTimeTypByTrackRawCarCond = new[] { lap with { Car = "KK-SII", LapTimeTypS = lap.LapTimeTypS + 1.0 } },
+            OutlapTypByTrackRawCarCond = Array.Empty<OutlapEntryDto>(),
+        });
+    }
+
+    [Fact]
+    public void Picker_ListsTheRawCarsInPlaceOfTheirPooledCar_OnlyWithRawCarRows()
+    {
+        Assert.Equal(Model.FittedCars, Model.AvailableCars);
+        Assert.Contains("FJ", Model.AvailableCars);
+        Assert.Equal("FJ", Model.SelectableCar("KK-SII"));
+
+        var split = WithKKSIIEntry();
+        Assert.Equal(new[] { "Inferno 86", "KK-F", "KK-F-V2", "KK-SII" }, split.AvailableCars);
+        Assert.Equal("KK-SII", split.SelectableCar("KK-SII"));
+        Assert.Equal("FJ", split.SelectableCar("FJ"));
+        Assert.Null(split.SelectableCar("Nobody"));
+        // the constants and the prefills resolve a raw name to the pooled car
+        Assert.Equal(split.AvailableCompounds("FJ"), split.AvailableCompounds("KK-F"));
+        Assert.Equal(split.LookupCornerDefaults("FJ", "fl", "dry"), split.LookupCornerDefaults("KK-SII", "fl", "dry"));
+        Assert.Equal(split.LookupTargetHotPressure("FJ", "DRY"), split.LookupTargetHotPressure("KK-SII", "DRY"));
+        Assert.Equal(split.LookupK("FJ", "fl", "dry"), split.LookupK("KK-SII", "fl", "dry"));
+    }
+
+    private void SaveSettings(string car)
+    {
+        var settings = new AppSettings
+        {
+            Mode = AppMode.CircuitPrediction,
+            Prediction = new PredictionSettings
+            {
+                Track = "tsukuba_2000",
+                Car = car,
+                Condition = "dry",
+                TargetLapTimeS = 60.0,
+                Compound = "DRY",
+            },
+        };
+        settings.Save();
+    }
+
+    [Fact]
+    public void SavedKKSII_PredictsFromItsOwnRows_WhenTheArtifactHasThem()
+    {
+        var split = WithKKSIIEntry();
+        SaveSettings("KK-SII");
+        var vm = new MainViewModel(split);
+        Assert.Equal("KK-SII", vm.SelectedCar);
+        Assert.DoesNotContain("FJ", vm.AvailableCars);
+        var own = new CircuitPredictor(split).Predict(
+            track: "tsukuba_2000", car: "KK-SII", condition: "dry", lapWithinStint: vm.LapWithinStint,
+            ambientTempC: vm.AmbientTempC, trackTempC: vm.TrackTempC, cloudCoverPct: vm.CloudCoverPct,
+            corner: "fl", targetHotPressureBar: vm.FrontLeft.TargetHotPressure,
+            coldTireTempC: vm.FrontLeft.CurrentTemp, targetLapTimeS: 60.0, compound: "DRY");
+        var pooled = new CircuitPredictor(split).Predict(
+            track: "tsukuba_2000", car: "FJ", condition: "dry", lapWithinStint: vm.LapWithinStint,
+            ambientTempC: vm.AmbientTempC, trackTempC: vm.TrackTempC, cloudCoverPct: vm.CloudCoverPct,
+            corner: "fl", targetHotPressureBar: vm.FrontLeft.TargetHotPressure,
+            coldTireTempC: vm.FrontLeft.CurrentTemp, targetLapTimeS: 60.0, compound: "DRY");
+        Assert.Equal(own.PredictedHotTempC, vm.FrontLeft.PredictedHotTempC);
+        Assert.True(own.PredictedHotTempC < pooled.PredictedHotTempC, "its own, cooler entry");
+        Assert.Equal(pooled.KKelvinPerG2, own.KKelvinPerG2);
+
+        // with today's artifact the same saved KK-SII is the FJ, as before
+        SaveSettings("KK-SII");
+        Assert.Equal("FJ", new MainViewModel(Model).SelectedCar);
+    }
+
+    [Fact]
+    public void SavedFJ_KeepsWorking_ButIsNotOfferedBesideTheRawCars()
+    {
+        SaveSettings("FJ");
+        var vm = new MainViewModel(WithKKSIIEntry());
+        Assert.Equal("FJ", vm.SelectedCar);
+        Assert.Equal(new[] { "Inferno 86", "KK-F", "KK-F-V2", "KK-SII", "FJ" }, vm.AvailableCars);
+        Assert.NotNull(vm.FrontLeft.PredictedHotTempC);
+        // a fresh start lists the raw cars only
+        _storage.Contents = null;
+        Assert.DoesNotContain("FJ", new MainViewModel(WithKKSIIEntry()).AvailableCars);
+    }
+
     // ---------- Forced compound selection ----------
 
     [Fact]

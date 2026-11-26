@@ -50,6 +50,7 @@ import pandas as pd
 
 from ..energy_balance import P_ATM_BAR, gay_lussac_cold_pressure_bar, warmup_two_stage_c
 from ..heat_input import ShareParams
+from ..predict import RAW_CAR_TABLES
 from ..validate import FoldLaps, _calculator_lap_inputs, _fold_constants
 from .export import TableExport
 from .heat import CORNERS, LapBins, lap_heat
@@ -181,11 +182,48 @@ def entry_of(model: dict[str, Any], track: str, car: str, condition: str) -> Ent
     )
 
 
-def place(model: dict[str, Any], track: str, car: str, condition: str, entry: Entry) -> dict:
+def _raw_cars_of(model: dict[str, Any], car: str) -> set[str]:
+    """The raw cars ``car_aliases`` pools under ``car``."""
+    return {raw for raw, fit in (model.get("car_aliases") or {}).items() if fit == car != raw}
+
+
+def _without_raw_rows(model: dict[str, Any], track: str, car: str, condition: str) -> dict:
+    """The raw-car entry tables (``predict.RAW_CAR_TABLES``) of ``model``
+    without the rows of the raw cars pooled under ``car`` at (track,
+    condition); only the tables the model has."""
+    raws = _raw_cars_of(model, car)
+    out: dict[str, list[dict]] = {}
+    for name in RAW_CAR_TABLES.values():
+        if name in model:
+            out[name] = [
+                r
+                for r in model[name] or []
+                if not (
+                    r["track_canonical"] == track
+                    and r["condition"] == condition
+                    and r["car"] in raws
+                )
+            ]
+    return out
+
+
+def place(
+    model: dict[str, Any],
+    track: str,
+    car: str,
+    condition: str,
+    entry: Entry,
+    *,
+    raw: bool = True,
+) -> dict:
     """``model`` with ``entry`` as its (track, car, condition): a shallow
     copy whose three entry tables hold the entry's rows in place of any
     the model had there (and no out-lap row when the entry has none).
-    Every constant, and every other cell, is the model's own."""
+    Every constant, and every other cell, is the model's own.
+
+    ``raw``: the entry answers the cell for the raw cars pooled under
+    ``car`` too, whose own rows there (#383) are taken out; without it they
+    stay, and a lookup by a raw car still reads them first."""
     extra = entry.extra
     heat: dict[str, Any] = {
         "track_canonical": track,
@@ -237,6 +275,8 @@ def place(model: dict[str, Any], track: str, car: str, condition: str, entry: En
         )
 
     out = dict(model)
+    if raw:
+        out.update(_without_raw_rows(model, track, car, condition))
     out["g2_typ_by_track_car_cond"] = _swap(model["g2_typ_by_track_car_cond"], [heat])
     out["lap_time_typ_by_track_car_cond"] = _swap(model["lap_time_typ_by_track_car_cond"], [lap])
     out["outlap_typ_by_track_car_cond"] = _swap(
@@ -246,9 +286,11 @@ def place(model: dict[str, Any], track: str, car: str, condition: str, entry: En
 
 
 def without_entry(model: dict[str, Any], track: str, car: str, condition: str) -> dict:
-    """``model`` with nothing for (track, car, condition): the lookups'
-    fallback chain then answers for it."""
+    """``model`` with nothing for (track, car, condition), nor for the raw
+    cars pooled under ``car`` there: the lookups' fallback chain then
+    answers for it."""
     out = dict(model)
+    out.update(_without_raw_rows(model, track, car, condition))
     for name in (
         "g2_typ_by_track_car_cond",
         "lap_time_typ_by_track_car_cond",

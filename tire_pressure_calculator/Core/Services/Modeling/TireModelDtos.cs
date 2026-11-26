@@ -29,8 +29,22 @@ public sealed record TireModelDto(
     [property: JsonPropertyName("target_hot_pressure_by_car_compound")] IReadOnlyList<TargetHotPressureEntryDto>? TargetHotPressureByCarCompound = null,
     [property: JsonPropertyName("car_aliases")] IReadOnlyDictionary<string, string>? CarAliases = null,
     [property: JsonPropertyName("data_through_date")] string? DataThroughDate = null,
-    [property: JsonPropertyName("data_through_local")] string? DataThroughLocal = null
+    [property: JsonPropertyName("data_through_local")] string? DataThroughLocal = null,
+    // The entries per raw car beside the pooled ones (#383; additive): the
+    // same rows, Car the car the session names, for each raw car CarAliases
+    // pools under another name. See TireModel.EntryRow.
+    [property: JsonPropertyName("g2_typ_by_track_raw_car_cond")] IReadOnlyList<G2EntryDto>? G2TypByTrackRawCarCond = null,
+    [property: JsonPropertyName("lap_time_typ_by_track_raw_car_cond")] IReadOnlyList<LapTimeEntryDto>? LapTimeTypByTrackRawCarCond = null,
+    [property: JsonPropertyName("outlap_typ_by_track_raw_car_cond")] IReadOnlyList<OutlapEntryDto>? OutlapTypByTrackRawCarCond = null
 );
+
+/// <summary>What every entry row (heat, lap time, out-lap) is keyed by.</summary>
+public interface IEntryRow
+{
+    string TrackCanonical { get; }
+    string Car { get; }
+    string Condition { get; }
+}
 
 // ---- Compound-aware K + UI prefill medians (schema v3 additive) ----
 
@@ -150,7 +164,7 @@ public sealed record G2EntryDto(
     // Schema v5: per-corner typical heat input keyed "fl"/"fr"/"rl"/"rr".
     // g2_typ stays as the corner mean for older consumers.
     [property: JsonPropertyName("q_typ_by_corner")] Dictionary<string, double>? QTypByCorner = null
-);
+) : IEntryRow;
 
 public sealed record OutlapEntryDto(
     [property: JsonPropertyName("track_canonical")] string TrackCanonical,
@@ -161,7 +175,7 @@ public sealed record OutlapEntryDto(
     [property: JsonPropertyName("n_laps_used")] int NLapsUsed,
     // Schema v5: per-corner out-lap heat input; outlap_g2 stays as the mean.
     [property: JsonPropertyName("outlap_q_by_corner")] Dictionary<string, double>? OutlapQByCorner = null
-);
+) : IEntryRow;
 
 public sealed record LapTimeEntryDto(
     [property: JsonPropertyName("track_canonical")] string TrackCanonical,
@@ -169,7 +183,7 @@ public sealed record LapTimeEntryDto(
     [property: JsonPropertyName("condition")] string Condition,
     [property: JsonPropertyName("lap_time_typ_s")] double LapTimeTypS,
     [property: JsonPropertyName("n_laps_used")] int NLapsUsed
-);
+) : IEntryRow;
 
 // Source-gen context — AOT-friendly. Single entry point lets us deserialize
 // the full root DTO without runtime reflection.
