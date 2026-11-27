@@ -988,3 +988,216 @@ def test_the_committed_artifact_answers_each_raw_car_as_its_pooled_car() -> None
             for cond in ("dry", "damp", "wet"):
                 kw = dict(track=track, track_condition=cond, target_lap_time_s=70.0)
                 assert _predict(model, raw, **kw) == _predict(model, pooled, **kw)
+
+
+# ------------------------------------------------- simulated entries (cutover)
+
+#: RawA's dry entry simulated (the cutover's rows, schema §9: beside the
+#: logged ones, which stay): 14 knots from 50 s to 76 s, supported from 54 s
+#: to 70 s, at a fed-use lap time of 57 s; its out-lap stays logged. The
+#: same numbers as the ports' tests.
+SIM_KNOTS = [50.0 + 2 * i for i in range(14)]
+SIM_TYP = 57.0
+
+
+def _sim_series(k: float) -> list[float]:
+    return [k / (1 + 0.07 * i) for i in range(len(SIM_KNOTS))]
+
+
+def _sim_model(
+    support: dict | None = None, *, with_support: bool = True, sim_first: bool = False
+) -> dict:
+    model = _raw_car_model()
+    by_corner = {"fl": _sim_series(2.6), "fr": _sim_series(1.9)}
+    by_corner |= {"rl": _sim_series(2.3), "rr": _sim_series(1.7)}
+    curve: dict = {
+        "lap_time_s": SIM_KNOTS,
+        "g2": [sum(v[i] for v in by_corner.values()) / 4 for i in range(len(SIM_KNOTS))],
+        "g2_by_corner": by_corner,
+        "n_laps": 0,
+        "method": "sim",
+    }
+    if with_support:
+        curve["support"] = support or {"lap_time_min_s": 54.0, "lap_time_max_s": 70.0}
+    key = {"track_canonical": "track_a", "car": "RawA", "condition": "dry", "source": "sim"}
+    heat = key | {
+        "g2_typ": 2.0,
+        "n_laps_used": 0,
+        "q_typ_by_corner": {"fl": 2.3, "fr": 1.7, "rl": 2.0, "rr": 1.5},
+        "g2_vs_lap_time": curve,
+    }
+    lap = key | {"lap_time_typ_s": SIM_TYP, "n_laps_used": 0}
+    for name, row in (
+        ("g2_typ_by_track_raw_car_cond", heat),
+        ("lap_time_typ_by_track_raw_car_cond", lap),
+    ):
+        model[name] = [row, *model[name]] if sim_first else [*model[name], row]
+    return model
+
+
+def _linear(x: float, xs: list[float], ys: list[float]) -> float:
+    i = next(k for k, v in enumerate(xs) if v >= x)
+    return ys[i - 1] + (x - xs[i - 1]) / (xs[i] - xs[i - 1]) * (ys[i] - ys[i - 1])
+
+
+def test_a_simulated_entry_reports_its_provenance_and_reads_its_knots_linearly() -> None:
+    from motorsports_data_notebook.tire_model.predict import _lookup_lap_time
+
+    model = _sim_model()
+    p = _predict(model, "RawA", target_lap_time_s=61.0)
+    assert (p.heat_provenance, p.lap_time_provenance, p.outlap_provenance) == (
+        "sim",
+        "sim",
+        "logged",
+    )
+    assert p.uses_simulation and p.pace_status == "ok"
+    # the fed-use lap time is the prefill, and the 14 knots are read linearly
+    assert _lookup_lap_time(model, "track_a", "RawA", "dry")[0] == SIM_TYP
+    fl = _sim_series(2.6)
+    expected = 2.3 * _linear(61.0, SIM_KNOTS, fl) / _linear(SIM_TYP, SIM_KNOTS, fl)
+    assert p.g2_typ == pytest.approx(expected, abs=1e-12)
+    # no target: the typical lap time's status
+    assert _predict(model, "RawA").pace_status == "ok"
+    # no out-lap asked for: none read
+    assert _predict(model, "RawA", include_outlap=False).outlap_provenance is None
+
+
+@pytest.mark.parametrize("target", [52.0, 71.0, 80.0])
+def test_a_lap_time_outside_the_logged_pace_is_answered_and_flagged(target: float) -> None:
+    p = _predict(_sim_model(), "RawA", target_lap_time_s=target)
+    assert p.pace_status == "outside_support" and math.isfinite(p.cold_pressure_bar)
+
+
+def test_a_lap_time_faster_than_the_table_is_answered_at_its_fastest_knot() -> None:
+    p = _predict(_sim_model(), "RawA", target_lap_time_s=47.0)
+    fl = _sim_series(2.6)
+    assert p.pace_status == "no_solution"
+    assert p.g2_scale == pytest.approx(fl[0] / _linear(SIM_TYP, SIM_KNOTS, fl), abs=1e-12)
+    assert p.t_at_lap_n_s == 3 * 47.0
+    # a sim curve without its support is outside it
+    bare = _sim_model(with_support=False)
+    assert _predict(bare, "RawA", target_lap_time_s=61.0).pace_status == "outside_support"
+
+
+def test_a_sim_row_answers_its_exact_condition_only_whatever_its_place() -> None:
+    """Schema §9: a simulated row sits beside the logged one and answers
+    only its exact condition; every other step reads logged rows, so a wet
+    or damp cell without a simulated row of its own reads what it reads
+    today, and so does a saved pooled car."""
+    from motorsports_data_notebook.tire_model.predict import _lookup_g2, _lookup_lap_time
+
+    for sim_first in (False, True):
+        model = _sim_model(sim_first=sim_first)
+        assert _predict(model, "RawA", target_lap_time_s=61.0).heat_provenance == "sim"
+        assert _lookup_lap_time(model, "track_a", "RawA", "dry")[0] == SIM_TYP
+
+    def strip(model: dict) -> dict:
+        for name in ("g2_typ_by_track_car_cond", "lap_time_typ_by_track_car_cond"):
+            model[name] = [r for r in model[name] if r["condition"] != "damp"]
+        return model
+
+    # with the pooled damp rows gone, RawA's wet and damp fall back to its
+    # own dry rows: the logged ones, as today, not the simulated one beside
+    today, sim = strip(_raw_car_model()), strip(_sim_model())
+    for cond in ("wet", "damp"):
+        p = _predict(sim, "RawA", track_condition=cond, target_lap_time_s=61.0)
+        assert p == _predict(today, "RawA", track_condition=cond, target_lap_time_s=61.0)
+        assert p.g2_pace_source == "curve" and not p.uses_simulation
+        assert _lookup_g2(sim, "track_a", "RawA", cond)[2] == "fallback(dry)"
+    # with them, the pooled damp entry, as today; and a saved pooled car reads
+    # the pooled logged rows
+    for car, conds in (("RawA", ("wet", "damp")), ("ToyCar", ("dry", "damp", "wet"))):
+        for cond in conds:
+            kw = dict(track_condition=cond, target_lap_time_s=61.0)
+            assert _predict(_sim_model(), car, **kw) == _predict(_raw_car_model(), car, **kw)
+
+
+def test_logged_rows_carry_no_attribution() -> None:
+    model = _sim_model()
+    for car in ("ToyCar", "RawB"):
+        p = _predict(model, car, target_lap_time_s=61.0)
+        assert (p.heat_provenance, p.lap_time_provenance, p.outlap_provenance) == (
+            "logged",
+            "logged",
+            "logged",
+        )
+        assert not p.uses_simulation and p.pace_status is None
+    # a simulated out-lap alone carries the attribution
+    out = _raw_car_model()
+    rows = out["outlap_typ_by_track_raw_car_cond"]
+    rows.append(rows[0] | {"source": "sim", "outlap_moving_s": 70.0})
+    o = _predict(out, "RawA", target_lap_time_s=61.0)
+    assert (o.heat_provenance, o.outlap_provenance, o.outlap_time_s, o.uses_simulation) == (
+        "logged",
+        "sim",
+        70.0,
+        True,
+    )
+    assert o.pace_status is None
+
+
+def test_the_averaged_fallbacks_read_logged_rows_only() -> None:
+    """The lead's ruling of 2026-11-27: a car without an entry of its own
+    reads the mean of the logged rows only, a step with none is skipped,
+    and an averaged answer is never simulated."""
+    from motorsports_data_notebook.tire_model.predict import _lookup_g2, _lookup_lap_time
+
+    def heat(model: dict, track: str, cond: str) -> dict:
+        return next(
+            r
+            for r in model["g2_typ_by_track_car_cond"]
+            if r["track_canonical"] == track and r["car"] == "ToyCar" and r["condition"] == cond
+        )
+
+    model = _minimal_model()
+    assert _lookup_g2(model, "track_a", "Nobody", "dry")[0] == pytest.approx((0.9 + 0.6 + 0.8) / 3)
+    # track_pooled: the simulated damp row is not counted
+    heat(model, "track_a", "damp")["source"] = "sim"
+    value, _n, step = _lookup_g2(model, "track_a", "Nobody", "dry")
+    assert step == "track_pooled" and value == pytest.approx((0.9 + 0.8) / 2)
+    nobody = _predict(model, "Nobody", target_lap_time_s=61.0)
+    assert not nobody.uses_simulation and nobody.pace_status is None
+    # track_car_pooled with only a simulated row is skipped for the track's logged rows
+    model["g2_typ_by_track_car_cond"].remove(heat(model, "track_a", "dry"))
+    value, _n, step = _lookup_g2(model, "track_a", "ToyCar", "dry")
+    assert step == "track_pooled" and value == pytest.approx(0.8)
+    # a track whose rows are all simulated is skipped for the global logged mean
+    for r in model["g2_typ_by_track_car_cond"]:
+        if r["track_canonical"] == "track_a":
+            r["source"] = "sim"
+    value, n, step = _lookup_g2(model, "track_a", "Nobody", "dry")
+    assert step == "global" and value == pytest.approx(0.7) and n == 0
+    # and the lap time the same: a simulated row is no term of an average
+    for r in model["lap_time_typ_by_track_car_cond"]:
+        r["source"] = "sim"
+    assert _lookup_lap_time(model, "track_a", "Nobody", "dry") == (90.0, 0, "global")
+
+
+def test_the_refactored_lookups_answer_as_before_on_the_committed_artifact() -> None:
+    """The one chain walker leaves every lookup's answer where it was: the
+    committed artifact reads as logged everywhere and its predictions match
+    the parity fixture the ports are pinned to."""
+    from motorsports_data_notebook.tire_etl.paths import default_dataset_root
+
+    path = default_dataset_root() / "tire_model.json"
+    fixture = (
+        Path(__file__).resolve().parents[2]
+        / "tire_pressure_calculator"
+        / "Tests"
+        / "Fixtures"
+        / "python_predictions.json"
+    )
+    if not path.exists() or not fixture.exists():
+        pytest.skip("no committed tire_model.json or parity fixture")
+    model = json.loads(path.read_text())
+    if any("source" in r for r in model["g2_typ_by_track_car_cond"]):
+        pytest.skip("the committed artifact has simulated entries")
+    for case in json.loads(fixture.read_text()):
+        inputs = dict(case["inputs"])
+        target = inputs.pop("target_hot_pressure_bar")
+        got = predict_cold_pressure(
+            target_hot_pressure_bar={c: target for c in CORNERS}, _model=model, **inputs
+        )
+        for c in CORNERS:
+            assert got[c].cold_pressure_bar == case["corners"][c]["cold_pressure_bar"]
+            assert not got[c].uses_simulation and got[c].pace_status is None

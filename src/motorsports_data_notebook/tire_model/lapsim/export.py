@@ -44,6 +44,34 @@ def _bins_to_dict(bins: LapBins) -> dict:
     return out
 
 
+def sig(x: float, digits: int) -> float:
+    """``x`` to ``digits`` significant digits (NaN and inf as they are)."""
+    x = float(x)
+    return float(f"{x:.{digits}g}") if math.isfinite(x) else x
+
+
+def _sig_array(values: np.ndarray, digits: int) -> np.ndarray:
+    return np.array([sig(v, digits) for v in np.asarray(values, float)], dtype=float)
+
+
+def _sig_bins(bins: LapBins, digits: int) -> LapBins:
+    return LapBins(
+        **{f: _sig_array(getattr(bins, f), digits) for f in _BIN_FIELDS},
+        lap_time_s=sig(bins.lap_time_s, digits),
+    )
+
+
+def _sig_dict(data: dict, digits: int) -> dict:
+    return {
+        k: (
+            sig(v, digits)
+            if isinstance(v, float)
+            else _sig_dict(v, digits) if isinstance(v, dict) else v
+        )
+        for k, v in data.items()
+    }
+
+
 def _bins_from_dict(data: dict) -> LapBins:
     return LapBins(
         **{f: np.asarray(data[f], float) for f in _BIN_FIELDS},
@@ -61,7 +89,9 @@ class TableExport:
     exit), and ``rolling_s`` how long an out-lap has been rolling when it
     joins (the track's; no heat is counted there). ``support`` and
     ``assumes`` are the table's; ``made`` says when and at which commit
-    the laps were driven."""
+    the laps were driven. A committed export (:mod:`.sim_export`) also
+    names its ``raw_car`` and holds its ``fed`` use (``{"use", ...}``: the
+    lap an entry stands for)."""
 
     layout_id: str
     car: str
@@ -75,6 +105,30 @@ class TableExport:
     fastest_lap_s: float = float("nan")
     max_driver_lap_s: float = float("nan")
     made: dict = field(default_factory=dict)
+    raw_car: str = ""
+    fed: dict = field(default_factory=dict)
+
+    def rounded(self, digits: int = 7) -> "TableExport":
+        """The export with every number to ``digits`` significant digits:
+        what is committed (:mod:`.sim_export`), and what the holdout's
+        ``served`` arm reads, so that the arm scored is the shipped one to
+        the last bit."""
+        return TableExport(
+            layout_id=self.layout_id,
+            car=self.car,
+            use=_sig_array(self.use, digits),
+            lap_time_s=_sig_array(self.lap_time_s, digits),
+            flying=[_sig_bins(b, digits) for b in self.flying],
+            out=None if self.out is None else [_sig_bins(b, digits) for b in self.out],
+            rolling_s=sig(self.rolling_s, digits),
+            support=_sig_dict(self.support, digits),
+            assumes=dict(self.assumes),
+            fastest_lap_s=sig(self.fastest_lap_s, digits),
+            max_driver_lap_s=sig(self.max_driver_lap_s, digits),
+            made=dict(self.made),
+            raw_car=self.raw_car,
+            fed=_sig_dict(self.fed, digits),
+        )
 
     def heat_knots(self, share: ShareParams) -> np.ndarray:
         """Lap-mean heat rate per tyre at each knot (knots × 4; G·m/s)."""
@@ -144,6 +198,8 @@ class TableExport:
             "fastest_lap_s": float(self.fastest_lap_s),
             "max_driver_lap_s": float(self.max_driver_lap_s),
             "made": self.made,
+            **({"raw_car": self.raw_car} if self.raw_car else {}),
+            **({"fed": self.fed} if self.fed else {}),
         }
 
     @classmethod
@@ -163,6 +219,8 @@ class TableExport:
             fastest_lap_s=float(data.get("fastest_lap_s", float("nan"))),
             max_driver_lap_s=float(data.get("max_driver_lap_s", float("nan"))),
             made=dict(data.get("made") or {}),
+            raw_car=str(data.get("raw_car") or ""),
+            fed=dict(data.get("fed") or {}),
         )
 
     def save(self, path: Path) -> None:
