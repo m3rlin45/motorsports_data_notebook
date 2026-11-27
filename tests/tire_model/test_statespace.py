@@ -268,3 +268,74 @@ def test_fit_trains_around_a_discarded_window(tmp_path: Path) -> None:
     comp = ss.lap_heat_components(stints)
     holed = comp[comp["session_id"] == "s_tsukuba"]["lap_num"].unique()
     assert 180 // LAP_S not in holed and 0 in holed
+
+
+def _kappa_laps(root: Path, kappa: float, *, quantise: bool = False) -> pd.DataFrame:
+    return pd.concat(
+        [
+            _make_stint(root, "s_a", "tsukuba_2000", 12, quantise=quantise, kappa=kappa),
+            _make_stint(root, "s_b", "fuji", 12, quantise=quantise, kappa=kappa),
+        ],
+        ignore_index=True,
+    )
+
+
+def test_within_lap_kappa_reads_the_planted_constant(tmp_path: Path) -> None:
+    """ln P against v² within a lap gives κ back, with what it was read from."""
+    import dataclasses
+
+    true_kappa = 2e-6  # a formula car's: 6 mbar between 15 and 40 m/s
+    stints = ss.build_stint_series(tmp_path, _kappa_laps(tmp_path, true_kappa))
+    got = ss.within_lap_kappa(stints)["FJ"]
+    assert got.kappa == pytest.approx(true_kappa, rel=0.05)
+    assert got.n_sessions == 2 and got.n_segments > 0 and got.n_seconds >= 40 * got.n_segments
+    assert not got.held  # two short sessions are not enough for the fit to hold it
+    assert np.isfinite(got.stderr)
+    # nothing to read: no entry, not a zero
+    assert ss.within_lap_kappa([]) == {}
+    wet = [dataclasses.replace(s, condition="wet") for s in stints]
+    assert ss.within_lap_kappa(wet) == {}
+
+
+def test_within_lap_kappa_does_not_see_a_stint_s_level(tmp_path: Path) -> None:
+    """A wrong anchor shifts every observation of a stint by a factor: the
+    fitted κ moves to absorb it (#417), the κ read within the lap does not."""
+    true_kappa = 2e-6
+    laps = _kappa_laps(tmp_path, true_kappa)
+    off = laps.copy()
+    fuji = off["track_canonical"] == "fuji"
+    for c in CORNERS:  # the anchor pressure one TPMS count low on one circuit
+        off.loc[fuji, f"p_start_{c}"] -= 0.03
+    clean, shifted = ss.build_stint_series(tmp_path, laps), ss.build_stint_series(tmp_path, off)
+    k_clean = ss.within_lap_kappa(clean)["FJ"].kappa
+    k_shifted = ss.within_lap_kappa(shifted)["FJ"].kappa
+    assert k_shifted == pytest.approx(k_clean, rel=1e-9)
+    fit_clean = ss.fit_cells(clean, v_corr=True).kappa["FJ"]
+    fit_shifted = ss.fit_cells(shifted, v_corr=True).kappa["FJ"]
+    assert fit_clean == pytest.approx(true_kappa, rel=0.1)
+    assert abs(fit_shifted - true_kappa) > 0.25 * true_kappa
+
+
+def test_fit_physical_holds_kappa_read_within_the_lap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``kappa_source="within_lap"`` holds the value read; the default fits κ
+    and says nothing of the reading; an unknown source is refused."""
+    laps = _kappa_laps(tmp_path, 2e-6)
+    monkeypatch.setattr(ss, "WITHIN_LAP_MIN_SEGMENTS", 1)
+    read = ss.within_lap_kappa(ss.build_stint_series(tmp_path, laps, ss.PHYSICAL_HEAT_INPUT))
+    assert read["FJ"].held
+    held = ss.fit_physical(tmp_path, laps, kappa_source="within_lap")
+    assert held.kappa_source == "within_lap"
+    assert held.kappa["FJ"] == read["FJ"].kappa
+    assert held.kappa_within_lap["FJ"] == read["FJ"]
+    fitted = ss.fit_physical(tmp_path, laps)
+    assert fitted.kappa_source == "fit" and fitted.kappa_within_lap == {}
+    assert fitted.kappa["FJ"] != read["FJ"].kappa
+    # too little behind the reading: the car keeps a fitted κ
+    monkeypatch.setattr(ss, "WITHIN_LAP_MIN_SEGMENTS", 10**6)
+    thin = ss.fit_physical(tmp_path, laps, kappa_source="within_lap")
+    assert not thin.kappa_within_lap["FJ"].held
+    assert thin.kappa["FJ"] == pytest.approx(fitted.kappa["FJ"], rel=1e-6)
+    with pytest.raises(ValueError, match="kappa_source"):
+        ss.fit_physical(tmp_path, laps, kappa_source="prior")

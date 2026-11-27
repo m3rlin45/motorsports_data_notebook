@@ -50,6 +50,21 @@ def _add_heat_frame_arg(p: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_kappa_source_arg(p: argparse.ArgumentParser) -> None:
+    from .statespace import DEFAULT_KAPPA_SOURCE, KAPPA_SOURCES
+
+    p.add_argument(
+        "--kappa-source",
+        choices=KAPPA_SOURCES,
+        default=DEFAULT_KAPPA_SOURCE,
+        help=(
+            "Where the speed-pressure constant kappa comes from. fit: a parameter of the "
+            "per-second fit. within_lap (#417): read per car from the pressure against "
+            "speed^2 within a lap, then held in the fit."
+        ),
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="tire-model", description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -65,6 +80,7 @@ def main(argv: list[str] | None = None) -> int:
         help="Force rebuild (currently always rebuilds; flag reserved for future)",
     )
     _add_heat_frame_arg(p_build)
+    _add_kappa_source_arg(p_build)
 
     p_predict = sub.add_parser(
         "predict",
@@ -235,6 +251,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     _add_inputs_args(p_holdout)
     _add_heat_frame_arg(p_holdout)
+    _add_kappa_source_arg(p_holdout)
 
     args = parser.parse_args(argv)
 
@@ -349,7 +366,9 @@ def _cmd_infer_compounds(args: argparse.Namespace) -> int:
 def _cmd_build(args: argparse.Namespace) -> int:
     root = args.dataset_root or default_dataset_root()
     logger.info("Building tire model artifacts at %s", root)
-    model = build_warmup_table(root, rebuild=args.rebuild, heat_frame=args.heat_frame)
+    model = build_warmup_table(
+        root, rebuild=args.rebuild, heat_frame=args.heat_frame, kappa_source=args.kappa_source
+    )
     n_k = len(model["K_buckets"])
     n_tau = len(model["tau_sec_by_car_corner_cond"])
     n_g2 = len(model["g2_typ_by_track_car_cond"])
@@ -477,6 +496,7 @@ def _cmd_holdout(args: argparse.Namespace) -> int:
         n_folds=args.n_folds,
         inputs=args.inputs,
         heat_frame=args.heat_frame,
+        kappa_source=args.kappa_source,
     )
 
 

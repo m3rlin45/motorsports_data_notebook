@@ -1189,6 +1189,376 @@ spread went 0.41 → 0.34 and its per-track gain ratios moved to within ±9 %
 of 1. Speed-dependent *cooling* on the carcass node is rejected a second
 time once κ is in (β unstable 1.4–3.6, track factors drift up).
 
+### 2.2a″ κ read within the lap (#417; an option, default off)
+
+**What was wrong.** The FJ's fitted κ fell from 8.10e-7 to 1.22e-7 when the
+KK-F-V2's Fuji day of 2026-11-25 entered the fit, and across the standing
+holdout's 15 folds it runs from 3e-12 to 3.1e-7. It is not the solver
+(starts at 1e-9, 8e-7 and 2e-6 end at the same value) and not a session:
+each of the day's nine sessions alone, added to the earlier data, leaves κ
+between 4.8e-7 and 8.7e-7. Leaving out any one of the 24 dates moves it
+between 0 and 8.1e-7: five dates put it at zero, fourteen under 1e-7.
+
+**Why.** In the fit κ acts through `v² − v_anchor²`. That has a part
+within the lap (`v²` less its lap mean) and a level (the lap mean less the
+anchor), and the level is the larger regressor. Fitted as two parameters
+on the FJ's dry stints:
+
+| | all data | without the Fuji day | leaving one date out | one raw car × track at a time |
+|---|---|---|---|---|
+| within the lap | 1.54e-6 | 1.57e-6 | 1.50 to 1.59e-6 | 0.97 to 1.96e-6 |
+| level | −1.74e-6 | −1.6e-7 | −2.7e-6 to −1.6e-7 | −2.0e-6 to +3.6e-6 |
+
+The level is where every stint's offset sits (tens of mbar; §2.2, #421),
+against the 4 to 14 mbar this car's κ is worth, so the single fitted κ is
+a compromise between the reading's dependence on speed and whichever
+circuits are over- or under-predicted. The two fast circuits have the
+largest lever (lap-mean `v²` about 1,550 at Fuji and 1,600 at Suzuka
+against 1,100 at Tsukuba) and pull opposite ways: Fuji is under-predicted
+by 30 to 65 mbar (#394) and wants κ at zero, Suzuka wants it high. The
+sum of squares at κ = 8e-7 less that at κ = 0, everything else refitted,
+is +8,245 on the KK-F-V2's Fuji day and +7,343 on the KK-SII's, −4,988 at
+Suzuka, −5,740 on the KK-F at Tsukuba and +2,643 on the KK-SII there.
+Before the Fuji day the balance sat at 8.1e-7; the day moved it to
+1.2e-7. The objective is flat: 2,987,789 at the optimum, +144 at κ = 0,
++4,449 at 8e-7. On the Inferno 86 the two parts agree (8.8e-6 and 1.0e-5)
+and the fitted κ is stable (8.9e-6 to 1.0e-5 leaving one date out): its
+effect is five times larger.
+
+**A direct reading.** Within a lap the gas hardly changes, so `ln P`
+against `v²` there is a slope with no thermal model behind it
+(`statespace.within_lap_kappa`). It is an *effective* slope: within a
+lap speed and cornering go together, and the reading follows both ("What
+the slope is made of", below). Per dry stint, tyre and lap of 40 s or
+more on the fit's 1 s clock, a quadratic trend taken out of every series,
+`ln P_abs` against `v²` half a second earlier (the held 1.25 Hz packet's
+mean age), the single node's ripple from the corner-blind heat rate, and
+the tyre's lateral and longitudinal load. One least-squares fit per car;
+the standard error is a jackknife over sessions.
+
+| | Inferno 86 | FJ |
+|---|---|---|
+| read within the lap | 9.60e-6 ± 0.43e-6 | 1.86e-6 ± 0.07e-6 |
+| fitted (v1.4.0) | 9.51e-6 | 1.22e-7 |
+| leaving one date out | 9.32 to 9.82e-6 | 1.81 to 1.91e-6 |
+| detrend order 1 to 3, with and without the ripple and the loads | 9.0 to 9.8e-6 | 1.60 to 1.94e-6 |
+| damp stints | 6.9e-6 (one session) | 1.61e-6 ± 0.40e-6 |
+| wet stints | 8.03e-6 ± 0.26e-6 | 1.62e-6 ± 0.16e-6 |
+
+- The estimator gives the Inferno 86's fitted value back, which is what
+  says it can be trusted on the FJ.
+- **Per raw car and circuit** (the same tyres and sensors on the three
+  formula cars):
+
+  | | Tsukuba | Suzuka | Fuji | every circuit |
+  |---|---|---|---|---|
+  | KK-SII | 1.58e-6 ± 0.08e-6 (30 sessions) | 2.01e-6 ± 0.13e-6 (14) | 1.17e-6 ± 0.22e-6 (2) | 1.79e-6 ± 0.09e-6 |
+  | KK-F | 2.21e-6 ± 0.16e-6 (11) | | | 2.21e-6 ± 0.16e-6 |
+  | KK-F-V2 | 1.83e-6 ± 0.41e-6 (3) | | 1.67e-6 ± 0.11e-6 (8) | 1.73e-6 ± 0.10e-6 |
+
+  At Tsukuba, the one circuit they share, the KK-F reads 0.63e-6 above
+  the KK-SII (3.4 standard errors), so the raw cars do not read alike;
+  but the KK-SII alone reads 1.58e-6 at Tsukuba and 2.01e-6 at Suzuka
+  (2.9 standard errors), so the reading moves as much with the circuit as
+  with the car, and what it follows is not known (the pressures run, the
+  kerbs, what is left of the ripple and the load). The whole spread is
+  ± 20 % of the car's value, 2 to 4 mbar at the end of a straight, where
+  the fitted value is off by a factor of 15. A κ per raw car is not
+  built: it is not what made the fitted value move, and one car's
+  circuits differ as much as the cars.
+- The wet stints read about 15 % lower than the dry on both cars (not
+  explained; the option reads the dry stints, as the fit does).
+- The four tyres read differently until the load is a regressor (FJ
+  2.48 / 0.93 / 2.35 / 1.32e-6 without it, 1.90 / 1.52 / 1.76 / 1.86e-6
+  with it): the outer tyre in a corner reads higher by about 0.55 K of
+  gas temperature per g on the FJ and 1.2 to 2.3 K per g on the
+  Inferno 86, a loaded tyre's cavity being smaller. That signed part
+  averages out over the car; an unsigned part does not (below).
+- This is the 1.5e-6 this section first reported for the FJ (2026-10-08).
+
+**The option.** `kappa_source="within_lap"` (`fit_physical`,
+`build_warmup_table`, `--kappa-source within_lap` on
+`tire-build-warmup-table` and `tire-predict-holdout`; default `fit`,
+`statespace.DEFAULT_KAPPA_SOURCE`): κ is read as above from the training
+set's dry stints and held in the per-second fit, dry and rain, for every
+car with 200 (lap, tyre) segments behind the reading; another car keeps a
+fitted κ. The model then records the reading under
+`energy_balance.speed_pressure.within_lap`. With the option off a fold's
+model is the same bit for bit (checked on folds 0 and 1 against the code
+before the option; only `fit_at_utc` differs).
+
+**The gate**, written before any fold of the option was fitted
+(`gate.md` in the worker's notes; 15 folds pinned by master's picker,
+129 sessions, 5,703 rows, calculator inputs; a paired difference is per
+held-out session, mean |residual| of the option less master's, ± the SE
+clustered by date):
+
+| check | master | option | |
+|---|---|---|---|
+| κ_FJ across the folds, sd / mean (pass: at most 10 %) | 77 % (3e-12 to 3.1e-7) | 0.8 % (1.83 to 1.88e-6) | pass |
+| κ of the Inferno 86 across the folds, sd / mean (no larger) | 3.4 % | 1.2 % | pass |
+| hot-pressure MAE, pooled (pass: paired at most +0.5 mbar) | 36.19 | 36.36, paired +0.19 ± 0.11 | pass |
+
+| rows | MAE, mbar | bias, mbar | paired, mbar |
+|---|---|---|---|
+| FJ (75 sessions) | 31.14 → 31.52 | +7.2 → +7.2 | +0.43 ± 0.17 |
+| Inferno 86 (54) | 43.16 → 43.04 | +0.5 → +0.5 | −0.15 ± 0.06 |
+| dry (101) | 34.99 → 35.00 | +3.8 → +3.8 | +0.01 ± 0.08 |
+| damp (4) | 42.83 → 44.50 | +21.7 → +24.3 | +1.56 ± 0.76 |
+| wet (24) | 40.76 → 41.40 | +2.9 → +2.5 | +0.73 ± 0.37 |
+| Tsukuba (63) | 32.42 → 32.63 | +8.7 → +8.9 | +0.20 ± 0.12 |
+| Fuji (27) | 42.76 → 42.94 | −19.2 → −19.8 | +0.17 ± 0.44 |
+| Fuji, FJ (5, wet, one date) | 40.25 → 43.30 | −27.0 → −31.6 | +2.26 |
+| Fuji, Inferno 86 (22) | 43.15 → 42.88 | −18.0 → −18.0 | −0.30 ± 0.11 |
+| Suzuka, FJ (13) | 34.66 → 35.40 | +5.8 → +6.1 | +0.68 ± 0.30 |
+
+- The standing holdout holds out no dry Fuji session of the FJ (the
+  KK-F-V2's bucket has nine). The two days that are out of sample, by the
+  holdout's scoring: 2026-11-25 with both models fitted without the date
+  (168 rows) 53.5 → 56.4 mbar, bias −50.8 → −54.1, and the same with the
+  laps' own heat (53.7 → 56.6); 2026-11-27 on the all-data models with
+  the simulated entries placed as the shipped artifact has them (68 rows)
+  46.2 → 49.0, bias −20.1 → −19.9 (logged entries only 45.6 → 48.4; own
+  heat 54.4 → 56.2).
+- So the option costs 2 to 3 mbar on the FJ at Fuji. Elsewhere on the
+  FJ the dry Tsukuba rows are level (28.34 → 28.39, +0.01 ± 0.12) and
+  Suzuka (+0.68 ± 0.30), the damp and the wet rows are worse; the
+  Inferno 86 is 0.15 better. Fuji was expected and written into the gate
+  beforehand: the lap-end reading there is taken at the fastest point of
+  the lap, a larger κ lowers the predicted reading there, and the fitted
+  κ of about zero had been hiding that much of #394's under-prediction.
+- **What was not run.** The option is scored on the calculator fed from
+  logged entries (`validate`'s folds). It is not plumbed into
+  `lapsim/pressure_gate.py`, so the folds' served arm with simulated
+  entries and `just tire-sim-compare` have not seen it (the 2026-11-27
+  figure above is the one place a simulated entry was scored).
+- **What is assumed.** That the slope within a lap is also the offset
+  between standstill and speed. On the Inferno 86 the level part of the
+  fit and the pit-lane events agree with it; on the FJ it is not
+  established ("What the slope is made of").
+- **The other constants across the 15 folds**, κ fitted and κ held (range
+  over the folds, sd / mean):
+
+  | | FJ, κ fitted | FJ, κ held | Inferno 86, κ fitted | Inferno 86, κ held |
+  |---|---|---|---|---|
+  | K front, dry | 6.50 to 6.74 (1.2 %) | 6.63 to 6.86 (1.1 %) | 12.03 to 12.60 (1.1 %) | 12.02 to 12.62 (1.2 %) |
+  | K rear, dry | 4.18 to 4.28 (0.6 %) | 4.26 to 4.36 (0.6 %) | 10.82 to 11.24 (0.8 %) | 10.82 to 11.21 (0.8 %) |
+  | τ front, s | 501 to 533 (1.7 %) | 495 to 525 (1.7 %) | 636 to 687 (1.9 %) | 637 to 684 (1.8 %) |
+  | τ rear, s | 324 to 338 (1.2 %) | 320 to 333 (1.1 %) | 573 to 604 (1.2 %) | 573 to 601 (1.2 %) |
+  | `g_transfer`, G | 2.52 to 2.84 (2.8 %) | 2.59 to 2.91 (2.7 %) | 3.52 to 4.97 (7.0 %) | 3.51 to 4.96 (7.0 %) |
+
+  Holding κ steadies κ and nothing else: K, τ and `g_transfer` vary across
+  the folds as they did (#382 for `g_transfer`). Nor is κ what moves them
+  with the data: with κ held at the reading K_f still goes 6.29 → 6.65 and
+  τ_f 453 → 501 s when the Fuji day enters (fitted κ: 6.23 → 6.53,
+  457 → 507).
+- What a retrain with the option would change: κ_FJ 1.22e-7 → 1.86e-6,
+  κ of the Inferno 86 9.51e-6 → 9.60e-6; the FJ's dry K +1.8 % (6.53 →
+  6.66 front, 4.20 → 4.27 rear), its wet K +3.3 %, its compound K +3 %
+  (DRY, dry) to +9 % (DRY, wet, rear), τ −1.2 %, `g_transfer` 2.74 → 2.80;
+  the Inferno 86's constants under 0.15 %. On the parity fixture's 24 cases the
+  recommended cold pressure falls by 4.6 mbar on the FJ (3.0 to 5.3; 9.0
+  with the WET compound) and by 0.2 mbar on the Inferno 86.
+
+**What the slope is made of** (measured 2026-11-27 after the gate, on
+the owner's questions; the option's own regression on per-lap segments,
+dry unless said, ± a bootstrap over dates; no refit, logs in the worker's
+notes `m1`–`m5`). The slope read within the lap is not the reading's
+dependence on speed alone.
+
+- **What the option's κ is and is not.** It is a stable slope of the
+  reading against `v²` within a lap. On the FJ about half of it is speed
+  alone (0.85e-6 on the straights) and half a prompt part that follows
+  cornering, of unknown origin; on the Inferno 86 the speed part is most
+  of it (7.9e-6 of 9.6e-6). It is not a constant of geometry and not
+  thermal ripple. It does not fix the level between the reading on track
+  and the pressure at rest: on the FJ that is fixed only by the pit-lane
+  exits, at 0.15 ± 0.07 % (the whole slope would make it 0.21 %).
+
+- **It is not a v² law.** With a `v⁴` term beside `v²` the local slope
+  `−d ln P / d(v²)` falls with speed, and the seconds on a straight
+  (lateral under 0.3 g) read a smaller slope than the seconds in a corner:
+
+  | × 1e-6 | at 20 m/s | 40 m/s | 55 m/s | straight seconds | cornering seconds | `v²` + unsigned lateral g |
+  |---|---|---|---|---|---|---|
+  | FJ | 3.01 ± 0.18 | 1.72 ± 0.14 | 0.19 ± 0.25 | 0.85 ± 0.12 | 1.78 ± 0.09 | 1.20 ± 0.10 |
+  | Inferno 86 | 12.6 ± 0.6 | 8.8 ± 0.6 | 4.3 ± 1.1 | 7.9 ± 0.6 | 10.4 ± 0.5 | 8.7 ± 0.5 |
+
+  Beside the signed load (the outer tyre against the inner one), every
+  tyre reads higher in a corner: +0.15 % of the absolute pressure per g of
+  lateral on the FJ (about 4 mbar per g), +0.27 % on the Inferno 86. Speed
+  and cornering are collinear within a lap (the correlation of `v²` with
+  the unsigned lateral g is −0.57 and −0.49), so the regression cannot say
+  how the slope divides between them: the FJ's part that is speed alone
+  lies between about 0.85e-6 and 1.7e-6, the Inferno 86's between 7.9e-6
+  and 9.5e-6.
+- **It is not thermal ripple.** Heat goes in at low speed and comes out
+  at high speed, so a gas node's temperature falls with `v²` within a lap
+  with no effect of speed on the reading at all. The fitted single node's
+  own ripple (per tyre and second, from a fit with κ held at 0) is
+  0.2 K rms within a lap on both cars and ± 0.1 K through a corner: the
+  node gains about 0.06 K/s on average on the FJ, (T_hot − T_eff)/τ, and
+  a corner lasts a few seconds, so the ripple is a fifth of the 1 K a
+  10 s burst would suggest. Taken
+  out at a coefficient of 1 it lowers the `v²`-only slope from 1.94e-6 to
+  1.72e-6 on the FJ (11 %) and from 9.76e-6 to 9.49e-6 on the Inferno 86
+  (3 %); left free its coefficient is 0.06 ± 0.07 and 0.59 ± 0.10. The
+  phase is that of an instantaneous effect: in the mean over 6,822 and
+  8,940 passes of a tyre through a corner apex the pressure peaks 1 s
+  after the slowest second,
+  where `v²` read through the packet's delay peaks; the slope is largest
+  at the shortest lag of `v²` and gone by 4.5 s on the FJ; and the tyre's
+  heat rate passed through a lag of 2, 5, 10 or 20 s fits best at 2 s and
+  no better than with no lag. What follows the cornering force does so
+  within 2 s, which conduction through the carcass cannot.
+- **Where speed changes without cornering: the pit lane.** Every change
+  between running under 20 m/s for 10 s or more (about 12 m/s) and running
+  at speed (window mean 30 m/s or more), with a window of readings on each
+  side and the fitted single node's warming or cooling between them taken
+  out (76 events on the FJ, 45 on the Inferno 86; `m2`):
+
+  | × 1e-6, as a slope against the change of `v²` | entry and exit together | exit (slow to fast) | entry (fast to slow) | within the lap |
+  |---|---|---|---|---|
+  | FJ | 2.68 ± 0.43 | 1.30 ± 0.57 | 4.09 ± 0.50 | 1.86 |
+  | Inferno 86 | 9.90 ± 1.03 | 8.0 ± 1.1 | 13.5 ± 1.8 | 9.60 |
+
+  The exits agree, within their noise, with the part of the within-lap
+  slope that is speed alone. The entries read more on both cars: on
+  slowing the pressure rises 4 to 7 mbar more than the node predicts, a
+  thermal effect of one sign (no cold-tyre subset is large enough to
+  remove it: 10 cold exits on the FJ give 2.1 ± 1.7e-6). "Slow" is
+  pit-lane speed, not standstill; the modules mostly stop sending at rest.
+- **The owner's centrifuge** (the gas in solid-body rotation with the
+  sensor at the rim reads below the mass-mean pressure: κ = (⟨r²⟩ −
+  r_sensor²) / (2·R·T·r_roll²), the gas taken as a rectangular annulus
+  from the bead seat to 12 mm under the tread). Sizes from the owner
+  (2026-11-27):
+  - the formula cars (the KK-SII, the KK-F and the KK-F-V2 alike,
+    confirmed): 13-inch wheels, front 150/575R13 (outer radius 0.2875 m),
+    rear 170/605R13 (0.3025 m), rim radius 0.165 m, the sensor the valve
+    on the rim (`heat_input.CAR_WHEELS`). It gives 1.68e-6 (front) and
+    1.79e-6 (rear) at 320 K with the sensor at the bead seat, and 2.01e-6
+    and 2.08e-6 with it in the rim well, against 1.86 ± 0.12e-6 and
+    1.74 ± 0.14e-6 read on the two axles;
+  - the Inferno 86: 255/40R17 front and rear (rim radius 0.216 m, outer
+    radius 0.318 m). It gives 1.3 to 1.7e-6 at 330 K, against 7.6 to
+    11.9e-6 read, and it predicts equal axles on this car.
+
+  On the FJ the size fits and the rest does not:
+  - the axles agree on DRY tyres (front 1.86 ± 0.12, rear
+    1.74 ± 0.14e-6), but on WET tyres on a wet track the
+    fronts read 1.9 to 3.1e-6 and the rears 0.2 to 0.9e-6 on six of seven
+    dates, which geometry cannot do;
+  - κ ∝ 1/T is not seen: the exponent is −1.0 ± 1.1 (+1 predicted), and
+    −3.2 ± 1.1 on laps 3 and later of every condition;
+  - it is exactly `v²` and a function of wheel speed alone, where the
+    local slope falls with speed and the straights read half the corners;
+    it can account for at most the straights' 0.85e-6.
+  So the whole of κ is not a constant of geometry. By the owner's
+  direction of 2026-11-27 the centrifuge part is to be computed and what
+  is left measured on top of it; that is a further option and not this
+  one. The owner also states that the FJ has nontrivial downforce
+  (`heat_input.CAR_WHEELS`), which raises the pressure with speed and so
+  works against the centrifuge on the straights; it is not sized here.
+- **Per compound** (written labels on the Inferno 86; DRY and WET by the
+  holdout's labels on the formula cars; every condition):
+
+  | × 1e-6 | every circuit | Fuji | Sodegaura | front | rear | sessions |
+  |---|---|---|---|---|---|---|
+  | Inferno 86, A050 | 7.57 ± 0.29 | | 7.57 ± 0.28 | 8.47 | 6.32 | 10 |
+  | Inferno 86, A052 | 7.57 ± 0.18 | 7.42 ± 0.17 | 7.98 | 8.76 | 5.82 | 20 |
+  | Inferno 86, RE-71RS | 11.89 ± 0.46 | 12.07 ± 0.11 | 13.10 (one date) | 13.22 | 9.86 | 14 |
+  | FJ, DRY | 1.83 ± 0.10 | | | 1.82 | 1.72 | 74 |
+  | FJ, WET | 1.66 ± 0.08 | | | 2.21 | 0.74 | 21 |
+
+  On the Inferno 86 the RE-71RS reads 57 % above the two Advans, at the
+  same circuit and on every date (A052 6.9 to 8.0e-6 on eight dates,
+  RE-71RS 9.0 to 13.1e-6 on five), and the pit-lane exits show it too
+  (A052 4.9 ± 0.9, RE-71RS 10.3 ± 1.0e-6). The car's one κ of 9.6e-6 is a
+  mix of the two. **It is the tyre's, by the owner's word** (2026-11-27,
+  asked which wheel sets and sensors the three compounds run on: there is
+  "no consistency there"; the compounds are not tied to wheel sets). The
+  data alone could not say: the dataset has no sensor ids and no record
+  of the wheel set a session ran on, and the one note there is puts the
+  RE-71RS on the black set.
+  The fronts read 1.34 to 1.50 times the rears on all three compounds at
+  equal pressure (1.23 on straight seconds), so κ is not a constant of
+  the compound alone either. The car is square (255/40R17 all round), so
+  that is not geometry: it is something on the axle (load, camber, the
+  fronts' share of the cornering) or the sensors, and it fits the part of
+  the slope that follows cornering promptly. On the FJ the DRY and the WET
+  tyres read alike.
+- **What the Inferno 86's excess over the centrifuge could be.** It is
+  1.8 to 1.9 % of pressure at 200 km/h on the Advans and 3.2 to 3.3 % on
+  the RE-71RS: 1.5 and 2.7 mm of radial growth at a cavity dV/V of 12 per
+  metre (1.1 and 1.9 mm if the gas follows the volume adiabatically
+  within a lap). Growth and a sensor reading low under acceleration are
+  both instantaneous in `v²`. With the compounds not tied to wheel sets
+  (the owner, above) the difference between them is the tyre's, which
+  growth by construction predicts and a sensor does not. The rest of the
+  data lean the same way without settling
+  it: the front-to-rear ratio is the same on every compound (a factor on
+  the compound's value, not a term added to it), and within each compound
+  the slope rises 4 to 9 % from the cooler to the hotter half of the laps
+  (1 to 1.6 standard errors each; a softer hot carcass, and the opposite
+  of 1/T); its exponent in absolute pressure is −0.7 ± 0.4 where a fixed
+  pressure error per g would give +1. Neither is a pure `v²` law in the
+  data.
+- **Follow-ups, named and not built.** (1) A term in the reading for the
+  unsigned lateral g, read within the lap beside κ, so that what is left
+  in κ is speed alone and the level at rest follows. (2) κ per compound
+  on the Inferno 86, which the owner's answer on the wheel sets makes the
+  tyre's. Each is an option, default off, with its own gate.
+
+**What hot pressure means** (the owner, 2026-11-27: "the meaning of hot
+pressure is the pressure you would measure stopped in the pits"). The hot
+target and every predicted hot pressure the calculators show are the
+pressure at rest in the pits. The TPMS at speed reads lower, by the factor
+`1 + κ·v²`: 0.6 % on the FJ at 200 km/h (15 mbar) with the κ read within
+the lap, 3 % on the Inferno 86.
+
+- **The calculators solve for the pressure at rest, with no κ at the
+  target.** The cold pressure is `(P_hot,target + P_atm)·T_cold/T_hot −
+  P_atm` and nothing else:
+  - Python: `energy_balance.gay_lussac_cold_pressure_bar`
+    (`energy_balance.py:237-238`), called at `predict.py:696`;
+  - C#: `EnergyBalance.GayLussacColdPressureBar`
+    (`Core/Services/Modeling/EnergyBalance.cs:95-96`), called at
+    `Core/Services/CircuitPredictor.cs:144` and, in the manual mode, at
+    `Core/ViewModels/TireCornerViewModel.cs:135`;
+  - web: `gayLussacColdPressureBar` (`web/js/model.js:111-112`), called at
+    `model.js:673`; the preview chart's pressure is the same gas law from
+    the cold pressure (`model.js:737`).
+
+  `predict.py` and both ports do not read
+  `energy_balance.speed_pressure` at all. κ reaches a recommendation only
+  through K and τ, which the fit reads off the TPMS at speed after
+  putting each reading on the at-rest scale with κ.
+- **So what the fit takes for the offset between the reading on track
+  and the pressure at rest sets the recommendation for that target.**
+  With the shipped κ_FJ (1.22e-7) the fit takes the FJ's readings at speed
+  for pressures at rest. If the whole slope read within the lap
+  (1.86e-6) is that offset, the predicted hot temperature is too low and
+  the FJ's recommended cold pressures are about 4.6 mbar too high (3.0 to
+  5.3 over the fixture's cases, 9.0 with the WET compound, 9.8 on its
+  worst tyre). **That is the upper end, not the figure.** A regression
+  within the lap fixes a slope and not a level: if the part that follows
+  cornering is real pressure that is absent at rest, the FJ's lap-mean
+  reading sits within 0.03 % of the pressure at rest and the shipped
+  recommendation is right; the pit-lane exits put the lap-mean reading
+  0.15 ± 0.07 % under the pressure at pit-lane speed, the entries 0.48 %,
+  and the whole slope 0.21 %. So the FJ's recommended cold pressures are
+  somewhere between right and about 5 mbar too high. On the Inferno 86
+  the offset is 0.7 to 1.1 % whichever way it is read, and its fitted κ
+  already carries it (the option moves its recommendations by 0.2 mbar).
+- **A comparison with a TPMS reading is made at the reading's speed.** The
+  holdout brings each prediction to the lap-end speed with the model's κ
+  before it is set against the TPMS (`validate._score_fold_laps`), so its
+  MAE is of the reading at speed, not of the pressure at rest; no TPMS
+  reading at rest after a stint is in the dataset to score the latter.
+
+Not promoted: the default stays `fit` until the owner decides.
+
 ### 2.2b The out-lap (schema v4)
 
 The stint does not start at the first flying lap. It starts when the car
