@@ -1315,6 +1315,65 @@ day (2026-11-25, 2026-11-27) has a lap dropped mid-stint, so on the
 shipped artifact both score as before (11-27 re-scored: 340 rows
 identical); after a retrain they move only through the FJ's DRY compound K.
 
+**A stop is off the clock, and that is right.** Neither clock counts a
+standstill or the gap between two merged recordings (the extractor joins
+recordings under 300 s apart, and a stop under 600 s without a pit-exit
+out-lap stays inside the stint). The gas does not cool there at anything
+like the rolling rate. Every stop of 30 s or more with warm tyres and
+masked TPMS readings on both sides (the mean pressure 3–25 s after the car
+rolls again less the 20 s before it stopped): 20 stops in 20 sessions. In
+three, all the Inferno 86's and all between stints, pressure was let out in
+the pits (−147 to −342 mbar with the sensor no colder). In the other 17
+(42–446 s; 4 inside a stint, 13 between stints) the pressure moved by
+**−2.0 ± 1.7 mbar per 100 s of stop**, where cooling at the fitted rolling
+τ towards the stint's cold reading would take −27 per 100 s (−129 mbar for
+the 442 s stop, which read −15). The four inside a stint read +11.5 mbar
+(sd 16) after the stop. Read 25–60 s after the car rolls again instead,
+the 13 between stints are at −12.4 mbar and the four inside a stint at
++11.3. The sensor's temperature is 0–8 °C higher after a stop than before
+it (2.6 on average between stints, 4.0 inside one), so the reading after
+is in most of them a new packet and not the one held from before.
+The 255 s between the two recordings of 2026-11-27 at Fuji lost nothing
+either (FL 1.472 → 1.477, FR 1.470 → 1.478, RL 1.522 → 1.503, RR 1.500 →
+1.500 bar): that day's −7 mbar before the stop and +15 after is the
+warm-up's shape (the TPMS is flat from lap 4 while the FJ's front τ of
+507 s keeps the prediction rising to lap 11; #381), not time the clock
+missed. So no wall clock, no re-stinting at a stop and no standstill
+cooling term: up to 7.4 minutes, the longest measured, a stop is neither
+heat nor cooling.
+
+**A cool-down lap needs no input (#258).** #258 estimated, from the model's
+own τ and K, that the calculator reads 64 mbar high on the Inferno 86 at a
+cool-down lap and 6–13 on the formula cars. The holdout does not show it.
+Per stint (14 with a scored lap before it), from the lap before to the
+cool-down lap: the TPMS goes *up* 10.0 ± 4.5 mbar (the tyre is still
+rising), and the calculator's residual steps +1.6 ± 3.6 (FJ +2.1 ± 4.7,
+Inferno 86 +0.6 ± 6.4). At or after a cool-down lap (828 rows, 22 stints)
+the calculator reads +8.5 mbar in bias and 33.6 in MAE, against +4.0 and
+36.6 on the other rows. Feeding the lap its own lap time along the pace
+curve on the stint's real clock changes |residual| on those rows by
++0.5 ± 2.0 mbar, and its own measured heat by −0.1 ± 1.8; across the
+cool-down lap itself those two step −13.2 ± 4.1 and −7.9 ± 3.7, that is,
+they take out cooling that did not happen. Scoring the rows apart would
+move the pooled figure from 36.13 to 36.6 mbar, the wrong way. So the
+holdout scores them as it scores any lap and the calculators ask nothing
+about them. #258's other half, flying laps 1–3 running slower than the
+typed 25th percentile, was not gated here; the same rows say this much: on
+dry pit-exit stints without any of the three events the calculator's bias
+at flying laps 1 / 3 / 5 / 8 is +7.0 / +7.8 / +3.2 / +0.7 mbar on the FJ
+and +4.0 / −5.3 / −4.8 / −7.2 on the Inferno 86, and with each lap's own
+lap time +2.8 / +2.6 / −2.0 / −4.2 and −2.7 / −13.6 / −14.1 / −16.7, for a
+change in |residual| of −0.40 ± 0.74. Own lap times take 4–10 mbar off the
+prediction everywhere, which the FJ needs and the Inferno 86 does not.
+
+With the stop above, the cool-down lap is one finding from two sides: when
+the heat input falls for one to seven minutes the gas loses far less than
+a single τ predicts.
+
+What the calculators can say with this: count every lap driven since the
+pit exit, the slow ones too; a stop of a few minutes on the grid or in the
+pit lane, and a cool-down lap, change nothing that needs typing.
+
 ### 2.4 Gay-Lussac inversion
 
 Given the predicted hot temperature, invert Gay-Lussac's Law at constant
