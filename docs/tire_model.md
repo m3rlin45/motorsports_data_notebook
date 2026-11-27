@@ -6604,6 +6604,139 @@ the day's own for the simulation against 3.6 for the current calculator
 51.9. GPS and IMU heat now agree within 1 % on it, against 7–10 %
 before.
 
+**The cutover: simulated entries in `tire_model.json` (#208's adoption;
+2026-11-27).** The shape is
+the one Segment F approved, form A: a precomputed pace table, no solver in
+the client. Gate F and the standing holdout did not tell form A from the
+direct solve.
+
+- **The committed export** (`lapsim export-entries`, `lapsim/sim_export.py`,
+  `data/lapsim/exports/`):
+  - one file per raw car and committed track: the pace table of the raw
+    car's latest powertrain (the Inferno 86's second engine, the KK-F, the
+    KK-F-V2, the KK-SII), each knot's flying lap and out-lap as the heat
+    chain's 1 s bins (`TableExport`);
+  - the raw car's fed use, the layout's own where it has run the layout,
+    else the median over its layouts;
+  - the table's support (dry and wet ranges of use);
+  - what it assumes, and the commit, date and dataset it was made at;
+  - an index with GSI's attribution.
+  - It is made as the holdout's `served` arm makes a cell
+    (`pressure_gate.held_out_drive` with nothing held out). Its numbers are
+    rounded to 7 significant digits (the lead): the files halve, and the
+    heat moves by under a millionth.
+  - No heat is stored. Every retrain splits the bins through its own shares.
+  - **The tracks are those committed before the 2026-11 refresh.** The
+    car models, fed uses and pace tables are on all data (through
+    2026-11-25). Since #376 the fit's heat also reads the tracks' bank and
+    grade, so rebuilding them is a follow-up with its own refit.
+- **Placement** (`tire_model/sim_entries.place_simulated`, at
+  `build_warmup_table(write_artifacts=True)` only):
+  - **The track:** a raw car's export at a venue's main layout
+    (`VENUES[..].default_layout`) serves that track.
+  - **Only the shipped artifact:** a fold's fit never gets simulated rows,
+    and `fold_model` refuses one that has them.
+  - **Only the tyres' frame:** a sensor-frame model gets no simulated rows,
+    and records why.
+- **What a cell is served** (`lapsim/served.py`, the shipping rules):
+  - **dry:** the table read log-log at the fed use's lap time, with the
+    knots as its curve (`method: "sim"`, `support`);
+  - **wet and damp:** served only where the model has a logged typical lap
+    time for exactly that condition. The dry table is read there (#208's
+    ruling), and the lap-time row stays the logged one. Elsewhere the cell
+    keeps its logged answer (the lead, 2026-11-27: a dry pace must not
+    become a wet prefill);
+  - **out-lap:** the car's own logged out-lap wherever the condition chain
+    reaches one at the track. Only where none does is it the simulated
+    out-lap, which is driven at the flying knob (#377).
+- **Beside, not in place of** (schema §9, `predict._entry_row`):
+  - A simulated row is added beside the logged rows at its key and answers
+    only its own exact condition.
+  - At the exact step the order is raw sim, raw logged, pooled sim, pooled
+    logged, decided by `source` (absent means logged), never by row order.
+  - Every condition fallback and every averaged step (track and global)
+    reads logged rows only.
+  - So every cell the simulation does not serve reads exactly what it read
+    before. `place_simulated` refuses to write if any moved
+    (`logged_cells_moved`).
+  - The FJ raw cars' rows go in #383's raw tables, so a saved FJ reads the
+    pooled rows, which stay logged.
+- **What the artifact says** (recorded as `simulation` and `entry_coverage`):
+  - `simulation`: the export's making, the conditions, the rules, the cells
+    and the attribution;
+  - `entry_coverage`: per offered cell, which kind of row (sim, logged,
+    averaged, none) each lookup answers with, read through the calculators'
+    one chain walker (`predict._answering_rows`), with the reason where the
+    simulation does not answer.
+  - The calculators show GSI's attribution whenever a prediction reads a
+    simulated row.
+- **The arm scored is the arm shipped.**
+  - `check-pressure-holdout` has a `served` arm that places each fold's cell
+    with the same function and rounding. It differs from shipping only in
+    using the day's powertrain, and in that every model under it holds the
+    fold's sessions out.
+  - `--served-steps` scores the committee's rules (simfix's `table_logout`)
+    and each step from them to the shipping ones in the same run, as side
+    arms kept out of the common rows: the simulated out-lap, the raw-car
+    rows, the rounding.
+  - `SIM_CONDITIONS` is dry, damp and wet, on the re-evaluation below.
+- **Two commits** (the lead's ruling (B)):
+  - The Python commit carries the code, the export and the tests, with
+    `tire_model.json` untouched. predict.py reads today's artifact as
+    before, pinned to the parity fixture by
+    `test_the_refactored_lookups_answer_as_before_on_the_committed_artifact`.
+  - The calculators' commit carries the ports, which read `source` in the
+    §9 order, the artifact regenerated with simulated entries, and the
+    parity fixture.
+- **Rehearsal** (the saved pace tables of 2026-11-24, placed in fold 0's
+  cached model, no dataset read):
+  - 60 offered cells: 28 answer simulated heat, 5 of them sim-only (the FJ
+    raw cars at Motegi and Sodegaura, the Inferno 86 at Suzuka); 16 are
+    logged and 16 averaged;
+  - 0 logged cells moved, against 6 before §9, when the Inferno 86's
+    simulated rows reached the KK-F-V2's track average;
+  - 15 export files, 2.4 MB rounded.
+
+**The re-evaluation** (2026-11-27). The standing holdout ran on the final
+data: the fix stack (#376, #371, #373, #383, #395, #393, #391), the
+dataset through 2026-11-25 (429 recordings), and the export of 20 files
+(4 raw cars × 5 tracks, 3.2 MB). It used 15 folds and 129 held-out
+sessions. The current calculator and the shipped `served` arm were
+scored, and master 47426819c324's calculator on the same fold ids.
+
+On the 5,651 lap × tyre rows all three have (128 sessions), in mbar,
+paired per lap and tyre, ± session / date-clustered SE:
+
+| | master | calculator | served | served − calculator |
+|---|---|---|---|---|
+| pooled | 42.40 | 36.15 | 36.08 | −0.06 ± 0.17 / 0.22 (59 of 128 nearer) |
+| FJ | 35.37 | 31.14 | 30.94 | −0.20 ± 0.15 / 0.20 |
+| KK-SII | 32.06 | 29.95 | 29.50 | −0.46 ± 0.19 / 0.23 |
+| KK-F | 41.72 | 33.41 | 33.71 | +0.30 ± 0.21 / 0.25 |
+| Inferno 86 | 52.31 | 43.22 | 43.35 | +0.12 ± 0.34 / 0.45 |
+| dry (100 sessions) | 41.73 | 34.93 | 35.17 | +0.24 ± 0.15 / 0.21 |
+| damp (4) | 72.29 | 42.83 | 42.64 | −0.19 ± 0.25 / 0.27 |
+| wet (24) | 38.22 | 40.76 | 39.16 | −1.60 ± 0.59 / 0.68 (15 of 24 nearer) |
+
+- **The shipped arm is at parity with the calculator** pooled and in the
+  dry, and better in the wet. On that the lead set `SIM_CONDITIONS` to
+  all three. Its value beyond the holdout is coverage: 7 car × track
+  pairs answer from the simulation alone (the FJ raw cars at Motegi and
+  Sodegaura, the Inferno 86 at Suzuka).
+- **Against master**, the calculator is −6.25 ± 1.71 mbar (date SE;
+  nearer on 91 of 128) and the shipped arm −6.31.
+  - The scores are on identical pressure readings. The gain is mostly the
+    fix stack's reading of the calculator's inputs (the pit-exit anchor,
+    the stint clock).
+  - The wet is the exception: there the calculator is +2.55 ± 1.22 against
+    master and the shipped arm +0.95 ± 0.82.
+- **No day of the refresh is scored.** A holdout bucket is (track, raw car,
+  condition) with at least 10 dry sessions. The KK-F-V2's Fuji day has 9
+  trained dry sessions. The KK-SII's five Motegi sessions have TPMS but no
+  lap the fit's filters keep, so that cell has no logged entry and is
+  sim-only. The refresh enters as training data, and as the simulation's
+  fed uses at those two cells.
+
 **Batches, and speed.** The solver works on a batch of laps of one
 track, each with its own car and its own u (`solver.solve_laps`,
 `solver.drive_laps`; one lap is a batch of one), in two forms that give
