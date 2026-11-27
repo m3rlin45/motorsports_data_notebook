@@ -320,6 +320,12 @@ def _as_float(v: object) -> float:
 # flying lap (drivers are optimistic about their pace).
 TARGET_LAP_TIME_QUANTILE = 0.25
 
+#: A cool-down lap: a flying lap, after its stint's first lap, over this many
+#: times the stint's best flying lap (#258). The calculator's inputs know
+#: nothing of one; the holdout's rows at or after one are tabulated apart
+#: (:func:`_print_stint_events`).
+COOL_DOWN_LAP_RATIO = 1.12
+
 
 def _inferred_compound_labels(root: Path) -> dict[str, str]:
     """Compound per session from the compound EM run on the full dataset:
@@ -716,6 +722,38 @@ def _laps_from_anchor(full: pd.DataFrame) -> Callable[[str, int, int, float], in
     return count
 
 
+def _stint_interruptions(full: pd.DataFrame) -> dict[tuple[str, int], tuple[float, float]]:
+    """Per ``(session_id, stint_id)`` of ``full`` (every usable lap of the
+    stints): the ``lap_within_stint`` of the stint's first cool-down lap
+    (:data:`COOL_DOWN_LAP_RATIO`) and of the first lap after one that
+    cleaning dropped mid-stint (a gap in the stint clock's index, #270);
+    ``inf`` where the stint has none. A frame without lap times has no
+    cool-down laps."""
+    out: dict[tuple[str, int], tuple[float, float]] = {}
+    has_time = "lap_time_s" in full.columns
+    is_out = (
+        full["_is_out"].fillna(False).astype(bool)
+        if "_is_out" in full.columns
+        else pd.Series(False, index=full.index)
+    )
+    for (sid, stint), grp in full.assign(_out=is_out).groupby(["session_id", "stint_id"]):
+        grp = grp.sort_values("lap_within_stint")
+        n = grp["lap_within_stint"].to_numpy(dtype=int)
+        gaps = np.flatnonzero(np.diff(n) > 1)
+        after_drop = float(n[gaps[0] + 1]) if gaps.size else float("inf")
+        cool = float("inf")
+        if has_time:
+            flying = ~grp["_out"].to_numpy(dtype=bool)
+            t = grp["lap_time_s"].to_numpy(dtype=float)
+            if flying.any() and np.isfinite(t[flying]).any():
+                best = float(np.nanmin(t[flying]))
+                slow = flying & (n > n[0]) & (t > COOL_DOWN_LAP_RATIO * best)
+                if slow.any():
+                    cool = float(n[slow][0])
+        out[(str(sid), int(stint))] = (cool, after_drop)  # type: ignore[call-overload]
+    return out
+
+
 def _score_fold_laps(
     prep: FoldLaps,
     model: dict[str, Any],
@@ -738,6 +776,7 @@ def _score_fold_laps(
     stint_outlap = prep.stint_outlap
     kappa_by_car = prep.kappa_by_car
     laps_from_anchor = _laps_from_anchor(prep.full)
+    interruptions = _stint_interruptions(prep.full)
     # Build per-(track, car) lookups from the held-out model
     g2_lookup = {
         (d["track_canonical"], d["car"], d["condition"]): d["g2_typ"]
@@ -763,6 +802,9 @@ def _score_fold_laps(
         t_eff = float(lap["t_eff_c"]) if pd.notna(lap["t_eff_c"]) else None
         if t_eff is None:
             continue
+        first_cool, first_after_drop = interruptions.get(
+            (str(lap["session_id"]), int(lap["stint_id"])), (float("inf"), float("inf"))
+        )
         on_track_s = lap.get("on_track_s")
         heat_proxy_total = lap.get("heat_proxy")
         g2_total: float | None
@@ -915,6 +957,8 @@ def _score_fold_laps(
                     "P_hot_pred_bar": p_pred,
                     "resid_bar": p_pred - float(p_obs) if pd.notna(p_obs) else float("nan"),
                     "T_tpms_obs_c": _as_float(lap.get(f"tpms_temp_{c}_end")),
+                    "after_cool_down": bool(int(lap["lap_within_stint"]) >= first_cool),
+                    "after_dropped": bool(int(lap["lap_within_stint"]) >= first_after_drop),
                 }
             )
     return pd.DataFrame(rows)
@@ -947,12 +991,43 @@ def _print_corner_table(label: str, frame: pd.DataFrame) -> None:
         print(line)
 
 
+def _print_stint_events(label: str, df: pd.DataFrame) -> None:
+    """The rows by what happened earlier in their stint, hot pressure: at or
+    after a cool-down lap (#258) and after a lap cleaning dropped (#270),
+    beside the rows with neither before them. The calculator's inputs
+    describe an uninterrupted stint at pace, so these are reported, not
+    gated: measured on v1.4.0 they score no worse than the rest
+    (``docs/tire_model.md`` §2.3a)."""
+    if not {"after_cool_down", "after_dropped", "resid_bar"}.issubset(df.columns):
+        return
+    cool = df["after_cool_down"].astype(bool)
+    drop = df["after_dropped"].astype(bool)
+    if not (cool.any() or drop.any()):
+        return
+    print(f"\n=== {label} — by what happened earlier in the stint (hot pressure) ===")
+    for name, mask in (
+        ("neither before it", ~cool & ~drop),
+        (f"at or after a cool-down lap (over {COOL_DOWN_LAP_RATIO} × the stint's best)", cool),
+        ("after a lap cleaning dropped", drop),
+    ):
+        sub = df.loc[mask]
+        pb = sub["resid_bar"].dropna()
+        if pb.empty:
+            continue
+        stints = sub.groupby(["session_id", "stint_id"]).ngroups
+        print(
+            f"  {name:<58}  MAE = {pb.abs().mean():.3f} bar  bias = {pb.mean():+.3f} bar"
+            f"    n = {len(pb)} in {stints} stints"
+        )
+
+
 def _print_summary(df: pd.DataFrame, *, summary_label: str = "Held-out") -> None:
     _print_corner_table(f"{summary_label} per-corner T_hot residuals — POOLED", df)
     for car_name, car_frame in df.groupby("car"):
         _print_corner_table(f"{summary_label} — {car_name}", car_frame)
     for cond_name, cond_frame in df.groupby("condition"):
         _print_corner_table(f"{summary_label} — condition={cond_name}", cond_frame)
+    _print_stint_events(summary_label, df)
 
 
 def run_holdout_validation(

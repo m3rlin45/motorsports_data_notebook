@@ -1391,8 +1391,12 @@ def score_cell(
                 got = _score_fold_laps(held.prep, model, session_ids=[sid])
                 if got.empty:
                     continue
-                got = got[got["resid_bar"].notna()].merge(
-                    flags, on=["session_id", "lap_num"], how="left"
+                # the gate's own marks (the stint's best on the full lap list,
+                # ``pressure.mark_laps``), not the holdout summary's
+                got = (
+                    got[got["resid_bar"].notna()]
+                    .drop(columns=["after_dropped", "after_cool_down"], errors="ignore")
+                    .merge(flags, on=["session_id", "lap_num"], how="left")
                 )
                 tpms.append(
                     pd.DataFrame(

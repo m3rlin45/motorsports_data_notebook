@@ -548,6 +548,39 @@ def test_a_lap_dropped_after_the_anchor_counts_in_the_calculators_n() -> None:
     assert fed == [(3, 1, False), (4, 2, False)]
 
 
+def test_rows_after_a_cool_down_lap_or_a_dropped_lap_are_marked(capsys) -> None:  # type: ignore[no-untyped-def]
+    """The calculator's inputs describe an uninterrupted stint at pace. Rows
+    at or after a cool-down lap (#258) and rows after a lap cleaning dropped
+    (#270) are scored like any other and marked, and the summary tabulates
+    them beside the rest."""
+    from motorsports_data_notebook.tire_model.validate import _print_summary
+
+    # laps 0-3 of 60 s; lap 2 driven in 70 s (over 1.12 × the stint's best)
+    prep = _stint(12.0, "pit_exit", out_lap=True)
+    prep.full["lap_time_s"] = [95.0, 60.0, 70.0, 60.0]
+    prep.flying = prep.full[prep.full["lap_within_stint"] > 0].reset_index(drop=True)
+    rows = _score_fold_laps(prep, _harness_model())
+    assert rows["lap_within_stint"].tolist() == [1, 2, 3]
+    assert rows["after_cool_down"].tolist() == [False, True, True]
+    assert not rows["after_dropped"].any()
+    plain = _score_fold_laps(_stint(12.0, "pit_exit", out_lap=True), _harness_model())
+    assert not plain["after_cool_down"].any() and not plain["after_dropped"].any()
+    # the marks change no prediction
+    assert rows["P_hot_pred_bar"].tolist() == plain["P_hot_pred_bar"].tolist()
+    # a lap dropped between laps 1 and 3 of the stint clock
+    dropped = _score_fold_laps(
+        _stint_with_a_dropped_lap(12.0, "pit_exit", out_lap=True), _harness_model()
+    )
+    assert dropped["lap_within_stint"].tolist() == [1, 3, 4]
+    assert dropped["after_dropped"].tolist() == [False, True, True]
+    _print_summary(pd.concat([rows, dropped], ignore_index=True))
+    out = capsys.readouterr().out
+    assert "by what happened earlier in the stint" in out
+    assert "at or after a cool-down lap" in out and "n = 2 in 1 stints" in out
+    _print_summary(plain)
+    assert "earlier in the stint" not in capsys.readouterr().out
+
+
 def test_score_fold_laps_reads_the_raw_cars_own_entry() -> None:
     """A held-out lap is answered by its raw car's own entry where the
     model has one (#383) and by the pooled car's otherwise; the constants
