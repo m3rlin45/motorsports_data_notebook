@@ -513,6 +513,41 @@ def test_a_pit_exit_anchor_is_fed_the_flying_laps_after_the_out_lap() -> None:
     assert fed == [(1, 1, True), (2, 2, True), (3, 3, True)]
 
 
+def _stint_with_a_dropped_lap(t_anchor: float, kind: str, *, out_lap: bool = False) -> FoldLaps:
+    """:func:`_stint` with a lap of 150 s rolling dropped by cleaning between
+    laps 1 and 2: the stint clock keeps it (#270), so the usable laps are
+    0, 1, 3, 4 on the clock and the dropped lap has no row."""
+    prep = _stint(t_anchor, kind, out_lap=out_lap)
+    full = prep.full.copy()
+    after = full["lap_within_stint"] >= 2
+    full.loc[after, "lap_within_stint"] += 1
+    full.loc[after, "lap_num"] += 1
+    full.loc[after, "t_cum_s"] += 150.0
+    prep.full = full
+    prep.flying = full[full["lap_within_stint"] > 0].reset_index(drop=True)
+    return prep
+
+
+def test_a_lap_dropped_after_the_anchor_counts_in_the_calculators_n() -> None:
+    """The calculator's N is the laps driven since the reading. A lap that
+    cleaning dropped mid-stint is one of them: from a pit exit N is the
+    flying-lap number on the stint clock, from a first-lap anchor the laps
+    driven after it, the dropped one among them (#270)."""
+    fed, rows = _fed(_stint_with_a_dropped_lap(12.0, "pit_exit", out_lap=True))
+    assert fed == [(1, 1, True), (3, 3, True), (4, 4, True)]
+    # the oracle's clock has the dropped lap's rolling time
+    assert rows["t_cum_s"].tolist() == [120.0, 330.0, 390.0]
+    # a first-lap anchor at the first lap's start: that lap is ahead of it too
+    fed, _ = _fed(_stint_with_a_dropped_lap(0.0, "first_lap"))
+    assert fed == [(1, 2, False), (3, 4, False), (4, 5, False)]
+    # at the end of lap 1, with the dropped lap straight after it
+    fed, _ = _fed(_stint_with_a_dropped_lap(120.0, "first_lap"))
+    assert fed == [(3, 2, False), (4, 3, False)]
+    # at the start of lap 3, the dropped lap behind it: lap 3 is the first
+    fed, _ = _fed(_stint_with_a_dropped_lap(270.5, "first_lap"))
+    assert fed == [(3, 1, False), (4, 2, False)]
+
+
 def test_score_fold_laps_reads_the_raw_cars_own_entry() -> None:
     """A held-out lap is answered by its raw car's own entry where the
     model has one (#383) and by the pooled car's otherwise; the constants

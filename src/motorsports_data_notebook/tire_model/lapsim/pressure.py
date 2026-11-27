@@ -425,7 +425,7 @@ def mark_laps(prep: FoldLaps, raw_laps: pd.DataFrame) -> pd.DataFrame:
     - ``cool_down``: a flying lap over :data:`COOL_DOWN` × that;
     - ``after_cool_down``: at or after the stint's first cool-down lap;
     - ``after_dropped``: after a lap that cleaning dropped from the stint
-      (the stint's clock and its lap count then skip it, #270);
+      (the stint's clock counts it, #270, but it was not a lap at pace);
     - ``ordinary``: a flying lap from flying lap
       :data:`ORDINARY_FROM_LAP` on that is not a cool-down lap and has a
       heat on every tyre."""

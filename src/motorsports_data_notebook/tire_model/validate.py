@@ -657,8 +657,8 @@ def _prepare_fold_laps(
 def _laps_from_anchor(full: pd.DataFrame) -> Callable[[str, int, int, float], int]:
     """``(session_id, stint_id, lap_within_stint, t_anchor) -> N``: how many
     of the stint's laps, up to and including that one, were driven after a
-    first-lap anchor (``full``: every lap of the stint, the out-lap among
-    them). That is the calculator's N for such a stint: with no pit-exit
+    first-lap anchor (``full``: every usable lap of the stint, the out-lap
+    among them). That is the calculator's N for such a stint: with no pit-exit
     reading its clock starts at the reading, so the laps are counted from
     the anchor's lap boundary (#374). An anchor at the start of the stint's
     first lap has that lap ahead of it, so lap ``lap_within_stint`` is the
@@ -670,7 +670,13 @@ def _laps_from_anchor(full: pd.DataFrame) -> Callable[[str, int, int, float], in
     time, so a reading at a boundary can be a few hundredths of a second
     off it, and a reading placed inside a lap goes to the nearer end of
     that lap. A lap whose end is nearer the anchor than its middle is the
-    anchor's own lap (N = 0) and is not scored."""
+    anchor's own lap (N = 0) and is not scored.
+
+    The count is of laps driven, on the stint clock's own index: a lap that
+    cleaning dropped after the anchor has no row in ``full`` but is a gap in
+    ``lap_within_stint`` and counts (#270). An anchor sits in a usable lap,
+    so every lap before that one, dropped or not, is before the anchor, and
+    every lap after it is after."""
     from .warmup_table import _rolling_time_s
 
     laps = pd.DataFrame(
@@ -678,17 +684,34 @@ def _laps_from_anchor(full: pd.DataFrame) -> Callable[[str, int, int, float], in
             "session_id": full["session_id"].astype(str).to_numpy(),
             "stint_id": full["stint_id"].astype(int).to_numpy(),
             "n": full["lap_within_stint"].to_numpy(dtype=int),
+            "end": full["t_cum_s"].to_numpy(dtype=float),
             "mid": (full["t_cum_s"] - 0.5 * _rolling_time_s(full)).to_numpy(dtype=float),
         }
-    )
+    ).sort_values(["session_id", "stint_id", "n"])
     by_stint = {
-        (str(sid), int(stint)): (grp["n"].to_numpy(), grp["mid"].to_numpy())  # type: ignore[call-overload]
+        (str(sid), int(stint)): (  # type: ignore[call-overload]
+            grp["n"].to_numpy(),
+            grp["end"].to_numpy(),
+            grp["mid"].to_numpy(),
+        )
         for (sid, stint), grp in laps.groupby(["session_id", "stint_id"], sort=False)
     }
 
     def count(session_id: str, stint_id: int, lap_within_stint: int, t_anchor: float) -> int:
-        n, m = by_stint[(str(session_id), int(stint_id))]
-        return int(np.count_nonzero((n <= lap_within_stint) & (m > t_anchor)))
+        n, end, mid = by_stint[(str(session_id), int(stint_id))]
+        at_end = np.flatnonzero(end == t_anchor)
+        later = np.flatnonzero(end > t_anchor)
+        if at_end.size:
+            # an end reading: the laps before the anchor are those up to its lap
+            before = int(n[at_end[0]]) + 1
+        elif later.size:
+            # a start reading inside that lap: the lap itself is ahead of the
+            # anchor when its middle is
+            own = later[0]
+            before = int(n[own]) + (0 if mid[own] > t_anchor else 1)
+        else:
+            before = int(n[-1]) + 1
+        return max(int(lap_within_stint) + 1 - before, 0)
 
     return count
 
