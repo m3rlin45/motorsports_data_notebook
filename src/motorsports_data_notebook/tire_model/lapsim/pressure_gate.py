@@ -212,18 +212,27 @@ _SHIPPED_POOLING = dict(_shipped_aliases())
 def split_pooling(own: tuple[str, ...]) -> dict[str, str]:
     """An experiment's switch (#208, the owner's question of 2026-11-25:
     does splitting the pooled formula car help?): fit the raw cars ``own``
-    as a pooled car of their own, named after the first, in place of the
-    one they are pooled under. It changes ``warmup_table.CAR_FIT_ALIASES``
-    for the process (every module reads that one dict) and gives the new
-    car the facts of the car it leaves; nothing is written. Returns the
-    pooling in force. A fold fitted under it is cached apart."""
+    as a pooled car of their own in place of the one they are pooled
+    under. It changes ``warmup_table.CAR_FIT_ALIASES`` for the process
+    (every module reads that one dict) and gives the new car the facts of
+    the car it leaves; nothing is written. Returns the pooling in force. A
+    fold fitted under it is cached apart.
+
+    Several cars are named after all of them (``"KK-F+KK-F-V2"``), never
+    after the first (#420). A raw car pooled under another name keeps
+    logged entries of its own (#383) and a car pooled under no other name
+    has only the pooled ones, so a group named ``"KK-F"`` took the raw
+    KK-F's own entries away (it read the group's, the KK-F-V2's laps among
+    them) while the KK-F-V2 kept its own: the switch moved entries as well
+    as the pooling of the constants. One car split out alone keeps its
+    name; its pooled entries are then its own."""
     from ..heat_input import CAR_FACTS
     from ..warmup_table import CAR_FIT_ALIASES
 
     if not own:
         return dict(CAR_FIT_ALIASES)
-    name = own[0]
-    left = CAR_FIT_ALIASES.get(name, name)
+    name = own[0] if len(own) == 1 else "+".join(own)
+    left = CAR_FIT_ALIASES.get(own[0], own[0])
     for raw in own:
         if raw == name:
             CAR_FIT_ALIASES.pop(raw, None)
@@ -3543,6 +3552,11 @@ def check_pressure_holdout(
 
     heat_frame = resolve(heat_frame)  # concrete: the workers are other processes
     sensor = heat_frame == SENSOR
+    # The compound of an unlabelled session is what a driver selects, an input:
+    # the EM that stands in for it is run under the shipped pooling whatever
+    # ``split`` says, so that both runs are fed the same tyre (#420: the two
+    # EMs differ on the KK-F's damp sessions).
+    labels = _inferred_compound_labels(root)
     pooling = split_pooling(tuple(split))
     rep = GateReport(
         ("FHP" if fastest else "FHS" if split else "FH") + ("_sensor" if sensor else ""),
@@ -3552,9 +3566,11 @@ def check_pressure_holdout(
         + (", the heat in the sensor's frame and a frame factor" if sensor else ""),
     )
     if split:
-        rep.notes.append(f"The pooling of the cars in this run: {pooling}.")
+        rep.notes.append(
+            f"The pooling of the cars in this run: {pooling}. The compound labels of unlabelled "
+            "sessions are the shipped pooling's (the same input as the pooled run's)."
+        )
     prod = load_production(root)
-    labels = _inferred_compound_labels(root)
     jobs = []
     margins = pd.DataFrame()
     if fastest:
