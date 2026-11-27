@@ -629,3 +629,25 @@ def test_raw_car_entries_need_two_sessions_and_a_pace_curve(monkeypatch, tmp_pat
     monkeypatch.setattr(wt, "RAW_CAR_NEEDS_CURVE", False)
     every = build()
     assert sorted(every.g2) == [("t", "A", "dry"), ("t", "B", "dry")]
+
+
+def test_the_model_says_when_kappa_was_read_within_the_lap() -> None:
+    """With the option off the speed-pressure block is the block it always
+    was; with it on the block carries the reading per car (#417)."""
+
+    def block(within):  # type: ignore[no-untyped-def]
+        model = wt._assemble_model(
+            tau_by_car_corner_cond={},
+            k_by_car_corner_cond={},
+            g2_lookup={},
+            lap_time_lookup={},
+            bucket_n_samples={},
+            kappa_by_car={"FJ": 1.9e-6},
+            kappa_within_lap=within,
+        )
+        return model["energy_balance"]["speed_pressure"]
+
+    plain = {"form": block(None)["form"], "kappa_by_car": {"FJ": 1.9e-6}, "fitted": True}
+    assert block(None) == plain and block({}) == plain
+    reading = {"FJ": {"kappa": 1.9e-6, "stderr": 7e-8, "n_segments": 2710, "held": True}}
+    assert block(reading) == {**plain, "source": "within_lap", "within_lap": reading}
