@@ -447,3 +447,110 @@ CAR_FACTS: dict[str, CarFacts] = {
     "FJ": CarFacts(p_f=0.42, brake_bias_front=0.58),
 }
 DEFAULT_CAR_FACTS = CarFacts(p_f=0.5, brake_bias_front=0.6)
+
+
+# ------------------------------------------------------------ wheels and tyres (stated)
+
+
+@dataclass(frozen=True)
+class TyreSize:
+    """A tyre's dimensions as its size string gives them (:func:`tyre_size`)."""
+
+    size: str
+    width_m: float
+    rim_radius_m: float
+    outer_radius_m: float
+
+    @property
+    def sidewall_m(self) -> float:
+        return self.outer_radius_m - self.rim_radius_m
+
+
+def tyre_size(size: str) -> TyreSize:
+    """Read a tyre size string: ``"255/40R17"`` (section width in mm, aspect
+    ratio in percent, rim diameter in inches: the road-tyre form) or
+    ``"170/605R13"`` (width in mm, *overall diameter* in mm, rim diameter in
+    inches: the racing form). The second number tells them apart: an aspect
+    ratio is under 100, an overall diameter is hundreds of millimetres.
+
+    Examples
+    --------
+    >>> round(tyre_size("255/40R17").outer_radius_m, 4)
+    0.3179
+    >>> tyre_size("170/605R13").outer_radius_m
+    0.3025
+    """
+    import re
+
+    m = re.fullmatch(r"\s*(\d{3})/(\d{2,3})\s*Z?R\s*(\d{2})\s*", size.upper())
+    if m is None:
+        raise ValueError(f"not a tyre size like '255/40R17' or '170/605R13': {size!r}")
+    width_mm, second, rim_in = (float(g) for g in m.groups())
+    rim_radius = rim_in * 0.0254 / 2.0
+    if second < 100.0:  # aspect ratio, percent of the section width
+        outer_radius = rim_radius + width_mm * second / 100.0 / 1000.0
+    else:  # overall diameter, mm
+        outer_radius = second / 2.0 / 1000.0
+    if outer_radius <= rim_radius:
+        raise ValueError(f"tyre size {size!r}: the outer radius is not over the rim's")
+    return TyreSize(
+        size=size.strip(),
+        width_m=width_mm / 1000.0,
+        rim_radius_m=rim_radius,
+        outer_radius_m=outer_radius,
+    )
+
+
+@dataclass(frozen=True)
+class WheelFacts:
+    """What the owner states of a car's wheels and tyres. Stated, not fitted,
+    and not read from the logs: the size strings as given (dimensions come
+    from :func:`tyre_size`), how the TPMS sensor is mounted, whether a tyre
+    compound stays on one wheel set, and whether the car makes downforce."""
+
+    front: str
+    rear: str
+    #: "valve": the sensor is the valve, on the rim, inside the wheel
+    tpms_mount: str
+    #: False: a compound is on whichever wheel set, so what differs by
+    #: compound is the tyre's and not a wheel's or a sensor's. None: not stated
+    compound_tied_to_wheel_set: bool | None
+    #: as stated, without a number ("nontrivial"). None: not stated
+    downforce: str | None
+    stated: str  # who said it and when
+
+    @property
+    def front_size(self) -> TyreSize:
+        return tyre_size(self.front)
+
+    @property
+    def rear_size(self) -> TyreSize:
+        return tyre_size(self.rear)
+
+    def size(self, corner: str) -> TyreSize:
+        """The tyre on a corner (``fl``, ``fr``, ``rl``, ``rr``)."""
+        return self.front_size if corner[0] == "f" else self.rear_size
+
+
+# Per (fit-pooled) car, as the owner gave them on 2026-11-27. "FJ" is the
+# KK-SII, the KK-F and the KK-F-V2 (the owner's "SFJ" / "FJ1500"): confirmed
+# to run the same wheels and tyres. The one place these are written; nothing
+# is fitted from them and no logged channel carries them.
+CAR_WHEELS: dict[str, WheelFacts] = {
+    "Inferno 86": WheelFacts(
+        front="255/40R17",
+        rear="255/40R17",
+        tpms_mount="valve",
+        compound_tied_to_wheel_set=False,
+        downforce=None,
+        stated="owner, 2026-11-27",
+    ),
+    "FJ": WheelFacts(
+        front="150/575R13",
+        rear="170/605R13",
+        tpms_mount="valve",
+        compound_tied_to_wheel_set=None,
+        downforce="nontrivial",
+        stated="owner, 2026-11-27",
+    ),
+}

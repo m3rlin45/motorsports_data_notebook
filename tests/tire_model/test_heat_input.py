@@ -103,3 +103,40 @@ def test_load_transfer_conserves_weight_and_loads_the_outer_tyres() -> None:
     assert q2 == pytest.approx(q * r**2)
     assert corner_heat_rate(h, lat, lng, v, "X", "fl", None, 1.0) == pytest.approx(q)
     assert set(BUILTIN_GEOMETRY) >= {"FJ", "Inferno 86"}
+
+
+def test_tyre_size_reads_the_road_and_the_racing_form() -> None:
+    from motorsports_data_notebook.tire_model.heat_input import tyre_size
+
+    road = tyre_size("255/40R17")
+    assert road.width_m == pytest.approx(0.255)
+    assert road.rim_radius_m == pytest.approx(17 * 0.0254 / 2)
+    assert road.sidewall_m == pytest.approx(0.102)
+    assert road.outer_radius_m == pytest.approx(0.3179)
+    racing = tyre_size(" 170/605r13 ")
+    assert racing.size == "170/605r13"
+    assert racing.width_m == pytest.approx(0.170)
+    assert racing.rim_radius_m == pytest.approx(0.1651)
+    assert racing.outer_radius_m == pytest.approx(0.3025)
+    assert tyre_size("150/575R13").outer_radius_m == pytest.approx(0.2875)
+    assert tyre_size("245/40ZR18").outer_radius_m == pytest.approx(0.2286 + 0.098)
+    for bad in ("255-40-17", "17 inch", "170/120R13", ""):  # 120 mm overall is inside the rim
+        with pytest.raises(ValueError):
+            tyre_size(bad)
+
+
+def test_the_stated_wheels_of_the_cars() -> None:
+    """The owner's facts of 2026-11-27, written once: every car of the share
+    model has its wheels, and the sizes parse."""
+    from motorsports_data_notebook.tire_model.heat_input import CAR_FACTS, CAR_WHEELS
+
+    assert set(CAR_WHEELS) == set(CAR_FACTS)
+    fj, i86 = CAR_WHEELS["FJ"], CAR_WHEELS["Inferno 86"]
+    assert (fj.front, fj.rear) == ("150/575R13", "170/605R13")
+    assert fj.size("fl").outer_radius_m == pytest.approx(0.2875)
+    assert fj.size("rr").outer_radius_m == pytest.approx(0.3025)
+    assert fj.front_size.rim_radius_m == fj.rear_size.rim_radius_m == pytest.approx(0.1651)
+    assert fj.downforce == "nontrivial" and fj.compound_tied_to_wheel_set is None
+    assert i86.front == i86.rear == "255/40R17"  # square
+    assert i86.compound_tied_to_wheel_set is False and i86.downforce is None
+    assert all(w.tpms_mount == "valve" and w.stated for w in CAR_WHEELS.values())
