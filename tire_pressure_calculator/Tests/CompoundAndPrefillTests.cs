@@ -172,6 +172,63 @@ public class CompoundAndPrefillTests : IDisposable
         Assert.DoesNotContain("FJ", new MainViewModel(WithKKSIIEntry()).AvailableCars);
     }
 
+    [Fact]
+    public void SavedFJ_ShowsTheHintToPickTheRawCar_AndALoggedEntryNoAttribution()
+    {
+        SaveSettings("FJ");
+        var vm = new MainViewModel(WithKKSIIEntry());
+        Assert.True(vm.ShowCarHint);
+        Assert.False(vm.ShowGsiAttribution);
+        Assert.False(vm.ShowPaceFlag);
+        vm.SelectedCar = "KK-SII";
+        Assert.False(vm.ShowCarHint);
+        // a pooled-only artifact (every one before #383's retrain) offers FJ
+        // itself: no hint
+        SaveSettings("FJ");
+        Assert.False(new MainViewModel(PooledOnly()).ShowCarHint);
+    }
+
+    // WithKKSIIEntry with the KK-SII's rows simulated, its curve supported
+    // from 61 s to 70 s.
+    private static TireModel WithSimulatedKKSII()
+    {
+        var dto = WithKKSIIEntry().Dto;
+        var g2 = dto.G2TypByTrackRawCarCond!.Single();
+        return new TireModel(dto with
+        {
+            G2TypByTrackRawCarCond = new[]
+            {
+                g2 with
+                {
+                    Source = "sim",
+                    G2VsLapTime = g2.G2VsLapTime! with { Support = new PaceSupportDto(61.0, 70.0) },
+                },
+            },
+            LapTimeTypByTrackRawCarCond = dto.LapTimeTypByTrackRawCarCond!.Select(r => r with { Source = "sim" }).ToList(),
+        });
+    }
+
+    [Fact]
+    public void SimulatedEntry_ShowsTheAttributionAndThePaceFlag_InPredictionModeOnly()
+    {
+        SaveSettings("KK-SII");
+        var vm = new MainViewModel(WithSimulatedKKSII());
+        Assert.True(vm.ShowGsiAttribution);
+        Assert.Equal(Localization.Localizer.Instance["GsiAttribution"], vm.GsiAttributionText);
+        // 60 s is under the support's 61 s: answered, flagged
+        Assert.NotNull(vm.FrontLeft.PredictedHotTempC);
+        Assert.True(vm.ShowPaceFlag);
+        Assert.Equal(Localization.Localizer.Instance["PaceOutsideSupport"], vm.PaceFlagText);
+        // the pooled FJ reads its logged entry
+        vm.SelectedCar = "KK-F";
+        Assert.False(vm.ShowGsiAttribution);
+        Assert.False(vm.ShowPaceFlag);
+        vm.SelectedCar = "KK-SII";
+        vm.Mode = AppMode.Manual;
+        Assert.False(vm.ShowGsiAttribution);
+        Assert.False(vm.ShowPaceFlag);
+    }
+
     // ---------- Forced compound selection ----------
 
     [Fact]

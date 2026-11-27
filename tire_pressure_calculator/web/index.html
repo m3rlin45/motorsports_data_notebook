@@ -61,6 +61,10 @@
     <!-- Date of the newest session in the model, so a cached PWA can be told
          apart from the latest deploy at a glance -->
     <p id="lastUpdated" class="last-updated" aria-live="polite"></p>
+    <!-- GSI's attribution, shown while the prediction reads a simulated
+         entry (its laps are driven on road banks processed from GSI's
+         elevation tiles; data/lapsim/README.md) -->
+    <p id="gsiAttribution" class="last-updated attribution" hidden></p>
 
     <!-- Prediction inputs panel (prediction mode only) -->
     <section id="predPanel" class="pred-panel" hidden>
@@ -96,6 +100,11 @@
         <label id="targetLapLabel" for="targetLapInput"></label>
         <input id="targetLapInput" type="text" inputmode="decimal" autocomplete="off" placeholder="1:05.2" />
       </div>
+      <!-- A saved pooled car (FJ) reads the pooled entry; a simulated pace
+           curve flags a lap time outside the car's logged pace, or faster
+           than its limit (answered either way) -->
+      <p id="carHint" class="pred-note" hidden></p>
+      <p id="paceFlag" class="pred-note pred-flag" role="status" hidden></p>
     </section>
   </div>
 
