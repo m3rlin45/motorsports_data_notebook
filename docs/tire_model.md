@@ -1455,11 +1455,9 @@ dependence on speed alone.
     local slope falls with speed and the straights read half the corners;
     it can account for at most the straights' 0.85e-6.
   So the whole of κ is not a constant of geometry. By the owner's
-  direction of 2026-11-27 the centrifuge part is to be computed and what
-  is left measured on top of it; that is a further option and not this
-  one. The owner also states that the FJ has nontrivial downforce
-  (`heat_input.CAR_WHEELS`), which raises the pressure with speed and so
-  works against the centrifuge on the straights; it is not sized here.
+  direction of 2026-11-27 the centrifuge part is computed and what is
+  left is measured on top of it (the stack, below), where the downforce
+  the owner states for the FJ is taken up as well.
 - **Per compound** (written labels on the Inferno 86; DRY and WET by the
   holdout's labels on the formula cars; every condition):
 
@@ -1506,9 +1504,351 @@ dependence on speed alone.
   data.
 - **Follow-ups, named and not built.** (1) A term in the reading for the
   unsigned lateral g, read within the lap beside κ, so that what is left
-  in κ is speed alone and the level at rest follows. (2) κ per compound
-  on the Inferno 86, which the owner's answer on the wheel sets makes the
-  tyre's. Each is an option, default off, with its own gate.
+  in κ is speed alone and the level at rest follows; not built. (2) κ per
+  compound on the Inferno 86, which the owner's answer on the wheel sets
+  makes the tyre's: built into the stack, below, and measured first
+  without a computed part.
+
+**κ per compound on the Inferno 86, measured first without a computed
+part.** This arm ("per compound" below) is the stack of the next part
+with nothing computed, scored before the stack existed; it is not a
+source of its own in the code. It does what `within_lap` does and,
+for the cars of `statespace.KAPPA_COMPOUND_CARS` (the Inferno 86 alone:
+the formula cars' DRY and WET tyres read alike), reads κ by the same
+regression per (car, compound) over the dry stints of the sessions with a
+*pinned* label, a written one (notes, sidecar) or a condition seed
+(`warmup_table.pinned_compounds`; never a label the compound EM inferred).
+A compound with 200 segments behind its reading is held: every stint of a
+session with that label carries its compound's κ in the per-second fit
+(`StintSeries.kappa`), dry and rain, and in the lap-end speed correction
+(`apply_speed_correction(kappa_by_session=)`); a session with no pinned
+label keeps the car's. A held-out session is scored with the κ of its
+pinned label, read from the fold's training sessions. The model lists the
+readings under `energy_balance.speed_pressure.by_car_compound`.
+
+The gate, written before the code (`gate2.md` in the worker's notes; the
+same 15 folds; arms: master, the first option, this one):
+
+| check | | |
+|---|---|---|
+| options off: fold 0 against the code before any option | identical apart from `fit_at_utc` | pass |
+| the first option unchanged by this code, fold 0 | residuals equal to 1e-15 bar | pass |
+| κ per compound across the folds, sd / mean (at most 10 %) | A050 7.57e-6 (0.9 %), A052 7.66e-6 (0.8 %), RE-71RS 12.18e-6 (0.8 %); held in all 15 | pass |
+| the Inferno 86's MAE against the first option (at most +0.3 mbar) | 43.04 → 43.08, paired −0.04 ± 0.33 | pass; not an improvement |
+| the FJ's rows against the first option (at most 0.05 mbar on a row) | 0.029 | pass |
+
+| Inferno 86 rows | sessions | MAE, mbar: master / first / this | bias: first → this | paired against the first option |
+|---|---|---|---|---|
+| all | 54 | 43.16 / 43.04 / 43.08 | +0.5 → −1.3 | −0.04 ± 0.33 |
+| A052 | 18 | 47.96 / 47.77 / 47.00 | −1.4 → −2.3 | −0.69 ± 0.66 |
+| A050 | 10 | 39.27 / 39.31 / 39.51 | +4.2 → +6.7 | +0.32 ± 0.34 |
+| RE-71RS | 12 | 45.37 / 45.14 / 45.52 | +5.2 → +4.2 | +0.18 ± 0.82 |
+| no written label | 14 | 38.02 / 37.96 / 38.82 | −3.1 → −10.3 | +0.32 ± 0.78 |
+| Fuji | 22 | 43.15 / 42.88 / 42.71 | −18.0 → −19.5 | −0.44 ± 0.53 |
+| Sodegaura | 26 | 40.97 / 40.91 / 40.82 | +8.9 → +7.1 | −0.01 ± 0.50 |
+| Tsukuba (wet, two dates) | 6 | 54.66 / 54.73 / 55.98 | +7.7 → +5.8 | +1.26 ± 0.02 |
+| A052 at Fuji | 8 | 44.75 / 44.40 / 43.15 | −22.5 → −20.2 | −1.19 ± 0.65 |
+| RE-71RS at Fuji | 6 | 41.86 / 41.37 / 41.31 | −25.5 → −27.3 | +0.23 ± 1.66 |
+
+- **The holdout does not tell the two options apart.** It scores the
+  reading at the lap-end speed, and a κ and a compound K that trade
+  against each other give the same reading: the compound K already carried
+  each compound's level. The car's rows move by 4.8 mbar in the mean and
+  by up to 17.5, and the MAE by 0.04. (The folds of this arm ran at one thread
+  and the others at two; the same arm at one and two threads differs by at
+  most 0.03 mbar on a row.)
+- **What it changes is the pressure at rest**, the owner's meaning of a
+  hot pressure. What a retrain would move on the Inferno 86: the dry
+  compound K by −1.7 % (A050), −3.1 % (A052) and +4.5 % (RE-71RS), the
+  pooled K by −0.2 to −0.9 %, τ by 2 % or less, `g_transfer` 4.32 → 4.26;
+  and the recommended cold pressure, for a target of 2.1 bar at flying
+  lap 5, by +6.6 mbar (A050), +10.8 (A052) and −14.0 (RE-71RS) at Fuji and
+  +5.2, +8.5 and −10.6 at Sodegaura; +1.4 with no compound selected. The
+  FJ is not touched.
+- **What stands behind that move, and what does not.** Nothing scores
+  the pressure at rest. The nearest thing is the pit-lane exits, where
+  speed changes without cornering, and they are few: 7 on the A052
+  (4.9 ± 0.9e-6) and 11 on the RE-71RS (10.3 ± 1.0e-6). They say the
+  compounds differ in the offset to rest and not only within the lap.
+  They back the A052's move and say it is too small (4.9e-6 is under both
+  its 7.7e-6 and the car's 9.6e-6). They do not back the RE-71RS's: its
+  exits are 0.7 standard errors from the car's 9.6e-6 and 2 under the
+  12.2e-6 the option gives it, so its −11 to −14 mbar rests on the
+  within-lap slope alone.
+- **In the rain the RE-71RS does not read its dry value.** The option
+  carries a compound's dry κ into the rain stints, as the fit carries the
+  car's. The RE-71RS's three wet sessions (one date, Tsukuba) read
+  9.0e-6, not 12.2e-6; the A052's three read 7.5e-6 against 7.7e-6. The
+  one loss the gate sees is there (wet Tsukuba, +1.26 ± 0.02 mbar on six
+  sessions of two dates). A variant in which the rain keeps the car's κ
+  was run afterwards and is worse still ("Two rules tried", below).
+- **Not run.** As with the first option, it is not plumbed into
+  `lapsim/pressure_gate.py` (the served arm, `just tire-sim-compare`);
+  `twonode` and `heat_experiment` still read the car's κ from the model.
+- **A session without a pinned label** keeps the car's κ in the fit and in
+  the scoring, while the EM still gives it a compound for K: its bias
+  moves from −3.1 to −10.3 mbar (MAE +0.3 ± 0.8). Twenty of the car's 64
+  sessions in the fit have no written label.
+- **Labelling a session from its own κ is left out.** Per session the
+  Advans read 6.2 to 9.2e-6 and the RE-71RS 8.9 to 13.9e-6: at 9.5e-6
+  three of 44 labelled sessions fall on the wrong side (the RE-71RS's
+  three wet sessions at Tsukuba). Four of the unlabelled sessions read
+  14.2 to 15.0e-6, above every labelled RE-71RS, so a tyre the labels do
+  not hold is likely among them. For a held-out session it would read the
+  label from the pressure the label's κ then corrects, and it cannot tell
+  the A050 from the A052, which the compound K needs.
+
+**The stack: the centrifuge computed, a measured κ on top**
+(`kappa_source="centrifuge_stack"`, `--kappa-source centrifuge_stack`;
+default off). The owner's direction of 2026-11-27: "how about we
+mathematically calculate the centrifuge effect, and stack kappa on top of
+that".
+
+- **κ_c, computed** (`energy_balance.centrifuge_kappa`): per tyre, from
+  the stated sizes of `heat_input.CAR_WHEELS`, the gas a rectangular
+  annulus from the bead seat to 12 mm under the tread, the rolling radius
+  0.975 × the outer radius, the sensor at the bead seat, quoted at 320 K
+  and applied as κ_c · 320 / T at the gas temperature of each reading.
+  Nothing in it is fitted or tuned.
+
+  | κ_c at 320 K, × 1e-6 | tyre | sensor at the bead seat (used) | in the rim well (the other end of a valve sensor's range) |
+  |---|---|---|---|
+  | FJ front | 150/575R13 | 1.68 | 2.01 |
+  | FJ rear | 170/605R13 | 1.79 | 2.08 |
+  | Inferno 86 | 255/40R17 | 1.33 | 1.68 |
+
+- **κ_x, measured on top**: the option's own within-lap regression of
+  what κ_c leaves (`ln P + κ_c·(320/T)·v²` against `v²` and the same
+  regressors), per car, and per compound on the Inferno 86 as in the
+  per-compound arm above. It may be of either sign.
+
+  | κ_x, × 1e-6 | all tyres | front | rear | sd over the 15 folds |
+  |---|---|---|---|---|
+  | FJ | +0.13 ± 0.07 | +0.18 ± 0.09 | −0.04 ± 0.10 | 0.016 |
+  | Inferno 86, the car | +8.31 ± 0.43 | +9.49 | +6.56 | 0.11 |
+  | Inferno 86, A050 | +6.32 ± 0.24 | +7.21 | +5.08 | 0.07 |
+  | Inferno 86, A052 | +6.35 ± 0.18 | +7.54 | +4.71 | 0.06 |
+  | Inferno 86, RE-71RS | +10.90 ± 0.24 | +12.22 | +8.92 | 0.10 |
+
+  Beside each compound, the check at rest that exists, the pit-lane exits
+  as a whole κ (to be set against κ_c + κ_x): A052 4.9 ± 0.9e-6 on 7
+  exits against 7.7e-6; RE-71RS 10.3 ± 1.0e-6 on 11 against 12.2e-6; the
+  A050 has 2 exits on one date, too few to read; the car as a whole
+  8.0 ± 1.1e-6 on 30 against 9.6e-6.
+
+- **The reading**: `P_read = P_rest / (1 + (κ_c·320/T + κ_x)·v²)`, both
+  held in the per-second fit (`StintSeries.kappa_c` beside
+  `StintSeries.kappa`), in the lap-end correction
+  (`apply_speed_correction(centrifuge=)`) and in the holdout's scoring.
+  The model writes the parts under `energy_balance.speed_pressure`
+  (`centrifuge`, `kappa_x_by_car`, `by_car_compound`); `kappa_by_car`
+  stays the whole at 320 K for a reader of one κ per car.
+- **With the sensor in the rim well instead** κ_x reads −0.18 ± 0.07e-6
+  on the FJ, and +7.96 (the car), +5.99, +6.00 and +10.56e-6 on the
+  Inferno 86: on the FJ its sign turns on where in its 15 mm the valve
+  sensor sits.
+- **On the FJ the within-lap slope is equal in size to κ_c**: what is left
+  of 1.86e-6 is +0.13 to −0.18e-6, zero within what the sensor's place
+  leaves open. That is a statement of size and not of cause: half of that
+  slope follows cornering, which a centrifuge does not, and the straights
+  read half of κ_c (next). On the Inferno 86 the centrifuge is a seventh
+  of the slope and κ_x is the tyre's part, which differs by compound.
+- **The straights read less than the centrifuge on the FJ.** Against the
+  0.85e-6 of the straight seconds the remainder is −0.84e-6 (front) and
+  −0.94e-6 (rear). Zeroing it by the sensor's place would put the sensor
+  33 to 41 mm outside the bead seat, which a valve on the rim is not; the
+  radius is not tuned. What can lower the straight-line reading: the
+  packet's delay smearing `v²` where it changes fastest, the part of the
+  reading that follows cornering (absent on a straight, so the straight
+  sits below the lap's mean), and downforce.
+- **Downforce** (the owner: the FJ has nontrivial downforce). It adds
+  load as the square of the airspeed, a loaded tyre's cavity is smaller,
+  so it raises the pressure with speed, against the centrifuge: the
+  speed-only slope is κ_c − κ_df (+ growth), and a negative remainder is
+  physical. Two things are needed to size it.
+  - *How much pressure a load makes*, read in corners: +0.48 % of the
+    absolute pressure per unit of relative load on the fronts and +0.42 %
+    on the rears (the outer tyre gaining 38 % of its load per g), and a
+    curvature of 1.03 % per unit² *if* the part by which every tyre reads
+    higher in a corner is load and not lateral force.
+  - *How much load the air makes*, measured on the KK-F-V2 on Fuji's main
+    straight on 2026-11-27 from its shock pots (a separate measurement,
+    its third and final version: one spring a corner, the pots zeroed on
+    the ground, 125 to 213 km/h; two earlier versions are withdrawn). Per
+    tyre the load above static is `b·v² + c·a_x`: as the springs carry
+    it, b is 0.040 to 0.049 N per (m/s)² on a front tyre and 0.190 to
+    0.205 on a rear, against pitot airspeed (0.038 and 0.194 against GPS
+    speed); in total 0.48 to 0.49, a C_L·A of 0.83 to 0.85 m². The rear
+    springs also carry 400 to 510 N per g of thrust beyond weight
+    transfer (taken as physics: 618 N per g on the repo's figures). With
+    that taken out at steady speed, the wings and floor alone are about
+    0.11 N per (m/s)² at the front axle and 0.29 to 0.30 at the rear
+    (27 % on the front), a C_L·A of 0.70 to 0.71 m². Whether the tyres or
+    the suspension links carry the thrust part is open, so the total is
+    0.70 to 0.85 m² and the band for the tyre's own load is 0.04 to 0.06
+    (front) and 0.145 to 0.205 (rear) per tyre. An earlier slope of
+    0.35 m² above 185 km/h was a local slope and is withdrawn. Measured directly at 210 km/h: 125 to
+    150 N on a front tyre and 635 to 685 N on a rear. It is not a clean
+    `v²` line (± 35 N per tyre, with a rise at 158 to 180 km/h that is
+    not explained), and it is one car on one day: the KK-SII is not
+    measured.
+
+  On 525 kg with 42 % on the front (the repo's figures, not weighed) that
+  is +11 to +17 % of a front tyre's load and +30 to +42 % of a rear's at
+  200 km/h, and
+
+  | × 1e-6 | κ_df, linear | with the curvature, at 50 m/s | at 60 m/s | the straights' gap κ_c − 0.85 | covered |
+  |---|---|---|---|---|---|
+  | front | 0.18 to 0.26 | 0.21 to 0.34 | 0.23 to 0.38 | 0.83 | a quarter to a half (21 to 46 %) |
+  | rear | 0.41 to 0.58 | 0.65 to 1.06 | 0.76 to 1.28 | 0.94 | half to all (43 to 136 %) |
+
+  With the wings and floor alone (0.055 and 0.147 N per (m/s)² per tyre)
+  κ_df is 0.25e-6 linear and 0.35e-6 with the curvature at 60 m/s on the
+  front, 0.41 and 0.77e-6 on the rear: 30 to 42 % of the front's gap and
+  44 to 82 % of the rear's.
+
+  So the measured downforce accounts for the rear's gap, all of it if the
+  load response is curved and the tyres carry what the springs carry and
+  half if it is linear, and for a quarter to a half of the front's; the
+  rest of the front's is not explained. (The
+  "75 % of the weight, implausible" of an earlier note used the linear
+  coefficient alone and no measurement.) A rear-heavy balance predicts
+  the rear's slope under the front's by 0.03 to 0.29e-6, after the
+  0.11e-6 by which the rear's κ_c is the larger; the dry data read the
+  rear 0.12 ± 0.18e-6 under the front, which agrees and decides nothing.
+  No number for the downforce is in the model: κ_x holds whatever κ_c
+  leaves.
+- **The WET split follows the condition.** On WET tyres on a wet track
+  the fronts read 1.9 to 3.1e-6 and the rears 0.2 to 0.9e-6 on six of
+  seven dates and on both raw cars (KK-SII 2.41 ± 0.12 against
+  0.49 ± 0.18e-6; KK-F 1.72 against 1.12e-6); on the two damp dates it
+  is the other way round, and DRY tyres on a damp track read 1.28 against
+  1.54e-6. It does not follow the date or the car. More rear wing in the
+  wet would do it; the wing settings are the owner's to say.
+- **1/T.** Between the cooler and the hotter half of the laps κ_c moves
+  by 0.05 to 0.09e-6, under every standard error, so its 1/T cannot show.
+  With κ_c taken out, κ_x rises with the gas temperature on all three
+  compounds of the Inferno 86 (+0.35, +0.58 and +1.07e-6; 0.7 to 1.4
+  standard errors) and on the FJ (−0.28 to +0.09e-6), the sign growth of
+  a softer carcass gives.
+- **At rest** the centrifuge, the downforce and the growth are all gone,
+  so the net slope against speed is the offset to rest whatever its
+  parts. What a regression within the lap still cannot fix is the level
+  of the part that follows cornering ("What hot pressure means").
+
+The gate, written before any fold of it (`gate3.md`; arms: master, the
+first option, the per-compound arm, the stack):
+
+| check | | |
+|---|---|---|
+| the three earlier sources unchanged by this code, fold 0 | identical apart from `fit_at_utc` | pass |
+| κ_x across the folds | FJ sd 0.016e-6; Inferno 86 8.32e-6 (1.3 %), A050 6.32e-6 (1.1 %), A052 6.35e-6 (0.9 %), RE-71RS 10.90e-6 (0.9 %) | pass |
+| Inferno 86 MAE against the first option (at most +0.3 mbar) | 43.04 → 43.08, paired −0.03 ± 0.33; against the per-compound arm +0.01 ± 0.02 | pass; not an improvement |
+| FJ MAE against the first option (within ± 0.1 mbar) | 31.52 → 31.54, paired +0.03 ± 0.03 | pass |
+
+- **The stack is the per-compound arm restated**, as expected and written
+  into the gate: its total κ is the measured slope by construction, so
+  its rows lie within 0.19 mbar in the mean (0.95 at most) of the second
+  arm's on the Inferno 86 and within 0.24 (1.3 at most) of the first
+  option's on the FJ, and the recommended cold pressures within 0.5 mbar
+  in the mean over a car's tyres (0.03 to 0.16 in the dry; 0.8 on one
+  tyre with the WET compound). The holdout says nothing for or against the
+  centrifuge. What the stack adds is that the part physics gives is named
+  and computed, per axle and with its 1/T, and that what is left on the
+  FJ is small.
+- The constants across the folds are the per-compound arm's (K 0.6 to 1.2 %,
+  τ 1.1 to 2.0 %, `g_transfer` 2.7 and 6.9 %).
+- Everything said of the per-compound arm holds for the stack: the move of
+  the Inferno 86's recommendation by compound, what stands behind it and
+  what does not, the rain, the sessions without a label, what was not
+  run.
+- **Two rules tried against two of those objections, and not kept**
+  (`gate4.md`, written before their folds; arm "revised").
+  (1) *A rain stint keeps the car's κ_x.* Expected: the wet rows back at
+  the first option's. Found: worse, 54.73 → 59.34 mbar on the six wet
+  sessions (+3.73 ± 1.01; the first form 55.92). The compound K is a
+  multiplier of the compound that is one for every condition, so a κ that
+  leaves the compound in the rain while its K multiplier stays is the
+  inconsistent pairing, not the consistent one.
+  (2) *A held-out session with no pinned label is scored on the car's
+  pooled K as well as the car's κ.* Its bias does come back (−10.2 →
+  +2.2 mbar; the first option −3.1), but its MAE is worse (37.96 → 39.77,
+  +1.51 ± 0.47): the compound the EM infers for such a session was worth
+  having for K.
+  With both, the Inferno 86 is 43.04 → 43.74 against the first option
+  (+0.59 ± 0.41: over the limit of +0.3). The code keeps the first form.
+  The objections stand as limits of the option, not as things these rules
+  mend.
+
+**Removing κ altogether** (the owner's question of 2026-11-28: "what
+about just removing kappa altogether? how does that change the
+performance?"). κ held at zero through the fit's fixed-κ path on the same
+15 folds, on both cars and on the FJ alone; paired against master, per
+held-out session, SE clustered by date, mbar:
+
+| rows | master | κ = 0 on both | κ = 0 on the FJ only | first option | the stack |
+|---|---|---|---|---|---|
+| pooled (129 sessions) | 36.19 | 37.05, +1.97 ± 0.73 | 36.17, −0.01 ± 0.01 | 36.36, +0.19 ± 0.11 | 36.39, +0.20 ± 0.18 |
+| FJ (75) | 31.14 | 31.11, −0.02 ± 0.01 | 31.11, −0.02 ± 0.01 | 31.52, +0.43 ± 0.17 | 31.54, +0.46 ± 0.20 |
+| Inferno 86 (54) | 43.16 | 45.25, +4.73 ± 1.49 | 43.16, 0.00 | 43.04, −0.15 ± 0.06 | 43.08, −0.18 ± 0.33 |
+| dry (101) | 34.99 | 35.90, +2.35 ± 0.91 | 34.98 | 35.00 | |
+| damp (4) | 42.83 | 42.73 | 42.73 | 44.50 | |
+| wet (24) | 40.76 | 41.66, +0.68 ± 0.54 | 40.75 | 41.40 | |
+| Fuji (27) | 42.76 | 44.75, +4.80 ± 2.79 | 42.76 | 42.94 | |
+| Suzuka (13) | 34.66 | 34.55, −0.11 ± 0.03 | 34.55 | 35.40 | |
+| Tsukuba (63) | 32.42 | 32.65, +0.25 ± 0.21 | 32.40 | 32.63 | |
+| Sodegaura (26) | 40.97 | 42.78, +4.23 ± 1.52 | 40.97 | 40.91 | |
+
+(The κ = 0 arms ran at one thread and master at two; the same arm at one
+and two threads differs by up to 0.03 mbar on a row, so the FJ's −0.02 is
+of the size of that difference.)
+
+- **On the FJ removing κ changes nothing**: its fitted value is already
+  near zero (0.13e-6 in the mean of the folds). MAE −0.02 ± 0.01 mbar, K
+  −0.1 %, τ +0.1 %, the fixture's cold pressures +0.3 mbar (0.2 to 0.7).
+  So on the FJ "κ fitted" and "no κ" are the same model, and the choice
+  that matters there is between that and the measured slope (the first
+  option: +0.43 ± 0.17 mbar of MAE and −4.6 mbar of recommended cold
+  pressure).
+- **On the Inferno 86 removing κ costs 4.7 mbar** (43.16 → 45.25; seen at
+  Sodegaura and in the dry as a whole). K and τ compensate: K −4.1 %
+  (front) and −3.7 % (rear), τ +6.8 and +7.3 %; in the wet K −5.1 and
+  −3.7 %, τ +7.9 and +9.5 %. What they cannot repair is the shape of the
+  stint: the anchor is read at pit-lane speed and every later reading at
+  speed is lower, so without κ the first flying laps are over-predicted,
+  +28.7, +18.7, +10.1, +5.4 and +1.1 mbar on flying laps 1 to 5 where
+  master has +2.2, −2.1, −4.8, −4.5 and −5.2.
+- **The lap-end bias on the fastest lines**, which is what κ was brought
+  in for (2026-10-08). By the speed at the line on the Inferno 86:
+
+  | speed at the line | rows | bias, master | bias, κ = 0 | MAE, master | MAE, κ = 0 |
+  |---|---|---|---|---|---|
+  | 30 to 35 m/s | 115 | +29.7 | +34.2 | 55.0 | 58.4 |
+  | 35 to 40 | 659 | +3.3 | +3.8 | 44.7 | 45.6 |
+  | 40 to 45 | 882 | +10.2 | +8.5 | 40.4 | 43.1 |
+  | 45 to 50 | 262 | −19.0 | −4.7 | 45.0 | 45.4 |
+  | over 50 | 478 | −17.4 | +0.7 | 42.1 | 45.5 |
+
+  With κ the Inferno 86's fastest lines are 17 to 19 mbar under (they
+  are Fuji's: −18.0 there); without it the mean bias there is gone (−1.2
+  at Fuji, and the slope of the residual on the line speed² goes from
+  −25.4 to −10.5 mbar per 1,000 (m/s)²) while the MAE is higher (43.15 →
+  45.46 at Fuji), the longer τ and the lower K that stand in for κ having
+  put an error into the shape of the stint. So on the Inferno 86 the
+  under-prediction at Fuji does go with κ, and why is open: a κ that is
+  too large at Fuji's speeds (the slope is not a `v²` law) and a level
+  error of the circuit that a missing κ happens to offset would both read
+  like this. On the FJ, which is #394's car, κ is not what makes it: its
+  fastest lines (over 50 m/s, the wet Fuji sessions) are −30.5 mbar on
+  master, −30.3 with κ removed and −35.3 under the first option, and its
+  Fuji bias is −27.0 with κ fitted and −26.7 with none.
+- **For the target at rest** removing κ says the reading at speed is the
+  pressure at rest. The pit-lane events put the two 0.7 to 1.1 % apart on
+  the Inferno 86, and the fixture's recommended cold pressures for that
+  car rise by 19 to 36 mbar without κ (18.9 at Sodegaura with no compound,
+  29.6 on the A050, 35.8 on the A052). On the FJ the same step is 0.3 mbar
+  because nothing was there to remove.
+
 
 **What hot pressure means** (the owner, 2026-11-27: "the meaning of hot
 pressure is the pressure you would measure stopped in the pits"). The hot

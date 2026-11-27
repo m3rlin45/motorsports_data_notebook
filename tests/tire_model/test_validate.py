@@ -7,7 +7,10 @@ cover the pure pandas logic in ``_pick_holdout_sessions``.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pandas as pd
+import pytest
 
 from motorsports_data_notebook.tire_model.validate import (
     FoldLaps,
@@ -536,3 +539,57 @@ def test_score_fold_laps_reads_the_raw_cars_own_entry() -> None:
     pd.testing.assert_frame_equal(
         _score_fold_laps(prep, bare), _score_fold_laps(prep, _harness_model())
     )
+
+
+def test_scoring_reads_the_pressure_at_speed_with_the_sessions_kappa_and_the_centrifuge() -> None:
+    """The predicted pressure at rest is brought to the lap-end speed with
+    the κ of the session where it carries one, else the car's; a computed
+    centrifuge is added at the gas temperature of each reading (#417)."""
+    import dataclasses
+
+    from motorsports_data_notebook.tire_model.energy_balance import P_ATM_BAR, T_ZERO_C_TO_K
+
+    base = _harness_laps()
+    flying = base.flying.assign(speed_end_ms=50.0, speed_anchor_fl_ms=10.0)
+    model = _harness_model()
+
+    def score(**kw):  # type: ignore[no-untyped-def]
+        prep = dataclasses.replace(base, flying=flying, full=flying, **kw)
+        return _score_fold_laps(prep, model).set_index(["session_id", "lap_num"])
+
+    rest = score()  # no κ: the pressure at rest
+    car = score(kappa_by_car={"c": 2e-6})
+    own = score(kappa_by_car={"c": 2e-6}, kappa_by_session={"s2": 5e-6})
+    p = lambda df: df["P_hot_pred_bar"] + P_ATM_BAR  # noqa: E731
+
+    def factor(k_a: float, k_end: float) -> float:
+        return (1 + k_a * 10.0**2) / (1 + k_end * 50.0**2)
+
+    assert (p(car) / p(rest)).to_numpy() == pytest.approx(factor(2e-6, 2e-6))
+    assert (p(own) / p(rest)).loc["s1"].to_numpy() == pytest.approx(factor(2e-6, 2e-6))
+    assert (p(own) / p(rest)).loc["s2"].to_numpy() == pytest.approx(factor(5e-6, 5e-6))
+    stack = score(kappa_by_car={"c": 1e-6}, centrifuge={"c": {"front": 1.6e-6, "rear": 9e-6}})
+    t_hot_k = stack["T_hot_pred_c"].to_numpy() + T_ZERO_C_TO_K
+    want = [
+        factor(1e-6 + 1.6e-6 * 320.0 / (20.0 + T_ZERO_C_TO_K), 1e-6 + 1.6e-6 * 320.0 / t)
+        for t in t_hot_k
+    ]
+    assert (p(stack) / p(rest)).to_numpy() == pytest.approx(want)
+
+
+def test_a_held_out_session_takes_the_kappa_of_its_pinned_compound(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from motorsports_data_notebook.tire_model import validate, warmup_table
+
+    laps = pd.DataFrame({"session_id": ["a", "b", "c"], "car": ["X", "X", "Y"]})
+    monkeypatch.setattr(
+        warmup_table, "pinned_compounds", lambda root, df: {"a": "SOFT", "c": "SOFT"}
+    )
+    rows = [
+        {"car": "X", "compound": "SOFT", "kappa": 7e-6, "held": True},
+        {"car": "X", "compound": "HARD", "kappa": 12e-6, "held": True},
+        {"car": "Y", "compound": "SOFT", "kappa": 3e-6, "held": False},  # too little behind it
+    ]
+    model = {"energy_balance": {"speed_pressure": {"by_car_compound": rows}}}
+    # b has no pinned label, c's compound is not held: both keep their car's κ
+    assert validate._held_out_kappa(Path("."), laps, model) == {"a": 7e-6}
+    assert validate._held_out_kappa(Path("."), laps, {"energy_balance": {}}) == {}

@@ -651,3 +651,113 @@ def test_the_model_says_when_kappa_was_read_within_the_lap() -> None:
     assert block(None) == plain and block({}) == plain
     reading = {"FJ": {"kappa": 1.9e-6, "stderr": 7e-8, "n_segments": 2710, "held": True}}
     assert block(reading) == {**plain, "source": "within_lap", "within_lap": reading}
+
+
+def test_the_model_lists_kappa_per_compound_when_it_was_read() -> None:
+    def block(per_compound):  # type: ignore[no-untyped-def]
+        model = wt._assemble_model(
+            tau_by_car_corner_cond={},
+            k_by_car_corner_cond={},
+            g2_lookup={},
+            lap_time_lookup={},
+            bucket_n_samples={},
+            kappa_by_car={"Inferno 86": 9.6e-6},
+            kappa_within_lap={"Inferno 86": {"kappa": 9.6e-6, "held": True}},
+            kappa_by_compound=per_compound,
+        )
+        return model["energy_balance"]["speed_pressure"]
+
+    first = block(None)
+    assert first["source"] == "within_lap" and "by_car_compound" not in first
+    assert block([]) == first
+    rows = [{"car": "Inferno 86", "compound": "RE-71RS", "kappa": 1.19e-5, "held": True}]
+    got = block(rows)
+    assert got["source"] == "centrifuge_stack" and got["by_car_compound"] == rows
+    assert got["kappa_by_car"] == {"Inferno 86": 9.6e-6}  # the car's value stays the fallback
+
+
+def test_speed_correction_takes_a_sessions_own_kappa(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """A session listed in ``kappa_by_session`` is corrected with its own κ,
+    any other with its car's."""
+    from pathlib import Path
+
+    from motorsports_data_notebook.tire_model import statespace as ss
+
+    laps = pd.DataFrame(
+        {
+            "session_id": ["a", "b"],
+            "stint_id": [1, 1],
+            "lap_num": [1, 1],
+            "car": ["X", "X"],
+            "t_eff_c": [20.0, 20.0],
+            **{f"t_start_{c}": [20.0, 20.0] for c in wt.CORNERS},
+            **{f"p_start_{c}": [1.5, 1.5] for c in wt.CORNERS},
+            **{f"tpms_press_{c}_end": [1.6, 1.6] for c in wt.CORNERS},
+            **{f"t_gas_{c}_end": [0.0, 0.0] for c in wt.CORNERS},
+        }
+    )
+    terms = laps[["session_id", "stint_id", "lap_num"]].assign(
+        speed_end_ms=50.0, **{f"speed_anchor_{c}_ms": 10.0 for c in wt.CORNERS}
+    )
+    monkeypatch.setattr(ss, "stint_speed_terms", lambda root, df: terms)
+    car_only = wt.apply_speed_correction(Path("."), laps, {"X": 1e-5})
+    own = wt.apply_speed_correction(Path("."), laps, {"X": 1e-5}, {"b": 2e-5})
+    assert own["t_gas_fl_end"].iloc[0] == car_only["t_gas_fl_end"].iloc[0]
+    k_ratio = (1 + 2e-5 * 2500) / (1 + 2e-5 * 100) / ((1 + 1e-5 * 2500) / (1 + 1e-5 * 100))
+    assert (own["t_gas_fl_end"].iloc[1] + 273.15) == pytest.approx(
+        (car_only["t_gas_fl_end"].iloc[1] + 273.15) * k_ratio
+    )
+
+
+def test_the_model_block_of_a_centrifuge_stack() -> None:
+    block = wt._assemble_model(
+        tau_by_car_corner_cond={},
+        k_by_car_corner_cond={},
+        g2_lookup={},
+        lap_time_lookup={},
+        bucket_n_samples={},
+        kappa_by_car={"FJ": 1.0e-7},  # what is measured on top
+        kappa_within_lap={"FJ": {"kappa": 1.0e-7, "held": True}},
+        kappa_centrifuge={"FJ": {"front": 1.7e-6, "rear": 1.8e-6}},
+    )["energy_balance"]["speed_pressure"]
+    assert block["source"] == "centrifuge_stack"
+    assert block["kappa_x_by_car"] == {"FJ": 1.0e-7}
+    assert block["kappa_by_car"]["FJ"] == pytest.approx(1.0e-7 + 1.75e-6)  # the whole, at T_ref
+    c = block["centrifuge"]
+    assert c["t_ref_k"] == 320.0 and c["by_car"]["FJ"]["front"] == 1.7e-6
+    assert (c["by_car"]["FJ"]["tyre_front"], c["by_car"]["FJ"]["tyre_rear"]) == (
+        "150/575R13",
+        "170/605R13",
+    )
+
+
+def test_speed_correction_with_a_centrifuge(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """κ of a reading is κ_x + κ_c·T_ref/T at that reading's gas temperature."""
+    from pathlib import Path
+
+    from motorsports_data_notebook.tire_model import statespace as ss
+
+    laps = pd.DataFrame(
+        {
+            "session_id": ["a"],
+            "stint_id": [1],
+            "lap_num": [1],
+            "car": ["X"],
+            "t_eff_c": [20.0],
+            **{f"t_start_{c}": [46.85] for c in wt.CORNERS},  # 320 K
+            **{f"p_start_{c}": [1.5] for c in wt.CORNERS},
+            **{f"tpms_press_{c}_end": [1.75] for c in wt.CORNERS},  # 352 K
+            **{f"t_gas_{c}_end": [0.0] for c in wt.CORNERS},
+        }
+    )
+    terms = laps[["session_id", "stint_id", "lap_num"]].assign(
+        speed_end_ms=50.0, **{f"speed_anchor_{c}_ms": 10.0 for c in wt.CORNERS}
+    )
+    monkeypatch.setattr(ss, "stint_speed_terms", lambda root, df: terms)
+    got = wt.apply_speed_correction(
+        Path("."), laps, {"X": 1e-6}, None, {"X": {"front": 2e-6, "rear": 4e-6}}
+    )
+    for c, kc in (("fl", 2e-6), ("rr", 4e-6)):
+        k_end, k_a = 1e-6 + kc * 320.0 / 352.0, 1e-6 + kc
+        want = 320.0 * (2.75 / 2.5) * (1 + k_end * 2500) / (1 + k_a * 100) - 273.15
+        assert got[f"t_gas_{c}_end"].iloc[0] == pytest.approx(want)

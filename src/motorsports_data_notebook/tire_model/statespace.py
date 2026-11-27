@@ -38,10 +38,17 @@ import pandas as pd
 from scipy.optimize import least_squares  # type: ignore[import-untyped]
 
 from .cleaning import mask_stale_tpms
-from .energy_balance import P_ATM_BAR, T_ZERO_C_TO_K, speed_pressure_factor
+from .energy_balance import (
+    CENTRIFUGE_T_REF_K,
+    P_ATM_BAR,
+    T_ZERO_C_TO_K,
+    centrifuge_kappa,
+    speed_pressure_factor,
+)
 from .heat_input import (
     BUILTIN_GEOMETRY,
     CAR_FACTS,
+    CAR_WHEELS,
     DEFAULT_CAR_FACTS,
     DEFAULT_HEAT_INPUT,
     PHYSICAL_HEAT_INPUT,
@@ -84,8 +91,25 @@ KAPPA_BOUNDS = (0.0, 5e-5)  # per (m/s)²: pressure observable P_obs = P_gas / (
 #: Where :func:`fit_physical` takes κ from. ``"fit"``: a parameter of the
 #: per-second fit (production). ``"within_lap"``: read from the pressure
 #: within a lap before the fit and held in it (:func:`within_lap_kappa`, #417).
-KAPPA_SOURCES = ("fit", "within_lap")
+#: ``"centrifuge_stack"`` (the owner's direction of 2026-11-27): κ in two
+#: parts, ``κ_c`` *computed* per tyre from its size and the gas temperature
+#: (:func:`energy_balance.centrifuge_kappa`, the stated wheels of
+#: ``heat_input.CAR_WHEELS``) and ``κ_x`` *measured* on top of it, the
+#: within-lap reading of what ``κ_c`` leaves: per car, and for the cars of
+#: :data:`KAPPA_COMPOUND_CARS` per tyre compound as well
+#: (:func:`within_lap_kappa_by_compound`), each stint carrying its
+#: compound's.
+KAPPA_SOURCES = ("fit", "within_lap", "centrifuge_stack")
 DEFAULT_KAPPA_SOURCE = "fit"
+#: What is measured on top of a computed part may be of either sign (a car
+#: with downforce reads less than its centrifuge alone).
+KAPPA_X_BOUNDS = (-5e-5, 5e-5)
+#: The cars whose κ_x is read per compound under ``"centrifuge_stack"``.
+#: On the Inferno 86 the RE-71RS reads 11.9e-6 against 7.6e-6 on the A050
+#: and the A052, and the owner has the compounds on no fixed wheel set, so
+#: it is the tyre's (docs §2.2a″). The formula cars' DRY and WET tyres read
+#: alike (1.83e-6 and 1.66e-6) and are left on the car's one value.
+KAPPA_COMPOUND_CARS: tuple[str, ...] = ("Inferno 86",)
 WITHIN_LAP_MIN_SECONDS = 40  # a lap shorter than this is not read
 WITHIN_LAP_TREND_ORDER = 2  # polynomial trend taken out of each (stint, tyre, lap)
 WITHIN_LAP_MIN_SEGMENTS = 200  # (lap, tyre) segments a car needs for its κ to be held
@@ -133,6 +157,14 @@ class StintSeries:
     # pit-exit anchor, else the first scored bin after the last hole before
     # it (see REANCHOR_SECONDS). None when the stint has no hole.
     seg_anchor: np.ndarray | None = None
+    # the speed-pressure κ this stint's readings are corrected with when it
+    # is held per stint (its compound's, #417); None: the car's
+    kappa: float | None = None
+    # (4,) the computed centrifuge κ_c of each tyre at CENTRIFUGE_T_REF_K
+    # (it goes as 1/T of the gas); None: nothing is computed and the κ above,
+    # or the car's, is the whole of it. With it, they are what is measured
+    # on top (κ_x).
+    kappa_c: np.ndarray | None = None
 
 
 def sink_temperature(s: StintSeries, cool_params: dict[str, float], corner: str) -> float:
@@ -695,6 +727,8 @@ class _Design:
         self.cars = sorted({s.car for s in stints})
         car_i = []
         v_anchor = []
+        kappa_rows: list[np.ndarray] = []
+        kc_rows: list[np.ndarray] = []
         g2, teff, obs, seg_start, t0, cell_i, logp = [], [], [], [], [], [], []
         vv = []
         tair: list[np.ndarray] = []
@@ -740,6 +774,12 @@ class _Design:
             t0.append(tt)
             cell_i.append(np.full(n, self._cell_index(s.car, s.condition)))
             car_i.append(np.full(n, self.cars.index(s.car)))
+            kappa_rows.append(np.full(n, np.nan if s.kappa is None else float(s.kappa)))
+            kc_rows.append(
+                np.zeros((n, 4))
+                if s.kappa_c is None
+                else np.repeat(np.asarray(s.kappa_c, dtype=float)[None, :], n, axis=0)
+            )
             va = np.zeros((n, 4))
             for j in range(4):
                 # the pit-exit anchor's speed for every row: a re-anchored
@@ -759,6 +799,13 @@ class _Design:
         self.v = np.concatenate(vv)
         self.car_idx = np.concatenate(car_i)
         self.v_anchor = np.concatenate(v_anchor)
+        # per row, the κ of a stint that carries its own; None when no stint does
+        kappa_row = np.concatenate(kappa_rows)
+        self.kappa_row: np.ndarray | None = kappa_row if np.isfinite(kappa_row).any() else None
+        # per (row, tyre), the computed centrifuge κ_c at the reference
+        # temperature; None when no stint has one
+        kc_row = np.concatenate(kc_rows)
+        self.kc_row: np.ndarray | None = kc_row if (kc_row != 0.0).any() else None
         self.logp = np.concatenate(logp) if logp else None
         self.teff = np.concatenate(teff)
         self.tair = np.concatenate(tair)
@@ -930,10 +977,26 @@ class _Design:
     def observed(self, x: np.ndarray) -> np.ndarray:
         """The gas temperature observations, corrected for the speed effect
         on the pressure reading when ``v_corr`` is on."""
-        if not self.v_corr and not self.fixed_kappa:
+        if (
+            not self.v_corr
+            and not self.fixed_kappa
+            and self.kappa_row is None
+            and self.kc_row is None
+        ):
             return self.obs
         kap = self.kappa(x)
         k = np.array([kap.get(c, 0.0) for c in self.cars])[self.car_idx]
+        if self.kappa_row is not None:
+            k = np.where(np.isfinite(self.kappa_row), self.kappa_row, k)
+        if self.kc_row is not None:
+            # κ = κ_x + κ_c·T_ref/T: the computed part at the gas temperature
+            # of the reading (the uncorrected one: the difference is second
+            # order) and, for the anchor, at the anchor's
+            t_obs = np.where(self.fin, self.obs, self.t0) + T_ZERO_C_TO_K
+            k_num = k[:, None] + self.kc_row * (CENTRIFUGE_T_REF_K / t_obs)
+            k_den = k[:, None] + self.kc_row * (CENTRIFUGE_T_REF_K / (self.t0 + T_ZERO_C_TO_K))
+            f = (1.0 + k_num * self.v[:, None] ** 2) / (1.0 + k_den * self.v_anchor**2)
+            return np.asarray((self.obs + T_ZERO_C_TO_K) * f - T_ZERO_C_TO_K)
         f = (1.0 + k[:, None] * self.v[:, None] ** 2) / (1.0 + k[:, None] * self.v_anchor**2)
         return np.asarray((self.obs + T_ZERO_C_TO_K) * f - T_ZERO_C_TO_K)
 
@@ -1340,9 +1403,14 @@ def _within_lap_normal_equations(s: StintSeries) -> tuple[np.ndarray, np.ndarray
         for j in range(4):
             if s.anchor_idx[j] < 0:
                 continue
-            y = np.log(s.obs[lo:hi, j] + T_ZERO_C_TO_K)
+            t_gas = s.obs[lo:hi, j] + T_ZERO_C_TO_K
+            y = np.log(t_gas)
             if not np.isfinite(y).all():
                 continue
+            if s.kappa_c is not None:
+                # what the computed centrifuge leaves: ln P_rest = ln P_read
+                # + (κ_c·T_ref/T + κ_x)·v², so κ_x is read from y + κ_c·v²
+                y = y + float(s.kappa_c[j]) * (CENTRIFUGE_T_REF_K / t_gas) * v2_lag[lo:hi]
             side = 1.0 if j in (0, 2) else -1.0  # the left tyres are the outer ones in a right turn
             axle = -1.0 if j < 2 else 1.0  # braking loads the fronts, drive the rears
             cols = np.column_stack([y, v2_lag[lo:hi], ripple, side * lat[lo:hi], axle * lng[lo:hi]])
@@ -1364,6 +1432,65 @@ def _within_lap_solve(xtx: np.ndarray, xty: np.ndarray) -> float:
     scale = np.where(scale > 0, scale, 1.0)
     beta = np.linalg.lstsq(xtx / np.outer(scale, scale), xty / scale, rcond=None)[0] / scale
     return float(-beta[0])
+
+
+def _within_lap_by(stints: list[StintSeries], key: Any) -> dict[Any, WithinLapKappa]:
+    """:func:`within_lap_kappa`'s regression per group: ``key(stint)`` names
+    the group a dry stint is read with, None leaves it out. A group whose
+    stints carry a computed centrifuge (``kappa_c``) is read for what is
+    left on top of it, which may be negative."""
+    per: dict[Any, dict[str, list[Any]]] = {}
+    stacked: set[Any] = set()
+    for s in stints:
+        if s.condition != "dry":
+            continue
+        k = key(s)
+        if k is None:
+            continue
+        got = _within_lap_normal_equations(s)
+        if got is None:
+            continue
+        if s.kappa_c is not None:
+            stacked.add(k)
+        acc = per.setdefault(k, {}).setdefault(s.session_id, [np.zeros((4, 4)), np.zeros(4), 0, 0])
+        for i in range(4):
+            acc[i] = acc[i] + got[i]
+    out: dict[Any, WithinLapKappa] = {}
+    for k, by_session in per.items():
+        parts = list(by_session.values())
+        xtx = np.sum([p[0] for p in parts], axis=0)
+        xty = np.sum([p[1] for p in parts], axis=0)
+        kappa = _within_lap_solve(xtx, xty)
+        stderr = float("nan")
+        g = len(parts)
+        if g > 1:
+            jack = np.array([_within_lap_solve(xtx - p[0], xty - p[1]) for p in parts])
+            stderr = float(np.sqrt((g - 1) / g * np.sum((jack - jack.mean()) ** 2)))
+        bounds = KAPPA_X_BOUNDS if k in stacked else KAPPA_BOUNDS
+        out[k] = WithinLapKappa(
+            kappa=float(np.clip(kappa, bounds[0], bounds[1])),
+            stderr=stderr,
+            n_segments=int(sum(p[2] for p in parts)),
+            n_seconds=int(sum(p[3] for p in parts)),
+            n_sessions=g,
+        )
+    return out
+
+
+def within_lap_kappa_by_compound(
+    stints: list[StintSeries], compound_by_session: dict[str, str]
+) -> dict[tuple[str, str], WithinLapKappa]:
+    """:func:`within_lap_kappa` per (car, compound), over the dry stints of
+    the sessions ``compound_by_session`` names a compound for (pinned
+    labels: written or seeded, never inferred from the pressure). The
+    regression, its selection of laps and its standard error are the car's;
+    a stint of a session without a label is read with no compound."""
+
+    def key(s: StintSeries) -> tuple[str, str] | None:
+        compound = compound_by_session.get(s.session_id)
+        return (s.car, compound) if isinstance(compound, str) else None
+
+    return _within_lap_by(stints, key)
 
 
 def within_lap_kappa(stints: list[StintSeries]) -> dict[str, WithinLapKappa]:
@@ -1396,37 +1523,7 @@ def within_lap_kappa(stints: list[StintSeries]) -> dict[str, WithinLapKappa]:
     κ is minus the coefficient of ``v²``, clipped to :data:`KAPPA_BOUNDS`.
     The standard error is a jackknife over sessions.
     """
-    per_car: dict[str, dict[str, list[Any]]] = {}
-    for s in stints:
-        if s.condition != "dry":
-            continue
-        got = _within_lap_normal_equations(s)
-        if got is None:
-            continue
-        acc = per_car.setdefault(s.car, {}).setdefault(
-            s.session_id, [np.zeros((4, 4)), np.zeros(4), 0, 0]
-        )
-        for i in range(4):
-            acc[i] = acc[i] + got[i]
-    out: dict[str, WithinLapKappa] = {}
-    for car, by_session in per_car.items():
-        parts = list(by_session.values())
-        xtx = np.sum([p[0] for p in parts], axis=0)
-        xty = np.sum([p[1] for p in parts], axis=0)
-        kappa = _within_lap_solve(xtx, xty)
-        stderr = float("nan")
-        g = len(parts)
-        if g > 1:
-            jack = np.array([_within_lap_solve(xtx - p[0], xty - p[1]) for p in parts])
-            stderr = float(np.sqrt((g - 1) / g * np.sum((jack - jack.mean()) ** 2)))
-        out[car] = WithinLapKappa(
-            kappa=float(np.clip(kappa, KAPPA_BOUNDS[0], KAPPA_BOUNDS[1])),
-            stderr=stderr,
-            n_segments=int(sum(p[2] for p in parts)),
-            n_seconds=int(sum(p[3] for p in parts)),
-            n_sessions=g,
-        )
-    return out
+    return _within_lap_by(stints, lambda s: s.car)
 
 
 @dataclass
@@ -1444,6 +1541,14 @@ class PhysicalFit:
     kappa_source: str = DEFAULT_KAPPA_SOURCE
     # what within_lap_kappa read per car, when it is the source (#417)
     kappa_within_lap: dict[str, WithinLapKappa] = field(default_factory=dict)
+    # under "centrifuge_stack": the reading per (car, compound), and the
+    # κ of every session whose stints carried its compound's
+    kappa_by_compound: dict[tuple[str, str], WithinLapKappa] = field(default_factory=dict)
+    kappa_by_session: dict[str, float] = field(default_factory=dict)
+    # under "centrifuge_stack": per car the computed κ_c at
+    # CENTRIFUGE_T_REF_K, {"front": ..., "rear": ...}; ``kappa`` and the two
+    # above are then what is measured on top of it (κ_x)
+    kappa_c: dict[str, dict[str, float]] = field(default_factory=dict)
 
 
 def lap_heat_share(stints: list[StintSeries], share: dict[str, ShareParams]) -> pd.DataFrame:
@@ -1489,6 +1594,7 @@ def fit_physical(
     *,
     facts: dict[str, CarFacts] | None = None,
     kappa_source: str | None = None,
+    compound_by_session: dict[str, str] | None = None,
 ) -> PhysicalFit:
     """The production fit (schema v5): ``q_i = V·|F_i|`` with the corner's
     force from bounded shares of the car's accelerations (one lateral
@@ -1504,7 +1610,21 @@ def fit_physical(
     with everything else; ``"within_lap"`` (#417, default off) reads it from
     the pressure within a lap first (:func:`within_lap_kappa`) and holds it
     in the fit for every car with :data:`WITHIN_LAP_MIN_SEGMENTS` segments
-    behind it, the others keeping a fitted κ."""
+    behind it, the others keeping a fitted κ. ``"centrifuge_stack"``
+    (default off; the owner's direction of 2026-11-27) first gives every
+    tyre of a car with stated wheels (``heat_input.CAR_WHEELS``) its
+    computed centrifuge ``κ_c`` (:func:`energy_balance.centrifuge_kappa`,
+    sensor at the bead seat), and then reads and holds what is left on top
+    of it, ``κ_x``, in the same way: per car, and for the cars of
+    :data:`KAPPA_COMPOUND_CARS` per compound too
+    (:func:`within_lap_kappa_by_compound` on ``compound_by_session``, the
+    pinned label of each session). A stint of a session whose compound has
+    enough behind its reading carries that compound's κ_x, dry or rain (the
+    compound K's multiplier is one for every condition, and a κ that left
+    the compound in the rain scored worse: docs §2.2a″); any other stint
+    the car's. The reading is
+    ``P_rest / (1 + (κ_c·T_ref/T + κ_x)·v²)``, and the returned ``kappa``
+    is ``κ_x`` with ``kappa_c`` beside it."""
     from .warmup_table import FitParam
 
     kappa_source = DEFAULT_KAPPA_SOURCE if kappa_source is None else kappa_source
@@ -1530,10 +1650,36 @@ def fit_physical(
     }
     within: dict[str, WithinLapKappa] = {}
     kappa_held: dict[str, float] | None = None
-    if kappa_source == "within_lap":
+    by_compound: dict[tuple[str, str], WithinLapKappa] = {}
+    by_session: dict[str, float] = {}
+    kappa_c: dict[str, dict[str, float]] = {}
+    if kappa_source == "centrifuge_stack":
+        for s in stints:
+            wheels = CAR_WHEELS.get(s.car)
+            if wheels is None:
+                continue  # no stated size: nothing computed, the whole κ is measured
+            per_tyre = [
+                centrifuge_kappa(wheels.size(c).rim_radius_m, wheels.size(c).outer_radius_m)
+                for c in CORNERS
+            ]
+            s.kappa_c = np.array(per_tyre)
+            kappa_c[s.car] = {"front": per_tyre[0], "rear": per_tyre[2]}
+        logger.info("computed centrifuge kappa at %.0f K: %s", CENTRIFUGE_T_REF_K, kappa_c)
+    if kappa_source in ("within_lap", "centrifuge_stack"):
         within = within_lap_kappa(stints)
         kappa_held = {car: w.kappa for car, w in within.items() if w.held}
         logger.info("kappa read within the lap: %s", within)
+    if kappa_source == "centrifuge_stack" and kappa_held is not None:
+        labels = compound_by_session or {}
+        by_compound = within_lap_kappa_by_compound(
+            [s for s in stints if s.car in KAPPA_COMPOUND_CARS and s.car in kappa_held], labels
+        )
+        for s in stints:
+            w = by_compound.get((s.car, str(labels.get(s.session_id))))
+            if w is not None and w.held:
+                s.kappa = w.kappa
+                by_session[s.session_id] = w.kappa
+        logger.info("kappa read within the lap per compound: %s", by_compound)
     cf = fit_cells(
         stints,
         v_corr=True,
@@ -1573,6 +1719,9 @@ def fit_physical(
         cost_dry=cf.cost_dry,
         kappa_source=kappa_source,
         kappa_within_lap=within,
+        kappa_by_compound=by_compound,
+        kappa_by_session=by_session,
+        kappa_c=kappa_c,
     )
 
 

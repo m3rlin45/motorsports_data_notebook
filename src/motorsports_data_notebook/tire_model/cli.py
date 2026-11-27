@@ -60,7 +60,10 @@ def _add_kappa_source_arg(p: argparse.ArgumentParser) -> None:
         help=(
             "Where the speed-pressure constant kappa comes from. fit: a parameter of the "
             "per-second fit. within_lap (#417): read per car from the pressure against "
-            "speed^2 within a lap, then held in the fit."
+            "speed^2 within a lap, then held in the fit. centrifuge_stack: the "
+            "centrifuge computed from the stated tyre sizes, and what is measured on top "
+            "of it within the lap, per car and, on the Inferno 86, per tyre compound "
+            "(sessions with a written label)."
         ),
     )
 

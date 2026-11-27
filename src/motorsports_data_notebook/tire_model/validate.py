@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import logging
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
@@ -26,6 +26,7 @@ import pyarrow.parquet as pq
 
 from ..tire_etl.paths import default_dataset_root, laps_dir, sessions_dir
 from .energy_balance import (
+    CENTRIFUGE_T_REF_K,
     P_ATM_BAR,
     T_ZERO_C_TO_K,
     t_effective_c,
@@ -428,6 +429,11 @@ class FoldLaps:
     session_lap_time: dict[str, float]
     stint_outlap: dict[tuple[str, int], tuple[float, dict[str, float]]]
     kappa_by_car: dict[str, float]
+    #: the κ of the held-out sessions that carry their compound's (#417)
+    kappa_by_session: dict[str, float] = field(default_factory=dict)
+    #: a model with a computed centrifuge: per car ``{"front", "rear"}`` at
+    #: its reference temperature; the two maps above are then κ_x
+    centrifuge: dict[str, dict[str, float]] = field(default_factory=dict)
 
 
 #: What the warmup curve is fed for one lap and corner: the signature of
@@ -594,14 +600,26 @@ def _prepare_fold_laps(
     # comparison is with what a standstill reading would show.
     from .warmup_table import apply_speed_correction
 
+    speed_pressure = model.get("energy_balance", {}).get("speed_pressure", {})
+    # A model with a computed centrifuge holds the measured part apart
+    # (kappa_x_by_car); its kappa_by_car is the whole, for other readers.
+    centrifuge = {
+        str(car): {"front": float(v["front"]), "rear": float(v["rear"])}
+        for car, v in (speed_pressure.get("centrifuge", {}).get("by_car") or {}).items()
+    }
     kappa_by_car = {
         k: float(v)
-        for k, v in model.get("energy_balance", {})
-        .get("speed_pressure", {})
-        .get("kappa_by_car", {})
-        .items()
+        for k, v in speed_pressure.get(
+            "kappa_x_by_car" if centrifuge else "kappa_by_car", {}
+        ).items()
     }
-    all_laps = apply_speed_correction(root, all_laps, kappa_by_car)
+    # A model whose κ was read per compound: a held-out session carries the
+    # κ of its pinned label (written or seeded: what the driver knows is on
+    # the car), never of a label inferred from its own pressures.
+    kappa_by_session = _held_out_kappa(root, all_laps, model)
+    all_laps = apply_speed_correction(
+        root, all_laps, kappa_by_car, kappa_by_session or None, centrifuge or None
+    )
     # Schema v5: the held-out laps' own per-corner driving intensity from
     # the fold model's geometry and drive/brake coefficients (oracle inputs).
     from .warmup_table import attach_lap_heat
@@ -661,7 +679,30 @@ def _prepare_fold_laps(
         session_lap_time=session_lap_time,
         stint_outlap=stint_outlap,
         kappa_by_car=kappa_by_car,
+        kappa_by_session=kappa_by_session,
+        centrifuge=centrifuge,
     )
+
+
+def _held_out_kappa(root: Path, laps: pd.DataFrame, model: dict[str, Any]) -> dict[str, float]:
+    """``session_id -> κ`` for the sessions of ``laps`` whose pinned
+    compound the model holds a κ for (``speed_pressure.by_car_compound``,
+    written under ``kappa_source="centrifuge_stack"``): the rule of the fit.
+    A session with no pinned label keeps the car's. Empty for any other
+    model."""
+    rows = model.get("energy_balance", {}).get("speed_pressure", {}).get("by_car_compound") or []
+    held = {(r["car"], r["compound"]): float(r["kappa"]) for r in rows if r.get("held")}
+    if not held or laps.empty:
+        return {}
+    from .warmup_table import pinned_compounds
+
+    label = pinned_compounds(root, laps)
+    car = laps.drop_duplicates("session_id").set_index("session_id")["car"]
+    return {
+        str(sid): held[(str(c), label[str(sid)])]
+        for sid, c in car.items()
+        if str(sid) in label and (str(c), label[str(sid)]) in held
+    }
 
 
 def _laps_from_anchor(full: pd.DataFrame) -> Callable[[str, int, int, float], int]:
@@ -868,11 +909,17 @@ def _score_fold_laps(
             if pd.notna(p_anchor) and pd.notna(p_obs) and float(t_start) > -273.15:
                 ratio = (t_hot_pred + T_ZERO_C_TO_K) / (float(t_start) + T_ZERO_C_TO_K)
                 # what the TPMS would read at the lap-end speed
-                kap = kappa_by_car.get(car, 0.0)
+                kap = prep.kappa_by_session.get(str(lap["session_id"]), kappa_by_car.get(car, 0.0))
+                kap_a = kap_end = kap
+                kc = prep.centrifuge.get(car, {}).get("front" if c[0] == "f" else "rear", 0.0)
+                if kc:
+                    # the computed part at the gas temperature of each reading
+                    kap_a = kap + kc * CENTRIFUGE_T_REF_K / (float(t_start) + T_ZERO_C_TO_K)
+                    kap_end = kap + kc * CENTRIFUGE_T_REF_K / (t_hot_pred + T_ZERO_C_TO_K)
                 v_end = _as_float(lap.get("speed_end_ms"))
                 v_a = _as_float(lap.get(f"speed_anchor_{c}_ms"))
-                f_speed = (1.0 + kap * (0.0 if np.isnan(v_a) else v_a) ** 2) / (
-                    1.0 + kap * (0.0 if np.isnan(v_end) else v_end) ** 2
+                f_speed = (1.0 + kap_a * (0.0 if np.isnan(v_a) else v_a) ** 2) / (
+                    1.0 + kap_end * (0.0 if np.isnan(v_end) else v_end) ** 2
                 )
                 p_pred = (float(p_anchor) + P_ATM_BAR) * ratio * f_speed - P_ATM_BAR
             rows.append(

@@ -339,3 +339,178 @@ def test_fit_physical_holds_kappa_read_within_the_lap(
     assert thin.kappa["FJ"] == pytest.approx(fitted.kappa["FJ"], rel=1e-6)
     with pytest.raises(ValueError, match="kappa_source"):
         ss.fit_physical(tmp_path, laps, kappa_source="prior")
+
+
+def test_a_stint_carries_its_own_kappa(tmp_path: Path) -> None:
+    """Two tyres with different κ on one car: held per stint, the fit finds
+    τ and K; with one κ for the car it cannot explain both."""
+    k_a, k_b = 8e-6, 2e-6
+    laps = pd.concat(
+        [
+            _make_stint(tmp_path, "s_a", "tsukuba_2000", 12, quantise=False, kappa=k_a),
+            _make_stint(tmp_path, "s_b", "fuji", 12, quantise=False, kappa=k_b),
+        ],
+        ignore_index=True,
+    )
+    stints = ss.build_stint_series(tmp_path, laps)
+    one = ss.fit_cells(stints, v_corr=True, kappa={"FJ": 0.5 * (k_a + k_b)})
+    for s in stints:
+        s.kappa = k_a if s.session_id == "s_a" else k_b
+    own = ss.fit_cells(stints, v_corr=True, kappa={"FJ": 0.5 * (k_a + k_b)})
+    a, b = own.ab[("FJ", "fl", "dry")]
+    assert 1.0 / b == pytest.approx(TRUE_TAU, rel=0.03)
+    assert a / b == pytest.approx(TRUE_K, rel=0.03)
+    assert own.cost_dry < 0.05 * one.cost_dry
+    assert own.kappa == {"FJ": 0.5 * (k_a + k_b)}  # the car's value is still the car's
+
+
+def test_kappa_per_compound_is_read_and_carried(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``centrifuge_stack`` reads κ per labelled compound for the listed
+    cars; a session without a label and a car not listed keep the car's.
+    (No wheels are stated here, so nothing is computed and what is read is
+    the whole.)"""
+    k_a, k_b = 8e-6, 2e-6
+    laps = pd.concat(
+        [
+            _make_stint(tmp_path, "s_a", "tsukuba_2000", 12, quantise=False, kappa=k_a),
+            _make_stint(tmp_path, "s_b", "fuji", 12, quantise=False, kappa=k_b),
+            _make_stint(tmp_path, "s_c", "suzuka", 12, quantise=False, kappa=k_b),
+        ],
+        ignore_index=True,
+    )
+    labels = {"s_a": "SOFT", "s_b": "HARD"}  # s_c: no label
+    monkeypatch.setattr(ss, "WITHIN_LAP_MIN_SEGMENTS", 1)
+    monkeypatch.setattr(ss, "CAR_WHEELS", {})
+    stints = ss.build_stint_series(tmp_path, laps, ss.PHYSICAL_HEAT_INPUT)
+    read = ss.within_lap_kappa_by_compound(stints, labels)
+    assert sorted(read) == [("FJ", "HARD"), ("FJ", "SOFT")]
+    # one synthetic session each, its heat rate tied to its speed: to 0.6e-6
+    assert read[("FJ", "SOFT")].kappa == pytest.approx(k_a, abs=6e-7)
+    assert read[("FJ", "HARD")].kappa == pytest.approx(k_b, abs=6e-7)
+    assert read[("FJ", "SOFT")].n_sessions == 1
+
+    # the car is not listed: the first option, nothing per session
+    plain = ss.fit_physical(
+        tmp_path, laps, kappa_source="centrifuge_stack", compound_by_session=labels
+    )
+    assert plain.kappa_by_compound == {} and plain.kappa_by_session == {}
+    first = ss.fit_physical(tmp_path, laps, kappa_source="within_lap")
+    assert plain.kappa == first.kappa and plain.tau == first.tau
+
+    monkeypatch.setattr(ss, "KAPPA_COMPOUND_CARS", ("FJ",))
+    fit = ss.fit_physical(
+        tmp_path, laps, kappa_source="centrifuge_stack", compound_by_session=labels
+    )
+    assert fit.kappa_source == "centrifuge_stack" and fit.kappa_c == {}
+    assert {k: w.kappa for k, w in fit.kappa_by_compound.items()} == {
+        k: w.kappa for k, w in read.items()
+    }
+    assert fit.kappa_by_session == {
+        "s_a": read[("FJ", "SOFT")].kappa,
+        "s_b": read[("FJ", "HARD")].kappa,
+    }
+    assert fit.kappa["FJ"] == fit.kappa_within_lap["FJ"].kappa  # the car's, for s_c
+    assert fit.cost_dry < first.cost_dry
+    # a labelled session carries its compound's value in the rain too
+    wet = pd.concat(
+        [laps, _make_stint(tmp_path, "s_w", "fuji", 12, quantise=False, kappa=k_a)],
+        ignore_index=True,
+    )
+    wet.loc[wet["session_id"] == "s_w", "condition"] = "wet"
+    rain = ss.fit_physical(
+        tmp_path,
+        wet,
+        kappa_source="centrifuge_stack",
+        compound_by_session={**labels, "s_w": "SOFT"},
+    )
+    assert sorted(rain.kappa_by_session) == ["s_a", "s_b", "s_w"]
+    assert rain.kappa_by_session["s_w"] == rain.kappa_by_session["s_a"]
+
+
+def test_centrifuge_kappa_from_a_tyres_size() -> None:
+    from motorsports_data_notebook.tire_model.energy_balance import (
+        RIM_WELL_DROP_M,
+        centrifuge_kappa,
+    )
+    from motorsports_data_notebook.tire_model.heat_input import tyre_size
+
+    rear = tyre_size("170/605R13")
+    k = centrifuge_kappa(rear.rim_radius_m, rear.outer_radius_m)
+    # by hand: gas from 0.1651 to 0.2905 m, sensor at 0.1651 m, r_roll 0.2949 m, 320 K
+    by_hand = ((0.1651**2 + 0.2905**2) / 2 - 0.1651**2) / (2 * 287.05 * 320.0 * 0.29494**2)
+    assert k == pytest.approx(by_hand, rel=1e-3) and k == pytest.approx(1.79e-6, rel=0.01)
+    # it goes as 1/T; a sensor further in reads further below the mean
+    assert centrifuge_kappa(rear.rim_radius_m, rear.outer_radius_m, 352.0) == pytest.approx(
+        k * 320.0 / 352.0
+    )
+    well = centrifuge_kappa(
+        rear.rim_radius_m,
+        rear.outer_radius_m,
+        sensor_radius_m=rear.rim_radius_m - RIM_WELL_DROP_M,
+    )
+    assert well > k
+    with pytest.raises(ValueError):
+        centrifuge_kappa(0.3, 0.2)
+
+
+def test_centrifuge_stack_reads_what_the_computed_part_leaves(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Under ``centrifuge_stack`` every tyre has its computed κ_c, the
+    reading is of what is left on top (negative when the tyre reads less
+    than its centrifuge), and the two together are the first option's κ."""
+    from motorsports_data_notebook.tire_model.energy_balance import CENTRIFUGE_T_REF_K
+    from motorsports_data_notebook.tire_model.heat_input import CAR_WHEELS
+
+    monkeypatch.setattr(ss, "WITHIN_LAP_MIN_SEGMENTS", 1)
+    for planted in (8e-6, 5e-7):
+        root = tmp_path / f"k{planted:g}"
+        laps = _kappa_laps(root, planted)
+        first = ss.fit_physical(root, laps, kappa_source="within_lap")
+        stack = ss.fit_physical(root, laps, kappa_source="centrifuge_stack")
+        wheels = CAR_WHEELS["FJ"]
+        assert stack.kappa_c["FJ"]["front"] == pytest.approx(1.685e-6, rel=0.01)
+        assert stack.kappa_c["FJ"]["rear"] == pytest.approx(1.788e-6, rel=0.01)
+        assert wheels.front != wheels.rear
+        k_x = stack.kappa["FJ"]
+        assert stack.kappa_within_lap["FJ"].kappa == k_x
+        # the gas is at 300 to 330 K here, so κ_c is within 7 % of its reference value
+        k_c = 0.5 * (stack.kappa_c["FJ"]["front"] + stack.kappa_c["FJ"]["rear"])
+        assert k_x + k_c == pytest.approx(first.kappa["FJ"], abs=0.07 * k_c + 1e-9)
+        assert (k_x < 0) == (planted < k_c)
+        # the same data, the same τ and K, whichever way κ is put together
+        for key in first.tau:
+            assert stack.tau[key].value == pytest.approx(first.tau[key].value, rel=0.02)
+            assert stack.k[key].value == pytest.approx(first.k[key].value, rel=0.02)
+    assert CENTRIFUGE_T_REF_K == 320.0
+    # a car with no stated wheels has nothing computed: the first option
+    monkeypatch.setattr(ss, "CAR_WHEELS", {})
+    bare = ss.fit_physical(root, laps, kappa_source="centrifuge_stack")
+    assert bare.kappa_c == {} and bare.kappa == first.kappa
+
+
+def test_a_zero_centrifuge_is_no_centrifuge(tmp_path: Path) -> None:
+    import dataclasses
+
+    laps = _kappa_laps(tmp_path, 4e-6)
+    stints = ss.build_stint_series(tmp_path, laps)
+    plain = ss.fit_cells(stints, v_corr=True, kappa={"FJ": 4e-6})
+    for s in stints:
+        s.kappa_c = np.zeros(4)
+    zero = ss.fit_cells(stints, v_corr=True, kappa={"FJ": 4e-6})
+    assert zero.ab == plain.ab and zero.cost_dry == plain.cost_dry
+    # and a computed part in the design is the same reading as that much more κ, at T_ref
+    for s in stints:
+        s.kappa_c = np.full(4, 1e-6)
+    design = ss._Design(stints, [("FJ", "dry")], {}, v_corr=True, fixed_kappa={"FJ": 3e-6})
+    whole = ss._Design(
+        [dataclasses.replace(s, kappa_c=None) for s in stints],
+        [("FJ", "dry")],
+        {},
+        v_corr=True,
+        fixed_kappa={"FJ": 4e-6},
+    )
+    x = np.zeros(len(design.names))
+    assert np.nanmax(np.abs(design.observed(x) - whole.observed(x))) < 0.05  # K: 1/T on 1e-6
