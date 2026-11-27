@@ -191,6 +191,7 @@ def build_warmup_table(
     exclude_session_ids: set[str] | None = None,
     write_artifacts: bool = True,
     heat_frame: str | None = None,
+    kappa_source: str | None = None,
 ) -> dict[str, Any]:
     """Fit the energy-balance model (:func:`statespace.fit_physical`) and
     write both artifacts.
@@ -214,6 +215,13 @@ def build_warmup_table(
         the frame a simulated lap is in; recorded as ``heat_input.frame``
         with what fell back, ``frame_fallbacks``) or ``sensor`` (the sensor
         verdict's series, for comparison).
+    kappa_source
+        Where the speed-pressure constant κ comes from (None:
+        ``statespace.DEFAULT_KAPPA_SOURCE``): ``fit`` (a parameter of the
+        per-second fit) or ``within_lap`` (#417, default off: read from the
+        pressure within a lap, :func:`statespace.within_lap_kappa`, and held
+        in the fit; the model then records it under
+        ``energy_balance.speed_pressure.within_lap``).
 
     Returns the fitted model as a dict (matching the JSON schema) so callers
     can inspect without re-reading the file.
@@ -226,6 +234,7 @@ def build_warmup_table(
             rebuild=rebuild,
             exclude_session_ids=exclude_session_ids,
             write_artifacts=write_artifacts,
+            kappa_source=kappa_source,
         )
 
 
@@ -235,6 +244,7 @@ def _build_warmup_table(
     rebuild: bool = False,
     exclude_session_ids: set[str] | None = None,
     write_artifacts: bool = True,
+    kappa_source: str | None = None,
 ) -> dict[str, Any]:
     """:func:`build_warmup_table` in the heat frame in force."""
     from .heat_frame import SENSOR, current
@@ -280,7 +290,7 @@ def _build_warmup_table(
     # no track constants.
     from .statespace import fit_physical, lap_heat_frame
 
-    pf = fit_physical(root, laps_for_fit)
+    pf = fit_physical(root, laps_for_fit, kappa_source=kappa_source)
     tau_by_car_corner_cond = dict(pf.tau)
     k_by_car_corner_cond = dict(pf.k)
     kappa_by_car = dict(pf.kappa)
@@ -400,6 +410,17 @@ def _build_warmup_table(
         q_corner_lookup=q_corner_lookup,
         outlap_corner_lookup=outlap_corner_lookup,
         raw_car_entries=raw_car_entries,
+        kappa_within_lap={
+            car: {
+                "kappa": w.kappa,
+                "stderr": w.stderr if np.isfinite(w.stderr) else None,
+                "n_segments": w.n_segments,
+                "n_seconds": w.n_seconds,
+                "n_sessions": w.n_sessions,
+                "held": w.held,
+            }
+            for car, w in pf.kappa_within_lap.items()
+        },
     )
 
     if write_artifacts:
@@ -1466,6 +1487,7 @@ def _assemble_model(
     q_corner_lookup: dict[tuple[str, str, str], tuple[dict[str, float], int]] | None = None,
     outlap_corner_lookup: dict[tuple[str, str, str], dict[str, float]] | None = None,
     raw_car_entries: EntryLookups | None = None,
+    kappa_within_lap: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build the in-memory model dict that matches the JSON artifact schema.
 
@@ -1580,6 +1602,13 @@ def _assemble_model(
                 "form": "P_read = P_gas / (1 + kappa * V_ms^2)",
                 "kappa_by_car": {k: float(v) for k, v in (kappa_by_car or {}).items()},
                 "fitted": bool(kappa_by_car),
+                # only when kappa was read within the lap and held in the fit
+                # (statespace.within_lap_kappa, #417); absent otherwise
+                **(
+                    {"source": "within_lap", "within_lap": kappa_within_lap}
+                    if kappa_within_lap
+                    else {}
+                ),
             },
         },
         "rain_thermal": {

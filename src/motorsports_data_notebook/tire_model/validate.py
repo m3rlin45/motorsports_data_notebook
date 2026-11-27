@@ -183,6 +183,7 @@ def _collect_holdout_frame(
     inputs: str = "calculator",
     quiet: bool = False,
     heat_frame: str | None = None,
+    kappa_source: str | None = None,
 ) -> tuple[pd.DataFrame | None, int]:
     """Run the k-fold holdout and return ``(residual rows, n session×fold
     holdouts)``. ``None`` rows means no bucket could be held out."""
@@ -222,6 +223,7 @@ def _collect_holdout_frame(
             inputs=inputs,
             inferred_labels=inferred_labels,
             heat_frame=heat_frame,
+            kappa_source=kappa_source,
         )
         if not fold_df.empty:
             fold_df["fold"] = fold
@@ -436,10 +438,15 @@ LapInputsFn = Callable[..., tuple[float, float, float, float, float]]
 
 
 def _fit_fold(
-    root: Path, holdout_ids: Iterable[str], heat_frame: str | None = None
+    root: Path,
+    holdout_ids: Iterable[str],
+    heat_frame: str | None = None,
+    *,
+    kappa_source: str | None = None,
 ) -> dict[str, Any]:
     """The model fitted without ``holdout_ids``, nothing written, on heat in
-    ``heat_frame`` (:mod:`.heat_frame`; None: the frame in force)."""
+    ``heat_frame`` (:mod:`.heat_frame`; None: the frame in force), with κ
+    from ``kappa_source`` (:func:`~.warmup_table.build_warmup_table`)."""
     from .heat_frame import resolve
 
     return build_warmup_table(
@@ -447,6 +454,7 @@ def _fit_fold(
         exclude_session_ids=set(holdout_ids),
         write_artifacts=False,
         heat_frame=resolve(heat_frame),
+        kappa_source=kappa_source,
     )
 
 
@@ -494,6 +502,7 @@ def _evaluate_fold(
     model: dict[str, Any] | None = None,
     lap_inputs_fn: LapInputsFn | None = None,
     heat_frame: str | None = None,
+    kappa_source: str | None = None,
 ) -> pd.DataFrame:
     """Train a model excluding ``holdout_ids`` and return per-(lap, corner)
     residual rows for the held-out sessions.
@@ -520,11 +529,12 @@ def _evaluate_fold(
     :func:`_calculator_lap_inputs`. ``heat_frame`` is the frame the fold is
     fitted in when ``model`` is not given (:mod:`.heat_frame`); the held-out
     laps are prepared in the frame of the model they are scored with.
+    ``kappa_source`` is where that fit takes κ from (:func:`_fit_fold`).
     """
     if inputs not in INPUT_MODES:
         raise ValueError(f"inputs must be one of {INPUT_MODES}; got {inputs!r}")
     if model is None:
-        model = _fit_fold(root, holdout_ids, heat_frame=heat_frame)
+        model = _fit_fold(root, holdout_ids, heat_frame=heat_frame, kappa_source=kappa_source)
     prep = _prepare_fold_laps(root, holdout_ids, model, inferred_labels=inferred_labels)
     if prep is None:
         return pd.DataFrame()
@@ -940,12 +950,15 @@ def run_holdout_validation(
     n_folds: int = 1,
     inputs: str = "calculator",
     heat_frame: str | None = None,
+    kappa_source: str | None = None,
 ) -> int:
     """Train on all-minus-held-out, predict per-lap T_hot for held-out sessions.
 
     ``inputs``: see :func:`_evaluate_fold`. The default
     scores what the calculator would have told the driver; ``inputs="oracle"``
     scores the thermal model with the lap's real g² and clock.
+    ``kappa_source``: where each fold's fit takes κ from
+    (:func:`~.warmup_table.build_warmup_table`; #417).
 
     With ``n_folds == 1`` (default) this is a single deterministic holdout
     — the legacy behavior. With ``n_folds > 1`` it sweeps disjoint
@@ -963,6 +976,7 @@ def run_holdout_validation(
         n_folds=n_folds,
         inputs=inputs,
         heat_frame=heat_frame,
+        kappa_source=kappa_source,
     )
     if df is None:
         return 1
