@@ -59,6 +59,15 @@ public class CompoundAndPrefillTests : IDisposable
 
     // ---------- The raw cars in the picker (#383) ----------
 
+    // The bundled artifact with its raw-car rows taken out: a pooled-only
+    // artifact, as every one before #383's retrain was.
+    private static TireModel PooledOnly() => new(Model.Dto with
+    {
+        G2TypByTrackRawCarCond = null,
+        LapTimeTypByTrackRawCarCond = null,
+        OutlapTypByTrackRawCarCond = null,
+    });
+
     // The bundled artifact with a KK-SII entry of its own at Tsukuba (dry):
     // the pooled FJ row's heat x 0.8 and lap time + 1 s.
     private static TireModel WithKKSIIEntry()
@@ -85,9 +94,14 @@ public class CompoundAndPrefillTests : IDisposable
     [Fact]
     public void Picker_ListsTheRawCarsInPlaceOfTheirPooledCar_OnlyWithRawCarRows()
     {
-        Assert.Equal(Model.FittedCars, Model.AvailableCars);
-        Assert.Contains("FJ", Model.AvailableCars);
-        Assert.Equal("FJ", Model.SelectableCar("KK-SII"));
+        // the bundled artifact lists the raw cars exactly when it has raw-car rows
+        var hasRaw = (Model.Dto.G2TypByTrackRawCarCond?.Count ?? 0) > 0;
+        Assert.Equal(!hasRaw, Model.AvailableCars.Contains("FJ"));
+
+        var today = PooledOnly();
+        Assert.Equal(today.FittedCars, today.AvailableCars);
+        Assert.Contains("FJ", today.AvailableCars);
+        Assert.Equal("FJ", today.SelectableCar("KK-SII"));
 
         var split = WithKKSIIEntry();
         Assert.Equal(new[] { "Inferno 86", "KK-F", "KK-F-V2", "KK-SII" }, split.AvailableCars);
@@ -140,9 +154,9 @@ public class CompoundAndPrefillTests : IDisposable
         Assert.True(own.PredictedHotTempC < pooled.PredictedHotTempC, "its own, cooler entry");
         Assert.Equal(pooled.KKelvinPerG2, own.KKelvinPerG2);
 
-        // with today's artifact the same saved KK-SII is the FJ, as before
+        // with a pooled-only artifact the same saved KK-SII is the FJ, as before
         SaveSettings("KK-SII");
-        Assert.Equal("FJ", new MainViewModel(Model).SelectedCar);
+        Assert.Equal("FJ", new MainViewModel(PooledOnly()).SelectedCar);
     }
 
     [Fact]
