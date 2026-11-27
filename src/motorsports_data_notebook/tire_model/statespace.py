@@ -81,6 +81,14 @@ COOL_EXP_BOUNDS = (0.5, 2.0)
 COOL_DT_REF_K = 20.0
 W_ROAD_BOUNDS = (0.0, 1.0)
 KAPPA_BOUNDS = (0.0, 5e-5)  # per (m/s)²: pressure observable P_obs = P_gas / (1 + κ·V²)
+#: Where :func:`fit_physical` takes κ from. ``"fit"``: a parameter of the
+#: per-second fit (production). ``"within_lap"``: read from the pressure
+#: within a lap before the fit and held in it (:func:`within_lap_kappa`, #417).
+KAPPA_SOURCES = ("fit", "within_lap")
+DEFAULT_KAPPA_SOURCE = "fit"
+WITHIN_LAP_MIN_SECONDS = 40  # a lap shorter than this is not read
+WITHIN_LAP_TREND_ORDER = 2  # polynomial trend taken out of each (stint, tyre, lap)
+WITHIN_LAP_MIN_SEGMENTS = 200  # (lap, tyre) segments a car needs for its κ to be held
 COOL_BETA_BOUNDS = (0.0, 20.0)
 
 
@@ -1277,6 +1285,150 @@ def lap_heat_frame(
     return wide.reset_index()
 
 
+@dataclass(frozen=True)
+class WithinLapKappa:
+    """A car's κ as :func:`within_lap_kappa` reads it: the value, its
+    standard error (a jackknife over sessions; NaN with one session) and
+    what it was read from."""
+
+    kappa: float
+    stderr: float
+    n_segments: int  # (stint, tyre, lap) segments
+    n_seconds: int
+    n_sessions: int
+
+    @property
+    def held(self) -> bool:
+        """Whether there is enough behind the value for the fit to hold it."""
+        return self.n_segments >= WITHIN_LAP_MIN_SEGMENTS
+
+
+def _within_lap_normal_equations(s: StintSeries) -> tuple[np.ndarray, np.ndarray, int, int] | None:
+    """One stint's contribution to :func:`within_lap_kappa`: ``(XᵀX, Xᵀy,
+    segments, seconds)`` of the detrended regression, None when no lap of
+    it can be read."""
+    n = len(s.g2)
+    if n < WITHIN_LAP_MIN_SECONDS:
+        return None
+    lap_idx = np.cumsum(s.lap_ends) - s.lap_ends
+    v2 = s.v**2
+    # the TPMS value is a held 1.25 Hz packet: on the 1 s clock it is half a
+    # second old on average
+    v2_lag = 0.5 * (v2 + np.concatenate([[np.nan], v2[:-1]]))
+    zeros = np.zeros(n)
+    lat = (s.lat_pos if s.lat_pos is not None else zeros) - (
+        s.lat_neg if s.lat_neg is not None else zeros
+    )
+    lng = (s.long_pos if s.long_pos is not None else zeros) - (
+        s.long_neg if s.long_neg is not None else zeros
+    )
+    valid = np.ones(n, dtype=bool) if s.valid is None else s.valid
+    xtx, xty = np.zeros((4, 4)), np.zeros(4)
+    n_seg = n_sec = 0
+    starts = np.flatnonzero(np.diff(lap_idx, prepend=-1))
+    ends = np.append(starts[1:], n)
+    for lo, hi in zip(starts, ends):
+        m = int(hi - lo)
+        if m < WITHIN_LAP_MIN_SECONDS or not valid[lo:hi].all():
+            continue
+        if not np.isfinite(v2_lag[lo:hi]).all():
+            continue
+        basis = np.vander(np.linspace(-1.0, 1.0, m), WITHIN_LAP_TREND_ORDER + 1)
+        trend = basis @ np.linalg.pinv(basis)
+        q = s.g2[lo:hi]
+        ripple = np.cumsum(q - q.mean())
+        for j in range(4):
+            if s.anchor_idx[j] < 0:
+                continue
+            y = np.log(s.obs[lo:hi, j] + T_ZERO_C_TO_K)
+            if not np.isfinite(y).all():
+                continue
+            side = 1.0 if j in (0, 2) else -1.0  # the left tyres are the outer ones in a right turn
+            axle = -1.0 if j < 2 else 1.0  # braking loads the fronts, drive the rears
+            cols = np.column_stack([y, v2_lag[lo:hi], ripple, side * lat[lo:hi], axle * lng[lo:hi]])
+            cols = cols - trend @ cols
+            xtx += cols[:, 1:].T @ cols[:, 1:]
+            xty += cols[:, 1:].T @ cols[:, 0]
+            n_seg += 1
+            n_sec += m
+    if n_seg == 0:
+        return None
+    return xtx, xty, n_seg, n_sec
+
+
+def _within_lap_solve(xtx: np.ndarray, xty: np.ndarray) -> float:
+    """κ from the normal equations: minus the coefficient of v². A
+    regressor that is zero throughout (no accelerations on the stints) gets
+    a coefficient of zero."""
+    scale = np.sqrt(np.diag(xtx))
+    scale = np.where(scale > 0, scale, 1.0)
+    beta = np.linalg.lstsq(xtx / np.outer(scale, scale), xty / scale, rcond=None)[0] / scale
+    return float(-beta[0])
+
+
+def within_lap_kappa(stints: list[StintSeries]) -> dict[str, WithinLapKappa]:
+    """The speed-pressure constant κ per car, read from the pressure within
+    a lap and from nothing else (#417).
+
+    Inside the per-second fit κ acts through ``v² − v_anchor²``, which has a
+    part within the lap (``v²`` less its lap mean) and a level (the lap mean
+    less the anchor). The level is where every stint's offset sits, tens of
+    mbar against the few a formula car's κ is worth, so on that car the
+    fitted κ follows whichever circuits are over- or under-predicted and
+    not the reading's dependence on speed. Within a lap the gas hardly
+    changes, so the pressure against v² there is κ itself.
+
+    Per (dry stint, tyre, lap) with at least :data:`WITHIN_LAP_MIN_SECONDS`
+    seconds, every one scored and none in a hole of the heat input, on the
+    fit's own 1 s rolling clock: ``y = ln(T_obs + 273.15)`` (``ln P_abs`` up
+    to a constant of the stint, so the anchor does not enter) against
+
+    - ``v²`` half a second earlier (the held TPMS packet's mean age),
+    - the single node's ripple ``cumsum(q − lap mean q)`` from the
+      corner-blind heat rate,
+    - the tyre's lateral load (signed lateral g, positive on the outer
+      tyre) and longitudinal load (positive on the fronts under braking, on
+      the rears under drive): a loaded tyre's cavity is smaller,
+
+    after a polynomial trend of order :data:`WITHIN_LAP_TREND_ORDER` is taken
+    out of ``y`` and of every regressor per segment. No regressor holds a
+    fitted parameter. One least-squares fit per car over all tyres and laps;
+    κ is minus the coefficient of ``v²``, clipped to :data:`KAPPA_BOUNDS`.
+    The standard error is a jackknife over sessions.
+    """
+    per_car: dict[str, dict[str, list[Any]]] = {}
+    for s in stints:
+        if s.condition != "dry":
+            continue
+        got = _within_lap_normal_equations(s)
+        if got is None:
+            continue
+        acc = per_car.setdefault(s.car, {}).setdefault(
+            s.session_id, [np.zeros((4, 4)), np.zeros(4), 0, 0]
+        )
+        for i in range(4):
+            acc[i] = acc[i] + got[i]
+    out: dict[str, WithinLapKappa] = {}
+    for car, by_session in per_car.items():
+        parts = list(by_session.values())
+        xtx = np.sum([p[0] for p in parts], axis=0)
+        xty = np.sum([p[1] for p in parts], axis=0)
+        kappa = _within_lap_solve(xtx, xty)
+        stderr = float("nan")
+        g = len(parts)
+        if g > 1:
+            jack = np.array([_within_lap_solve(xtx - p[0], xty - p[1]) for p in parts])
+            stderr = float(np.sqrt((g - 1) / g * np.sum((jack - jack.mean()) ** 2)))
+        out[car] = WithinLapKappa(
+            kappa=float(np.clip(kappa, KAPPA_BOUNDS[0], KAPPA_BOUNDS[1])),
+            stderr=stderr,
+            n_segments=int(sum(p[2] for p in parts)),
+            n_seconds=int(sum(p[3] for p in parts)),
+            n_sessions=g,
+        )
+    return out
+
+
 @dataclass
 class PhysicalFit:
     """Result of :func:`fit_physical`: the schema-v5 production model."""
@@ -1289,6 +1441,9 @@ class PhysicalFit:
     facts: dict[str, CarFacts]
     lap_q: pd.DataFrame  # per (session, stint, lap_num): q_lap_{corner}
     cost_dry: float
+    kappa_source: str = DEFAULT_KAPPA_SOURCE
+    # what within_lap_kappa read per car, when it is the source (#417)
+    kappa_within_lap: dict[str, WithinLapKappa] = field(default_factory=dict)
 
 
 def lap_heat_share(stints: list[StintSeries], share: dict[str, ShareParams]) -> pd.DataFrame:
@@ -1333,6 +1488,7 @@ def fit_physical(
     laps_for_fit: pd.DataFrame,
     *,
     facts: dict[str, CarFacts] | None = None,
+    kappa_source: str | None = None,
 ) -> PhysicalFit:
     """The production fit (schema v5): ``q_i = V·|F_i|`` with the corner's
     force from bounded shares of the car's accelerations (one lateral
@@ -1342,9 +1498,18 @@ def fit_physical(
     2026-10-09 showed fitted efficiencies absorb circuit-specific braking
     and predict worse on an unseen circuit), one gain per (car, condition),
     cooling per (car, axle, condition), the speed-pressure constant κ per
-    car, and **no track constants**."""
+    car, and **no track constants**.
+
+    ``kappa_source`` (None: :data:`DEFAULT_KAPPA_SOURCE`): ``"fit"`` fits κ
+    with everything else; ``"within_lap"`` (#417, default off) reads it from
+    the pressure within a lap first (:func:`within_lap_kappa`) and holds it
+    in the fit for every car with :data:`WITHIN_LAP_MIN_SEGMENTS` segments
+    behind it, the others keeping a fitted κ."""
     from .warmup_table import FitParam
 
+    kappa_source = DEFAULT_KAPPA_SOURCE if kappa_source is None else kappa_source
+    if kappa_source not in KAPPA_SOURCES:
+        raise ValueError(f"kappa_source must be one of {KAPPA_SOURCES}; got {kappa_source!r}")
     facts_all = dict(CAR_FACTS)
     facts_all.update(facts or {})
     stints = build_stint_series(root, laps_for_fit, PHYSICAL_HEAT_INPUT)
@@ -1363,9 +1528,16 @@ def fit_physical(
         }
         for car, f in used.items()
     }
+    within: dict[str, WithinLapKappa] = {}
+    kappa_held: dict[str, float] | None = None
+    if kappa_source == "within_lap":
+        within = within_lap_kappa(stints)
+        kappa_held = {car: w.kappa for car, w in within.items() if w.held}
+        logger.info("kappa read within the lap: %s", within)
     cf = fit_cells(
         stints,
         v_corr=True,
+        kappa=kappa_held,
         share_a=True,
         share_b="axle",
         share_model=True,
@@ -1399,6 +1571,8 @@ def fit_physical(
         facts=used,
         lap_q=lap_heat_share(stints, cf.share),
         cost_dry=cf.cost_dry,
+        kappa_source=kappa_source,
+        kappa_within_lap=within,
     )
 
 
