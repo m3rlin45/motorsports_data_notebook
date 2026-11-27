@@ -357,6 +357,76 @@ def test_rolling_clock_and_flying_lookups_exclude_outlap_wait() -> None:
     assert out[("t", "FJ", "dry")] == (90.0, pytest.approx(0.3), 1)
 
 
+def _cleaned_laps(rows: list[tuple[str, int, int, bool, float]]) -> pd.DataFrame:
+    """A cleaned laps frame, unusable laps still in it:
+    ``(session_id, stint_id, lap_num, tire_usable, moving_s)`` per lap."""
+    return pd.DataFrame(
+        [
+            {
+                "session_id": sid,
+                "stint_id": stint,
+                "lap_num": lap,
+                "tire_usable": usable,
+                "is_outlap": lap == 0,
+                "on_track_s": moving + (5.0 if lap == 0 else 0.0),
+                "moving_s": moving,
+            }
+            for sid, stint, lap, usable, moving in rows
+        ]
+    ).astype({"moving_s": "float32", "on_track_s": "float32"})
+
+
+def test_a_lap_dropped_mid_stint_stays_on_the_stint_clock() -> None:
+    """A lap that cleaning drops in the middle of a stint was driven: the
+    laps after it keep their count and its rolling time (#270). Laps
+    dropped before the stint's first usable lap are before its anchor and
+    are not on the clock."""
+    laps = _cleaned_laps(
+        [
+            ("s", 1, 0, True, 90.0),
+            ("s", 1, 1, True, 60.0),
+            ("s", 1, 2, False, 150.0),  # too slow
+            ("s", 1, 3, True, 61.0),
+            ("s", 1, 4, False, 80.0),  # the in-lap
+            ("s", 2, 5, False, 20.0),  # an out-lap too short to use
+            ("s", 2, 6, True, 62.0),
+            ("s", 2, 7, True, 60.0),
+        ]
+    )
+    clocked = wt._attach_stint_clock(laps)
+    assert clocked.index.equals(laps.index)  # rows as they were
+    assert clocked["lap_num"].tolist() == laps["lap_num"].tolist()
+    lap = clocked[wt.STINT_CLOCK_LAP_COL].tolist()
+    roll = clocked[wt.STINT_CLOCK_ROLL_COL].tolist()
+    assert lap[:5] == [0, 1, 2, 3, 4]
+    assert roll[:5] == [90.0, 150.0, 300.0, 361.0, 441.0]
+    assert np.isnan(lap[5]) and np.isnan(roll[5])
+    assert lap[6:] == [0, 1] and roll[6:] == [62.0, 122.0]
+    # as the model loads them: the unusable laps go, the clock stays
+    usable = wt._compute_stint_clock(clocked[clocked["tire_usable"]])
+    assert usable["lap_num"].tolist() == [0, 1, 3, 6, 7]
+    assert usable["lap_within_stint"].tolist() == [0, 1, 3, 0, 1]
+    assert usable["t_cum_s"].tolist() == [90.0, 150.0, 361.0, 62.0, 122.0]
+
+
+def test_a_stint_without_a_dropped_lap_keeps_its_clock() -> None:
+    """The clock taken before the unusable laps are dropped is, for a stint
+    that loses none in its middle, the count and the sum over its own rows:
+    the same numbers in the same width."""
+    rng = np.random.default_rng(3)
+    rows = [("a", 1, 0, False, 30.0)]  # before the first usable lap
+    rows += [("a", 1, n, True, float(rng.uniform(58.0, 64.0))) for n in range(1, 9)]
+    rows += [("a", 1, 9, False, 75.0)]  # the in-lap, after the last usable lap
+    rows += [("b", 3, n, True, float(rng.uniform(100.0, 110.0))) for n in range(0, 6)]
+    laps = _cleaned_laps(rows)
+    usable = laps[laps["tire_usable"]]
+    before = wt._compute_stint_clock(usable)
+    after = wt._compute_stint_clock(wt._attach_stint_clock(laps)[laps["tire_usable"]])
+    assert after["lap_within_stint"].tolist() == before["lap_within_stint"].tolist()
+    assert after["t_cum_s"].dtype == before["t_cum_s"].dtype
+    assert after["t_cum_s"].tolist() == before["t_cum_s"].tolist()
+
+
 def test_delta_t_targets_the_pressure_implied_gas_temperature() -> None:
     """The model's observable is the gas temperature implied by pressure
     from the pit-exit (T, P); the TPMS end temperature is only a fallback

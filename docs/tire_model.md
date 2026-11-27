@@ -1233,6 +1233,88 @@ time: `t_at_lap_N = N · lap_time_typ_s[track, car]`. Users can override with
 `--lap-time-s` (e.g. for race-pace estimates that differ from session
 median).
 
+### 2.3a What is on the stint clock: dropped laps, stops, cool-down laps (#270, #258; measured 2026-11-27)
+
+The model has two clocks, and both count rolling time only (above 5 km/h):
+
+- the per-second fit's (`statespace._bin_stint`): every rolling second from
+  a stint's first fitted lap to its last, the laps cleaning dropped in
+  between among them;
+- the lap table's (`warmup_table._compute_stint_clock`: `lap_within_stint`
+  and `t_cum_s`), read by the anchors, the holdout (the calculator's N, the
+  oracle's elapsed time), the compound EM (its Δt) and the corner defaults.
+
+Three things can happen inside a stint that a count of usable laps does not
+see. They were measured on v1.4.0 (191 stints in 192 sessions, 1,789 usable
+flying laps; the standing holdout's 5,651 rows, 36.13 mbar):
+
+| event inside a stint | stints | laps | holdout rows after it |
+|---|---|---|---|
+| a lap cleaning dropped (25 of 27 `lap_too_slow`, 1.5–6.0 × the stint's best) | 13 | 27 | 584 |
+| a cool-down lap (usable, 1.12–1.40 × the stint's best) | 27 | 34 | 828 at or after |
+| a stop of 30 s or more (4 are the gap between merged recordings, 2 a standstill inside a dropped lap; 42–227 s) | 6 | | 104 |
+
+In none of the 14 stints with a dropped lap or a stop does the amount of gas
+(absolute pressure over TPMS kelvin) step by 2 % on any tyre: nobody let
+pressure out. Only 6 of the 27 dropped laps hold a stop of 5 s or more; the
+rest are slow rolling laps, twice five or six in a row.
+
+**A dropped lap stays on the lap table's clock (#270).** Until 2026-11-27
+the lap table's clock was counted and summed over the usable rows, so a lap
+dropped mid-stint was on the per-second clock and not on this one: the laps
+after it were numbered and timed as if it had not been driven. The clock is
+now taken before the unusable laps are dropped
+(`warmup_table._attach_stint_clock`, called by `_load_filtered_laps`): from
+the stint's first usable lap on, every lap counts and its rolling time is
+summed; the dropped lap still has no row and is not scored, and laps
+dropped before the stint's first usable one are before its anchor and stay
+off the clock. `validate._laps_from_anchor` counts on the same index, so a
+first-lap anchor's N has the dropped lap too. The rows are the same rows:
+only `lap_within_stint`, `t_cum_s` and what is read from them move, on the
+13 stints.
+
+What it does to the holdout, inputs only (the fix on v1.4.0's 15 fold
+models, no refit), hot pressure in mbar, paired with date-clustered SE:
+
+| rows | n | MAE before | after | paired |
+|---|---|---|---|---|
+| stints without a dropped lap | 4,915 | 36.08 | 36.08 | bit for bit |
+| before the drop, in the stints with one | 152 | 35.15 | 35.15 | bit for bit |
+| after a dropped lap | 584 | 36.87 | 34.12 | −2.75 ± 1.65 |
+| … first drop at lap 4 or earlier | 508 | 37.02 | 33.65 | −3.36 ± 1.71 |
+| … first drop later | 76 | 35.89 | 37.23 | +1.34 ± 0.74 |
+| … Inferno 86 dry (3 stints on 2 days) | 380 | 39.83 | 34.84 | −4.99 ± 0.28 |
+| … FJ dry (6 stints on 5 days) | 176 | 30.19 | 33.18 | +2.99 ± 3.23 |
+| pooled | 5,651 | 36.13 | 35.85 | −0.28 ± 0.28 |
+
+It is a warm-up effect: N was short by one to six laps, which matters while
+the tyre is still rising and hardly after. The FJ's loss is one stint with
+six slow laps in a row (KK-SII, 2026-05-24: 15.4 → 35.4 mbar): counted as
+six laps at pace they read 35 mbar high. A slow lap is a lap driven, not a
+lap at pace, and the calculator has no input for it; the count is right and
+the heat it stands for is not. The oracle's elapsed time gains more (after a
+drop 43.30 → 38.38 mbar, bias −17.2 → −0.2).
+
+Refitted (15 folds, each fold's model fitted on the new clock): pooled
+36.13 → 35.78 mbar (paired −0.35 ± 0.29; per session −0.11 ± 0.18), rows
+after a dropped lap 36.87 → 34.16 (−2.71 ± 1.63), stints without one 36.08
+→ 36.00 (−0.08 ± 0.10); FJ 31.14 → 31.14, Inferno 86 43.19 → 42.34
+(−0.84 ± 0.61); dry −0.35 ± 0.35, damp −0.04 ± 0.07, wet −0.44 ± 0.44. The
+refit itself is worth −0.07 ± 0.09 of that: the per-second fit never read
+this clock, so τ, K, κ, the shares and every entry table of a full-data fit
+are the same to the last digit. What a retrain moves is what the compound
+EM and the corner defaults read from the lap table: the compound K (dry: FJ
+DRY −0.4 to −0.8 %, Inferno 86 A050 −1.6 to −1.8 %, A052 +0.3 to +0.5 %,
+RE-71RS −0.0 to −0.3 %; over every condition −1.8 to +0.5 %) and the
+prefilled corner defaults (up to 0.24 °C and 6 mbar, three to five more
+laps behind each). On the parity fixture's
+24 cases the recommended cold pressure moves only where a compound is
+named: +4.3 mbar at most (Sodegaura, Inferno 86, A050), −1.2 (A052), 0.02
+(the FJ's WET); every other case is unchanged. Neither out-of-sample Fuji
+day (2026-11-25, 2026-11-27) has a lap dropped mid-stint, so on the
+shipped artifact both score as before (11-27 re-scored: 340 rows
+identical); after a retrain they move only through the FJ's DRY compound K.
+
 ### 2.4 Gay-Lussac inversion
 
 Given the predicted hot temperature, invert Gay-Lussac's Law at constant
@@ -6934,7 +7016,9 @@ removes.
   dry / damp / wet sessions are held out.
 - **Lap filtering.** The first full lap of each stint
   (`lap_within_stint == 0`) is not scored, so numbers stay comparable with
-  the v0 reports; the stint's first finite TPMS reading is the initial
+  the v0 reports; a lap that cleaning dropped mid-stint is not scored
+  either but stays on the stint clock, so the laps after it keep their
+  count and their rolling time (§2.3a, #270); the stint's first finite TPMS reading is the initial
   condition for every scored lap — the same information a driver supplies
   as "Current °C" at roll-out. Laps at or before a corner's anchor are
   skipped, and so is a first-lap anchor's own lap: a lap whose middle on

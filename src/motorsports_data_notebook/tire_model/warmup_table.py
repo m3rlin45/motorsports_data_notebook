@@ -446,6 +446,11 @@ def _load_filtered_laps(root: Path) -> pd.DataFrame:
     ``tire_usable`` here. Car labels are alias-pooled (see CAR_FIT_ALIASES)
     so every consumer — the fit, held-out evaluation, sensor audit — sees
     the pooled car names.
+
+    The stint clock is taken before the unusable laps are dropped
+    (:func:`_attach_stint_clock`, #270): a lap that cleaning drops in the
+    middle of a stint was still driven, so the laps after it keep their
+    count and their rolling time.
     """
     laps_files = sorted((laps_dir(root)).glob("*.parquet"))
     sessions_files = sorted((sessions_dir(root)).glob("*.parquet"))
@@ -459,7 +464,7 @@ def _load_filtered_laps(root: Path) -> pd.DataFrame:
     sessions = pa.concat_tables(
         [pq.read_table(f) for f in sessions_files], promote_options="default"
     ).to_pandas()
-    laps = clean_laps(root, laps)
+    laps = _attach_stint_clock(clean_laps(root, laps))
 
     sessions_keep = sessions[(sessions["status"] == "ok") & sessions["has_tpms"]]
     cols_from_sessions = ["session_id", "track_canonical", "car", "session_start_utc", "date"]
@@ -597,11 +602,62 @@ def _rolling_time_s(df: pd.DataFrame) -> pd.Series:
     return df["on_track_s"]
 
 
+#: The stint clock of a lap as :func:`_attach_stint_clock` takes it from the
+#: cleaned laps, before the unusable ones are dropped: the lap's index in
+#: its stint and the rolling time at its end.
+STINT_CLOCK_LAP_COL = "stint_clock_lap"
+STINT_CLOCK_ROLL_COL = "stint_clock_s"
+
+
+def _attach_stint_clock(laps: pd.DataFrame) -> pd.DataFrame:
+    """The stint clock over every driven lap (#270), on a cleaned laps frame
+    that still holds its unusable laps (``tire_usable`` false).
+
+    Adds :data:`STINT_CLOCK_LAP_COL` and :data:`STINT_CLOCK_ROLL_COL`: per
+    ``(session_id, stint_id)`` the count of laps and the running sum of
+    rolling time (:func:`_rolling_time_s`) from the stint's first usable
+    lap on, over usable and unusable laps alike. A lap that cleaning drops
+    in the middle of a stint (too slow, mostly) was driven with the tyres
+    on the car: the laps after it are numbered and timed with it, as the
+    per-second fit's clock already is (``statespace._bin_stint`` spans
+    every lap between a stint's first and last fitted one). Laps before
+    the stint's first usable one are before its anchor and are not on the
+    clock (NaN); a stint without a dropped lap gets the clock it had. Rows
+    and their order are left as they are.
+    """
+    df = laps.copy()
+    df[STINT_CLOCK_LAP_COL] = np.nan
+    # in the rolling time's own width, so that the sum is the one a stint
+    # without a dropped lap always had
+    df[STINT_CLOCK_ROLL_COL] = pd.Series(np.nan, index=df.index, dtype=_rolling_time_s(df).dtype)
+    if df.empty or "tire_usable" not in df.columns:
+        return df
+    keys = ["session_id", "stint_id"]
+    usable = df["tire_usable"].fillna(False).astype(bool)
+    first = df.loc[usable].groupby(keys)["lap_num"].min().rename("_first_usable")
+    on = df.join(first, on=keys)
+    on = on[on["lap_num"] >= on["_first_usable"]].sort_values(keys + ["lap_num"])
+    stint = [on["session_id"], on["stint_id"]]
+    df.loc[on.index, STINT_CLOCK_LAP_COL] = on.groupby(keys, sort=False).cumcount().astype(float)
+    df.loc[on.index, STINT_CLOCK_ROLL_COL] = _rolling_time_s(on).groupby(stint, sort=False).cumsum()
+    return df
+
+
 def _compute_stint_clock(laps: pd.DataFrame) -> pd.DataFrame:
-    """Add ``lap_within_stint`` (cumcount within (session_id, stint_id); the
-    out-lap, lap 0, is index 0 when present) and ``t_cum_s`` (rolling time
-    cumsum within the stint, at the end of each lap)."""
+    """Add ``lap_within_stint`` (the lap's index within (session_id,
+    stint_id); the out-lap, lap 0, is index 0 when present) and ``t_cum_s``
+    (rolling time summed within the stint, at the end of each lap).
+
+    A frame from :func:`_load_filtered_laps` carries the clock taken before
+    the unusable laps were dropped (:func:`_attach_stint_clock`), and that
+    is the clock: a lap dropped mid-stint leaves a gap in
+    ``lap_within_stint`` and its rolling time in ``t_cum_s`` (#270). Any
+    other frame (synthetic laps) is counted and summed over its own rows."""
     df = laps.sort_values(["session_id", "stint_id", "lap_num"]).copy()
+    if STINT_CLOCK_LAP_COL in df.columns and STINT_CLOCK_ROLL_COL in df.columns:
+        df["lap_within_stint"] = df[STINT_CLOCK_LAP_COL].astype(int)
+        df["t_cum_s"] = df[STINT_CLOCK_ROLL_COL]
+        return df.reset_index(drop=True)
     df["_roll_s"] = _rolling_time_s(df)
     grouped = df.groupby(["session_id", "stint_id"], sort=False)
     df["lap_within_stint"] = grouped.cumcount()
