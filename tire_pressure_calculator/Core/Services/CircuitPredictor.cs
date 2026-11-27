@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using TirePressureCalculator.Services.Modeling;
 
 namespace TirePressureCalculator.Services;
@@ -116,6 +117,16 @@ public sealed class CircuitPredictor
                 outlapSource = (outlapSource ?? "none") + "+override";
             }
         }
+        // Where the entry rows read come from: a simulated one carries GSI's
+        // attribution (mirrors predict.py).
+        var heatProvenance = TireModel.RowProvenance(_model.HeatRows(track, entryCar, cond).Rows);
+        var lapTimeProvenance = TireModel.RowProvenance(_model.LapTimeRows(track, entryCar, cond).Rows);
+        var outRows = includeOutlap ? _model.OutlapRows(track, entryCar, cond).Rows : new List<OutlapEntryDto>();
+        string? outlapProvenance = outRows.Count > 0 ? TireModel.RowProvenance(outRows) : null;
+        bool usesSimulation = heatProvenance == TireModel.Sim || lapTimeProvenance == TireModel.Sim
+            || outlapProvenance == TireModel.Sim;
+        var paceStatus = _model.PaceStatus(track, entryCar, cond, lapTimeForClockS);
+
         double warmupFrac = tau.ValueSeconds > 0
             ? 1.0 - Math.Exp(-tAtLapNs / tau.ValueSeconds)
             : 0.0;
@@ -162,7 +173,12 @@ public sealed class CircuitPredictor
             OutlapTimeS: outlapS,
             OutlapG2: outlapG2,
             OutlapSource: outlapSource,
-            TAfterOutlapC: tAfterOutlapC);
+            TAfterOutlapC: tAfterOutlapC,
+            HeatProvenance: heatProvenance,
+            LapTimeProvenance: lapTimeProvenance,
+            OutlapProvenance: outlapProvenance,
+            UsesSimulation: usesSimulation,
+            PaceStatus: paceStatus);
     }
 }
 
@@ -192,4 +208,13 @@ public sealed record CornerPrediction(
     double OutlapTimeS = 0.0,
     double OutlapG2 = 0.0,
     string? OutlapSource = null,
-    double? TAfterOutlapC = null);
+    double? TAfterOutlapC = null,
+    // Provenance of the entry rows read: "sim" | "logged" (out-lap: null when
+    // none was read); UsesSimulation shows GSI's attribution; PaceStatus is a
+    // simulated curve's status at the lap time ("ok", "outside_support",
+    // "no_solution"), else null.
+    string HeatProvenance = TireModel.Logged,
+    string LapTimeProvenance = TireModel.Logged,
+    string? OutlapProvenance = null,
+    bool UsesSimulation = false,
+    string? PaceStatus = null);
