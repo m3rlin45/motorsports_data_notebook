@@ -108,9 +108,17 @@ is a handful of its slowest dry sessions.
 `just tire-lapsim check-pressure-holdout --split KK-F KK-F-V2` → `FHS_pressure_holdout_split.md`
 `just tire-lapsim compare-pressure-holdouts --a "" --b __split` → `FHC_pressure_holdout_compare.md`
 
-`--split` fits the raw cars named as a pooled car of their own (named
-after the first) on the same folds; it changes the pooling for that
-process only and writes nothing. `compare-pressure-holdouts` then sets
+`--split` fits the raw cars named as a pooled car of their own on the same
+folds; it changes the pooling for that process only and writes nothing.
+Two things keep the comparison one of pooling alone (#420). The new car
+is named after all its raw cars (`KK-F+KK-F-V2`), so each of them is
+still "pooled under another name" and keeps its own logged entries
+(#383); named after the first, the raw KK-F lost its entries to the
+group's. And the compound of an unlabelled session, which stands in for
+what a driver selects, is the shipped pooling's in both runs (the two
+compound EMs differ on the KK-F's damp sessions). A split car has no row
+in `hot_pressure_targets.yaml` (keyed by the pooled name), which the
+holdout does not read. `compare-pressure-holdouts` then sets
 two saved runs against each other row for row: each arm's MAE and bias in
 both, per raw car, per raw car and condition, and the change session by
 session. The saved rows are

@@ -637,10 +637,28 @@ class TestSplitPooling:
         before, facts = dict(warmup_table.CAR_FIT_ALIASES), dict(heat_input.CAR_FACTS)
         try:
             got = pg.split_pooling(("KK-F", "KK-F-V2"))
-            assert got == {"KK-F-V2": "KK-F", "KK-SII": "FJ"}
+            # named after both: each raw car is still "pooled under another name"
+            # and keeps its own logged entries (#383, #420)
+            group = "KK-F+KK-F-V2"
+            assert got == {"KK-F": group, "KK-F-V2": group, "KK-SII": "FJ"}
             assert warmup_table.CAR_FIT_ALIASES == got  # the one dict every module reads
-            assert heat_input.CAR_FACTS["KK-F"] == facts["FJ"]  # the facts of the car it leaves
+            assert heat_input.CAR_FACTS[group] == facts["FJ"]  # the facts of the car it leaves
             assert pg.split_pooling(()) == got  # nothing asked: the pooling in force
+            assert pg.split_pooling(("KK-F", "KK-F-V2")) == got  # asked again: the same
+        finally:
+            warmup_table.CAR_FIT_ALIASES.clear()
+            warmup_table.CAR_FIT_ALIASES.update(before)
+            heat_input.CAR_FACTS.clear()
+            heat_input.CAR_FACTS.update(facts)
+
+    def test_one_car_split_out_alone_keeps_its_name(self):
+        from motorsports_data_notebook.tire_model import heat_input, warmup_table
+
+        before, facts = dict(warmup_table.CAR_FIT_ALIASES), dict(heat_input.CAR_FACTS)
+        try:
+            got = pg.split_pooling(("KK-SII",))
+            assert got == {"KK-F": "FJ", "KK-F-V2": "FJ"}
+            assert heat_input.CAR_FACTS["KK-SII"] == facts["FJ"]
         finally:
             warmup_table.CAR_FIT_ALIASES.clear()
             warmup_table.CAR_FIT_ALIASES.update(before)

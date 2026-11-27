@@ -133,8 +133,8 @@ def main(argv: list[str] | None = None) -> int:
         nargs="+",
         default=[],
         metavar="CAR",
-        help="An experiment: fit these raw cars as a pooled car of their own, named after "
-        "the first (e.g. --split KK-F KK-F-V2), on the same folds.",
+        help="An experiment: fit these raw cars as a pooled car of their own (e.g. --split "
+        "KK-F KK-F-V2, fitted as 'KK-F+KK-F-V2'), on the same folds and compound labels.",
     )
     p_holdout.add_argument(
         "--fastest",

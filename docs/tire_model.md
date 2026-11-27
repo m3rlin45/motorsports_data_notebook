@@ -1809,7 +1809,7 @@ then the KK-SII's seed reached the KK-F and the KK-F-V2 only through
 deliberately not seeded"), ``infer-compounds`` never applied (its seeds
 were not aliased, so no FJ session was seeded there) and ``--split KK-F
 KK-F-V2`` silently dropped for the split cars (that experiment's KK-F ran
-with no DRY/WET seed). Every one of the 20 seeded KK-F-family sessions (29
+with no DRY/WET seed; rerun in §2.12, #420). Every one of the 20 seeded KK-F-family sessions (29
 with 2026-11-25's) has the seed its pace supports (dry at 0.98–1.03 × the
 car's dry pace, wet at 1.09–1.12); the session the comment worried about (a0381, slicks on a track the wetness model calls wet) carries a
 notes label, and a written label beats a seed.
@@ -6318,40 +6318,153 @@ scores a little further from the TPMS.
 *The KK-F fitted apart from the KK-SII* (the owner, 2026-11-25: "let's
 split out the KK-F and see if it gets better"; `check-pressure-holdout
 --split KK-F KK-F-V2`, `pressure_gate.split_pooling`, an experiment's
-switch that writes nothing). The same folds and rows; the KK-F and the
-KK-F-V2 are one pooled car with its own K, τ, κ, shares and entries, and
-the "FJ" that is left is the KK-SII alone. Hot-pressure MAE in bar,
-pooled fit and then split:
+switch that writes nothing). **Rerun on v1.4.0 on 2026-11-27 (#420)**:
+tyres'-frame heat, the stale-packet mask, raw-car entries (#383), seeds
+per raw car (#393), data through 2026-11-25. The gate, the table's shape
+and the confounds were written before any fold was fitted.
 
-| | rows | current calculator | simulation, pace table |
-|---|---|---|---|
-| every car | 5,751 | 0.0437 → 0.0436 | 0.0446 → 0.0446 |
-| KK-SII, all | 2,175 | 0.0318 → **0.0302** | 0.0331 → **0.0316** |
-| KK-SII, dry | 1,802 | 0.0312 → 0.0289 | 0.0327 → 0.0307 |
-| KK-SII, wet | 373 | 0.0347 → 0.0363 | 0.0350 → 0.0363 |
-| KK-F, all | 1,132 | 0.0421 → 0.0446 | 0.0434 → 0.0458 |
-| KK-F, dry | 668 | 0.0349 → 0.0342 | 0.0365 → 0.0345 |
-| KK-F, wet | 240 | 0.0328 → 0.0266 | 0.0327 → 0.0276 |
-| KK-F, damp | 224 | 0.0732 → **0.0948** | 0.0752 → **0.0989** |
-| Inferno 86 | 2,444 | 0.0551 → 0.0551 | 0.0555 → 0.0555 |
+What the split is now: the KK-F and the KK-F-V2 are one fitted car
+(`KK-F+KK-F-V2`) with its own K, τ, κ, `g_transfer`, compound multipliers
+and pooled (fallback) entries, and the "FJ" that is left is the KK-SII
+alone. The spec facts are copied, the compound seeds are per raw car and
+are the same under either pooling (KK-F: 11 dry sessions DRY and 6 wet
+WET; KK-F-V2: 12 DRY; KK-SII: 48 DRY, 12 WET), the condition overrides
+are by date, and every raw car keeps its own logged and simulated
+entries. Two things were fixed in the switch for that to hold. It named
+the new car after its first raw car, "KK-F", which since #383 took the
+raw KK-F's own entries away (its Tsukuba dry entry became the group's 214
+laps, the KK-F-V2's 36 among them, where v1.4.0 gives it its own 178): a
+group is now named after all its cars. And it took the compound of an
+unlabelled session from the EM of the pooling in force; the two EMs
+differ on the KK-F's damp sessions, so both runs are now fed the shipped
+pooling's labels.
 
-- **It gets better on the KK-SII and in the dry on both cars, and worse
-  on the KK-F's damp sessions; in total it is level.** The KK-SII gains
-  1.2 ± 0.7 mbar a session (better on 36 of 53) and its bias falls from
-  +7.6 to +2.7 mbar. The KK-F in the dry gains 0.7 mbar on the current
-  calculator and 2.0 on the simulation-based one, and its bias goes from
-  −11.5 to +2.3; in the wet it gains 5 to 6 mbar. Its four damp sessions
-  (224 rows) lose 22 mbar, which is the whole of its loss: over its 22
-  sessions the change is +1.3 ± 3.6 mbar.
-- **With the cars apart the simulation-based calculator is level with
-  the current one on the KK-F in the dry** (0.0345 against 0.0342, where
-  pooled it was 0.0365 against 0.0349), and still 1.4 to 1.8 mbar behind
-  on the KK-SII.
-- What it would take to keep: the damp cell of a car with four damp
-  sessions needs the condition chain to fall back sensibly (it reads the
-  KK-F's own thin damp fit where pooled it shared the KK-SII's), and the
-  KK-F's constants rest on one track. Not adopted; the pooling in
-  `warmup_table.CAR_FIT_ALIASES` is unchanged.
+The 15 pinned folds of the release's table (128 sessions); the pooled
+fold fits are refits of v1.4.0 on those ids (36.13 mbar where the
+release's own run has 36.15); the same 5,651 lap × tyre rows and the
+same observed pressures on both sides; the Inferno 86's predictions move
+by 0.015 mbar at most. Hot-pressure MAE in mbar, pooled → split, and the
+change with its date-clustered SE. `logged entries` is the standing
+holdout's arm and the one the experiment is read by; `as shipped` has the
+simulated entries; `oracle` is each lap's own heat and clock, the
+constants alone.
+
+| | rows | sessions (dates) | logged entries | change | sessions nearer | as shipped | oracle |
+|---|---|---|---|---|---|---|---|
+| every car | 5,651 | 128 (46) | 36.13 → 35.97 | −0.17 ± 0.80 | 73 | −0.23 ± 0.80 | −0.28 ± 0.74 |
+| FJ cars | 3,307 | 75 (27) | 31.14 → 30.85 | **−0.28 ± 1.38** | 48 | −0.39 ± 1.37 | −0.47 ± 1.27 |
+| KK-SII, all | 2,175 | 53 (18) | 29.95 → 28.32 | −1.64 ± 0.98 | 38 | −1.54 ± 0.96 | −1.30 ± 0.82 |
+| KK-SII, dry | 1,802 | 42 (16) | 28.74 → 26.74 | −2.00 ± 0.67 | 31 | −1.87 ± 0.66 | −1.45 ± 0.63 |
+| KK-SII, wet | 373 | 11 (4) | 35.82 → 35.90 | +0.09 ± 4.71 | 7 | +0.06 ± 4.63 | −0.53 ± 3.97 |
+| KK-F, all | 1,132 | 22 (9) | 33.41 → 35.73 | +2.33 ± 3.58 | 10 | +1.82 ± 3.61 | +1.11 ± 3.46 |
+| KK-F, dry | 668 | 11 (5) | 30.34 → 30.99 | +0.66 ± 3.26 | 5 | +0.07 ± 3.28 | −0.93 ± 2.91 |
+| KK-F, wet | 240 | 7 (3) | 33.16 → 34.30 | +1.14 ± 8.41 | 3 | +0.81 ± 8.45 | +0.42 ± 7.69 |
+| KK-F, damp | 224 | 4 (3) | 42.83 → 51.39 | +8.56 ± 10.12 | 2 | +8.14 ± 10.25 | +7.96 ± 10.52 |
+| Inferno 86 | 2,344 | 53 (19) | 43.19 → 43.19 | 0.00 | | 0.00 | 0.00 |
+
+- **Pooled and split are not told apart** (the FJ cars, the set the gate
+  named: −0.28 ± 1.38 mbar, 48 of 75 sessions nearer), on any of the
+  three arms. Of the fifteen sets read, one is beyond two SE: the KK-SII
+  in the dry is 2.0 ± 0.7 mbar nearer (31 of 42 sessions, bias +10.9 →
+  +4.6), the same on the oracle (−1.45 ± 0.63). The KK-F at Tsukuba gains
+  nothing in the dry or the wet, and its four damp sessions are further.
+- **The KK-SII's gain is a diagonal of tyres, and no constant of #389's
+  chassis level reaches it.** By tyre in the dry: front right −5.2 ± 2.0
+  (bias +19.5 → +4.1), rear left −2.2 ± 1.8 (+17.2 → +7.2), front left
+  −1.6 ± 0.5, rear right +0.9 ± 0.3. At the one track both cars run,
+  Tsukuba, the pooled fit's dry bias on those two tyres has opposite
+  signs in the two cars (oracle: KK-SII +15.9 and +14.7, KK-F −20.6 and
+  −18.2; front left and rear right within 12 of zero on both). It is not
+  κ: the pooled prediction with κ zeroed moves the KK-SII by +0.10 ± 0.06
+  mbar. It is not `g_transfer`: one scale serves both axles, so it moves
+  the two left tyres together and never a diagonal, and the heat fed
+  changes by 1 to 2 %. It is the K the scoring reads, which the compound
+  EM keeps per corner: in the dry K_fr/K_fl is 0.864 on the KK-SII
+  (0.860–0.874 over the folds), 1.065 on the KK-F group (1.054–1.081;
+  1.082 without the KK-F-V2's Fuji day) and 0.934 pooled, and K_rr/K_rl
+  1.144, 0.951 and 1.062. What sits behind a diagonal that differs by car
+  is not known from these data. The gain is not at every cell: at Suzuka
+  the KK-SII's rear left goes from −17 to −29 mbar of bias on the
+  oracle.
+- **The damp cell's loss is the cell standing alone, not the missing
+  seeds.** Four sessions on three dates: +8.6 ± 10.1 mbar on the labels
+  both runs were fed, not told apart. With two of the four held out, the
+  group's fold has no damp fit (no K bucket, no τ): every damp session is
+  read on the dry τ (654–670 s at the front where the group's damp fit
+  has 414), with a DRY-at-damp compound K from the two sessions left
+  (front left 7.75 in one fold, 2.09 in the other). Pooled, the KK-SII's
+  damp sessions keep the cell fitted. Two of the labels are doubtful: the
+  pooled EM calls a0288 and a0338 WET where the split's EM says DRY, and
+  their best laps are 0.997 and 0.991 × the KK-F's dry pace, where its
+  rain-tyre sessions are at 1.06–1.11. Labelled DRY in both runs the cell
+  reads 48.9 → 69.3 (+20.4 ± 9.0, none of the four nearer; reported
+  beside, with no verdict of its own on three dates). The labels are the
+  owner's to set in `tire_compounds.yaml`.
+- **Fitted apart the constants differ by more than their folds, and the
+  KK-F group's move by a third of that gap with one day.** All data, the
+  range over the 15 folds in brackets (the dry; K per axle from the
+  thermal fit, the gain a = K/τ being one number per car):
+
+  | | KK-SII alone | KK-F + KK-F-V2 | pooled FJ |
+  |---|---|---|---|
+  | a = K/τ, K per (G·m/s) per s | 0.01380 | 0.01181 | 0.01290 |
+  | K front | 5.95 [5.92–6.19] | 8.05 [7.91–8.19] | 6.54 [6.50–6.74] |
+  | τ front, s | 431 [423–463] | 681 [654–689] | 507 [501–533] |
+  | K rear | 4.01 [3.95–4.10] | 4.55 [4.47–4.60] | 4.20 [4.18–4.28] |
+  | τ rear, s | 290 [287–307] | 385 [373–388] | 326 [324–338] |
+  | `g_transfer`, G | 2.48 [2.36–2.61] | 3.07 [2.78–3.46] | 2.74 [2.52–2.84] |
+  | κ | 2e-11 [4e-13–3e-8] | 1.9e-7 [3e-9–2.6e-7] | 1.4e-7 [1e-11–3.1e-7] |
+  | m DRY / WET | 1.000 / 0.999, not identified | 1.010 / 0.955 | 1.020 / 0.918 |
+
+  The fold ranges are of leaving a few sessions out, and nine folds leave
+  the KK-F group untouched. Leaving out its one Fuji day moves its front
+  K from 8.05 to 7.33, τ from 681 to 579 s, `g_transfer` from 3.07 to
+  2.86 and κ from 1.9e-7 to 2.8e-6; the pooled κ goes from 1.4e-7 to
+  8.1e-7 on the same day. κ is not identified on either side (zero on the
+  KK-SII alone): the shipped artifact has 1.22e-7 for the pooled FJ and a
+  refit of the same data 1.36e-7, with K equal to 0.03 %. The compound
+  multipliers are not identified on the KK-SII alone, whose compound is
+  its condition (every dry session DRY, every wet one WET), so the K per
+  condition takes all of it. For all that difference in K and τ no car's
+  MAE in the dry moves by more than 2 mbar: this MAE does not rank them.
+- **The KK-F-V2's two Fuji days, out of sample** (they cannot rank the
+  sides). 2026-11-25 left out of both (8 scored sessions, 168 rows): as
+  shipped 53.1 → 45.8 mbar (8 of 8 sessions nearer), oracle 53.7 → 47.7
+  (7 of 8), both sides 43 to 52 mbar low. The group fitted on Tsukuba
+  alone has a κ of 2.8e-6, a speed term of −18 mbar at Fuji's line
+  against −5 pooled; with that term taken out of both predictions the
+  oracle is 14.5 mbar nearer split, so the group's own κ costs 8.5 of it
+  (its K and τ were fitted beside that κ, so this is not K and τ alone). The logged-entry arm reads 53.5 → 38.8 there, but the split's
+  is then a fallback (the group has no logged Fuji lap; the track's other
+  cars answer), not an entry. 2026-11-27 (in no fit; 2 sessions, 68 rows,
+  each side's all-data fit): logged entries 45.6 → 41.3, as shipped 46.2
+  → 41.7 (bias −20 → −10), oracle 54.5 → 51.0; one session level (34.8 →
+  34.6), the other nearer (65.5 → 53.7). By the rule written beforehand (5 mbar and most
+  sessions) the first day is nearer split and the second not told apart.
+- **What it supports.** Not a full split: it is level in total, gives
+  the KK-F nothing where it was scored and takes a thin cell's fit away.
+  For #389: that the tyre-level constants stay shared across the FJ cars
+  is consistent with it (the damp cell, the KK-F's level MAE; whether K
+  and τ really are the same on both cars is not resolved, above); that a
+  `g_transfer` per chassis would win back the KK-SII's 2 mbar is not: the
+  gain is in a per-corner pattern of K, which #389's table has at the
+  tyre level, shared. Not adopted; `warmup_table.CAR_FIT_ALIASES` is
+  unchanged.
+- *The run of 2026-11-25, superseded* (0.0437 → 0.0436 bar in total; the
+  KK-SII 0.0318 → 0.0302; the KK-F 0.0349 → 0.0342 in the dry, 0.0328 →
+  0.0266 in the wet and 0.0732 → 0.0948 on its damp sessions): its KK-F
+  had no compound seed (the seeds were keyed to the pooled "FJ" and fell
+  off the split car, #393), so the KK-F's DRY/WET compounds were inferred
+  from scratch, and each run had its own labels. The frame, the mask, the
+  entries and the data have changed since as well, so the two runs differ
+  by more than the seeds; the KK-SII's half, which had its seeds then,
+  reads the same in both (−1.6 mbar, bias +7.6 → +2.7 then, +7.5 → +3.9
+  now).
+- To do it again: these numbers are on the release's pinned fold ids.
+  `check-pressure-holdout --split KK-F KK-F-V2` on v1.4.0 picks its own
+  folds, which the November sessions moved (129 sessions, 13 of the 15
+  folds other than the pinned), so it gives the same comparison on other
+  folds, not these figures.
 
 *A lap time under anything the models were trained on* (the owner,
 2026-11-25; `check-pressure-holdout --fastest 0.25`,
