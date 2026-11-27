@@ -145,6 +145,15 @@ def main(argv: list[str] | None = None) -> int:
         "fraction of the dry sessions (by the lap time typed in) is held out of every model.",
     )
     p_holdout.add_argument(
+        "--anchor",
+        choices=("first", "window", "settled"),
+        default="first",
+        help="An option (#421), for every fit and held-out stint alike: how a stint anchor reads "
+        "the TPMS. first (default): the first valid reading. window: the means of the readings "
+        "over their first 60 s, at their mean time. settled: the window, with the temperature "
+        "the sensor reads 60-120 s on.",
+    )
+    p_holdout.add_argument(
         "--workers",
         type=int,
         default=None,
@@ -351,6 +360,7 @@ def _run(
             served_rules=args.served_rules,
             served_steps=tuple(args.served_steps),
             arms=tuple(dict.fromkeys(["calculator", *args.arms])),
+            anchor=args.anchor,
         )
     elif args.cmd == "pressure-pace-margins":
         from . import pressure_gate

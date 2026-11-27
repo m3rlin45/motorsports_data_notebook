@@ -20,7 +20,10 @@ Four steps, in the order the model applies them:
 2. :func:`recompute_tpms_lap_aggregates` — the per-lap TPMS summary columns
    (start / end / min / max / mean, rise rate, first-valid time) are rebuilt
    from the masked timeseries, so an out-lap's ``tpms_*_start`` — the stint
-   anchor — is the first *live* reading.
+   anchor — is the first *live* reading. The opening window of each lap's
+   readings (:func:`opening_window`: the means over :data:`ANCHOR_WINDOW_S`
+   from that reading and the settled temperature after it) is rebuilt
+   beside them, for the stint anchor's options (#421, #372).
 3. :func:`apply_filters` — ``tire_usable`` / ``exclude_reason`` per lap.
 4. :func:`drifting_tpms` — a corner whose amount of gas falls against its
    siblings' through a session (a leak, or a transducer that drifts) is
@@ -46,7 +49,7 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from ..tire_etl.aggregates import compute_corner_aggregates
+from ..tire_etl.aggregates import channel_series, compute_corner_aggregates
 from ..tire_etl.dataset import load_group
 from ..tire_etl.paths import laps_dir, timeseries_dir
 
@@ -66,6 +69,19 @@ STALE_RESTART_MIN_STEPS = 3
 #: ... within this many seconds of the stint's first reading shows that the
 #: readings before it were a held packet.
 STALE_RESTART_WINDOW_S = 60.0
+#: :func:`opening_window`: a lap's first TPMS readings are averaged over this
+#: many seconds from the first valid one. A single reading scatters by 10
+#: (FJ) to 16 mbar (Inferno 86) sd beside a 31.3 mbar count, and a stint
+#: anchored on one carries that into every lap; 60 s holds about five changes
+#: of value on both kits (#372, #421).
+ANCHOR_WINDOW_S = 60.0
+#: ... and the sensor's temperature is read again, as a median, between this
+#: many seconds after that reading: at the anchor the sensor reads the rim
+#: and not the gas, by about what it moves in its first minute or two of
+#: rolling (#421: the amount of gas is conserved best by this later reading).
+ANCHOR_SETTLED_S = (60.0, 120.0)
+#: Fewer finite readings than this in the settled span give no settled value.
+ANCHOR_SETTLED_MIN_SAMPLES = 3
 
 
 def tpms_lap_columns() -> list[str]:
@@ -78,8 +94,49 @@ def tpms_lap_columns() -> list[str]:
             f"tpms_press_{c}_rise_bar_per_min",
             f"tpms_temp_{c}_first_valid_s",
             f"tpms_press_{c}_first_valid_s",
+            f"tpms_press_{c}_window_mean",
+            f"tpms_temp_{c}_window_mean",
+            f"tpms_{c}_window_t_s",
+            f"tpms_temp_{c}_settled",
         ]
     return cols
+
+
+def opening_window(
+    t_press: np.ndarray,
+    press: np.ndarray,
+    t_temp: np.ndarray,
+    temp: np.ndarray,
+    t0: float,
+    *,
+    window_s: float = ANCHOR_WINDOW_S,
+    settled_s: tuple[float, float] = ANCHOR_SETTLED_S,
+) -> tuple[float, float, float, float]:
+    """A corner's TPMS readings over the opening window that starts at ``t0``
+    (the time of the reading a stint anchor is taken at), for the anchor's
+    options (``warmup_table.ANCHOR_MODE``).
+
+    ``(pressure, temperature, time, settled temperature)``: the means of the
+    finite pressure and temperature samples in ``[t0, t0 + window_s)``, the
+    mean time of those pressure samples, and the median of the finite
+    temperature samples in ``[t0 + settled_s[0], t0 + settled_s[1])`` (NaN on
+    fewer than :data:`ANCHOR_SETTLED_MIN_SAMPLES`). The streams are logged
+    at a fixed rate holding the last packet, so a sample mean is a
+    time-weighted one. ``t_press`` / ``t_temp`` are the samples' times on the
+    clock of ``t0``. All NaN when the window holds no finite pressure.
+    """
+    nan = float("nan")
+    in_p = np.isfinite(press) & (t_press >= t0) & (t_press < t0 + window_s)
+    if not in_p.any():
+        return nan, nan, nan, nan
+    in_t = np.isfinite(temp) & (t_temp >= t0) & (t_temp < t0 + window_s)
+    late = np.isfinite(temp) & (t_temp >= t0 + settled_s[0]) & (t_temp < t0 + settled_s[1])
+    return (
+        float(press[in_p].mean()),
+        float(temp[in_t].mean()) if in_t.any() else nan,
+        float(t_press[in_p].mean()),
+        float(np.median(temp[late])) if late.sum() >= ANCHOR_SETTLED_MIN_SAMPLES else nan,
+    )
 
 
 # ------------------------------------------------------------ 1. stale TPMS
@@ -259,7 +316,10 @@ def load_tpms_timeseries(root: Path, session_id: str) -> pa.Table | None:
     if not tpms or "lap_num" not in ts.schema.names:
         return None
     cols = ["lap_num"] + (["t_lap_s"] if "t_lap_s" in ts.schema.names else []) + tpms
-    return mask_stale_tpms(ts.select(["stint_id", "t_session_s"] + cols)).select(cols)
+    # the session clock stays in: the opening window of a lap can run past its end
+    return mask_stale_tpms(ts.select(["stint_id", "t_session_s"] + cols)).select(
+        ["t_session_s"] + cols
+    )
 
 
 def recompute_tpms_lap_aggregates(laps: pd.DataFrame, ts: pa.Table) -> pd.DataFrame:
@@ -268,14 +328,50 @@ def recompute_tpms_lap_aggregates(laps: pd.DataFrame, ts: pa.Table) -> pd.DataFr
     ``laps`` holds that session's rows (any other columns are kept as they
     are); ``ts`` is its masked TPMS timeseries from
     :func:`load_tpms_timeseries`. Mirrors the extractor's lap summary, so
-    the only difference from the committed columns is the masking.
+    the only difference from the committed columns is the masking; the
+    opening-window columns (:func:`opening_window`, from the lap's first
+    valid temperature reading, on the session clock where ``ts`` has it so
+    that a window can run past the lap's end) are added beside them.
     """
     out = laps.copy()
     lap_col = ts.column("lap_num").to_numpy()
     values: dict[str, list[float]] = {col: [] for col in tpms_lap_columns()}
+    # each corner's own samples on the window's clock, with their lap
+    clock = "t_session_s" if "t_session_s" in ts.schema.names else "t_lap_s"
+    streams = {
+        c: (
+            channel_series(ts, f"tpms_press_{c}_bar", clock),
+            channel_series(ts, f"tpms_temp_{c}_c", clock),
+            channel_series(ts, f"tpms_temp_{c}_c", "lap_num")[0],
+            channel_series(ts, f"tpms_temp_{c}_c", "t_lap_s")[0],
+        )
+        for c in CORNERS
+    }
     for ln in out["lap_num"].to_numpy():
         lap_ts = ts.filter(pa.array(lap_col == ln))
         for c in CORNERS:
+            (t_p, press), (t_t, temp), lap_t, t_lap = streams[c]
+            first = (
+                np.flatnonzero((lap_t == ln) & np.isfinite(temp))
+                if t_lap.size
+                else np.zeros(0, dtype=np.intp)
+            )
+            win = (float("nan"),) * 4
+            if first.size:
+                i0 = int(first[0])
+                if clock == "t_session_s":
+                    win = opening_window(t_p, press, t_t, temp, float(t_t[i0]))
+                else:  # no session clock: the window ends with the lap
+                    in_lap = channel_series(ts, f"tpms_press_{c}_bar", "lap_num")[0] == ln
+                    win = opening_window(
+                        t_p[in_lap], press[in_lap], t_t[lap_t == ln], temp[lap_t == ln], t_t[i0]
+                    )
+                # the mean time, from the lap's start
+                win = (win[0], win[1], win[2] - float(t_t[i0]) + float(t_lap[i0]), win[3])
+            values[f"tpms_press_{c}_window_mean"].append(win[0])
+            values[f"tpms_temp_{c}_window_mean"].append(win[1])
+            values[f"tpms_{c}_window_t_s"].append(win[2])
+            values[f"tpms_temp_{c}_settled"].append(win[3])
             agg = compute_corner_aggregates(lap_ts, c)
             values[f"tpms_press_{c}_start"].append(agg.press_start)
             values[f"tpms_press_{c}_end"].append(agg.press_end)

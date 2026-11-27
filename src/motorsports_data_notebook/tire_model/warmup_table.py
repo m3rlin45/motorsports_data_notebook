@@ -73,6 +73,27 @@ RAW_CAR_ENTRIES = True
 RAW_CAR_MIN_SESSIONS = 2
 RAW_CAR_NEEDS_CURVE = True
 
+# How a stint anchor reads the TPMS at its first valid reading (#421, #372):
+# an option, default off. ``"first"`` is that one reading. ``"window"`` is the
+# means of the corner's readings over the ``cleaning.ANCHOR_WINDOW_S`` seconds
+# from it (``tpms_*_window_mean``) at their mean time: one reading scatters by
+# 10-16 mbar sd beside a 31.3 mbar count. ``"settled"`` is the window with the
+# temperature the sensor reads one to two minutes on (``tpms_temp_*_settled``):
+# at the anchor the sensor reads the rim and not the gas. It changes the
+# training targets and the held-out anchors alike, never a typed input.
+# Every module reads this one value; set it with :func:`set_anchor_mode`.
+ANCHOR_MODES = ("first", "window", "settled")
+ANCHOR_MODE = "first"
+
+
+def set_anchor_mode(mode: str) -> str:
+    """Set :data:`ANCHOR_MODE` for the process; returns the mode in force."""
+    global ANCHOR_MODE
+    if mode not in ANCHOR_MODES:
+        raise ValueError(f"anchor mode {mode!r} is not one of {ANCHOR_MODES}")
+    ANCHOR_MODE = mode
+    return ANCHOR_MODE
+
 
 # Energy-balance config (see plan)
 W_ROAD = 0.2  # fixed in v0
@@ -614,6 +635,8 @@ def _compute_stint_anchor(laps: pd.DataFrame) -> pd.DataFrame:
     """Per (session, stint, corner): the stint's initial condition.
 
     Adds ``t_anchor_{c}`` (rolling seconds, same clock as ``t_cum_s``),
+    ``t_anchor_half_{c}`` (the half-span of the readings the anchor averages,
+    0 for a single reading),
     ``t_start_{c}`` (°C), ``p_start_{c}`` (gauge bar at the same reading, for
     the pressure-domain evaluation) and ``anchor_kind_{c}``:
 
@@ -622,6 +645,11 @@ def _compute_stint_anchor(laps: pd.DataFrame) -> pd.DataFrame:
       the cold pressure the driver actually set. Its time on the rolling
       clock is the reading's lap-relative time minus the standstill before
       the car moved (clipped at 0).
+
+    Under :data:`ANCHOR_MODE` ``"window"`` or ``"settled"`` (an option, #421)
+    an anchor taken at a lap's first valid reading, of either kind, is the
+    opening window's means at their mean time where the lap has them
+    (:func:`_window_anchor`); an anchor on a lap's end reading is unchanged.
     - ``"first_lap"``: no usable out-lap; the first finite reading of the
       first lap(s), the pre-schema-v3 behaviour. The warmup curve is integrated from that point:
     ``T(t) = T_eff + K·c·g²·(1 − e^{−(t−t_a)/τ}) + (T_a − T_eff)·e^{−(t−t_a)/τ}``.
@@ -649,6 +677,7 @@ def _compute_stint_anchor(laps: pd.DataFrame) -> pd.DataFrame:
         df[f"t_start_{c}"] = np.nan
         df[f"p_start_{c}"] = np.nan
         df[f"anchor_kind_{c}"] = None
+        df[f"t_anchor_half_{c}"] = 0.0
     for (_sid, _stint), grp in df.groupby(["session_id", "stint_id"], sort=False):
         first = grp.iloc[0]
         for c in CORNERS:
@@ -656,6 +685,7 @@ def _compute_stint_anchor(laps: pd.DataFrame) -> pd.DataFrame:
             p_start_col, p_end_col = f"tpms_press_{c}_start", f"tpms_press_{c}_end"
             fv_col = f"tpms_temp_{c}_first_valid_s"
             anchor: tuple[float, float, float] | None = None
+            half = 0.0
             kind = "first_lap"
             if (
                 bool(first["_is_out"])
@@ -674,6 +704,13 @@ def _compute_stint_anchor(laps: pd.DataFrame) -> pd.DataFrame:
                     float(first[start_col]),
                     float(p_val) if pd.notna(p_val) else np.nan,
                 )
+                win = _window_anchor(first, c)
+                if win is not None:
+                    anchor = (max(win[0] - wait_s, 0.0), win[1], win[2])
+                    # the readings are evenly spaced from the first one, so
+                    # they span the mean time ± this (the speed-pressure
+                    # correction reads the anchor's speed over that span)
+                    half = max(win[0] - first_valid, 0.0)
                 kind = "pit_exit"
             for row in grp.itertuples(index=False):
                 if anchor is not None:
@@ -704,6 +741,15 @@ def _compute_stint_anchor(laps: pd.DataFrame) -> pd.DataFrame:
                         float(t_s),
                         float(p_s) if pd.notna(p_s) else np.nan,
                     )
+                    win = (
+                        _window_anchor(dict(zip(grp.columns, row)), c)
+                        if ANCHOR_MODE != "first"
+                        else None
+                    )
+                    if win is not None and pd.notna(fv):
+                        # the window's mean time can lie past the lap's end
+                        anchor = (t_begin + max(win[0] - wait, 0.0), win[1], win[2])
+                        half = max(win[0] - float(fv), 0.0)
                     break
                 if pd.notna(t_e):
                     p_e = getattr(row, p_end_col, np.nan) if p_end_col in grp.columns else np.nan
@@ -714,8 +760,34 @@ def _compute_stint_anchor(laps: pd.DataFrame) -> pd.DataFrame:
                 df.loc[grp.index, f"t_start_{c}"] = anchor[1]
                 df.loc[grp.index, f"p_start_{c}"] = anchor[2]
                 df.loc[grp.index, f"anchor_kind_{c}"] = kind
+                df.loc[grp.index, f"t_anchor_half_{c}"] = half
     df = df.drop(columns=["_roll_s", "_is_out", "_from_pit"])
     return df.reset_index(drop=True)
+
+
+def _window_anchor(lap: Any, corner: str) -> tuple[float, float, float] | None:
+    """``(lap-relative time, T, P)`` of a lap's opening window for ``corner``
+    under :data:`ANCHOR_MODE` (``cleaning.opening_window``): the means of the
+    readings, with the settled temperature under ``"settled"`` where the lap
+    has one. None under ``"first"`` and when the lap lacks the window (no
+    timeseries, no valid reading). ``lap`` is a laps row (a Series or a
+    mapping)."""
+    if ANCHOR_MODE == "first":
+        return None
+
+    def value(name: str) -> float | None:
+        v = lap.get(name)
+        return float(v) if v is not None and pd.notna(v) else None
+
+    t_s = value(f"tpms_{corner}_window_t_s")
+    temp = value(f"tpms_temp_{corner}_window_mean")
+    press = value(f"tpms_press_{corner}_window_mean")
+    if t_s is None or temp is None or press is None:
+        return None
+    if ANCHOR_MODE == "settled":
+        settled = value(f"tpms_temp_{corner}_settled")
+        temp = settled if settled is not None else temp
+    return t_s, temp, press
 
 
 def _anchor_terms(df: pd.DataFrame, corner: str) -> tuple[np.ndarray, np.ndarray]:

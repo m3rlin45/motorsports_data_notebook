@@ -977,6 +977,10 @@ def run_holdout_validation(
             else " (measured g², clock, anchor)"
         )
     )
+    from .warmup_table import ANCHOR_MODE
+
+    if ANCHOR_MODE != "first":
+        print(f"stint anchors: {ANCHOR_MODE} (an option, #421; training and scoring alike)")
 
     label = "Held-out" if n_folds <= 1 else f"{n_folds}-fold CV"
     if n_folds > 1:
