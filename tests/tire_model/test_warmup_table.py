@@ -301,6 +301,45 @@ def test_compute_stint_anchor_uses_pit_exit_reading_on_the_rolling_clock() -> No
     assert (s2["anchor_kind_fl"] == "first_lap").all()
     assert (s2["t_anchor_fl"] == 0.0).all() and (s2["t_start_fl"] == 44.0).all()
 
+    # #421: the window option reads an anchor as the opening window's means at
+    # their mean time on the rolling clock, at a pit exit and on a first lap
+    # alike; a lap without window columns keeps the first reading.
+    laps["tpms_press_fl_window_mean"] = [1.33, 1.36, 1.52]
+    laps["tpms_temp_fl_window_mean"] = [26.5, 32.0, 45.0]
+    laps["tpms_fl_window_t_s"] = [175.0, 30.0, 30.0]
+    laps["tpms_temp_fl_settled"] = [25.0, 33.0, np.nan]
+    assert wt.ANCHOR_MODE == "first"
+    same = wt._compute_stint_anchor(laps)
+    assert (same["p_start_fl"] == out["p_start_fl"]).all()
+    assert (same["t_anchor_fl"] == out["t_anchor_fl"]).all()
+    try:
+        wt.set_anchor_mode("window")
+        win = wt._compute_stint_anchor(laps)
+        nan_win = wt._compute_stint_anchor(laps.assign(tpms_press_fl_window_mean=np.nan))
+        wt.set_anchor_mode("settled")
+        settled = wt._compute_stint_anchor(laps)
+    finally:
+        wt.set_anchor_mode("first")
+    w1 = win[win.stint_id == 1]
+    assert (w1["anchor_kind_fl"] == "pit_exit").all()
+    assert (w1["t_anchor_fl"] == 55.0).all()  # 175 s into the lap, 120 s standing
+    assert (w1["t_start_fl"] == 26.5).all() and (w1["p_start_fl"] == 1.33).all()
+    assert (w1["t_anchor_half_fl"] == 25.0).all()  # readings from 150 s, mean at 175 s
+    assert (out["t_anchor_half_fl"] == 0.0).all()
+    w2 = win[win.stint_id == 2]  # a first-lap anchor is read over its window too
+    assert (w2["anchor_kind_fl"] == "first_lap").all()
+    assert (w2["t_anchor_fl"] == 30.0).all() and (w2["t_anchor_half_fl"] == 30.0).all()
+    assert (w2["t_start_fl"] == 45.0).all() and (w2["p_start_fl"] == 1.52).all()
+    n1 = nan_win[nan_win.stint_id == 1]
+    assert (n1["t_anchor_fl"] == 30.0).all() and (n1["p_start_fl"] == 1.30).all()
+    # settled: the window's pressure and time, the temperature read one to two
+    # minutes on; the window's mean where the lap has no settled reading
+    assert (settled[settled.stint_id == 1]["t_start_fl"] == 25.0).all()
+    assert (settled[settled.stint_id == 1]["p_start_fl"] == 1.33).all()
+    assert (settled[settled.stint_id == 2]["t_start_fl"] == 45.0).all()
+    with pytest.raises(ValueError):
+        wt.set_anchor_mode("median")
+
 
 def test_rolling_clock_and_flying_lookups_exclude_outlap_wait() -> None:
     laps = pd.DataFrame(

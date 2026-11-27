@@ -125,6 +125,10 @@ class StintSeries:
     # pit-exit anchor, else the first scored bin after the last hole before
     # it (see REANCHOR_SECONDS). None when the stint has no hole.
     seg_anchor: np.ndarray | None = None
+    # (4,) the anchor's speed where it averages readings over a span
+    # (warmup_table.ANCHOR_MODE "window" / "settled", #421): the RMS speed
+    # over it, NaN for a single reading (the speed of the anchor's bin is used).
+    v_anchor: np.ndarray | None = None
 
 
 def sink_temperature(s: StintSeries, cool_params: dict[str, float], corner: str) -> float:
@@ -474,10 +478,12 @@ def build_stint_series(
         valid = binned["valid"]
         has_hole = not bool(valid.all())
         seg_anchor = np.full((n, 4), -1, dtype=int) if has_hole else None
+        v_anchor = np.full(4, np.nan)
         for j, c in enumerate(CORNERS):
             t0, p0, ta = first[f"t_start_{c}"], first[f"p_start_{c}"], first[f"t_anchor_{c}"]
             if pd.isna(t0) or pd.isna(p0) or pd.isna(ta) or float(p0) <= 0.3:
                 continue
+            v_anchor[j] = anchor_span_speed(binned["v"], float(ta), first.get(f"t_anchor_half_{c}"))
             p = binned["press"][:, j]
             tg = (float(t0) + T_ZERO_C_TO_K) * (p + P_ATM_BAR) / (
                 float(p0) + P_ATM_BAR
@@ -542,9 +548,25 @@ def build_stint_series(
                 lap_ends=binned["lap_end"],
                 valid=valid if has_hole else None,
                 seg_anchor=seg_anchor,
+                v_anchor=v_anchor if np.isfinite(v_anchor).any() else None,
             )
         )
     return out
+
+
+def anchor_span_speed(v: np.ndarray, t_anchor: float, half: float | None) -> float:
+    """The RMS of the per-second speed ``v`` over ``t_anchor ± half`` (rolling
+    seconds): the speed a speed-pressure correction should read for an
+    anchor that averages readings over that span (#372). NaN for a single
+    reading (``half`` missing or 0) or a span with no speed."""
+    if half is None or not np.isfinite(float(half)) or float(half) <= 0.0 or len(v) == 0:
+        return float("nan")
+    h = float(half)
+    lo = min(max(int(np.ceil(t_anchor - h)), 0), len(v) - 1)
+    hi = min(max(int(np.floor(t_anchor + h)), lo), len(v) - 1)
+    span = v[lo : hi + 1]
+    span = span[np.isfinite(span)]
+    return float(np.sqrt(np.mean(span**2))) if span.size else float("nan")
 
 
 def _segment_scored(scored: np.ndarray, valid: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -739,6 +761,8 @@ class _Design:
                 # already on the pit-exit scale (see simulate)
                 a_i = s.anchor_idx[j] if s.anchor_idx[j] >= 0 else 0
                 va[:, j] = s.v[a_i]
+                if s.v_anchor is not None and np.isfinite(s.v_anchor[j]):
+                    va[:, j] = s.v_anchor[j]
             v_anchor.append(va)
             if p_mode is not None:
                 logp.append(stint_log_pressure_ratio(s, p_mode))
@@ -1429,6 +1453,9 @@ def stint_speed_terms(root: Path, laps_for_fit: pd.DataFrame) -> pd.DataFrame:
             else:
                 i = min(max(int(np.ceil(float(ta))), 0), len(v) - 1)
                 anchors[c] = float(v[i])
+                span = anchor_span_speed(v, float(ta), first.get(f"t_anchor_half_{c}"))
+                if np.isfinite(span):
+                    anchors[c] = span
         for k, e in enumerate(ends):
             rows.append(
                 {

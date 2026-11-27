@@ -50,6 +50,20 @@ def _add_heat_frame_arg(p: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_anchor_arg(p: argparse.ArgumentParser) -> None:
+    p.add_argument(
+        "--anchor",
+        choices=("first", "window", "settled"),
+        default="first",
+        help=(
+            "An option (#421), for training and scoring alike: how a stint anchor reads the "
+            "TPMS. first (default): the first valid reading. window: the means of the readings "
+            "over their first 60 s, at their mean time. settled: the window, with the "
+            "temperature the sensor reads 60-120 s on."
+        ),
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="tire-model", description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -235,6 +249,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     _add_inputs_args(p_holdout)
     _add_heat_frame_arg(p_holdout)
+    _add_anchor_arg(p_holdout)
 
     args = parser.parse_args(argv)
 
@@ -469,7 +484,9 @@ def _cmd_pace_check(args: argparse.Namespace) -> int:
 
 def _cmd_holdout(args: argparse.Namespace) -> int:
     from .validate import run_holdout_validation
+    from .warmup_table import set_anchor_mode
 
+    set_anchor_mode(args.anchor)
     return run_holdout_validation(
         dataset_root=args.dataset_root,
         n_per_bucket=args.n_per_bucket,

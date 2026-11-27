@@ -29,6 +29,8 @@ from motorsports_data_notebook.tire_model.cleaning import (
     mask_stale_session_prefix,
     mask_stale_stint_starts,
     mask_stale_tpms,
+    opening_window,
+    recompute_tpms_lap_aggregates,
 )
 
 
@@ -310,6 +312,14 @@ def test_clean_laps_rebuilds_tpms_summary_from_masked_timeseries(tmp_path) -> No
     assert lap0["tpms_temp_rl_start"] == pytest.approx(27.0)
     assert lap0["tpms_press_rl_first_valid_s"] == pytest.approx(3.0)
     assert lap0["tpms_press_rl_max"] == pytest.approx(1.63)
+    # the opening window (#421) starts at the first live reading, not the stale
+    # one, and runs on into lap 1 (60 s on the session clock, one sample a second)
+    assert lap0["tpms_press_rl_window_mean"] == pytest.approx(
+        (3 * 1.60 + 2 * 1.63 + 6 * 1.66) / 11, abs=1e-6
+    )
+    assert lap0["tpms_temp_rl_window_mean"] == pytest.approx((4 * 27.0 + 28.0 + 6 * 31.0) / 11)
+    assert lap0["tpms_rl_window_t_s"] == pytest.approx(8.0)  # samples at 3 .. 13 s of lap 0
+    assert np.isnan(lap0["tpms_temp_rl_settled"])  # nothing 60 s on
     assert bool(lap0["tire_usable"])
     lap1 = out[out["lap_num"] == 1].iloc[0]
     # Flat pressure over the lap: the filters flag it as stuck.
@@ -691,3 +701,68 @@ def test_mask_corner_sessions_masks_that_corner_in_that_session_only() -> None:
         assert out.loc[a, col].isna().all() and out.loc[b, col].notna().all()
     assert out.loc[a, "tpms_temp_fr_start"].notna().all()
     assert out.loc[a, "tire_usable"].all()
+
+
+# ------------------------------------------- the opening window of a lap (#421)
+
+
+def test_opening_window_averages_from_the_anchor_reading() -> None:
+    """A held 1.25 Hz stream: the means run over ``window_s`` seconds from
+    ``t0``, NaNs and later samples are left out, the time is the pressure
+    samples' mean, and the settled temperature is the median of the span
+    after the window."""
+    t = TPMS_DT_S * np.arange(200)  # 160 s
+    press = np.where(t < 30.0, 1.28, 1.32)
+    temp = np.where(t < 50.0, 31.0, np.where(t < 100.0, 29.0, 28.0))
+    press[5] = np.nan  # a dropout inside the window
+    t0 = float(t[2])
+    p, temp_mean, s, settled = opening_window(t, press, t, temp, t0, window_s=60.0)
+    in_w = (t >= t0) & (t < t0 + 60.0)
+    assert p == pytest.approx(press[in_w & np.isfinite(press)].mean())
+    assert 1.28 < p < 1.32  # between the two counts the reading flickers on
+    assert temp_mean == pytest.approx(temp[in_w].mean())
+    assert s == pytest.approx(t[in_w & np.isfinite(press)].mean())
+    late = (t >= t0 + 60.0) & (t < t0 + 120.0)
+    assert settled == pytest.approx(np.median(temp[late])) and settled == 29.0
+    # too few readings one to two minutes on: no settled value, the means stand
+    short = t < t0 + 61.0
+    out = opening_window(t[short], press[short], t[short], temp[short], t0)
+    assert out[0] == pytest.approx(p) and np.isnan(out[3])
+    # no finite pressure in the window
+    assert all(np.isnan(v) for v in opening_window(t, np.full(t.size, np.nan), t, temp, t0))
+
+
+def test_opening_window_runs_past_the_laps_end_on_the_session_clock() -> None:
+    """The window is of the session's stream: a first valid reading 20 s
+    before the lap's end is averaged with the next lap's first 40 s, and
+    the mean time is counted from the anchor lap's start."""
+    n0, n1 = 50, 150  # lap 0: 40 s, lap 1: 120 s
+    t_session = 100.0 + TPMS_DT_S * np.arange(n0 + n1)
+    press = np.array([np.nan] * 25 + [1.30] * 25 + [1.36] * n1)
+    temp = np.array([np.nan] * 25 + [20.0] * 25 + [22.0] * n1)
+    ts = pa.table(
+        {
+            "t_session_s": pa.array(t_session, type=pa.float64()),
+            "lap_num": pa.array([0] * n0 + [1] * n1, type=pa.int16()),
+            "t_lap_s": pa.array(
+                list(TPMS_DT_S * np.arange(n0)) + list(TPMS_DT_S * np.arange(n1)),
+                type=pa.float32(),
+            ),
+            "tpms_press_rr_bar": pa.array(press, type=pa.float32()),
+            "tpms_temp_rr_c": pa.array(temp, type=pa.float32()),
+        }
+    )
+    laps = pd.DataFrame({"session_id": ["s", "s"], "lap_num": [0, 1]})
+    out = recompute_tpms_lap_aggregates(laps, ts).set_index("lap_num")
+    assert out.loc[0, "tpms_press_rr_start"] == pytest.approx(1.30)
+    # 75 samples from the first valid one: 25 at 1.30, 50 at 1.36
+    assert out.loc[0, "tpms_press_rr_window_mean"] == pytest.approx((25 * 1.30 + 50 * 1.36) / 75)
+    assert out.loc[0, "tpms_temp_rr_window_mean"] == pytest.approx((25 * 20.0 + 50 * 22.0) / 75)
+    assert out.loc[0, "tpms_rr_window_t_s"] == pytest.approx(20.0 + 0.5 * 74 * TPMS_DT_S)
+    assert out.loc[0, "tpms_temp_rr_settled"] == pytest.approx(22.0)
+    # every lap has its own window, from its own first reading
+    assert out.loc[1, "tpms_press_rr_window_mean"] == pytest.approx(1.36)
+    assert out.loc[1, "tpms_rr_window_t_s"] == pytest.approx(0.5 * 74 * TPMS_DT_S)
+    # without a session clock the window ends with the lap
+    lap_only = recompute_tpms_lap_aggregates(laps, ts.drop_columns(["t_session_s"]))
+    assert lap_only.set_index("lap_num").loc[0, "tpms_press_rr_window_mean"] == pytest.approx(1.30)

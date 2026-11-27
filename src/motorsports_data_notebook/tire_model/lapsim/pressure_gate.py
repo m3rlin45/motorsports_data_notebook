@@ -236,13 +236,16 @@ def split_pooling(own: tuple[str, ...]) -> dict[str, str]:
 
 def _fit_signature(root: Path) -> str:
     """What a cached fold is of: the dataset's files, the fit's source,
-    the sidecars a fit reads and, where it is not the shipped one, the
-    pooling of the cars."""
+    the sidecars a fit reads and, where they are not the shipped ones, the
+    pooling of the cars and the stint anchor's mode (#421)."""
+    from .. import warmup_table
     from ..warmup_table import CAR_FIT_ALIASES
 
     h = hashlib.sha256(geo._index_signature(root).encode())
     if dict(CAR_FIT_ALIASES) != _SHIPPED_POOLING:
         h.update(repr(sorted(CAR_FIT_ALIASES.items())).encode())
+    if warmup_table.ANCHOR_MODE != "first":
+        h.update(f"anchor:{warmup_table.ANCHOR_MODE}".encode())
     src = Path(__file__).resolve().parent.parent
     for name in _FIT_SOURCES:
         h.update((src / name).read_bytes())
@@ -3463,9 +3466,21 @@ def _fold_job(job: tuple) -> tuple[int, pd.DataFrame, pd.DataFrame]:
         rules,
         steps,
         arms,
+        anchor,
     ) = job
+    from ..warmup_table import set_anchor_mode
+
     split_pooling(tuple(split))
-    key = (str(root), str(cache_dir), str(tracks_dir), str(folds_dir), tuple(split), heat_frame)
+    set_anchor_mode(anchor)
+    key = (
+        str(root),
+        str(cache_dir),
+        str(tracks_dir),
+        str(folds_dir),
+        tuple(split),
+        heat_frame,
+        anchor,
+    )
     with using(heat_frame):
         if _WORKER.get("key") != key:
             _WORKER.update(
@@ -3503,6 +3518,7 @@ def check_pressure_holdout(
     served_rules: str = SERVED_RULES_DEFAULT,
     served_steps: tuple[str, ...] = (),
     arms: tuple[str, ...] = HOLDOUT_ARMS,
+    anchor: str = "first",
 ) -> GateReport:
     """The calculator's own evaluation, MAE over folds of held-out
     sessions (``tire-predict-holdout``: the every-session holdout,
@@ -3532,7 +3548,12 @@ def check_pressure_holdout(
     ``tyres`` outside any ``using``): ``tyres`` (#376) serves the simulated
     laps with no frame factor; ``sensor`` fits on the sensor
     verdict's series and brings the simulated laps to it by a frame factor
-    per kind of source (for comparison; ``holdout_rows__sensor.parquet``)."""
+    per kind of source (for comparison; ``holdout_rows__sensor.parquet``).
+
+    ``anchor`` is the stint anchor's mode (``warmup_table.ANCHOR_MODE``, an
+    option of #421): ``"window"`` or ``"settled"`` reads each anchor over
+    its opening window in every fit and every held-out stint
+    (``holdout_rows__anchor<mode>.parquet``)."""
     import multiprocessing
     import os
     from concurrent.futures import ProcessPoolExecutor
@@ -3540,16 +3561,19 @@ def check_pressure_holdout(
     from ..validate import _inferred_compound_labels, _pick_holdout_sessions
 
     from ..heat_frame import SENSOR, resolve
+    from ..warmup_table import set_anchor_mode
 
     heat_frame = resolve(heat_frame)  # concrete: the workers are other processes
     sensor = heat_frame == SENSOR
     pooling = split_pooling(tuple(split))
+    set_anchor_mode(anchor)  # the compound labels read the anchors too
     rep = GateReport(
         ("FHP" if fastest else "FHS" if split else "FH") + ("_sensor" if sensor else ""),
         "the standing holdout on simulated heat (`lapsim check-pressure-holdout`)"
         + (f", with {', '.join(split)} fitted apart" if split else "")
         + (f", the fastest {fastest:.0%} of each cell's dry sessions held out" if fastest else "")
-        + (", the heat in the sensor's frame and a frame factor" if sensor else ""),
+        + (", the heat in the sensor's frame and a frame factor" if sensor else "")
+        + (f", stint anchors read in the {anchor} mode (#421)" if anchor != "first" else ""),
     )
     if split:
         rep.notes.append(f"The pooling of the cars in this run: {pooling}.")
@@ -3573,6 +3597,7 @@ def check_pressure_holdout(
                 served_rules,
                 tuple(served_steps),
                 tuple(arms),
+                anchor,
             )
             for k, (_, ids) in enumerate(by_pace)
         ]
@@ -3601,6 +3626,7 @@ def check_pressure_holdout(
                 served_rules,
                 tuple(served_steps),
                 tuple(arms),
+                anchor,
             )
         )
     cores = os.cpu_count() or 2
@@ -3656,6 +3682,7 @@ def check_pressure_holdout(
             + (f"__fast{round(100 * fastest)}" if fastest else "")
             + ("__sensor" if sensor else "")
             + ("" if served_rules == SERVED_RULES_DEFAULT else f"__served_{served_rules}")
+            + (f"__anchor{anchor}" if anchor != "first" else "")
         )
         rows.to_parquet(out / f"holdout_rows{tag}.parquet")
         notes.to_parquet(out / f"holdout_sessions{tag}.parquet")

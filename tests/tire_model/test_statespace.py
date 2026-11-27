@@ -268,3 +268,20 @@ def test_fit_trains_around_a_discarded_window(tmp_path: Path) -> None:
     comp = ss.lap_heat_components(stints)
     holed = comp[comp["session_id"] == "s_tsukuba"]["lap_num"].unique()
     assert 180 // LAP_S not in holed and 0 in holed
+
+
+def test_anchor_span_speed_is_the_rms_over_the_span() -> None:
+    """#421: an anchor that averages readings over t_anchor ± half reads its
+    speed-pressure correction at the RMS speed of that span; a single
+    reading (no span) leaves the anchor bin's own speed to the caller."""
+    import numpy as np
+
+    from motorsports_data_notebook.tire_model.statespace import anchor_span_speed
+
+    v = np.arange(0.0, 100.0)  # 1 m/s per rolling second
+    assert anchor_span_speed(v, 30.0, 10.0) == np.sqrt(np.mean(np.arange(20.0, 41.0) ** 2))
+    assert np.isnan(anchor_span_speed(v, 30.0, 0.0))
+    assert np.isnan(anchor_span_speed(v, 30.0, None))
+    assert np.isnan(anchor_span_speed(v, 30.0, float("nan")))
+    # clipped at the series' ends
+    assert anchor_span_speed(v, 2.0, 5.0) == np.sqrt(np.mean(np.arange(0.0, 8.0) ** 2))

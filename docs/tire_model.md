@@ -289,6 +289,9 @@ notes-validation loaders, `statespace._session_timeseries`):
      first change, not at the temperature's.
 2. **Per-lap TPMS summaries rebuilt** from the masked streams, so an
    out-lap's `tpms_*_start` — the stint anchor — is the first live reading.
+   Each lap's opening window is rebuilt beside them (the means of the
+   first 60 s of readings and the temperature 60–120 s on), for the stint
+   anchor's options (§2.2a″; off by default).
 3. **Lap usability** (`tire_usable` / `exclude_reason`): out-laps need
    60 s of rolling time, in-laps are excluded, laps shorter than 30 s or
    slower than 1.4× the stint's best are dropped, and a lap needs a TPMS
@@ -1188,6 +1191,228 @@ and the lap-end bias 0.0225 → 0.0100 bar; the Inferno's per-stint gain
 spread went 0.41 → 0.34 and its per-track gain ratios moved to within ±9 %
 of 1. Speed-dependent *cooling* on the carcass node is rejected a second
 time once κ is in (β unstable 1.4–3.6, track factors drift up).
+
+### 2.2a″ The stint anchor: one reading, and the sensor is not the gas (#421, 2026-11-27)
+
+Every prediction of a stint starts from one TPMS reading: the corner's
+first valid pressure and temperature after the stale-packet masks (§1.0a′).
+The pressure is read in counts of 31.3 mbar and flickers between two
+counts; the temperature is the sensor's, in the rim. This section records
+what that costs on the standing holdout (15 pinned folds, 128 sessions,
+5,651 lap × tyre rows, calculator inputs, the fits of v1.4.0: 36.13 mbar),
+what was tried, and the option that came of it. Changes are paired per row
+with the standard error clustered by date (46 dates).
+
+**What the anchor costs** (the fold models unchanged, only the held-out
+anchors re-read):
+
+| | MAE, mbar | change |
+|---|---|---|
+| as it is | 36.13 | |
+| the best constant offset per stint × tyre (reads the answer: a ceiling) | 16.60 | −19.54 ± 1.60 |
+| the best constant offset per stint, the four tyres alike (reads the answer) | 28.76 | −7.38 ± 0.95 |
+| anchor pressure = the mean of the 60 s after it | 33.18 | −2.95 ± 0.79 |
+| … the median of those 60 s | 34.41 | −1.73 ± 0.81 |
+| … a line through them, read back at the anchor | 35.53 | −0.61 ± 0.55 |
+| a reading's own scatter of 13 / 15 / 18 mbar sd taken out (extrapolated from added noise) | 34.0 / 33.3 / 32.0 | −2.2 / −2.9 / −4.1 |
+| lap-end target = the mean of the lap's last 10 s | 35.64 | −0.49 ± 0.40 |
+
+- The residual's mean square (2,233 mbar²) is 35 % common to a stint (sd
+  28 mbar), 43 % a tyre's own and constant through the stint (sd 31), 22 %
+  lap to lap (sd 22; the MAE is 17.0 with every stint × tyre level taken
+  out). The reading's scatter (10 mbar sd about a 60 s line on the FJ, 16
+  on the Inferno 86) is a third to a half of the tyre's own part. The rest
+  is constant per stint × tyre and is not in the first minute's readings.
+- So the single reading is about 3 of the 36 mbar, not most of it.
+- 191 of the 586 stint × tyre anchors (33 %) are off the median of their
+  next minute. One count above (99): the stint is predicted 28.5 mbar high;
+  two above (19): +54; one below (64): −15; two below (9): −32; on it
+  (395): +1.
+- An anchor on a stint's first lap, not a pit exit (50 stint × tyres, 545
+  rows): MAE 38.4, bias +25.5 (+42 on the first lap after it). Pit exits:
+  35.9 and +2.4, flat with the laps. Seven of those 17 stints have no
+  out-lap in the file, five have a pit out-lap in which the corner never
+  read, five start rolling (#390).
+
+**The session-start mask stays as it is** (#421 (b), #418). Rules tried
+on the held-out side, the fits unchanged:
+
+| rule | change, mbar |
+|---|---|
+| no session-start rule, #371's rule alone (live unless it moves three counts within 60 s) | **+15.55 ± 4.37** |
+| unmask at the pressure's own first change, not the temperature's | −0.36 ± 0.79 |
+| #371's rule at two counts | +0.91 ± 0.68 |
+| #371's rule off (what it is worth on the held-out side) | +5.04 ± 1.87 |
+
+- The session-start rule sets 453 of the 586 anchors. The value it masks
+  is two or more counts from the next minute's median on 190 of the 337
+  anchors it sets at a pressure change (as the anchor instead: MAE 149 on
+  those rows). Where the step is one count (142) it is a coin toss: the
+  stream is back on the masked value within 60 s on 119. That is the case
+  of 2026-11-27, and no mask rule settles it; a window does.
+- The 116 anchors unmasked by a temperature change sit more often above
+  their next minute than below it (27 against 6): a held pressure that the
+  temperature's change let through. Unmasking at the pressure's own change
+  moves 1,117 rows and is not told from zero.
+- **#371's rule in the wet** (+2.98 ± 1.31 mbar on the 24 wet sessions
+  with it in training and scoring, against neither): +0.90 ± 0.82 is the
+  held-out side and is one tyre, a2002 FR (Inferno 86, Tsukuba), whose
+  masked reading is a held packet (2.48 bar and 48 °C for 12 s, then 2.38
+  and 45; FL beside it drops eight counts at 6 s); with the fresh anchor
+  the model is 75 mbar low on it, where the stale one gave +24 by luck.
+  +2.25 ± 1.02 is the constants: the Inferno 86's wet K rises 6–9 % and
+  its wet τ 17–21 % in every fold when its stale anchors are masked (six
+  wet sessions: +5.6 ± 3.2 on them; the FJ's eighteen +0.8 ± 0.3). The
+  rule masks nothing live in the wet; no wet case is needed.
+
+**The sensor at the anchor is not the gas** (#421 (c)). The amount of gas
+in a tyre, `(P + P_atm) / T`, is the same at the anchor and late in the
+stint, so `T·ln(n_anchor / n_late)` (in kelvin, `n_late` from the lap means
+from flying lap 4 on) measures how far the anchor's temperature is from
+the gas's, up to a constant of the car and track. On 404 pit-exit stint ×
+tyres, within car × track × axle × condition:
+
+| the sensor's change 60–120 s after the anchor | stint × tyres | gas less sensor at the anchor, K (against anchors whose sensor did not move) |
+|---|---|---|
+| fell by 3 °C or more | 16 | −7.3 |
+| fell by 2 °C | 32 | −3.7 |
+| fell by 1 °C | 53 | −1.5 |
+| rose by 1 °C | 88 | +0.9 |
+| rose by 2 °C | 26 | +2.7 |
+| rose by 3 °C or more | 34 | +5.8 |
+
+- The slope is +1.12 ± 0.11 K per °C (FJ 0.94 ± 0.07, Inferno 86
+  1.50 ± 0.21); a sensor that tracked the gas would give about 0.3. The
+  anchor temperature that conserves the gas best is the sensor's reading
+  one to two minutes on (the spread within cells falls from 3.69 to
+  2.80 K; one kelvin is about 8 mbar hot).
+- A falling sensor is a warm restart: the rim is warmer than the gas and
+  cools in the air stream. A rising one is mostly a later stint of a
+  session (+4.4 K on the FJ, +4.9 on the Inferno 86): the rim cooled in
+  the pit lane while the gas stayed warm.
+- 25 % of pit-exit stint × tyres fall by 1 °C or more, 12 % by 2 or more.
+- On the holdout it is small: the anchor temperature moved by half the
+  sensor's change −0.54 ± 0.23 mbar, by the fall where it fell
+  −0.17 ± 0.33. The flag "sensor falling while the pressure rises" reads
+  −19 mbar of bias, but its pressure clause selects anchors read a count
+  low; on the temperature alone the bias is −4.
+- For the driver it bears on #385: the dash temperature at a re-set is
+  not the gas's, by about what it then moves.
+
+**The option** (`warmup_table.ANCHOR_MODE`, `--anchor` on `tire-model
+holdout` and `lapsim check-pressure-holdout`; default `first`, as before).
+
+- `window`: an anchor taken at a lap's first valid reading (a pit exit or
+  a first lap alike) is the means of the corner's masked pressure and
+  temperature over the 60 s from it (`cleaning.opening_window`,
+  `tpms_*_window_mean`, on the session clock, so past the lap's end where
+  need be), at their mean time on the rolling clock; the speed-pressure
+  correction reads the RMS speed over the span (`t_anchor_half_*`,
+  `statespace.anchor_span_speed`). It is #372's form (its 2026-11-26 patch,
+  never landed) extended to first-lap anchors.
+- `settled`: the window, with the temperature the median of the sensor's
+  readings 60–120 s after the first valid one (`tpms_temp_*_settled`).
+
+Training and scoring read it alike; the calculators' prediction path and
+every typed input are untouched. The window's form was chosen on the
+held-out side (the table above; #372 chose 60 s the same way), so it is
+not blind; the refits below are.
+
+**Gate** (written before any fold was refitted with it): the 15 folds
+refitted with the mode on against the baseline; pass if the paired change
+has a date-clustered 95 % interval below zero, neither car is worse by
+more than 0.5 mbar and the wet is not worse by more than its SE; `settled`
+is preferred to `window` only if better by more than one SE.
+
+| | MAE | change | FJ | Inferno 86 | wet | bias |
+|---|---|---|---|---|---|---|
+| baseline | 36.13 | | 31.14 | 43.19 | 40.76 | +4.6 |
+| `window`, training and scoring | 32.26 | **−3.86 ± 0.94** | −1.58 ± 1.07 | −7.07 ± 1.50 | −2.11 ± 2.29 | +7.9 |
+| `window`, scoring only (the baseline's fits) | 32.16 | −3.96 ± 0.86 | −2.50 ± 0.93 | −6.01 ± 1.62 | −2.89 ± 1.86 | +5.7 |
+| `window`, training only (scored on first readings) | 36.63 | +0.49 ± 0.45 | +1.30 ± 0.44 | −0.65 ± 0.78 | | +6.8 |
+| `settled`, training and scoring | 32.10 | **−4.02 ± 1.10** | −1.88 ± 1.27 | −7.02 ± 1.82 | −2.66 ± 2.55 | +8.0 |
+| `settled`, scoring only | 31.83 | −4.28 ± 0.97 | −2.81 ± 1.06 | −6.36 ± 1.83 | −3.74 ± 2.18 | +5.2 |
+| `settled`, training only | 36.87 | +0.73 ± 0.53 | +1.53 ± 0.52 | −0.40 ± 0.94 | | +7.5 |
+
+- Both pass. `window` is nearer on 91 of the 128 sessions. `settled` less
+  `window` is −0.16 ± 0.32: not preferred. The four damp sessions are
+  +4.8 ± 5.0 and +2.4 ± 2.8.
+- **Part of the first-lap anchors' gain is the lap count, not the
+  anchor's value.** The window's mean time is about 30 s after the first
+  reading. A stint anchored on its first lap is fed the laps whose middle
+  lies past the anchor (`validate._laps_from_anchor`), so on 156 of the 545
+  first-lap rows the later anchor drops one lap: those rows go 40.8 → 27.1
+  (bias +31 → +9), which is the out-lap no longer counted as a flying lap.
+  On the rows whose lap count is unchanged `window` is −3.57 ± 0.94
+  (scoring only −3.71 ± 0.87): pit exits −4.09 ± 0.97 (5,106 rows),
+  first-lap anchors +3.4 ± 3.3 (383 rows; scoring only +0.9 ± 2.7). So the
+  window's value is shown at pit exits, and on first laps only on
+  2026-11-27 below. Six first-lap rows lose their only scored lap.
+- At a pit exit the calculator integrates the whole typical out-lap from
+  the anchor wherever in the out-lap the reading was taken. A window
+  anchor is the state about 30 s in, so that much out-lap heat is counted
+  twice: the bias on pit-exit rows goes +2.4 → +4.2 with the baseline's
+  fits. On 60 of the 536 pit-exit stint × tyres the window's span runs
+  past the out-lap's end.
+- With the compound labels held at the baseline's the two refits read
+  32.29 and 32.10: the labels play no part.
+- **The gain is the holdout's own inputs.** The holdout types in the
+  stint's first TPMS reading as the cold pressure; a driver sets it with a
+  gauge. The constants fitted on window anchors are no better for him:
+  scored on first readings they are +0.49 ± 0.45 (the FJ +1.30 ± 0.44),
+  and on window anchors they are +0.10 ± 0.51 against the baseline's
+  constants. What the option buys is a sharper yardstick, by about 4 mbar,
+  for whatever is judged on the holdout next.
+- **The fitted constants move, one way in all 15 folds**: the FJ's κ from
+  1.2 × 10⁻⁷ (1.4 × 10⁻¹¹ to 3.1 × 10⁻⁷ across the folds) to 8.1 × 10⁻⁷
+  (1.8 × 10⁻⁷ to 1.06 × 10⁻⁶), the value it had before the KK-F-V2's Fuji
+  day; the Inferno 86's κ −15 %; K dry +2.7 / +1.9 % (FJ front / rear) and
+  −3.7 / −2.0 % (Inferno 86); τ dry −2 to −3 %. An all-data fit with
+  `window` on against one with it off: the same, and g_transfer 2.74 →
+  3.40 (FJ) and 4.32 → 3.96 (Inferno 86); the recommended cold pressure on
+  the parity fixture's 24 cases moves by −2.6 mbar in the mean, 6.3 in
+  the mean absolute, −12.8 to +12.0 (`settled`: −5.5, 8.0, −14.7 to +9.6;
+  τ dry −7 % on the FJ).
+- **The two Fuji days of the KK-F-V2** (hot pressure, MAE / bias, mbar):
+
+  | | `first` | `window` | `settled` |
+  |---|---|---|---|
+  | 2026-11-27 (never in a fit; 68 rows), the shipped constants | 46.2 / −20.1 | 36.0 / −9.9 | 32.7 / −14.8 |
+  | 2026-11-27, an all-data fit with the mode | 46.2 / −20.1 | 36.2 / −3.6 | 31.6 / −6.5 |
+  | … of which a0447 (24 rows), the shipped constants | 66.5 / −62.1 | 46.8 / −41.2 | 44.4 / −36.2 |
+  | 2026-11-25 (168 rows), fitted without the day | 53.2 / −50.2 | 51.2 / −49.4 | 48.1 / −46.1 |
+
+  The day that found #421 loses 10 of its 46 mbar with the window. All
+  its anchors are first-lap ones: on the 35 rows whose lap count is
+  unchanged (a0447 and part of a0444-0445) the window reads 63.3 / −60.3 →
+  39.5 / −34.5, which is the anchor's value; on the 33 whose count drops by
+  one, 28.0 / +22.5 → 32.2 / +16.1. a0447 stays 36–41 mbar low and
+  2026-11-25 50 low, which is #394 and not the anchor. 2026-11-25 is scored
+  from the committed dataset with the day left out of the fit; the shipped
+  constants have seen it.
+- With the option off the holdout's rows are the baseline's bit for bit;
+  two folds refitted with it off give the same rows and fold fits equal to
+  the last one or two bits of 45 of 2,882 values.
+- Not explained, and not this change: an all-data fit of the release's
+  own code, the option off, does not give the shipped artifact's FJ κ
+  (1.36 × 10⁻⁷ against 1.22 × 10⁻⁷) nor its g_transfer to better than
+  0.1–0.2 %; K and τ agree. The comparisons above are against that fit.
+
+**#390 at query time.** `speed_kmh_first` is in the laps table, so an
+out-lap that starts rolling can be counted as a pit exit when the laps are
+loaded, with no extractor change: 21 of the dataset's 365 stints that
+start on an out-lap do (10 at Fuji, 7 at Tsukuba; 10 of the KK-F-V2's
+14). Measured on the held-out side only, the fold fits and their out-lap
+entries unchanged: counting those under 60 or 45 km/h as pit exits
+changes the kind of 167 or 149 held-out rows and the holdout by
++0.01 ± 0.04 or 0.00 ± 0.04 mbar; the first-lap anchors' bias stays at
++25. The holdout cannot speak for the car it concerns most: none of the
+KK-F-V2's Fuji sessions is in it. On its 2026-11-27 morning the same
+relabelling (the `dataset_pit` root of that day's evaluation) read 47.3
+against 46.2 mbar. The effect on the fitted out-lap entries (the FJ's at
+Fuji rests on n = 2) was not measured. An extractor change would add only
+the stint split at a rolling pit visit (`_restint_at_pit_exits`). Not
+built.
 
 ### 2.2b The out-lap (schema v4)
 
