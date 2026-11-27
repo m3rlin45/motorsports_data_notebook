@@ -3,6 +3,7 @@
 
 import {
   TireModel, predictCorner, predictCornerTrajectory, adjustedHotTempC, cornerColdPressureBar,
+  PACE_NO_SOLUTION, PACE_OUTSIDE_SUPPORT,
 } from './model.js';
 import { renderPressureChart } from './chart.js';
 import { STRINGS, resolveLanguage } from './strings.js';
@@ -140,6 +141,9 @@ const els = {
   targetLapLabel: $('targetLapLabel'), targetLapInput: $('targetLapInput'),
   compoundLabel: $('compoundLabel'), compoundSelect: $('compoundSelect'),
   lastUpdated: $('lastUpdated'),
+  gsiAttribution: $('gsiAttribution'),
+  carHint: $('carHint'),
+  paceFlag: $('paceFlag'),
 };
 
 // "Model data: 2026-10-02 14:23 JST · v1.1.1": the newest session in the
@@ -279,7 +283,13 @@ function cornerInputs(c) {
   };
 }
 
+// What the current prediction says about its entry, shared by the corners:
+// whether it reads a simulated row (GSI's attribution) and the simulated
+// pace curve's status at the lap time (a flag unless 'ok').
+let entryNotes = { usesSimulation: false, paceStatus: null };
+
 function refreshPredictions() {
+  entryNotes = { usesSimulation: false, paceStatus: null };
   for (const c of CORNERS) {
     predictions[c.id] = null;
     const inputs = cornerInputs(c);
@@ -287,10 +297,19 @@ function refreshPredictions() {
     try {
       const result = predictCorner(model, inputs);
       predictions[c.id] = result.predictedHotTempC;
+      entryNotes.usesSimulation ||= result.usesSimulation;
+      entryNotes.paceStatus ??= result.paceStatus;
     } catch {
       predictions[c.id] = null;
     }
   }
+}
+
+// The pace flag's string for a status, or null for none ('ok', no status).
+function paceFlagKey(status) {
+  if (status === PACE_NO_SOLUTION) return 'PaceNoSolution';
+  if (status === PACE_OUTSIDE_SUPPORT) return 'PaceOutsideSupport';
+  return null;
 }
 
 // ---- Preview charts ----
@@ -351,6 +370,8 @@ function applyStrings() {
   els.cloudLabel.textContent = t('CloudCover');
   els.targetLapLabel.textContent = t('TargetLapTime');
   els.compoundLabel.textContent = t('Compound');
+  els.gsiAttribution.textContent = t('GsiAttribution');
+  els.carHint.textContent = t('PickRawCarHint');
   fillCompoundSelects();
   renderLastUpdated();
 
@@ -524,6 +545,11 @@ function render() {
     els.targetLapInput.value = formatLapTime(p.TargetLapTimeS);
   }
   els.compoundSelect.value = p.Compound ?? '';
+  els.carHint.hidden = !(prediction && model?.isPooledSelection(p.Car));
+  const flag = prediction ? paceFlagKey(entryNotes.paceStatus) : null;
+  els.paceFlag.hidden = flag === null;
+  els.paceFlag.textContent = flag === null ? '' : t(flag);
+  els.gsiAttribution.hidden = !(prediction && entryNotes.usesSimulation);
 
   // Corner cards.
   for (const c of CORNERS) {

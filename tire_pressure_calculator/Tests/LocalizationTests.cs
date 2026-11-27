@@ -17,6 +17,7 @@ public class LocalizationTests
         "ConditionDry", "ConditionDamp", "ConditionWet",
         "TempAdjustZero", "TempAdjustFormat",
         "PredictedHotPrefix", "LastUpdatedFormat",
+        "GsiAttribution", "PaceOutsideSupport", "PaceNoSolution", "PickRawCarHint",
     };
 
     [Fact]

@@ -56,6 +56,14 @@ test('parity with Python predictor fixture', () => {
           `${label}: g2 scale ${prediction.g2Scale} != ${expected.g2_scale}`);
         assert.equal(prediction.g2PaceSource, testCase.g2_pace_source, `${label}: pace source`);
       }
+      if (testCase.uses_simulation !== undefined) {
+        assert.deepEqual(
+          { heat: prediction.heatProvenance, lap_time: prediction.lapTimeProvenance,
+            outlap: prediction.outlapProvenance },
+          testCase.provenance, `${label}: provenance`);
+        assert.equal(prediction.usesSimulation, testCase.uses_simulation, `${label}: attribution`);
+        assert.equal(prediction.paceStatus, testCase.pace_status, `${label}: pace status`);
+      }
     }
   }
 });
@@ -515,6 +523,299 @@ test('a saved KK-SII predicts from its own rows when the artifact has them', () 
   assert.ok(kksii.coldPressureBar > fj.coldPressureBar, 'less heat, a higher cold pressure');
   // the KK-F has no row of its own there and reads the FJ's
   assert.deepEqual(predictCorner(split, { ...args, car: 'KK-F' }), fj);
+});
+
+// rawCarModel with RawA's dry entry simulated (the cutover's rows, schema
+// §9: beside the logged ones, which stay): 14 knots from 50 s to 76 s,
+// supported from 54 s to 70 s, at a fed-use lap time of 57 s; its out-lap
+// stays logged (the served arm where the cell has logged laps). The pooled
+// car's rows stay logged.
+const SIM_KNOTS = Array.from({ length: 14 }, (_, i) => 50 + 2 * i);
+const SIM_TYP = 57;
+const simSeries = (k) => SIM_KNOTS.map((_, i) => k / (1 + 0.07 * i));
+function simModel({ support = { lap_time_min_s: 54, lap_time_max_s: 70 }, simFirst = false } = {}) {
+  const dto = rawCarModel();
+  const byCorner = { fl: simSeries(2.6), fr: simSeries(1.9), rl: simSeries(2.3), rr: simSeries(1.7) };
+  const curve = {
+    lap_time_s: SIM_KNOTS, n_laps: 0, method: 'sim',
+    g2: SIM_KNOTS.map((_, i) => (byCorner.fl[i] + byCorner.fr[i] + byCorner.rl[i] + byCorner.rr[i]) / 4),
+    g2_by_corner: byCorner,
+  };
+  if (support) curve.support = support;
+  const heat = {
+    track_canonical: 'synth', car: 'RawA', condition: 'dry', source: 'sim',
+    g2_typ: 2.0, n_laps_used: 0, q_typ_by_corner: { fl: 2.3, fr: 1.7, rl: 2.0, rr: 1.5 },
+    g2_vs_lap_time: curve,
+  };
+  const lap = {
+    track_canonical: 'synth', car: 'RawA', condition: 'dry', source: 'sim',
+    lap_time_typ_s: SIM_TYP, n_laps_used: 0,
+  };
+  const beside = (rows, row) => (simFirst ? [row, ...rows] : [...rows, row]);
+  dto.g2_typ_by_track_raw_car_cond = beside(dto.g2_typ_by_track_raw_car_cond, heat);
+  dto.lap_time_typ_by_track_raw_car_cond = beside(dto.lap_time_typ_by_track_raw_car_cond, lap);
+  return dto;
+}
+
+const linear = (x, xs, ys) => {
+  const i = xs.findIndex((v) => v >= x);
+  return ys[i - 1] + (x - xs[i - 1]) / (xs[i] - xs[i - 1]) * (ys[i] - ys[i - 1]);
+};
+
+const SIM_ARGS = {
+  track: 'synth', condition: 'dry', lapWithinStint: 5, ambientTempC: 20,
+  cloudCoverPct: 100, targetHotPressureBar: 1.8, corner: 'fl', car: 'RawA',
+};
+
+test('simulated entries: provenance, the knots read linearly, the pace flag', () => {
+  const model = new TireModel(simModel());
+  const args = SIM_ARGS;
+  const p = predictCorner(model, { ...args, targetLapTimeS: 61 });
+  assert.equal(p.heatProvenance, 'sim');
+  assert.equal(p.lapTimeProvenance, 'sim');
+  assert.equal(p.outlapProvenance, 'logged');
+  assert.equal(p.usesSimulation, true);
+  assert.equal(p.paceStatus, 'ok');
+  // the fed-use lap time is the prefill, and the 14 knots are read linearly
+  assert.equal(model.lookupLapTime('synth', 'RawA', 'dry').valueSeconds, SIM_TYP);
+  const fl = simSeries(2.6);
+  assert.ok(Math.abs(p.g2Typ - 2.3 * linear(61, SIM_KNOTS, fl) / linear(SIM_TYP, SIM_KNOTS, fl)) < 1e-12);
+  // no target: the typical lap time's status
+  assert.equal(predictCorner(model, args).paceStatus, 'ok');
+  // outside the logged pace, either side, or past the slowest knot: answered, flagged
+  for (const t of [52, 71, 80]) {
+    const q = predictCorner(model, { ...args, targetLapTimeS: t });
+    assert.equal(q.paceStatus, 'outside_support', `${t} s`);
+    assert.ok(Number.isFinite(q.coldPressureBar));
+  }
+  // faster than the fastest knot: answered at it (the clamp), flagged
+  const fast = predictCorner(model, { ...args, targetLapTimeS: 47 });
+  assert.equal(fast.paceStatus, 'no_solution');
+  assert.ok(Math.abs(fast.g2Scale - fl[0] / linear(SIM_TYP, SIM_KNOTS, fl)) < 1e-12);
+  assert.equal(fast.tAtLapNs, 5 * 47);
+  // a sim curve without its support is outside it
+  const bare = new TireModel(simModel({ support: null }));
+  assert.equal(predictCorner(bare, { ...args, targetLapTimeS: 61 }).paceStatus, 'outside_support');
+  // no out-lap asked for: none read
+  assert.equal(predictCorner(model, { ...args, includeOutlap: false }).outlapProvenance, null);
+});
+
+test('simulated entries: a sim row answers its exact condition only, whatever its place in the table', () => {
+  const today = new TireModel(rawCarModel());
+  const args = { ...SIM_ARGS, targetLapTimeS: 61 };
+  for (const simFirst of [false, true]) {
+    const model = new TireModel(simModel({ simFirst }));
+    assert.equal(predictCorner(model, args).heatProvenance, 'sim', `simFirst=${simFirst}`);
+    assert.equal(model.lookupLapTime('synth', 'RawA', 'dry').valueSeconds, SIM_TYP);
+  }
+  // with the pooled damp rows gone, RawA's wet and damp fall back to its own
+  // dry rows: the logged ones, as today, not the simulated one beside them
+  const strip = (dto) => {
+    dto.g2_typ_by_track_car_cond = dto.g2_typ_by_track_car_cond.filter((r) => r.condition !== 'damp');
+    dto.lap_time_typ_by_track_car_cond = dto.lap_time_typ_by_track_car_cond.filter((r) => r.condition !== 'damp');
+    return dto;
+  };
+  const todayDry = new TireModel(strip(rawCarModel()));
+  const sim = new TireModel(strip(simModel()));
+  for (const condition of ['wet', 'damp']) {
+    const p = predictCorner(sim, { ...args, condition });
+    assert.deepEqual(p, predictCorner(todayDry, { ...args, condition }), condition);
+    assert.equal(p.g2PaceSource, 'curve');
+    assert.equal(p.usesSimulation, false);
+    assert.equal(sim.lookupG2('synth', 'RawA', condition).source, 'fallback(dry)');
+  }
+  // and with the pooled damp rows, as today: the pooled damp entry
+  for (const condition of ['wet', 'damp']) {
+    assert.deepEqual(predictCorner(new TireModel(simModel()), { ...args, condition }),
+      predictCorner(today, { ...args, condition }), condition);
+  }
+  // a saved pooled car reads the pooled logged rows, as today
+  for (const condition of ['dry', 'damp', 'wet']) {
+    assert.deepEqual(predictCorner(new TireModel(simModel()), { ...args, car: 'Car', condition }),
+      predictCorner(today, { ...args, car: 'Car', condition }), condition);
+  }
+
+  // the exact step's order is raw sim, raw logged, pooled sim, pooled
+  // logged: a pooled sim row does not beat the raw car's own logged row ...
+  const pooledSim = simModel();
+  pooledSim.g2_typ_by_track_raw_car_cond = pooledSim.g2_typ_by_track_raw_car_cond
+    .filter((r) => r.source !== 'sim');
+  const simRow = simModel().g2_typ_by_track_raw_car_cond.find((r) => r.source === 'sim');
+  pooledSim.g2_typ_by_track_car_cond.unshift({ ...simRow, car: 'Car' });
+  const ordered = new TireModel(pooledSim);
+  assert.equal(ordered.entryRow('g2_typ_by_track_car_cond', 'synth', 'RawA', 'dry').source, undefined);
+  assert.equal(ordered.entryRow('g2_typ_by_track_car_cond', 'synth', 'RawA', 'dry').g2_typ, 1.2);
+  // ... and a raw car with no row of its own reads the pooled sim row first
+  assert.equal(ordered.entryRow('g2_typ_by_track_car_cond', 'synth', 'RawB', 'dry').source, 'sim');
+  assert.equal(ordered.entryRow('g2_typ_by_track_car_cond', 'synth', 'RawB', 'dry', { exact: false }).g2_typ, 1.0);
+});
+
+test('simulated entries: logged rows carry no attribution and no flag, averages read logged rows only', () => {
+  const dto = simModel();
+  const model = new TireModel(dto);
+  const args = { ...SIM_ARGS, corner: 'rr', targetLapTimeS: 61 };
+  for (const car of ['Car', 'RawB']) {
+    const p = predictCorner(model, { ...args, car });
+    assert.deepEqual(
+      [p.heatProvenance, p.lapTimeProvenance, p.outlapProvenance, p.usesSimulation, p.paceStatus],
+      ['logged', 'logged', 'logged', false, null], car);
+  }
+  // a simulated out-lap alone carries the attribution
+  const out = rawCarModel();
+  out.outlap_typ_by_track_raw_car_cond.push({
+    ...out.outlap_typ_by_track_raw_car_cond[0], source: 'sim', outlap_moving_s: 70,
+  });
+  const o = predictCorner(new TireModel(out), args);
+  assert.deepEqual([o.heatProvenance, o.outlapProvenance, o.outlapTimeS, o.usesSimulation, o.paceStatus],
+    ['logged', 'sim', 70, true, null]);
+  // an averaged fallback reads logged rows only (the lead's ruling of
+  // 2026-11-27): the simulated damp row is not counted ...
+  const before = new TireModel(dto).lookupG2('synth', 'Nobody', 'dry', 'rr');
+  assert.equal(before.value, (0.7 + 0.6) / 2);
+  dto.g2_typ_by_track_car_cond[1].source = 'sim';
+  const pooled = new TireModel(dto);
+  const nobody = predictCorner(pooled, { ...args, car: 'Nobody' });
+  assert.deepEqual(pooled.lookupG2('synth', 'Nobody', 'dry', 'rr'),
+    { value: 0.7, nLapsUsed: 10, source: 'track_pooled' });
+  assert.equal(nobody.heatProvenance, 'logged');
+  assert.equal(nobody.paceStatus, null);
+  // ... a car whose rows at the track are all simulated skips to the
+  // track's logged rows, and a track with none to the global logged mean
+  const onlySim = structuredClone(dto);
+  onlySim.g2_typ_by_track_car_cond = onlySim.g2_typ_by_track_car_cond.filter((r) => r.condition !== 'dry');
+  onlySim.g2_typ_by_track_car_cond.push({
+    track_canonical: 'other', car: 'Car', condition: 'dry', g2_typ: 0.5, n_laps_used: 3,
+  });
+  const skip = new TireModel(onlySim);
+  assert.deepEqual(skip.lookupG2('synth', 'Car', 'dry'), { value: 0.5, nLapsUsed: 0, source: 'global' });
+  assert.deepEqual(skip.lookupG2('synth', 'Nobody', 'dry'), { value: 0.5, nLapsUsed: 0, source: 'global' });
+  for (const r of onlySim.lap_time_typ_by_track_car_cond) r.source = 'sim';
+  assert.deepEqual(new TireModel(onlySim).lookupLapTime('synth', 'Nobody', 'dry'),
+    { valueSeconds: 90.0, nLapsUsed: 0, source: 'global' });
+});
+
+test('a track only a raw car\'s rows cover is offered', () => {
+  const dto = simModel();
+  assert.deepEqual(new TireModel(dto).availableTracks, ['synth']);
+  dto.g2_typ_by_track_raw_car_cond.push({
+    ...dto.g2_typ_by_track_raw_car_cond.find((r) => r.source === 'sim'), track_canonical: 'simonly',
+  });
+  const model = new TireModel(dto);
+  assert.deepEqual(model.availableTracks, ['simonly', 'synth']);
+  const p = predictCorner(model, {
+    track: 'simonly', car: 'RawA', condition: 'dry', lapWithinStint: 5, ambientTempC: 20,
+    targetHotPressureBar: 1.8, corner: 'fl',
+  });
+  assert.equal(p.heatProvenance, 'sim');
+  assert.equal(p.g2Typ, 2.3);
+});
+
+// The bundled artifact as it was before the cutover: its simulated rows
+// and the cutover's blocks taken out, and no row carrying a `source`.
+function withoutSimulation(dto) {
+  const out = structuredClone(dto);
+  for (const [name, rows] of Object.entries(out)) {
+    if (!name.endsWith('_cond') || !Array.isArray(rows)) continue;
+    out[name] = rows.filter((r) => r.source !== 'sim').map(({ source, ...r }) => r);
+  }
+  delete out.simulation;
+  delete out.entry_coverage;
+  return out;
+}
+
+test('an artifact without source flags reads as logged everywhere', () => {
+  const model = new TireModel(withoutSimulation(modelDto));
+  for (const track of model.availableTracks) {
+    for (const car of model.availableCars) {
+      for (const condition of model.availableConditions) {
+        const p = predictCorner(model, {
+          track, car, condition, lapWithinStint: 5, ambientTempC: 18,
+          targetHotPressureBar: 1.7, corner: 'fl',
+        });
+        assert.equal(p.usesSimulation, false, `${track}/${car}/${condition}`);
+        assert.equal(p.paceStatus, null, `${track}/${car}/${condition}`);
+      }
+    }
+  }
+});
+
+test('the bundled artifact\'s logged cells read as they would without the simulated rows', () => {
+  // the simulated rows sit beside the logged ones and answer only their own
+  // cell: wherever the bundled artifact answers from logged rows, it is the
+  // artifact without them, to the last field (schema §9)
+  const bundled = new TireModel(modelDto);
+  const legacy = new TireModel(withoutSimulation(modelDto));
+  for (const track of bundled.availableTracks) {
+    for (const car of bundled.availableCars) {
+      for (const condition of bundled.availableConditions) {
+        const args = {
+          track, car, condition, lapWithinStint: 5, ambientTempC: 18,
+          targetHotPressureBar: 1.7, corner: 'rl',
+        };
+        const p = predictCorner(bundled, args);
+        if (p.usesSimulation) continue;
+        if (!legacy.availableTracks.includes(track)) continue;
+        assert.deepEqual(p, predictCorner(legacy, args), `${track}/${car}/${condition}`);
+      }
+    }
+  }
+});
+
+// The kind of row a lookup answers a cell with, as the artifact's
+// entry_coverage states it (sim_entries.answer): the first row the
+// condition chain finds ('sim' / 'logged'; a curve-less one is 'none' for
+// the curve), else 'averaged' (a track or global mean), else 'none'.
+function answerKind(model, table, cell, { globalStep, curve = false }) {
+  const { rows, source } = model.answeringRows(
+    table, cell.track_canonical, cell.car, cell.condition, { globalStep });
+  if (rows.length === 0) return 'none';
+  if (['track_car_pooled', 'track_pooled', 'global'].includes(source)) return 'averaged';
+  if (curve && !rows[0].g2_vs_lap_time) return 'none';
+  return rows[0].source ?? 'logged';
+}
+
+test('the bundled artifact\'s entry_coverage is what the lookups answer', (t) => {
+  const cells = modelDto.entry_coverage;
+  if (!cells) { t.skip('the bundled artifact has no entry_coverage'); return; }
+  const model = new TireModel(modelDto);
+  const offered = new Set();
+  for (const track of model.availableTracks) {
+    for (const car of model.availableCars) {
+      for (const condition of model.availableConditions) offered.add(`${track}|${car}|${condition}`);
+    }
+  }
+  assert.deepEqual(new Set(cells.map((c) => `${c.track_canonical}|${c.car}|${c.condition}`)), offered);
+  for (const cell of cells) {
+    const label = `${cell.track_canonical}/${cell.car}/${cell.condition}`;
+    assert.equal(answerKind(model, 'g2_typ_by_track_car_cond', cell, { globalStep: true }), cell.heat, `${label}: heat`);
+    assert.equal(answerKind(model, 'g2_typ_by_track_car_cond', cell, { globalStep: true, curve: true }),
+      cell.curve, `${label}: curve`);
+    assert.equal(answerKind(model, 'lap_time_typ_by_track_car_cond', cell, { globalStep: false }),
+      cell.lap_time, `${label}: lap time`);
+    assert.equal(answerKind(model, 'outlap_typ_by_track_car_cond', cell, { globalStep: false }),
+      cell.outlap, `${label}: out-lap`);
+    const p = predictCorner(model, {
+      track: cell.track_canonical, car: cell.car, condition: cell.condition, lapWithinStint: 5,
+      ambientTempC: 18, targetHotPressureBar: 1.7, corner: 'fl',
+    });
+    assert.equal(p.usesSimulation, [cell.heat, cell.lap_time, cell.outlap].includes('sim'), `${label}: attribution`);
+  }
+});
+
+test('the artifact\'s GSI attribution is the UI string', (t) => {
+  const attribution = modelDto.simulation?.attribution;
+  if (!attribution) { t.skip('the bundled artifact has no simulation block'); return; }
+  const strings = readJson('../../Core/Localization/strings.json');
+  for (const lang of ['en', 'ja']) assert.equal(strings[lang].GsiAttribution, attribution[lang], lang);
+});
+
+test('a saved pooled car is flagged for the hint only where its raw cars are offered', () => {
+  assert.equal(new TireModel(pooledOnly()).isPooledSelection('FJ'), false);
+  const split = new TireModel(withKKSIIEntry());
+  assert.equal(split.isPooledSelection('FJ'), true);
+  assert.equal(split.isPooledSelection('KK-SII'), false);
+  assert.equal(split.isPooledSelection('Inferno 86'), false);
+  assert.equal(split.isPooledSelection(null), false);
 });
 
 test('g2PaceScale: curve ratio anchored at typical, exponent fallback, clamps', () => {

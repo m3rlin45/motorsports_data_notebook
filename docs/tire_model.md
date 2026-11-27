@@ -1582,7 +1582,7 @@ drawing conclusions about the tread constants.
 ### 2.7 Artifact: `tire_model.json`
 
 The model serializes to a versioned JSON committed under
-`data/tire_dataset/tire_model.json` (`schema_version: 3`). Top-level keys:
+`data/tire_dataset/tire_model.json` (`schema_version: 5`). Top-level keys:
 
 Fitted tables:
 
@@ -1613,6 +1613,58 @@ Fitted tables:
   with a pace curve (the guard), and its lap time and pace curve come with
   it. Consumers that do not know the tables read the pooled
   entries as before
+- **Simulated rows** (the cutover; additive in schema 5;
+  `sim_entries.place_simulated`): rows of the three entry tables and their
+  raw-car siblings that carry `source: "sim"`. A row without `source` is
+  logged. A simulated row comes from a lap driven on a committed track
+  (`data/lapsim/tracks/`, whose road bank is processed from GSI's elevation
+  tiles), and any prediction that reads one shows GSI's attribution.
+  - **Where they sit:** the FJ's raw cars' rows go in the raw-car tables;
+    the Inferno 86's go in the pooled tables. The pooled FJ rows stay
+    logged. A simulated row is added beside the logged row of the same
+    key, never in its place.
+  - **Shape:** the row shape is unchanged. `n_laps_used` is 0. A simulated
+    heat row's `g2_vs_lap_time` is the pace table's knots: any number of
+    them, rising lap times, `method: "sim"`, read linearly as every curve
+    is. It carries `support: {lap_time_min_s, lap_time_max_s}`: the lap
+    times of the car's logged range of use at the layout, or of its range
+    over its layouts where it has not run this one. A wet or damp row's slow
+    end is the wet laps'.
+  - **Wet and damp:** a wet or damp cell carries a simulated row only where
+    the model has a logged lap time for that exact condition (rule (c),
+    §2.12 "The cutover"). Elsewhere it reads the logged chain.
+  - **How they are read** (schema §9 of the cutover; `predict._entry_row`,
+    `_answering_rows`, mirrored in both ports):
+    - A simulated row answers only its own exact condition, chosen by its
+      `source`, never by its place in the table. The order at the exact
+      step is raw sim, raw logged, pooled sim, pooled logged.
+    - A condition fallback (wet → damp → dry) reads logged rows only, the
+      raw car's before the pooled car's.
+    - The averaged steps (`track_car_pooled`, `track_pooled`, `global`)
+      average logged rows only, and a step with none is skipped. So a car
+      with no simulated entry of its own reads what it read before.
+  - **What a prediction reports:** `predict_cold_pressure` (and both ports)
+    reports `heat_provenance`, `lap_time_provenance`, `outlap_provenance`
+    (`sim` / `logged`) and `uses_simulation`. It also reports
+    `pace_status` for the lap time, read from a simulated curve only:
+    - `no_solution` under its fastest knot (answered there, by the clamp);
+    - `outside_support` outside `support`, or past the slowest knot;
+    - `ok` otherwise.
+
+    Both are display only: the calculators show the GSI line and a short
+    flag. No number depends on them.
+- `entry_coverage` — one row per cell the calculators offer (every track
+  with a row × every car the picker lists × dry, damp, wet), with
+  `layout_id`. For each of `heat`, `lap_time`, `outlap` and `curve` it gives
+  the kind of row the lookup answers with: `sim`, `logged`, `averaged` (a
+  track or global mean) or `none`. It also carries `sim_only`, and a
+  `reason` where nothing answers `sim`. The ports ignore it at run time,
+  and their tests hold their own lookups to it.
+- `simulation` — the cutover's provenance: `placed`, `export` (when, from
+  which commit and dataset), `conditions`, `rules`, `cells`,
+  `logged_cells_moved` (empty by construction) and `attribution`. The last
+  is GSI's wording in `ja` and `en`, which the tests hold equal to the
+  calculators' `GsiAttribution` string.
 - `rain_thermal` — how rain τ/K are fitted (τ bound, session minimum; §2.9)
 
 Config + provenance:
@@ -1624,7 +1676,7 @@ Config + provenance:
   the entries (heat, pace curve, lap time, out-lap) are read for a raw car
   from its own rows first, at each step of the condition chain, then from
   the pooled car's (§2.5a). The track and global fallbacks average the
-  pooled rows only.
+  pooled tables' logged rows only.
 - `g2_lap_time_model` — pace-scaling method (`uniform_scaled_lap_shares`), physics fallback exponent, multiplier clamp
 - `energy_balance` — the `w_road` config + T_road proxy formula
 - `gay_lussac`, `conditions`, `corners`, `priors_when_no_fit`,

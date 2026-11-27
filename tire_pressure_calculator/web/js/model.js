@@ -28,6 +28,34 @@ export const RAW_CAR_TABLES = {
 };
 export const MIN_SUPPORTED_SCHEMA_VERSION = 5;
 
+// Where an entry row's numbers come from (its `source`, absent meaning
+// logged): 'sim' is a lap simulated on a committed track, whose road bank is
+// processed from GSI's elevation tiles, so a prediction that reads one shows
+// GSI's attribution. Mirrors predict.py.
+export const SIM = 'sim';
+export const LOGGED = 'logged';
+
+// How a simulated pace curve answers the prediction's lap time (its
+// `support`): answered either way, flagged unless 'ok'. Mirrors predict.py.
+export const PACE_OK = 'ok';
+export const PACE_OUTSIDE_SUPPORT = 'outside_support';
+export const PACE_NO_SOLUTION = 'no_solution';
+
+// The steps of answeringRows that answer with an average of rows.
+const AVERAGED_STEPS = ['track_car_pooled', 'track_pooled', 'global'];
+
+const isSim = (r) => (r.source ?? LOGGED) === SIM;
+
+// The logged rows: what an averaged fallback step reads (the lead's ruling
+// of 2026-11-27), so that a car with no simulated entry of its own reads
+// what it read before the simulated rows came. Mirrors predict.py.
+const logged = (rows) => rows.filter((r) => !isSim(r));
+
+// 'sim' if any of the rows is simulated, else 'logged'.
+export function rowProvenance(rows) {
+  return rows.some(isSim) ? SIM : LOGGED;
+}
+
 // C# Math.Round uses banker's rounding (half to even); mirror it so the
 // web app displays the exact same values as the desktop/Android heads.
 export function roundTo(value, digits) {
@@ -218,36 +246,74 @@ export class TireModel {
   }
 
   // The row of an entry table (g2 / lap time / out-lap) that answers
-  // (track, car, condition): a raw car's own row in the table's raw-car
-  // sibling (`*_by_track_raw_car_cond`, #383) where it has one, else the
-  // fitted car's. Mirrors predict.py's _entry_row.
-  entryRow(table, track, car, condition) {
+  // (track, car, condition) at one step of the condition chain: a raw car's
+  // own row in the table's raw-car sibling (`*_by_track_raw_car_cond`, #383)
+  // where it has one, else the fitted car's. A simulated row sits beside the
+  // logged one and answers only its own exact condition (schema §9), chosen
+  // by its `source` (absent: logged), never by its place in the table: at
+  // the `exact` step the order is raw sim, raw logged, pooled sim, pooled
+  // logged; at any other step (a condition fallback) only logged rows count,
+  // the raw car's before the pooled car's. Mirrors predict.py's _entry_row.
+  entryRow(table, track, car, condition, { exact = true } = {}) {
     const fit = this.resolveCar(car);
-    const match = (who) => (r) =>
-      r.track_canonical === track && r.car === who && r.condition === condition;
-    if (fit !== car) {
-      const own = (this.dto[RAW_CAR_TABLES[table]] ?? []).find(match(car));
-      if (own) return own;
+    const tables = [...(fit !== car ? [[RAW_CAR_TABLES[table], car]] : []), [table, fit]];
+    const kinds = exact ? [SIM, LOGGED] : [LOGGED];
+    for (const [name, who] of tables) {
+      const rows = (this.dto[name] ?? []).filter(
+        (r) => r.track_canonical === track && r.car === who && r.condition === condition);
+      for (const kind of kinds) {
+        const hit = rows.find((r) => (isSim(r) ? SIM : LOGGED) === kind);
+        if (hit) return hit;
+      }
     }
-    return (this.dto[table] ?? []).find(match(fit)) ?? null;
+    return null;
   }
 
-  // Every condition's row at `track` for the car whose entries answer
-  // there: the raw car's own where it has any, else the fitted car's (the
-  // track_car_pooled fallback).
+  // Every condition's logged row at `track` for the car whose entries
+  // answer there: the raw car's own where it has any, else the fitted car's
+  // (the track_car_pooled fallback; an average, so a simulated row is not
+  // counted).
   entryRowsAtTrack(table, track, car) {
     const fit = this.resolveCar(car);
     if (fit !== car) {
-      const own = (this.dto[RAW_CAR_TABLES[table]] ?? []).filter(
-        (r) => r.track_canonical === track && r.car === car);
+      const own = logged((this.dto[RAW_CAR_TABLES[table]] ?? []).filter(
+        (r) => r.track_canonical === track && r.car === car));
       if (own.length > 0) return own;
     }
-    return (this.dto[table] ?? []).filter((r) => r.track_canonical === track && r.car === fit);
+    return logged((this.dto[table] ?? []).filter((r) => r.track_canonical === track && r.car === fit));
+  }
+
+  // The rows of an entry table that answer (track, car, condition), and the
+  // step that found them: one row by the condition chain ('exact',
+  // 'fallback(<cond>)'; a raw car's own first; a simulated row only at the
+  // exact condition), else every condition's row
+  // at the track for the car ('track_car_pooled'), else the pooled rows at
+  // the track ('track_pooled'), else, with globalStep, every pooled row
+  // ('global'; none: 'global' with no rows). The averaged steps read logged
+  // rows only, and a step the filter leaves empty is skipped. Every lookup
+  // walks this one chain, and a prediction's provenance is read from the
+  // rows it found. Mirrors predict.py's _answering_rows.
+  answeringRows(table, track, car, condition, { globalStep }) {
+    for (const cond of conditionChain(condition)) {
+      const exact = cond === condition;
+      const hit = this.entryRow(table, track, car, cond, { exact });
+      if (hit) return { rows: [hit], source: exact ? 'exact' : `fallback(${cond})` };
+    }
+    const sameTC = this.entryRowsAtTrack(table, track, car);
+    if (sameTC.length > 0) return { rows: sameTC, source: 'track_car_pooled' };
+    const rows = logged(this.dto[table] ?? []);
+    const sameT = rows.filter((r) => r.track_canonical === track);
+    if (sameT.length > 0) return { rows: sameT, source: 'track_pooled' };
+    return { rows: globalStep ? rows : [], source: 'global' };
   }
 
   get availableTracks() {
-    // Every track with observed data (a typical heat input).
-    const observed = this.dto.g2_typ_by_track_car_cond.map((r) => r.track_canonical);
+    // Every track with an entry (a typical heat input), a raw car's own
+    // included (a track only the simulation covers for it).
+    const observed = [
+      ...this.dto.g2_typ_by_track_car_cond,
+      ...(this.dto[RAW_CAR_TABLES.g2_typ_by_track_car_cond] ?? []),
+    ].map((r) => r.track_canonical);
     return [...new Set(observed)].sort();
   }
 
@@ -332,34 +398,17 @@ export class TireModel {
   // when `corner` is given and the entry carries q_typ_by_corner). Pooled
   // fallbacks average the same per-corner value over the pooled rows.
   lookupG2(track, car, condition, corner = null) {
-    const table = 'g2_typ_by_track_car_cond';
-    const rows = this.dto[table];
     const value = (r) => perCornerOr(r.q_typ_by_corner, corner, r.g2_typ);
-    for (const cond of conditionChain(condition)) {
-      const hit = this.entryRow(table, track, car, cond);
-      if (hit) {
-        const source = cond === condition ? 'exact' : `fallback(${cond})`;
-        return { value: value(hit), nLapsUsed: hit.n_laps_used, source };
-      }
+    const { rows, source } = this.answeringRows(
+      'g2_typ_by_track_car_cond', track, car, condition, { globalStep: true });
+    if (rows.length === 0) return { value: 0.7, nLapsUsed: 0, source: 'global' };
+    if (!AVERAGED_STEPS.includes(source)) {
+      return { value: value(rows[0]), nLapsUsed: rows[0].n_laps_used, source };
     }
-    const sameTC = this.entryRowsAtTrack(table, track, car);
-    if (sameTC.length > 0) {
-      return {
-        value: average(sameTC, value),
-        nLapsUsed: sum(sameTC, (r) => r.n_laps_used), source: 'track_car_pooled',
-      };
-    }
-    const sameT = rows.filter((r) => r.track_canonical === track);
-    if (sameT.length > 0) {
-      return {
-        value: average(sameT, value),
-        nLapsUsed: sum(sameT, (r) => r.n_laps_used), source: 'track_pooled',
-      };
-    }
-    if (rows.length > 0) {
-      return { value: average(rows, value), nLapsUsed: 0, source: 'global' };
-    }
-    return { value: 0.7, nLapsUsed: 0, source: 'global' };
+    return {
+      value: average(rows, value),
+      nLapsUsed: source === 'global' ? 0 : sum(rows, (r) => r.n_laps_used), source,
+    };
   }
 
   // ---- Compound-aware K (base × compound multiplier) ----
@@ -427,12 +476,13 @@ export class TireModel {
 
   // ---- Target-lap-time pace scaling (schema v3) ----
 
+  // The pace curve of the row lookupG2 reads (a condition-chain hit; an
+  // average of rows has none).
   lookupG2PaceCurve(track, car, condition) {
-    for (const cond of conditionChain(condition)) {
-      const hit = this.entryRow('g2_typ_by_track_car_cond', track, car, cond);
-      if (hit) return hit.g2_vs_lap_time ?? null;
-    }
-    return null;
+    const { rows, source } = this.answeringRows(
+      'g2_typ_by_track_car_cond', track, car, condition, { globalStep: true });
+    if (AVERAGED_STEPS.includes(source) || rows.length === 0) return null;
+    return rows[0].g2_vs_lap_time ?? null;
   }
 
   // Multiplier on the typical heat input for a target lap time; mirrors
@@ -469,59 +519,64 @@ export class TireModel {
   // `corner`, a v5 outlap_q_by_corner entry supplies that corner's heat
   // input instead of outlap_g2.
   lookupOutlap(track, car, condition, corner = null) {
-    const table = 'outlap_typ_by_track_car_cond';
-    const rows = this.dto[table] ?? [];
     const g2 = (r) => perCornerOr(r.outlap_q_by_corner, corner, r.outlap_g2);
-    for (const cond of conditionChain(condition)) {
-      const hit = this.entryRow(table, track, car, cond);
-      if (hit) {
-        const source = cond === condition ? 'exact' : `fallback(${cond})`;
-        return { movingS: hit.outlap_moving_s, g2: g2(hit), nLapsUsed: hit.n_laps_used, source };
-      }
+    const { rows, source } = this.answeringRows(
+      'outlap_typ_by_track_car_cond', track, car, condition, { globalStep: false });
+    if (rows.length === 0) return null;
+    if (!AVERAGED_STEPS.includes(source)) {
+      const hit = rows[0];
+      return { movingS: hit.outlap_moving_s, g2: g2(hit), nLapsUsed: hit.n_laps_used, source };
     }
-    const sameTC = this.entryRowsAtTrack(table, track, car);
-    if (sameTC.length > 0) {
-      return {
-        movingS: average(sameTC, (r) => r.outlap_moving_s), g2: average(sameTC, g2),
-        nLapsUsed: sum(sameTC, (r) => r.n_laps_used), source: 'track_car_pooled',
-      };
-    }
-    const sameT = rows.filter((r) => r.track_canonical === track);
-    if (sameT.length > 0) {
-      return {
-        movingS: average(sameT, (r) => r.outlap_moving_s), g2: average(sameT, g2),
-        nLapsUsed: sum(sameT, (r) => r.n_laps_used), source: 'track_pooled',
-      };
-    }
-    return null;
+    return {
+      movingS: average(rows, (r) => r.outlap_moving_s), g2: average(rows, g2),
+      nLapsUsed: sum(rows, (r) => r.n_laps_used), source,
+    };
   }
 
   lookupLapTime(track, car, condition) {
-    const table = 'lap_time_typ_by_track_car_cond';
-    const rows = this.dto[table];
-    for (const cond of conditionChain(condition)) {
-      const hit = this.entryRow(table, track, car, cond);
-      if (hit) {
-        const source = cond === condition ? 'exact' : `fallback(${cond})`;
-        return { valueSeconds: hit.lap_time_typ_s, nLapsUsed: hit.n_laps_used, source };
-      }
+    const { rows, source } = this.answeringRows(
+      'lap_time_typ_by_track_car_cond', track, car, condition, { globalStep: false });
+    if (rows.length === 0) return { valueSeconds: 90.0, nLapsUsed: 0, source: 'global' };
+    if (!AVERAGED_STEPS.includes(source)) {
+      return { valueSeconds: rows[0].lap_time_typ_s, nLapsUsed: rows[0].n_laps_used, source };
     }
-    const sameTC = this.entryRowsAtTrack(table, track, car);
-    if (sameTC.length > 0) {
-      return {
-        valueSeconds: average(sameTC, (r) => r.lap_time_typ_s),
-        nLapsUsed: sum(sameTC, (r) => r.n_laps_used), source: 'track_car_pooled',
-      };
-    }
-    const sameT = rows.filter((r) => r.track_canonical === track);
-    if (sameT.length > 0) {
-      return {
-        valueSeconds: average(sameT, (r) => r.lap_time_typ_s),
-        nLapsUsed: sum(sameT, (r) => r.n_laps_used), source: 'track_pooled',
-      };
-    }
-    return { valueSeconds: 90.0, nLapsUsed: 0, source: 'global' };
+    return {
+      valueSeconds: average(rows, (r) => r.lap_time_typ_s),
+      nLapsUsed: sum(rows, (r) => r.n_laps_used), source,
+    };
   }
+
+  // How the simulated pace curve a prediction reads answers lapTimeS (the
+  // target, else the typical lap time): 'no_solution' under its fastest
+  // knot (answered there, the clamp), 'outside_support' outside its
+  // `support` (the lap times of the car's logged range of use at the
+  // layout) or past its slowest knot, else 'ok'; null where the row the pace
+  // scale reads is not simulated (or is an average of rows). Display only.
+  // Mirrors predict.py's pace_status.
+  paceStatus(track, car, condition, lapTimeS) {
+    const { rows, source } = this.answeringRows(
+      'g2_typ_by_track_car_cond', track, car, condition, { globalStep: true });
+    if (AVERAGED_STEPS.includes(source) || rowProvenance(rows) !== SIM) return null;
+    const curve = rows[0].g2_vs_lap_time;
+    if (!curve) return null;
+    const xs = curve.lap_time_s;
+    if (!(lapTimeS >= xs[0])) return PACE_NO_SOLUTION;
+    const lo = curve.support?.lap_time_min_s;
+    const hi = curve.support?.lap_time_max_s;
+    if (lo === undefined || lo === null || hi === undefined || hi === null
+        || lapTimeS > xs[xs.length - 1] || !(lo <= lapTimeS && lapTimeS <= hi)) {
+      return PACE_OUTSIDE_SUPPORT;
+    }
+    return PACE_OK;
+  }
+
+  // A pooled car selected where its raw cars are offered in its place (a
+  // saved "FJ" from before #383): it reads the pooled, logged entries, and
+  // the UI hints to pick the raw car for its own.
+  isPooledSelection(car) {
+    return !!car && this.isFittedCar(car) && !this.availableCars.includes(car);
+  }
+
 }
 
 // Per-corner cold-pressure prediction (port of CircuitPredictor.Predict /
@@ -597,6 +652,18 @@ export function predictCorner(model, {
       outlapSource = `${outlapSource ?? 'none'}+override`;
     }
   }
+  // Where the entry rows read come from: a simulated one carries GSI's
+  // attribution (mirrors predict.py).
+  const heatProvenance = rowProvenance(model.answeringRows(
+    'g2_typ_by_track_car_cond', track, entryCar, cond, { globalStep: true }).rows);
+  const lapTimeProvenance = rowProvenance(model.answeringRows(
+    'lap_time_typ_by_track_car_cond', track, entryCar, cond, { globalStep: false }).rows);
+  const outRows = includeOutlap ? model.answeringRows(
+    'outlap_typ_by_track_car_cond', track, entryCar, cond, { globalStep: false }).rows : [];
+  const outlapProvenance = outRows.length > 0 ? rowProvenance(outRows) : null;
+  const usesSimulation = [heatProvenance, lapTimeProvenance, outlapProvenance].includes(SIM);
+  const paceStatus = model.paceStatus(track, entryCar, cond, lapTimeForClockS);
+
   const warmupFrac = tau.valueSeconds > 0 ? 1 - Math.exp(-tAtLapNs / tau.valueSeconds) : 0;
   const deltaTInf = k.valueKelvinPerG2 * g2Value;
   const [tAfterOutlapC, tHotC] = warmupTwoStageC(
@@ -633,6 +700,11 @@ export function predictCorner(model, {
     outlapG2,
     outlapSource,
     tAfterOutlapC,
+    heatProvenance,
+    lapTimeProvenance,
+    outlapProvenance,
+    usesSimulation,
+    paceStatus,
   };
 }
 

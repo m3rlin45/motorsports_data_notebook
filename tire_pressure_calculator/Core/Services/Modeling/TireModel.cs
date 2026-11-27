@@ -18,6 +18,21 @@ public sealed class TireModel
     public const int SupportedSchemaVersion = 5;
     public const int MinSupportedSchemaVersion = 5;
 
+    /// <summary>Where an entry row's numbers come from (its <c>source</c>,
+    /// absent meaning logged): "sim" is a lap simulated on a committed
+    /// track, whose road bank is processed from GSI's elevation tiles, so a
+    /// prediction that reads one shows GSI's attribution. Mirrors
+    /// predict.py.</summary>
+    public const string Sim = "sim";
+    public const string Logged = "logged";
+
+    /// <summary>How a simulated pace curve answers the prediction's lap
+    /// time (its <c>support</c>): answered either way, flagged unless "ok".
+    /// Mirrors predict.py.</summary>
+    public const string PaceOk = "ok";
+    public const string PaceOutsideSupport = "outside_support";
+    public const string PaceNoSolution = "no_solution";
+
     public TireModelDto Dto { get; }
 
     public TireModel(TireModelDto dto)
@@ -95,43 +110,143 @@ public sealed class TireModel
         Dto.CarAliases is { } aliases && aliases.TryGetValue(car, out var pooled) ? pooled : car;
 
     /// <summary>
-    /// The row of an entry table that answers (track, car, condition): a raw
-    /// car's own row in the raw-car table (<paramref name="rawRows"/>, #383)
-    /// where it has one, else the fitted car's in <paramref name="rows"/>.
-    /// <paramref name="car"/> may be either name. Mirrors predict.py's
-    /// <c>_entry_row</c>.
+    /// The row of an entry table that answers (track, car, condition) at one
+    /// step of the condition chain: a raw car's own row in the raw-car table
+    /// (<paramref name="rawRows"/>, #383) where it has one, else the fitted
+    /// car's in <paramref name="rows"/>. <paramref name="car"/> may be either
+    /// name. A simulated row sits beside the logged one and answers only its
+    /// own exact condition (schema §9), chosen by its <c>source</c> (absent:
+    /// logged), never by its place in the table: at the
+    /// <paramref name="exact"/> step the order is raw sim, raw logged, pooled
+    /// sim, pooled logged; at any other step (a condition fallback) only
+    /// logged rows count, the raw car's before the pooled car's. Mirrors
+    /// predict.py's <c>_entry_row</c>.
     /// </summary>
     private T? EntryRow<T>(IReadOnlyList<T>? rows, IReadOnlyList<T>? rawRows,
-        string track, string car, string condition) where T : class, IEntryRow
+        string track, string car, string condition, bool exact) where T : class, IEntryRow
     {
         var fit = ResolveCar(car);
-        if (fit != car && rawRows is not null)
+        var tables = new List<(IReadOnlyList<T>? Rows, string Who)>();
+        if (fit != car) tables.Add((rawRows, car));
+        tables.Add((rows, fit));
+        var kinds = exact ? new[] { true, false } : new[] { false };
+        foreach (var (table, who) in tables)
         {
-            var own = rawRows.FirstOrDefault(
-                r => r.TrackCanonical == track && r.Car == car && r.Condition == condition);
-            if (own is not null) return own;
+            var atKey = table?.Where(r => r.TrackCanonical == track && r.Car == who && r.Condition == condition)
+                .ToList() ?? new List<T>();
+            foreach (var sim in kinds)
+            {
+                var hit = atKey.FirstOrDefault(r => IsSim(r) == sim);
+                if (hit is not null) return hit;
+            }
         }
-        return rows?.FirstOrDefault(
-            r => r.TrackCanonical == track && r.Car == fit && r.Condition == condition);
+        return null;
     }
 
-    /// <summary>Every condition's row at <paramref name="track"/> for the car
-    /// whose entries answer there: the raw car's own where it has any, else
-    /// the fitted car's (the track_car_pooled fallback).</summary>
+    /// <summary>Every condition's logged row at <paramref name="track"/> for
+    /// the car whose entries answer there: the raw car's own where it has
+    /// any, else the fitted car's (the track_car_pooled fallback; an
+    /// average, so a simulated row is not counted).</summary>
     private List<T> EntryRowsAtTrack<T>(IReadOnlyList<T>? rows, IReadOnlyList<T>? rawRows,
         string track, string car) where T : class, IEntryRow
     {
         var fit = ResolveCar(car);
         if (fit != car && rawRows is not null)
         {
-            var own = rawRows.Where(r => r.TrackCanonical == track && r.Car == car).ToList();
+            var own = rawRows.Where(r => r.TrackCanonical == track && r.Car == car && !IsSim(r)).ToList();
             if (own.Count > 0) return own;
         }
-        return rows?.Where(r => r.TrackCanonical == track && r.Car == fit).ToList() ?? new List<T>();
+        return rows?.Where(r => r.TrackCanonical == track && r.Car == fit && !IsSim(r)).ToList()
+            ?? new List<T>();
     }
 
-    // Every track with observed data (a typical heat input).
+    private static bool IsSim(IEntryRow r) => (r.Source ?? Logged) == Sim;
+
+    /// <summary>The steps of <see cref="AnsweringRows"/> that answer with an
+    /// average of rows.</summary>
+    private static bool IsAveraged(string step) =>
+        step is "track_car_pooled" or "track_pooled" or "global";
+
+    /// <summary>
+    /// The rows of an entry table that answer (track, car, condition), and
+    /// the step that found them: one row by the condition chain ("exact",
+    /// "fallback(&lt;cond&gt;)"; a raw car's own first; a simulated row only at
+    /// the exact condition), else every
+    /// condition's row at the track for the car ("track_car_pooled"), else
+    /// the pooled rows at the track ("track_pooled"), else, with
+    /// <paramref name="globalStep"/>, every pooled row ("global"; none:
+    /// "global" with no rows). The averaged steps read logged rows only (the
+    /// lead's ruling of 2026-11-27, so that a car with no simulated entry of
+    /// its own reads what it read before), and a step the filter leaves empty
+    /// is skipped. Every lookup walks this one chain, and a prediction's
+    /// provenance is read from the rows it found. Mirrors predict.py's
+    /// <c>_answering_rows</c>.
+    /// </summary>
+    internal (List<T> Rows, string Step) AnsweringRows<T>(IReadOnlyList<T>? rows,
+        IReadOnlyList<T>? rawRows, string track, string car, string condition, bool globalStep)
+        where T : class, IEntryRow
+    {
+        foreach (var cond in ConditionChain(condition))
+        {
+            bool exact = cond == condition;
+            var hit = EntryRow(rows, rawRows, track, car, cond, exact);
+            if (hit is not null) return (new List<T> { hit }, exact ? "exact" : $"fallback({cond})");
+        }
+        var sameTC = EntryRowsAtTrack(rows, rawRows, track, car);
+        if (sameTC.Count > 0) return (sameTC, "track_car_pooled");
+        var logged = rows?.Where(r => !IsSim(r)).ToList() ?? new List<T>();
+        var sameT = logged.Where(r => r.TrackCanonical == track).ToList();
+        if (sameT.Count > 0) return (sameT, "track_pooled");
+        return (globalStep ? logged : new List<T>(), "global");
+    }
+
+    /// <summary>"sim" if any of the rows is simulated, else "logged".</summary>
+    public static string RowProvenance<T>(IEnumerable<T> rows) where T : IEntryRow =>
+        rows.Any(r => IsSim(r)) ? Sim : Logged;
+
+    internal (List<G2EntryDto> Rows, string Step) HeatRows(string track, string car, string condition) =>
+        AnsweringRows(Dto.G2TypByTrackCarCond, Dto.G2TypByTrackRawCarCond, track, car, condition, globalStep: true);
+
+    internal (List<LapTimeEntryDto> Rows, string Step) LapTimeRows(string track, string car, string condition) =>
+        AnsweringRows(Dto.LapTimeTypByTrackCarCond, Dto.LapTimeTypByTrackRawCarCond, track, car, condition, globalStep: false);
+
+    internal (List<OutlapEntryDto> Rows, string Step) OutlapRows(string track, string car, string condition) =>
+        AnsweringRows(Dto.OutlapTypByTrackCarCond, Dto.OutlapTypByTrackRawCarCond, track, car, condition, globalStep: false);
+
+    /// <summary>
+    /// How the simulated pace curve a prediction reads answers
+    /// <paramref name="lapTimeS"/> (the target, else the typical lap time):
+    /// "no_solution" under its fastest knot (answered there, the clamp),
+    /// "outside_support" outside its <c>support</c> (the lap times of the
+    /// car's logged range of use at the layout) or past its slowest knot,
+    /// else "ok"; null where the row the pace scale reads is not simulated
+    /// (or is an average of rows). Display only. Mirrors predict.py's
+    /// <c>pace_status</c>.
+    /// </summary>
+    public string? PaceStatus(string track, string car, string condition, double lapTimeS)
+    {
+        var (rows, step) = HeatRows(track, car, condition);
+        if (IsAveraged(step) || RowProvenance(rows) != Sim) return null;
+        if (rows[0].G2VsLapTime is not { } curve) return null;
+        var xs = curve.LapTimeS;
+        if (!(lapTimeS >= xs[0])) return PaceNoSolution;
+        if (curve.Support is not { LapTimeMinS: double lo, LapTimeMaxS: double hi }
+            || lapTimeS > xs[xs.Count - 1] || !(lo <= lapTimeS && lapTimeS <= hi))
+            return PaceOutsideSupport;
+        return PaceOk;
+    }
+
+    /// <summary>A pooled car selected where its raw cars are offered in its
+    /// place (a saved "FJ" from before #383): it reads the pooled, logged
+    /// entries, and the UI hints to pick the raw car for its own. Mirrors
+    /// the web app's <c>isPooledSelection</c>.</summary>
+    public bool IsPooledSelection(string? car) =>
+        car is not null && IsFittedCar(car) && !AvailableCars.Contains(car);
+
+    // Every track with an entry (a typical heat input), a raw car's own
+    // included (a track only the simulation covers for it).
     public IReadOnlyList<string> AvailableTracks => Dto.G2TypByTrackCarCond
+        .Concat(Dto.G2TypByTrackRawCarCond ?? Array.Empty<G2EntryDto>())
         .Select(r => r.TrackCanonical)
         .Distinct().OrderBy(s => s).ToList();
 
@@ -313,33 +428,10 @@ public sealed class TireModel
     {
         double Value(G2EntryDto r) => PerCornerOr(r.QTypByCorner, corner, r.G2Typ);
 
-        foreach (var cond in ConditionChain(condition))
-        {
-            var hit = EntryRow(Dto.G2TypByTrackCarCond, Dto.G2TypByTrackRawCarCond, track, car, cond);
-            if (hit is not null)
-            {
-                var tag = cond == condition ? "exact" : $"fallback({cond})";
-                return new G2Lookup(Value(hit), hit.NLapsUsed, tag);
-            }
-        }
-        var sameTC = EntryRowsAtTrack(
-            Dto.G2TypByTrackCarCond, Dto.G2TypByTrackRawCarCond, track, car);
-        if (sameTC.Count > 0)
-        {
-            return new G2Lookup(sameTC.Average(Value),
-                sameTC.Sum(r => r.NLapsUsed), "track_car_pooled");
-        }
-        var sameT = Dto.G2TypByTrackCarCond.Where(r => r.TrackCanonical == track).ToList();
-        if (sameT.Count > 0)
-        {
-            return new G2Lookup(sameT.Average(Value),
-                sameT.Sum(r => r.NLapsUsed), "track_pooled");
-        }
-        if (Dto.G2TypByTrackCarCond.Count > 0)
-        {
-            return new G2Lookup(Dto.G2TypByTrackCarCond.Average(Value), 0, "global");
-        }
-        return new G2Lookup(0.7, 0, "global");
+        var (rows, step) = HeatRows(track, car, condition);
+        if (rows.Count == 0) return new G2Lookup(0.7, 0, "global");
+        if (!IsAveraged(step)) return new G2Lookup(Value(rows[0]), rows[0].NLapsUsed, step);
+        return new G2Lookup(rows.Average(Value), step == "global" ? 0 : rows.Sum(r => r.NLapsUsed), step);
     }
 
     // ---- Target-lap-time pace scaling (schema v3) ----
@@ -362,14 +454,12 @@ public sealed class TireModel
         return ys[ys.Count - 1];
     }
 
+    /// <summary>The pace curve of the row <see cref="LookupG2"/> reads (a
+    /// condition-chain hit; an average of rows has none).</summary>
     private G2CurveDto? LookupG2PaceCurve(string track, string car, string condition)
     {
-        foreach (var cond in ConditionChain(condition))
-        {
-            var hit = EntryRow(Dto.G2TypByTrackCarCond, Dto.G2TypByTrackRawCarCond, track, car, cond);
-            if (hit is not null) return hit.G2VsLapTime;
-        }
-        return null;
+        var (rows, step) = HeatRows(track, car, condition);
+        return IsAveraged(step) || rows.Count == 0 ? null : rows[0].G2VsLapTime;
     }
 
     /// <summary>
@@ -419,60 +509,22 @@ public sealed class TireModel
     /// </summary>
     public OutlapLookup? LookupOutlap(string track, string car, string condition, string? corner = null)
     {
-        var rows = Dto.OutlapTypByTrackCarCond ?? Array.Empty<OutlapEntryDto>();
-        if (rows.Count == 0 && (Dto.OutlapTypByTrackRawCarCond?.Count ?? 0) == 0) return null;
         double G2(OutlapEntryDto r) => PerCornerOr(r.OutlapQByCorner, corner, r.OutlapG2);
 
-        foreach (var cond in ConditionChain(condition))
-        {
-            var hit = EntryRow(rows, Dto.OutlapTypByTrackRawCarCond, track, car, cond);
-            if (hit is not null)
-            {
-                var tag = cond == condition ? "exact" : $"fallback({cond})";
-                return new OutlapLookup(hit.OutlapMovingS, G2(hit), hit.NLapsUsed, tag);
-            }
-        }
-        var sameTC = EntryRowsAtTrack(rows, Dto.OutlapTypByTrackRawCarCond, track, car);
-        if (sameTC.Count > 0)
-        {
-            return new OutlapLookup(sameTC.Average(r => r.OutlapMovingS), sameTC.Average(G2),
-                sameTC.Sum(r => r.NLapsUsed), "track_car_pooled");
-        }
-        var sameT = rows.Where(r => r.TrackCanonical == track).ToList();
-        if (sameT.Count > 0)
-        {
-            return new OutlapLookup(sameT.Average(r => r.OutlapMovingS), sameT.Average(G2),
-                sameT.Sum(r => r.NLapsUsed), "track_pooled");
-        }
-        return null;
+        var (rows, step) = OutlapRows(track, car, condition);
+        if (rows.Count == 0) return null;
+        if (!IsAveraged(step))
+            return new OutlapLookup(rows[0].OutlapMovingS, G2(rows[0]), rows[0].NLapsUsed, step);
+        return new OutlapLookup(rows.Average(r => r.OutlapMovingS), rows.Average(G2),
+            rows.Sum(r => r.NLapsUsed), step);
     }
 
     public LapTimeLookup LookupLapTime(string track, string car, string condition)
     {
-        foreach (var cond in ConditionChain(condition))
-        {
-            var hit = EntryRow(
-                Dto.LapTimeTypByTrackCarCond, Dto.LapTimeTypByTrackRawCarCond, track, car, cond);
-            if (hit is not null)
-            {
-                var tag = cond == condition ? "exact" : $"fallback({cond})";
-                return new LapTimeLookup(hit.LapTimeTypS, hit.NLapsUsed, tag);
-            }
-        }
-        var sameTC = EntryRowsAtTrack(
-            Dto.LapTimeTypByTrackCarCond, Dto.LapTimeTypByTrackRawCarCond, track, car);
-        if (sameTC.Count > 0)
-        {
-            return new LapTimeLookup(sameTC.Average(r => r.LapTimeTypS),
-                sameTC.Sum(r => r.NLapsUsed), "track_car_pooled");
-        }
-        var sameT = Dto.LapTimeTypByTrackCarCond.Where(r => r.TrackCanonical == track).ToList();
-        if (sameT.Count > 0)
-        {
-            return new LapTimeLookup(sameT.Average(r => r.LapTimeTypS),
-                sameT.Sum(r => r.NLapsUsed), "track_pooled");
-        }
-        return new LapTimeLookup(90.0, 0, "global");
+        var (rows, step) = LapTimeRows(track, car, condition);
+        if (rows.Count == 0) return new LapTimeLookup(90.0, 0, "global");
+        if (!IsAveraged(step)) return new LapTimeLookup(rows[0].LapTimeTypS, rows[0].NLapsUsed, step);
+        return new LapTimeLookup(rows.Average(r => r.LapTimeTypS), rows.Sum(r => r.NLapsUsed), step);
     }
 }
 

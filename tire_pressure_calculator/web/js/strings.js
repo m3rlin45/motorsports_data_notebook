@@ -37,6 +37,10 @@ export const STRINGS = {
     SetupButton: 'Setup',
     ChartLapAxis: 'Lap',
     ChartOutLap: 'Out',
+    GsiAttribution: 'Source: GSI Tiles (elevation tiles, Fundamental Geospatial Data digital elevation model), Geospatial Information Authority of Japan; processed by this project.',
+    PaceOutsideSupport: 'Lap time outside this car\'s logged pace here: less certain',
+    PaceNoSolution: 'Faster than the car\'s limit allows: answered at the simulated fastest lap',
+    PickRawCarHint: 'FJ is the pooled entry: pick KK-SII, KK-F or KK-F-V2 for the car\'s own',
   },
   ja: {
     LanguageLabel: '言語:',
@@ -72,6 +76,10 @@ export const STRINGS = {
     SetupButton: 'セットアップ',
     ChartLapAxis: 'ラップ',
     ChartOutLap: 'アウト',
+    GsiAttribution: '出典：国土地理院ウェブサイト（地理院タイル：https://maps.gsi.go.jp/development/ichiran.html）「地理院タイル（標高タイル（基盤地図情報数値標高モデル））を加工して作成」',
+    PaceOutsideSupport: 'この車両の記録されたペースの範囲外のラップタイム：参考値',
+    PaceNoSolution: '車両の限界より速いラップタイム：シミュレーションの最速ラップで予測',
+    PickRawCarHint: 'FJは統合データです。車両固有の予測にはKK-SII・KK-F・KK-F-V2を選択してください',
   },
 };
 

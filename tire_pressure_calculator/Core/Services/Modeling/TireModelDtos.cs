@@ -38,12 +38,16 @@ public sealed record TireModelDto(
     [property: JsonPropertyName("outlap_typ_by_track_raw_car_cond")] IReadOnlyList<OutlapEntryDto>? OutlapTypByTrackRawCarCond = null
 );
 
-/// <summary>What every entry row (heat, lap time, out-lap) is keyed by.</summary>
+/// <summary>What every entry row (heat, lap time, out-lap) is keyed by, and
+/// where its numbers come from: <c>source</c> "sim" (a lap simulated on a
+/// committed track, whose road bank is processed from GSI's elevation
+/// tiles) or "logged"; absent means logged.</summary>
 public interface IEntryRow
 {
     string TrackCanonical { get; }
     string Car { get; }
     string Condition { get; }
+    string? Source { get; }
 }
 
 // ---- Compound-aware K + UI prefill medians (schema v3 additive) ----
@@ -98,7 +102,17 @@ public sealed record G2CurveDto(
     [property: JsonPropertyName("n_laps")] int NLaps,
     // Simulated-lap curves: one series per corner keyed "fl"/"fr"/"rl"/"rr";
     // g2 stays as the corner mean for consumers without it.
-    [property: JsonPropertyName("g2_by_corner")] Dictionary<string, double[]>? G2ByCorner = null
+    [property: JsonPropertyName("g2_by_corner")] Dictionary<string, double[]>? G2ByCorner = null,
+    // A simulated curve's lap times of the car's logged range of use at the
+    // layout: the pace status's support (TireModel.PaceStatus).
+    [property: JsonPropertyName("support")] PaceSupportDto? Support = null
+);
+
+/// <summary>The lap-time range a simulated pace curve is supported over
+/// (the lap of the car's highest and lowest logged use at the layout).</summary>
+public sealed record PaceSupportDto(
+    [property: JsonPropertyName("lap_time_min_s")] double? LapTimeMinS = null,
+    [property: JsonPropertyName("lap_time_max_s")] double? LapTimeMaxS = null
 );
 
 public sealed record GayLussacConfigDto(
@@ -163,7 +177,8 @@ public sealed record G2EntryDto(
     [property: JsonPropertyName("g2_vs_lap_time")] G2CurveDto? G2VsLapTime = null,
     // Schema v5: per-corner typical heat input keyed "fl"/"fr"/"rl"/"rr".
     // g2_typ stays as the corner mean for older consumers.
-    [property: JsonPropertyName("q_typ_by_corner")] Dictionary<string, double>? QTypByCorner = null
+    [property: JsonPropertyName("q_typ_by_corner")] Dictionary<string, double>? QTypByCorner = null,
+    [property: JsonPropertyName("source")] string? Source = null
 ) : IEntryRow;
 
 public sealed record OutlapEntryDto(
@@ -174,7 +189,8 @@ public sealed record OutlapEntryDto(
     [property: JsonPropertyName("outlap_g2")] double OutlapG2,
     [property: JsonPropertyName("n_laps_used")] int NLapsUsed,
     // Schema v5: per-corner out-lap heat input; outlap_g2 stays as the mean.
-    [property: JsonPropertyName("outlap_q_by_corner")] Dictionary<string, double>? OutlapQByCorner = null
+    [property: JsonPropertyName("outlap_q_by_corner")] Dictionary<string, double>? OutlapQByCorner = null,
+    [property: JsonPropertyName("source")] string? Source = null
 ) : IEntryRow;
 
 public sealed record LapTimeEntryDto(
@@ -182,7 +198,8 @@ public sealed record LapTimeEntryDto(
     [property: JsonPropertyName("car")] string Car,
     [property: JsonPropertyName("condition")] string Condition,
     [property: JsonPropertyName("lap_time_typ_s")] double LapTimeTypS,
-    [property: JsonPropertyName("n_laps_used")] int NLapsUsed
+    [property: JsonPropertyName("n_laps_used")] int NLapsUsed,
+    [property: JsonPropertyName("source")] string? Source = null
 ) : IEntryRow;
 
 // Source-gen context — AOT-friendly. Single entry point lets us deserialize
