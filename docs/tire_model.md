@@ -62,7 +62,9 @@ whatever its direction: there are no fitted brake or drive efficiencies
 
 **Energy out.** ``T_eff = 0.8·T_air + 0.2·T_road``: the tyre loses heat to
 the air over most of its surface and to the asphalt at the patch. Cooling
-is per axle because the rears sit in the car's wake.
+is per axle. With one gain ``a`` per car the two axles' time constants are
+tied to their steady-state gains (``τ_front / τ_rear = K_front / K_rear``),
+so their ratio is not a measurement of how each axle cools (§2.6d).
 
 **No track constants.** The circuit enters only through data: the typical
 per-corner intensity ``q_typ_by_corner`` per (track, car, condition) and
@@ -76,7 +78,7 @@ Suzuka's figure-eight is balanced at 8.0 / 8.0).
 | Constant | Per | Units | Fitted (FJ / Inferno 86) | What it is |
 |---|---|---|---|---|
 | ``a`` | car, condition | K/s per (G·m/s) | 0.0134 / 0.0182 | **Heating rate**: heat input per unit intensity over the effective heat capacity of the carcass + gas the pressure reads. At 1 G of force and 30 m/s (``q`` = 30) the FJ's gas warms ≈ 0.40 K/s, the Inferno's ≈ 0.55 K/s, with cooling switched off. |
-| ``b_A`` (reported as ``τ_A = 1/b_A``) | car, axle, condition | 1/s (τ in s) | FJ front 433 s / rear 282 s; Inferno 573 / 560 s | **Cooling rate**: conductance to air and road over the same heat capacity; τ is the time to close 63 % of the gap to the steady state. The open-wheel FJ's exposed rears cool 1.5× faster than its fronts; the Inferno's axles match. |
+| ``b_A`` (reported as ``τ_A = 1/b_A``) | car, axle, condition | 1/s (τ in s) | FJ front 433 s / rear 282 s; Inferno 573 / 560 s | **Cooling rate**: conductance to air and road over the same heat capacity; τ is the time to close 63 % of the gap to the steady state. With one ``a`` per car the ratio τ_front / τ_rear equals K_front / K_rear by construction (FJ 1.5, Inferno 1.0–1.1): it is the constraint's arithmetic, not a measurement that the FJ's exposed rears cool faster. Fitted with the gain per axle it was 1.10 and 0.84 (§2.6d, 2026-11-27). |
 | ``K_A = a / b_A`` | car, corner (derived) | K per (G·m/s) | FJ 5.8 / 3.8 (f/r); Inferno 10.4 / 10.2 | **Steady-state gain**: the equilibrium rise above ``T_eff`` per unit intensity; what the calculators multiply ``q_typ`` by. |
 | ``g_transfer`` | car | G | 2.43 / 3.13 | **Lateral transfer scale**: the lateral g at which the outer tyre carries ≈ 88 % of its axle's load. The rigid-body lift acceleration ``track/(2·CG height)`` is its geometric floor: ≈ 2.4 G for the FJ, which the fit reproduces; the Inferno's 3.1 G against a geometric 1.6 G says tyre load sensitivity and the roll-stiffness split soften the transfer the heat sees. |
 | ``κ`` | car | 1/(m/s)² | 2.0 × 10⁻⁶ / 1.0 × 10⁻⁵ | **Speed–pressure constant**: ``P_read = P_gas/(1 + κV²)``, the fractional drop of the TPMS reading per squared speed from centrifugal tyre growth and the sensor's g-load; 0.6 % and 3 % at 200 km/h. |
@@ -1578,6 +1580,197 @@ variant, which is what led to the speed-pressure correction above
 (§2.2a′) — the within-lap gas swing is mechanical, not thermal. The
 two-node fit should be re-run with κ applied to the gas observable before
 drawing conclusions about the tread constants.
+
+### 2.6d The warm-up's shape under the true stint (issue #381, 2026-11-27; nothing adopted)
+
+**The question.** With the stale anchors repaired (#371) and each stint fed
+as it was driven, the single node read 8–10 mbar low through flying laps
+4–7, which looked like a delay between the tread and the gas. It was
+re-measured on v1.4.0 (tyres' frame, data through 2026-11-25) and three
+remedies were tested. None is adopted; the measurements stand.
+
+**How it was measured.** The standing holdout: 15 folds on the ids of
+master's run, 128 sessions, 5,651 lap × tyre rows, each fold's model
+fitted without its sessions (logged entries). Three arms through the
+fold's K, τ and κ:
+
+- *calculator*: as fed (the typed lap, N × lap time). It equals
+  `validate._score_fold_laps` row for row, 36.13 mbar.
+- *true stint*: the stint's real rolling clock from the anchor, each lap at
+  the entry's heat scaled to its own lap time, the cell's out-lap heat.
+- *own heat*: the same clock with each lap's own measured per-tyre heat.
+
+and a fourth view, the fit's own 1 Hz forward model on the held-out stints
+(`statespace.build_stint_series`, so a lap dropped mid-stint stays on the
+clock), read per 30 s since the anchor. Bias is predicted minus TPMS, in
+mbar, ± the SE clustered over 46 dates.
+
+**It is still there, unchanged, and it is the Inferno 86's.**
+
+| true stint, by flying lap | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8+ |
+|---|---|---|---|---|---|---|---|---|
+| v1.4.0 | −0.0 | −4.3 | −5.5 | −7.0 | −7.6 | −8.9 | −7.0 | −1.3 |
+| the issue (before #376, #371 as a patch) | +0.2 | −4.2 | −5.4 | −7.2 | −8.1 | −9.7 | −8.5 | −1.2 |
+
+| laps | 1–3 | 4–7 | 8+ |
+|---|---|---|---|
+| true stint, pooled | −3.2 ± 2.5 | −7.7 ± 3.4 | −1.3 ± 4.0 |
+| own heat, pooled | −4.2 ± 2.4 | −8.1 ± 3.4 | −1.5 ± 4.0 |
+| calculator, pooled | +3.4 ± 2.5 | +0.4 ± 3.4 | +8.6 ± 4.1 |
+| true stint, FJ (75 sessions) | +1.2 ± 3.0 | −2.2 ± 3.2 | +3.9 ± 5.3 |
+| true stint, Inferno 86 (53) | −10.2 ± 4.2 | −16.0 ± 7.1 | −7.7 ± 6.2 |
+| true stint, dry (100) | −3.2 ± 2.7 | −9.5 ± 3.4 | −2.5 ± 3.9 |
+| true stint, wet (24) | −5.0 ± 7.1 | −3.4 ± 12.1 | −1.8 ± 21.3 |
+| true stint, damp (4) | +10.1 ± 4.3 | +10.5 ± 8.6 | +18.7 ± 16.1 |
+
+The tyres' frame and the committed stale mask did not move it. The wet and
+the damp cannot resolve it.
+
+**It is a time constant too long, not a delay.**
+
+- *Within the same stints* (9 or more flying laps; per stint and tyre, laps
+  4–7 less laps 8+, true stint): Inferno 86 −17.8 ± 4.3 (fronts
+  −24.8 ± 6.0, rears −12.0 ± 4.2; 28 stints, 16 dates); FJ −2.9 ± 2.8, its
+  axles opposite ways (fronts −11.7 ± 3.0, rears +6.5 ± 2.8; 39 stints, 22
+  dates).
+- *The 1 Hz view*, stints of 20 minutes or more, each stint and tyre less
+  its own level at minutes 15–20 (so that a stint's constant offset is
+  out of it):
+
+  | minutes from the anchor | 0–2 | 4–6 | 8–10 | 10–12.5 | 20–25 | 25–30 | 30–40 |
+  |---|---|---|---|---|---|---|---|
+  | Inferno 86 dry (21 stints, 15 dates) | +11 to +14 ± 9 | −0.1 ± 5.7 | −12.5 ± 4.6 | −11.4 ± 3.0 | +11.2 ± 1.8 | +22.7 ± 3.9 | +33.1 ± 4.5 |
+  | FJ dry, fronts (11 stints, 8 dates) | +2 ± 11 | −25.5 ± 10.6 | −20.5 ± 6.8 | −13.1 ± 3.4 | +9.7 ± 2.5 | | |
+  | FJ dry, rears | +16 to +24 ± 5 | +9.1 ± 7.6 | −1.4 ± 4.1 | +1.8 ± 2.6 | +3.3 ± 3.1 | | |
+
+  The node warms too slowly through minutes 4–15 and is still climbing
+  after the gas has levelled. The same is read on the stints with no
+  standstill inside a lap, no dropped lap and no lap over 1.12 × the best
+  (the lap table's clock skips those), and on the Inferno 86's stints
+  whose sensor temperature does not fall after the anchor (18 stints:
+  −16.9 ± 3.6 at minutes 8–10, +12.5 ± 1.7 at 20–25), so it is neither the
+  clock's holes nor the anchor (#421).
+- *Read in sample on the same 1 Hz series* (exploratory): no objective wants
+  a lag on the Inferno 86 (λ of 0 to 10 s, worth under 0.3 % of the rms,
+  per second and per 30 s block, with one gain per axle or a free gain
+  per stint and tyre); the FJ takes 20–30 s. With a free gain per stint
+  the Inferno 86's shape asks τ 450–500 s on both axles, where one gain
+  asks 600–650 s (the fit's 653 / 593).
+- The archive's reading of 2026-11-26 (within long stints the gas rises
+  sooner than the node allows; λ on its 5 s bound in 12 of 15 folds) is the
+  same fact.
+
+**Three remedies, each measured.** (A) was built and refitted on every
+fold; (B) and (C) were screened first: for fold k the constants were picked on
+the other folds' 1 Hz series, put into fold k's model as ratios to an
+emulation of the production constraint, and scored with the same arms. A
+screen is not a refit (each series carries its own fold's shares and κ).
+
+| | calculator MAE − master | true stint, laps 4–7, pooled | within stints, laps 4–7 less 8+ | calculator, first stint laps 2–5, Inferno 86 |
+|---|---|---|---|---|
+| master | 36.13 | −7.7 ± 3.4 | Inferno 86 −17.8 ± 4.3; FJ f −11.7 ± 3.0, r +6.5 ± 2.8 | −5.0 ± 6.0 |
+| (A) gain per axle, refitted | −0.18 ± 0.18 (FJ −0.59 ± 0.14, Inferno 86 +0.39 ± 0.35) | −7.8 ± 3.5 | Inferno 86 −18.3 ± 4.6; FJ f −7.0 ± 2.9, r +0.5 ± 2.8 | −5.3 ± 5.9 |
+| (B) τ from the within-stint shape, screened with the gain per axle | +0.15 ± 0.45 (FJ −0.52 ± 0.18, Inferno 86 +1.10 ± 1.05) | −3.8 ± 3.7 | Inferno 86 −2.5 ± 3.4 | +8.1 ± 6.7 |
+| (C) the heat-input lag beside (A), screened | −0.20 ± 0.20 | −6.3 ± 3.5 | as (A) | −5.0 ± 5.9 |
+
+- **(C) The lag** (the term of the archived patch and of PR #195:
+  `dh/dt = (q − h)/λ`, the gas heated by `h`). Beside (A): FJ 30 s
+  (20–30 over the folds), Inferno 86 0 on every fold (0–20 s beside (B)).
+  It takes the FJ calculator's laps
+  1–3 excess away (+6.4 → +0.6) and raises its laps 8+ (+10.5 → +14.3);
+  no gain in MAE over (A), and it would change the form in all three
+  calculators. Not ported.
+- **(B) τ from the shape** (a first pass fits the cooling rates with a
+  free gain per stint and tyre, the usual pass then fits one gain per
+  axle, so its FJ figure is (A)'s): it
+  flattens the Inferno 86's shape, but the calculator's typed lap (every
+  lap at the session's 25th-percentile pace, about 5 % more heat than the
+  stint as driven) was offsetting the shape error, so on the laps a driver
+  sets for it moves the Inferno 86's calculator the wrong way (first
+  stint, laps 2–5: −5.0 ± 6.0 → +8.1 ± 6.7), and its true stint then
+  reads −13.7 at laps 8+. Not built.
+- **(A) The gain per axle.** With one gain `a` per car, `K_A = a / b_A` ties the axles'
+  time constants to their steady-state gains, `τ_front / τ_rear =
+  K_front / K_rear`, whatever each axle's own response; freed, the FJ's
+  fronts fit 424 s where the tied fit has 508 s. The option fits `a` per
+  (car, axle, condition), a rain cell keeping its car's dry
+  rear-over-front ratio. The model's form and what the calculators read (K
+  and τ per corner) do not change. It was built as an option of the fit
+  (`fit_cells(share_a="axle")`, `fit_physical(gain_per_axle=True)`, two
+  recovery tests) and is **not in the source**: a constant that does not
+  carry to an unseen circuit does not belong there. It is kept as a patch on
+  v1.4.0 (d40784d5bddb) with this round's hand-off,
+  `workspace/lag/handoff/381-gain-per-axle-option.patch` in the `lag`
+  worker's copy (`.claude/worktrees/lag`, or its archive), beside the
+  scripts and rows behind every number here. With the option off a fold's
+  fit was master's to 6e-15.
+
+**The gate for (A), written before any refit was scored,** and what it
+read:
+
+| clause | result | |
+|---|---|---|
+| 1. (the issue's) pooled true stint on laps 4–7 within ±3 mbar | −7.8 ± 3.5 | fails, as expected: the Inferno 86 is untouched |
+| 2. FJ within-stint contrast on each axle nearer 0 than master's and within 2 SE of 0 | rears +0.5 ± 2.8; fronts −7.0 ± 2.9 | fails on the fronts |
+| 3. calculator MAE paired against master no worse (≤ +2 SE) pooled, per car, dry and wet | pooled −0.18 ± 0.18; FJ −0.59 ± 0.14 (nearer on 52 of 75 sessions); Inferno 86 +0.39 ± 0.35; dry −0.18 ± 0.20; wet −0.39 ± 0.32; damp +0.48 ± 1.12 | holds; a gain on the FJ only |
+| 4. τ and K fold ranges no wider than master's; the rear-over-front gain within ±15 % of its median | ratio FJ 0.76 (0.75–0.79), Inferno 86 0.81 (0.79–0.85); the ranges wider on 6 of 8 dry constants, three of them by under 0.5 % (the widest: FJ τ_rear max/min 1.087 against 1.046) | fails narrowly |
+| 5. unseen track (each car's three tracks left out whole, both arms refitted, own heat), A − master ≤ +2 SE | pooled +0.12 ± 0.24; FJ +0.11 ± 0.10; Inferno 86 +0.13 ± 0.53 | holds, with no gain |
+| 6. the two Fuji days of the KK-F-V2, A no further than master by more than 2 mbar | 2026-11-27 (out of every fit; all-data constants): calculator 46.2 → 44.8, own heat 46.5 → 45.9. 2026-11-25 (both arms fitted without the date): calculator 53.5 → 54.5, own heat 57.9 → 59.3, further on 7 of 8 sessions | holds; the two days disagree in sign |
+| 7. cold pressure at flying lap 5 on the parity fixture's 17 lap-5 cases (A's all-data K, τ and κ in the committed model) | dry cases: fronts −5 to −15 mbar, rears +2 to +15; mean absolute change 10.8 mbar over the 17 cases | reported |
+
+**Why (A) is not recommended: the ratio does not carry to an unseen circuit.**
+
+| fitted without | FJ rear-over-front gain | FJ τ front / rear, s (master) | Inferno 86 ratio | Inferno 86 τ front / rear, s (master) |
+|---|---|---|---|---|
+| nothing (the 15 folds' median) | 0.76 | 424 / 386 (508 / 326) | 0.81 | 573 / 681 (653 / 593) |
+| FJ at Tsukuba | 0.99 | 453 / 311 (455 / 310) | | |
+| FJ at Suzuka | 0.68 | 508 / 504 (664 / 384) | | |
+| FJ at Fuji | 0.69 | 323 / 354 (413 / 282) | | |
+| Inferno 86 at Fuji | | | 0.75 | 531 / 752 (663 / 636) |
+| Inferno 86 at Sodegaura | | | 0.82 | 569 / 641 (638 / 557) |
+| Inferno 86 at Tsukuba | | | 0.84 | 576 / 644 (641 / 575) |
+
+- The FJ's gain on known circuits does not carry to an unseen one: with
+  each lap's own heat +0.11 ± 0.10, with Fuji left out +1.33 ± 0.40, and
+  on 2026-11-25 (fitted without the date) further on 7 of 8 sessions.
+- Without Tsukuba the freed fit lands on the tied one (ratio 0.99; 453 /
+  311 s against 455 / 310). Two readings fit that and the data do not
+  choose: the 0.76 is Tsukuba's own, as October's fitted brake efficiency
+  was the training circuits' braking mix (§2.0c); or the ratio is simply
+  not identified without Tsukuba, where 36 of the FJ's 39 held-out long
+  stints were driven. Either way it is not yet a constant of the car.
+- The same table shows that the FJ's time constants are not well
+  determined by either fit: master's own move from 413 to 664 s (front)
+  and 282 to 384 s (rear) as a track is left out.
+- What the option does settle is a reading. Under one gain per car the
+  ratio τ_front / τ_rear is K_front / K_rear by construction (FJ 1.56,
+  Inferno 86 1.10); freed, it is 1.10 and 0.84. The earlier line that the
+  FJ's exposed rears cool 1.5× faster than its fronts was the constraint's
+  arithmetic, not a measurement of cooling (§2.0a is corrected).
+
+**What is left, and the open lead.** The Inferno 86's warm-up within a
+stint is faster than its fitted τ and levels earlier, and no per-car
+constant tested here removes that without a cost elsewhere. Measurements
+made beside this one for #258 and #270 (that work is not landed; the
+stops and the TPMS rise below are its figures) say the node is also too
+quick the other way, when the input drops:
+
+- Across a cool-down lap (1.12–1.40 × the stint's best; 20 laps on 14
+  dates) the residual steps −1.1 ± 2.2 mbar for the calculator, which
+  knows nothing of the lap, and −9.9 ± 3.0 with the lap's own heat
+  (Inferno 86 −16.1 ± 2.2): the gas does not give the heat up as the node
+  says. The TPMS itself rises 10.0 ± 4.5 mbar across such a lap.
+- 17 warm stops of 42–446 s lose 2.0 ± 1.7 mbar per 100 s, against 27 at
+  the fitted rolling τ.
+
+One rate cannot both warm faster and cool slower. **A cooling rate that
+falls with the speed** (or with the heat input) can, and it is the next
+thing to test. October's speed-dependent cooling (§2.0d) came out at a
+slope of zero, but under 1 % of its seconds were below 15 m/s, where its
+own direct check read cooling 3–5× slower; the stops and the cool-down
+laps are that regime, and should be its held-out measure. The holdout's
+MAE cannot see a shape term of this size: the issue's upper bound for a
+perfect correction was −0.4 to −0.5 mbar.
 
 ### 2.7 Artifact: `tire_model.json`
 
