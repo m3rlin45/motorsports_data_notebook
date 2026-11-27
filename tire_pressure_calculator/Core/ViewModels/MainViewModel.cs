@@ -95,6 +95,43 @@ public class MainViewModel : INotifyPropertyChanged
     public string LastUpdatedText =>
         Localizer.Instance.Format("LastUpdatedFormat", _tireModel?.DataThrough ?? "—");
 
+    // ---- What the current prediction says about its entry (mirrors the web app) ----
+
+    private bool _usesSimulation;
+    private string? _paceStatus;
+
+    /// <summary>GSI's attribution, shown while the prediction reads a
+    /// simulated entry (its laps are driven on road banks processed from
+    /// GSI's elevation tiles; data/lapsim/README.md).</summary>
+    public bool ShowGsiAttribution => IsPredictionMode && _usesSimulation;
+    public string GsiAttributionText => Localizer.Instance["GsiAttribution"];
+
+    /// <summary>A simulated pace curve's flag for the lap time: outside the
+    /// car's logged pace, or faster than its limit (answered either way);
+    /// empty when there is none.</summary>
+    public string PaceFlagText => _paceStatus switch
+    {
+        TireModel.PaceNoSolution => Localizer.Instance["PaceNoSolution"],
+        TireModel.PaceOutsideSupport => Localizer.Instance["PaceOutsideSupport"],
+        _ => string.Empty,
+    };
+    public bool ShowPaceFlag => IsPredictionMode && PaceFlagText.Length > 0;
+
+    /// <summary>A saved pooled car (FJ) reads the pooled entry: hint to pick
+    /// the raw car for its own.</summary>
+    public bool ShowCarHint => IsPredictionMode && (_tireModel?.IsPooledSelection(_selectedCar) ?? false);
+    public string CarHintText => Localizer.Instance["PickRawCarHint"];
+
+    private void SetEntryNotes(bool usesSimulation, string? paceStatus)
+    {
+        _usesSimulation = usesSimulation;
+        _paceStatus = paceStatus;
+        OnPropertyChanged(nameof(ShowGsiAttribution));
+        OnPropertyChanged(nameof(PaceFlagText));
+        OnPropertyChanged(nameof(ShowPaceFlag));
+        OnPropertyChanged(nameof(ShowCarHint));
+    }
+
     // ---- Language picker ----
 
     public IReadOnlyList<LanguageOption> AvailableLanguages { get; } = new[]
@@ -607,8 +644,11 @@ public class MainViewModel : INotifyPropertyChanged
             FrontRight.PredictedHotTempC = null;
             RearLeft.PredictedHotTempC = null;
             RearRight.PredictedHotTempC = null;
+            SetEntryNotes(false, null);
             return;
         }
+        bool usesSimulation = false;
+        string? paceStatus = null;
         foreach (var (corner, vm) in new[]
                  {
                      ("fl", FrontLeft), ("fr", FrontRight),
@@ -631,12 +671,15 @@ public class MainViewModel : INotifyPropertyChanged
                     targetLapTimeS: _targetLapTimeS,
                     compound: _selectedCompound);
                 vm.PredictedHotTempC = prediction.PredictedHotTempC;
+                usesSimulation |= prediction.UsesSimulation;
+                paceStatus ??= prediction.PaceStatus;
             }
             catch (Exception)
             {
                 vm.PredictedHotTempC = null;
             }
         }
+        SetEntryNotes(usesSimulation, paceStatus);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

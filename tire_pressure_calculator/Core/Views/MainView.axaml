@@ -337,6 +337,7 @@
         <!-- WrapPanel without ItemHeight/ItemWidth so each row sizes to its
              tallest item; that prevents label/input overlap when items reflow
              to a second row on narrow screens. -->
+        <StackPanel>
         <WrapPanel Orientation="Horizontal" HorizontalAlignment="Center">
           <StackPanel Margin="6,4" MinWidth="150">
             <TextBlock Text="{Binding T_Track}" FontSize="11" />
@@ -399,13 +400,28 @@
                      Watermark="1:05.2" />
           </StackPanel>
         </WrapPanel>
+        <!-- A saved pooled car (FJ) reads the pooled entry; a simulated pace
+             curve flags a lap time outside the car's logged pace, or faster
+             than its limit (answered either way). Mirrors the web app. -->
+        <TextBlock Text="{Binding CarHintText}" IsVisible="{Binding ShowCarHint}"
+                   FontSize="12" Opacity="0.7" TextWrapping="Wrap"
+                   HorizontalAlignment="Center" TextAlignment="Center" Margin="6,2" />
+        <TextBlock Text="{Binding PaceFlagText}" IsVisible="{Binding ShowPaceFlag}"
+                   Foreground="OrangeRed" FontSize="12" TextWrapping="Wrap"
+                   HorizontalAlignment="Center" TextAlignment="Center" Margin="6,2" />
+        </StackPanel>
       </Border>
 
-      <!-- ROW 6: provenance line — model fit date + build id (see LastUpdatedText) -->
-      <TextBlock Grid.Row="6" Grid.ColumnSpan="2"
-                 Text="{Binding LastUpdatedText}"
-                 FontSize="10" Opacity="0.6"
-                 HorizontalAlignment="Center" Margin="0,2,0,6" />
+      <!-- ROW 6: provenance line — model fit date + build id (see LastUpdatedText),
+           and GSI's attribution while the prediction reads a simulated entry -->
+      <StackPanel Grid.Row="6" Grid.ColumnSpan="2" Margin="0,2,0,6">
+        <TextBlock Text="{Binding LastUpdatedText}"
+                   FontSize="10" Opacity="0.6"
+                   HorizontalAlignment="Center" />
+        <TextBlock Text="{Binding GsiAttributionText}" IsVisible="{Binding ShowGsiAttribution}"
+                   FontSize="10" Opacity="0.6" TextWrapping="Wrap"
+                   HorizontalAlignment="Center" TextAlignment="Center" Margin="12,2,12,0" />
+      </StackPanel>
     </Grid>
     </LayoutTransformControl>
   </ScrollViewer>
