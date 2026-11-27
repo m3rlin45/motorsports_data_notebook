@@ -438,6 +438,16 @@ test('raw-car entries: without the tables a raw car is its pooled car, and track
   assert.equal(withRaw.lookupLapTime('synth', 'Nobody', 'dry').source, 'track_pooled');
 });
 
+// The committed artifact with its raw-car rows taken out: a pooled-only
+// artifact, as every one before #383's retrain was.
+function pooledOnly() {
+  const dto = structuredClone(modelDto);
+  dto.g2_typ_by_track_raw_car_cond = [];
+  dto.lap_time_typ_by_track_raw_car_cond = [];
+  dto.outlap_typ_by_track_raw_car_cond = [];
+  return dto;
+}
+
 // The committed artifact with a KK-SII entry of its own at Tsukuba (dry):
 // the pooled FJ row's heat x 0.8 and lap time + 1 s.
 function withKKSIIEntry() {
@@ -457,7 +467,11 @@ function withKKSIIEntry() {
 }
 
 test('picker: raw cars replace their pooled car only when the artifact has raw-car rows', () => {
-  const today = new TireModel(modelDto);
+  // the committed artifact lists the raw cars exactly when it has raw-car rows
+  const committed = new TireModel(modelDto);
+  const hasRaw = (modelDto.g2_typ_by_track_raw_car_cond ?? []).length > 0;
+  assert.equal(committed.availableCars.includes('FJ'), !hasRaw);
+  const today = new TireModel(pooledOnly());
   assert.deepEqual(today.availableCars, today.fittedCars);
   assert.ok(today.availableCars.includes('FJ'));
   // a raw name saved before pooling still lands on its pooled car
@@ -486,7 +500,7 @@ test('a saved KK-SII predicts from its own rows when the artifact has them', () 
     track: 'tsukuba_2000', condition: 'dry', lapWithinStint: 5, ambientTempC: 18,
     cloudCoverPct: 50, targetHotPressureBar: 1.7, corner: 'fl',
   };
-  const today = new TireModel(modelDto);
+  const today = new TireModel(pooledOnly());
   const split = new TireModel(withKKSIIEntry());
   const kksii = predictCorner(split, { ...args, car: split.selectableCar('KK-SII') });
   const fj = predictCorner(split, { ...args, car: 'FJ' });

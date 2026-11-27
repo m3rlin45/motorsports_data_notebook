@@ -164,7 +164,11 @@ public class TireModelTests
     {
         var model = LoadBundled();
         Assert.Contains("Inferno 86", model.AvailableCars);
-        Assert.Contains("FJ", model.AvailableCars);
+        // the FJ, or its raw cars where the artifact has raw-car rows (#383)
+        if ((model.Dto.G2TypByTrackRawCarCond?.Count ?? 0) > 0)
+            Assert.Contains("KK-SII", model.AvailableCars);
+        else
+            Assert.Contains("FJ", model.AvailableCars);
     }
 
     [Fact]
