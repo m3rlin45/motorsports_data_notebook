@@ -1,0 +1,215 @@
+{
+ "made": {
+  "at_utc": "2026-11-27T00:16:58+00:00",
+  "commit": "7118f1bacf8068e16f3f23b20581b4dcb4322e84",
+  "dataset_sessions": 429
+ },
+ "attribution": {
+  "ja": "出典：国土地理院ウェブサイト（地理院タイル：https://maps.gsi.go.jp/development/ichiran.html）「地理院タイル（標高タイル（基盤地図情報数値標高モデル））を加工して作成」",
+  "en": "Source: GSI Tiles (elevation tiles, Fundamental Geospatial Data digital elevation model), Geospatial Information Authority of Japan; processed by this project."
+ },
+ "files": [
+  {
+   "raw_car": "Inferno 86",
+   "layout_id": "fuji_gp",
+   "file": "Inferno_86__fuji_gp.json"
+  },
+  {
+   "raw_car": "Inferno 86",
+   "layout_id": "motegi_full",
+   "file": "Inferno_86__motegi_full.json"
+  },
+  {
+   "raw_car": "Inferno 86",
+   "layout_id": "sodegaura",
+   "file": "Inferno_86__sodegaura.json"
+  },
+  {
+   "raw_car": "Inferno 86",
+   "layout_id": "suzuka_full",
+   "file": "Inferno_86__suzuka_full.json"
+  },
+  {
+   "raw_car": "Inferno 86",
+   "layout_id": "tsukuba_2000",
+   "file": "Inferno_86__tsukuba_2000.json"
+  },
+  {
+   "raw_car": "KK-F",
+   "layout_id": "fuji_gp",
+   "file": "KK-F__fuji_gp.json"
+  },
+  {
+   "raw_car": "KK-F",
+   "layout_id": "motegi_full",
+   "file": "KK-F__motegi_full.json"
+  },
+  {
+   "raw_car": "KK-F",
+   "layout_id": "sodegaura",
+   "file": "KK-F__sodegaura.json"
+  },
+  {
+   "raw_car": "KK-F",
+   "layout_id": "suzuka_full",
+   "file": "KK-F__suzuka_full.json"
+  },
+  {
+   "raw_car": "KK-F",
+   "layout_id": "tsukuba_2000",
+   "file": "KK-F__tsukuba_2000.json"
+  },
+  {
+   "raw_car": "KK-F-V2",
+   "layout_id": "fuji_gp",
+   "file": "KK-F-V2__fuji_gp.json"
+  },
+  {
+   "raw_car": "KK-F-V2",
+   "layout_id": "motegi_full",
+   "file": "KK-F-V2__motegi_full.json"
+  },
+  {
+   "raw_car": "KK-F-V2",
+   "layout_id": "sodegaura",
+   "file": "KK-F-V2__sodegaura.json"
+  },
+  {
+   "raw_car": "KK-F-V2",
+   "layout_id": "suzuka_full",
+   "file": "KK-F-V2__suzuka_full.json"
+  },
+  {
+   "raw_car": "KK-F-V2",
+   "layout_id": "tsukuba_2000",
+   "file": "KK-F-V2__tsukuba_2000.json"
+  },
+  {
+   "raw_car": "KK-SII",
+   "layout_id": "fuji_gp",
+   "file": "KK-SII__fuji_gp.json"
+  },
+  {
+   "raw_car": "KK-SII",
+   "layout_id": "motegi_full",
+   "file": "KK-SII__motegi_full.json"
+  },
+  {
+   "raw_car": "KK-SII",
+   "layout_id": "sodegaura",
+   "file": "KK-SII__sodegaura.json"
+  },
+  {
+   "raw_car": "KK-SII",
+   "layout_id": "suzuka_full",
+   "file": "KK-SII__suzuka_full.json"
+  },
+  {
+   "raw_car": "KK-SII",
+   "layout_id": "tsukuba_2000",
+   "file": "KK-SII__tsukuba_2000.json"
+  }
+ ],
+ "notes": [
+  {
+   "car": "Inferno 86",
+   "layout_id": "fuji_gp",
+   "made": true
+  },
+  {
+   "car": "Inferno 86",
+   "layout_id": "motegi_full",
+   "made": true
+  },
+  {
+   "car": "Inferno 86",
+   "layout_id": "sodegaura",
+   "made": true
+  },
+  {
+   "car": "Inferno 86",
+   "layout_id": "suzuka_full",
+   "made": true
+  },
+  {
+   "car": "Inferno 86",
+   "layout_id": "tsukuba_2000",
+   "made": true
+  },
+  {
+   "car": "KK-F",
+   "layout_id": "fuji_gp",
+   "made": true
+  },
+  {
+   "car": "KK-F",
+   "layout_id": "motegi_full",
+   "made": true
+  },
+  {
+   "car": "KK-F",
+   "layout_id": "sodegaura",
+   "made": true
+  },
+  {
+   "car": "KK-F",
+   "layout_id": "suzuka_full",
+   "made": true
+  },
+  {
+   "car": "KK-F",
+   "layout_id": "tsukuba_2000",
+   "made": true
+  },
+  {
+   "car": "KK-F-V2",
+   "layout_id": "fuji_gp",
+   "made": true
+  },
+  {
+   "car": "KK-F-V2",
+   "layout_id": "motegi_full",
+   "made": true
+  },
+  {
+   "car": "KK-F-V2",
+   "layout_id": "sodegaura",
+   "made": true
+  },
+  {
+   "car": "KK-F-V2",
+   "layout_id": "suzuka_full",
+   "made": true
+  },
+  {
+   "car": "KK-F-V2",
+   "layout_id": "tsukuba_2000",
+   "made": true
+  },
+  {
+   "car": "KK-SII",
+   "layout_id": "fuji_gp",
+   "made": true
+  },
+  {
+   "car": "KK-SII",
+   "layout_id": "motegi_full",
+   "made": true
+  },
+  {
+   "car": "KK-SII",
+   "layout_id": "sodegaura",
+   "made": true
+  },
+  {
+   "car": "KK-SII",
+   "layout_id": "suzuka_full",
+   "made": true
+  },
+  {
+   "car": "KK-SII",
+   "layout_id": "tsukuba_2000",
+   "made": true
+  }
+ ]
+}

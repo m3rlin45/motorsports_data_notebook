@@ -597,6 +597,8 @@ class SimSource:
     heat: np.ndarray
     out_part_s: np.ndarray | None = None
     out_heat: np.ndarray | None = None
+    #: The shares the export was split through.
+    share: ShareParams | None = None
 
     @classmethod
     def of(cls, export: TableExport, share: ShareParams) -> "SimSource":
@@ -606,6 +608,7 @@ class SimSource:
             heat=export.heat_knots(share),
             out_part_s=None if out is None else out[0],
             out_heat=None if out is None else out[1],
+            share=share,
         )
 
     def status(self, lap_time_s: float) -> str:

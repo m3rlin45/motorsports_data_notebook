@@ -403,9 +403,21 @@ def _build_warmup_table(
     )
 
     if write_artifacts:
-        _write_warmup_table_parquet(root, model)
-        _write_tire_model_json(root, model)
+        model = _write_artifacts(root, model)
 
+    return model
+
+
+def _write_artifacts(root: Path, model: dict[str, Any]) -> dict[str, Any]:
+    """The shipped artifact: the fitted model with the simulated entries of
+    the committed export placed in it (:mod:`.sim_entries`; never in a
+    fold's fit, which writes nothing), written as ``tire_model.json`` and
+    ``warmup_table.parquet``."""
+    from .sim_entries import place_simulated
+
+    model = place_simulated(model)
+    _write_warmup_table_parquet(root, model)
+    _write_tire_model_json(root, model)
     return model
 
 

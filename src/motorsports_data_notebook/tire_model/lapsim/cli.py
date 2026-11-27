@@ -160,12 +160,49 @@ def main(argv: list[str] | None = None) -> int:
         "factor (#376). sensor: the pressure model fitted on the sensor verdict's series, the "
         "simulated laps brought to it by a frame factor (for comparison).",
     )
+    p_holdout.add_argument(
+        "--served-rules",
+        choices=("committee", "sim_outlap", "raw_rows", "shipping_unrounded", "shipping"),
+        default="shipping",
+        help="How the `served` arm reads and places its entry (lapsim/served.py): committee "
+        "(the table's heat at the fed use in the pooled row, the model's own out-lap chain), "
+        "the steps sim_outlap and raw_rows, or shipping (what tire_model.json gets).",
+    )
+    p_holdout.add_argument(
+        "--arms",
+        nargs="+",
+        default=["calculator", "table", "direct", "direct_setup", "served"],
+        choices=("calculator", "table", "direct", "direct_setup", "served"),
+        help="The arms to score (the calculator always): e.g. `--arms calculator served` for "
+        "the shipped arm alone, with no lap driven directly.",
+    )
+    p_holdout.add_argument(
+        "--served-steps",
+        nargs="*",
+        default=[],
+        choices=("committee", "sim_outlap", "raw_rows", "shipping_unrounded", "shipping"),
+        help="More rules scored beside `served` in the same run, as arms served:<name> (kept "
+        "out of the reports' common rows): the steps from the committee's rules to the "
+        "shipping ones.",
+    )
     p_margins = sub.add_parser(
         "pressure-pace-margins",
         help="What `check-pressure-holdout --fastest F` would ask for at several fractions "
         "(how far under the training pace the held-out sessions are); no fit is made.",
     )
     p_margins.add_argument("--fractions", type=float, nargs="+", default=[0.25, 0.5, 0.8, 0.9])
+    p_export = sub.add_parser(
+        "export-entries",
+        help="Write the committed export of the simulated laps the pressure model's simulated "
+        "entries are made from (data/lapsim/exports; lapsim/sim_export.py), from every raw car's "
+        "fit on all its laps on the committed tracks.",
+    )
+    p_export.add_argument(
+        "--out-dir",
+        type=Path,
+        default=None,
+        help="Where the export goes (default: data/lapsim/exports, which is committed).",
+    )
     p_compare = sub.add_parser(
         "compare-pressure-holdouts",
         help="Two saved runs of check-pressure-holdout on the same folds, row for row "
@@ -311,11 +348,24 @@ def _run(
             split=tuple(args.split),
             fastest=args.fastest,
             heat_frame=args.heat_frame,
+            served_rules=args.served_rules,
+            served_steps=tuple(args.served_steps),
+            arms=tuple(dict.fromkeys(["calculator", *args.arms])),
         )
     elif args.cmd == "pressure-pace-margins":
         from . import pressure_gate
 
         report = pressure_gate.check_pace_margins(root, tuple(args.fractions))
+    elif args.cmd == "export-entries":
+        from . import sim_export
+
+        report = sim_export.export_entries(
+            root,
+            cache_dir=workspace / "cache",
+            tracks_dir=tracks,
+            folds_dir=folds,
+            out_dir=args.out_dir,
+        )
     elif args.cmd == "compare-pressure-holdouts":
         import pandas as pd
 

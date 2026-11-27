@@ -64,6 +64,7 @@ from . import holdout as ho
 from . import pace
 from . import pressure as pr
 from . import samples as smp
+from . import served as srv
 from . import track as trk
 from .gates import GateItem, GateReport, md_table
 from .heat import CORNERS
@@ -294,6 +295,8 @@ def fold_model(
             model: dict[str, Any] = json.loads(path.read_text())
             return model
     model = _fit_fold(root, ids, heat_frame)
+    if "simulation" in model:
+        raise RuntimeError("a fold's fit has simulated entries placed in it: the export saw it")
     if path is not None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(model))
@@ -2926,16 +2929,21 @@ def report_simulation(
 
 
 #: The calculators of the standing holdout: the current one, and the
-#: simulation-based one as a precomputed pace table and as a lap driven
+#: simulation-based one as a precomputed pace table, as a lap driven
 #: directly (with the powertrain's own shift point and gears, and with
-#: the day's logged ones).
-HOLDOUT_ARMS = ("calculator", "table", "direct", "direct_setup")
+#: the day's logged ones), and as it is served (:mod:`.served`: the
+#: table's heat with the cell's logged out-lap).
+HOLDOUT_ARMS = ("calculator", "table", "direct", "direct_setup", "served")
 ARM_NAMES = {
     "calculator": "the current calculator",
     "table": "simulation, precomputed pace table",
     "direct": "simulation, driven directly",
     "direct_setup": "simulation, driven directly with the day's shift point and gears",
+    "served": "simulation, as served (the table with the cell's logged out-lap, as shipped)",
 }
+#: The rules the ``served`` arm places its entry by (:mod:`.served`); the
+#: committee's (``served.COMMITTEE``) or the shipping ones.
+SERVED_RULES_DEFAULT = "shipping"
 
 
 def heats_in_tyres_frame() -> bool:
@@ -2977,6 +2985,9 @@ def holdout_rows(
     labels: dict[str, str],
     cache_dir: Path | None,
     heat_frame: str | None = None,
+    served_rules: str = SERVED_RULES_DEFAULT,
+    served_steps: tuple[str, ...] = (),
+    arms: tuple[str, ...] = HOLDOUT_ARMS,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """One fold of production's holdout scored on one fit by every arm of
     :data:`HOLDOUT_ARMS`: ``(rows, sessions)``. ``rows`` are
@@ -3001,8 +3012,11 @@ def holdout_rows(
     force must be the fold's (``sim``'s logged laps were read in it; the
     worker sets both, :func:`_fold_job`): a mixed run is an error."""
     from ..heat_frame import HeatFrameError, current, frame_of
+    from ..sim_entries import answer
     from ..validate import _prepare_fold_laps, _score_fold_laps
 
+    for name in (served_rules, *served_steps):
+        srv.RULES[name]  # an unknown name fails before the fold is fitted
     model = fold_model(prod.root, ids, cache_dir, heat_frame=heat_frame)
     if frame_of(model) != current():
         raise HeatFrameError(
@@ -3039,6 +3053,7 @@ def holdout_rows(
         note: dict[str, Any] = {"session_id": sid, "car": pooled, "raw_car": raw_car}
         note.update(track=track, condition=cond, source=source, why="")
         entries: dict[str, pr.Entry | None] = {}
+        served_models: dict[str, dict[str, Any]] = {}
         if pooled not in shares or layout_id not in sim.tracks:
             note["why"] = "no track or no car model"
         else:
@@ -3064,18 +3079,47 @@ def holdout_rows(
                     note["why"] = "no fed use"
                 else:
                     entries["table"] = src.entry(factor, use=use)
+                    # what ships: the cell served in the dry and in the session's condition
+                    for name in (served_rules, *served_steps):
+                        got, how = srv.serve_cell(
+                            model, src, factor, track, raw_car, use, ("dry", cond), srv.RULES[name]
+                        )
+                        # what ships for the session, served or not in its condition (rule (c))
+                        note[f"served_{name}"] = how.get(cond, "")
+                        if how.get(cond) == srv.SIM:
+                            heat = answer(got, "heat", track, raw_car, cond)
+                            if heat != srv.SIM:  # the scorer reads the session's raw car first
+                                raise RuntimeError(
+                                    f"{sid}: the served cell answers {heat} for {raw_car}, not sim"
+                                )
+                        served_models["served" if name == served_rules else f"served:{name}"] = got
                     note["use"] = use
                     note["table_status"] = src.status(typed)
-                if src is not None and np.isfinite(typed):
+                if src is not None and np.isfinite(typed) and "direct" in arms:
                     entries["direct"] = cell.direct_entry(raw_car, date, sid, typed, factor)
+                if src is not None and np.isfinite(typed) and "direct_setup" in arms:
                     entries["direct_setup"] = cell.direct_entry(
                         raw_car, date, sid, typed, factor, setup=True
                     )
         for arm in HOLDOUT_ARMS[1:]:
+            if arm not in arms:
+                continue
             entry = entries.get(arm)
+            if arm == "served":
+                note[arm] = arm in served_models
+                if arm in served_models:
+                    parts.append(
+                        _score_fold_laps(prep, served_models[arm], session_ids=[sid]).assign(
+                            arm=arm
+                        )
+                    )
+                continue
             note[arm] = entry is not None
             if entry is not None:
                 placed = pr.place(model, track, pooled, cond, entry)
+                parts.append(_score_fold_laps(prep, placed, session_ids=[sid]).assign(arm=arm))
+        for arm, placed in served_models.items():
+            if arm != "served":  # a step between the committee's rules and the shipping ones
                 parts.append(_score_fold_laps(prep, placed, session_ids=[sid]).assign(arm=arm))
         notes.append(note)
     return pd.concat(parts, ignore_index=True), pd.DataFrame(notes)
@@ -3406,7 +3450,20 @@ def _fold_job(job: tuple) -> tuple[int, pd.DataFrame, pd.DataFrame]:
     laps among them) in the run's frame."""
     from ..heat_frame import using
 
-    root, cache_dir, tracks_dir, folds_dir, fold, ids, labels, split, heat_frame = job
+    (
+        root,
+        cache_dir,
+        tracks_dir,
+        folds_dir,
+        fold,
+        ids,
+        labels,
+        split,
+        heat_frame,
+        rules,
+        steps,
+        arms,
+    ) = job
     split_pooling(tuple(split))
     key = (str(root), str(cache_dir), str(tracks_dir), str(folds_dir), tuple(split), heat_frame)
     with using(heat_frame):
@@ -3417,7 +3474,15 @@ def _fold_job(job: tuple) -> tuple[int, pd.DataFrame, pd.DataFrame]:
                 sim=load_sim(root, cache_dir=cache_dir, tracks_dir=tracks_dir, folds_dir=folds_dir),
             )
         rows, notes = holdout_rows(
-            _WORKER["prod"], _WORKER["sim"], ids, labels, cache_dir, heat_frame=heat_frame
+            _WORKER["prod"],
+            _WORKER["sim"],
+            ids,
+            labels,
+            cache_dir,
+            heat_frame=heat_frame,
+            served_rules=rules,
+            served_steps=tuple(steps),
+            arms=tuple(arms),
         )
     return fold, rows, notes
 
@@ -3435,6 +3500,9 @@ def check_pressure_holdout(
     split: tuple[str, ...] = (),
     fastest: float = 0.0,
     heat_frame: str | None = None,
+    served_rules: str = SERVED_RULES_DEFAULT,
+    served_steps: tuple[str, ...] = (),
+    arms: tuple[str, ...] = HOLDOUT_ARMS,
 ) -> GateReport:
     """The calculator's own evaluation, MAE over folds of held-out
     sessions (``tire-predict-holdout``: the every-session holdout,
@@ -3492,7 +3560,20 @@ def check_pressure_holdout(
     if fastest:
         by_pace, margins = fastest_sessions(prod, fastest, min_bucket_size)
         jobs = [
-            (root, cache_dir, tracks_dir, folds_dir, k, ids, labels, tuple(split), heat_frame)
+            (
+                root,
+                cache_dir,
+                tracks_dir,
+                folds_dir,
+                k,
+                ids,
+                labels,
+                tuple(split),
+                heat_frame,
+                served_rules,
+                tuple(served_steps),
+                tuple(arms),
+            )
             for k, (_, ids) in enumerate(by_pace)
         ]
     for fold in range(max(1, n_folds) if not fastest else 0):
@@ -3507,7 +3588,20 @@ def check_pressure_holdout(
         if not ids:
             break
         jobs.append(
-            (root, cache_dir, tracks_dir, folds_dir, fold, ids, labels, tuple(split), heat_frame)
+            (
+                root,
+                cache_dir,
+                tracks_dir,
+                folds_dir,
+                fold,
+                ids,
+                labels,
+                tuple(split),
+                heat_frame,
+                served_rules,
+                tuple(served_steps),
+                tuple(arms),
+            )
         )
     cores = os.cpu_count() or 2
     workers = max(1, min(len(jobs), workers or cores // 2))
@@ -3561,6 +3655,7 @@ def check_pressure_holdout(
             ("__split" if split else "")
             + (f"__fast{round(100 * fastest)}" if fastest else "")
             + ("__sensor" if sensor else "")
+            + ("" if served_rules == SERVED_RULES_DEFAULT else f"__served_{served_rules}")
         )
         rows.to_parquet(out / f"holdout_rows{tag}.parquet")
         notes.to_parquet(out / f"holdout_sessions{tag}.parquet")
@@ -3623,7 +3718,7 @@ def check_pressure_holdout(
             "reported: `tire-predict-holdout --n-folds` prints the same",
         )
     )
-    sims = HOLDOUT_ARMS[1:]
+    sims = tuple(a for a in HOLDOUT_ARMS[1:] if a in arms)
     cover = {arm: int(notes[arm].sum()) for arm in sims if arm in notes.columns}
     missing = notes[~notes[[a for a in sims if a in notes.columns]].all(axis=1)]
     rep.items.append(
