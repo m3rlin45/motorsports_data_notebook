@@ -221,7 +221,12 @@ def build_warmup_table(
         per-second fit) or ``within_lap`` (#417, default off: read from the
         pressure within a lap, :func:`statespace.within_lap_kappa`, and held
         in the fit; the model then records it under
-        ``energy_balance.speed_pressure.within_lap``).
+        ``energy_balance.speed_pressure.within_lap``) or
+        ``centrifuge_stack`` (default off: κ in two parts, the centrifuge
+        computed from the stated tyre sizes and what is measured on top of
+        it, per car and, for ``statespace.KAPPA_COMPOUND_CARS``, per
+        compound over the sessions of :func:`pinned_compounds`; recorded
+        under ``centrifuge``, ``kappa_x_by_car`` and ``by_car_compound``).
 
     Returns the fitted model as a dict (matching the JSON schema) so callers
     can inspect without re-reading the file.
@@ -290,7 +295,16 @@ def _build_warmup_table(
     # no track constants.
     from .statespace import fit_physical, lap_heat_frame
 
-    pf = fit_physical(root, laps_for_fit, kappa_source=kappa_source)
+    pf = fit_physical(
+        root,
+        laps_for_fit,
+        kappa_source=kappa_source,
+        compound_by_session=(
+            pinned_compounds(root, laps_for_fit, exclude_session_ids)
+            if kappa_source == "centrifuge_stack"
+            else None
+        ),
+    )
     tau_by_car_corner_cond = dict(pf.tau)
     k_by_car_corner_cond = dict(pf.k)
     kappa_by_car = dict(pf.kappa)
@@ -303,7 +317,9 @@ def _build_warmup_table(
     laps_for_fit = laps_for_fit.merge(
         pf.lap_q, on=["session_id", "stint_id", "lap_num"], how="left"
     )
-    laps_for_fit = apply_speed_correction(root, laps_for_fit, kappa_by_car)
+    laps_for_fit = apply_speed_correction(
+        root, laps_for_fit, kappa_by_car, pf.kappa_by_session or None, pf.kappa_c or None
+    )
     q_corner_lookup = _build_q_typ_per_corner(_flying_laps(laps_for_fit))
     # Pace model: the training laps nearest each bucket's typical lap time,
     # simulated per second at other lap times through the fitted force
@@ -421,12 +437,75 @@ def _build_warmup_table(
             }
             for car, w in pf.kappa_within_lap.items()
         },
+        kappa_by_compound=[
+            {
+                "car": car,
+                "compound": compound,
+                "kappa": w.kappa,
+                "stderr": w.stderr if np.isfinite(w.stderr) else None,
+                "n_segments": w.n_segments,
+                "n_seconds": w.n_seconds,
+                "n_sessions": w.n_sessions,
+                "held": w.held,
+            }
+            for (car, compound), w in sorted(pf.kappa_by_compound.items())
+        ],
+        kappa_centrifuge=pf.kappa_c,
     )
 
     if write_artifacts:
         model = _write_artifacts(root, model)
 
     return model
+
+
+def _centrifuge_block(kappa_c: dict[str, dict[str, float]]) -> dict[str, Any]:
+    """What the model says of the computed part of κ: the values per car and
+    axle at the reference temperature, and everything they were made of."""
+    from .energy_balance import (
+        CENTRIFUGE_T_REF_K,
+        ROLLING_RADIUS_FACTOR,
+        TREAD_TO_GAS_M,
+    )
+    from .heat_input import CAR_WHEELS
+
+    return {
+        "formula": "kappa_c = (<r^2> - r_sensor^2) / (2 R T r_roll^2); <r^2> = (r_in^2 + r_out^2) / 2",
+        "t_ref_k": CENTRIFUGE_T_REF_K,
+        "sensor": "bead seat (valve-mounted, on the rim)",
+        "tread_to_gas_m": TREAD_TO_GAS_M,
+        "rolling_radius_factor": ROLLING_RADIUS_FACTOR,
+        "by_car": {
+            car: {
+                "front": float(v["front"]),
+                "rear": float(v["rear"]),
+                "tyre_front": CAR_WHEELS[car].front,
+                "tyre_rear": CAR_WHEELS[car].rear,
+            }
+            for car, v in sorted(kappa_c.items())
+        },
+    }
+
+
+def pinned_compounds(
+    root: Path, laps: pd.DataFrame, exclude_session_ids: set[str] | None = None
+) -> dict[str, str]:
+    """``session_id -> compound`` for the sessions whose tyre is known
+    without reading the pressure: the written labels (notes, sidecar) less
+    ``exclude_session_ids``, then the condition seeds over ``laps``. What a
+    compound-specific constant may be keyed on (#417)."""
+    from .compound_infer import apply_condition_seeds
+    from .compounds import load_compound_labels, load_condition_seeds
+
+    labels = load_compound_labels(root)
+    if exclude_session_ids:
+        labels = labels[~labels["session_id"].isin(exclude_session_ids)].reset_index(drop=True)
+    labels = apply_condition_seeds(labels, laps, load_condition_seeds(root))
+    return {
+        str(r.session_id): str(r.compound)
+        for r in labels.itertuples()
+        if isinstance(r.compound, str)
+    }
 
 
 def _write_artifacts(root: Path, model: dict[str, Any]) -> dict[str, Any]:
@@ -932,18 +1011,27 @@ def gas_temperature_c(
 
 
 def apply_speed_correction(
-    root: Path, laps: pd.DataFrame, kappa_by_car: dict[str, float]
+    root: Path,
+    laps: pd.DataFrame,
+    kappa_by_car: dict[str, float],
+    kappa_by_session: dict[str, float] | None = None,
+    centrifuge: dict[str, dict[str, float]] | None = None,
 ) -> pd.DataFrame:
     """Recompute ``t_gas_{c}_end`` / ``delta_t_{c}`` with the speed-pressure
     correction (``energy_balance.gas_temperature_at_speed_c``): the lap-end
     reading is taken at the lap-end speed, the anchor at the anchor speed.
     Attaches ``speed_end_ms`` and ``speed_anchor_{c}_ms`` from the
     timeseries. Cars without a fitted κ are left on the constant-volume
-    gas law."""
+    gas law. ``kappa_by_session`` holds the κ of the sessions that carry
+    their own (their compound's, #417) in place of the car's. With
+    ``centrifuge`` (per car ``{"front": κ_c, "rear": κ_c}`` at
+    ``energy_balance.CENTRIFUGE_T_REF_K``) the two maps are what is measured
+    on top of it and the κ of a reading is ``κ_x + κ_c·T_ref/T`` at the gas
+    temperature of that reading (the anchor's at the anchor)."""
     from .energy_balance import gas_temperature_at_speed_c
     from .statespace import stint_speed_terms
 
-    if not kappa_by_car:
+    if not kappa_by_car and not centrifuge:
         return laps
     terms = stint_speed_terms(root, laps)
     if terms.empty:
@@ -957,6 +1045,9 @@ def apply_speed_correction(
     )
     df = df.merge(terms, on=["session_id", "stint_id", "lap_num"], how="left")
     kap = df["car"].map(kappa_by_car).fillna(0.0).to_numpy(dtype=float)
+    if kappa_by_session:
+        own = df["session_id"].map(kappa_by_session).to_numpy(dtype=float)
+        kap = np.where(np.isfinite(own), own, kap)
     for c in CORNERS:
         if f"p_start_{c}" not in df.columns or f"tpms_press_{c}_end" not in df.columns:
             continue
@@ -965,7 +1056,22 @@ def apply_speed_correction(
         t_k = df[f"t_start_{c}"].to_numpy(dtype=float) + T_ZERO_C_TO_K
         p_a = df[f"p_start_{c}"].to_numpy(dtype=float) + P_ATM_BAR
         p = df[f"tpms_press_{c}_end"].to_numpy(dtype=float) + P_ATM_BAR
-        f = (1.0 + kap * np.nan_to_num(v_end) ** 2) / (1.0 + kap * np.nan_to_num(v_a) ** 2)
+        kap_end = kap_a = kap
+        if centrifuge:
+            from .energy_balance import CENTRIFUGE_T_REF_K
+
+            axle = "front" if c[0] == "f" else "rear"
+            kc = (
+                df["car"]
+                .map({car: v.get(axle, 0.0) for car, v in centrifuge.items()})
+                .fillna(0.0)
+                .to_numpy(dtype=float)
+            )
+            with np.errstate(invalid="ignore", divide="ignore"):
+                t_end_k = t_k * p / p_a  # the uncorrected gas temperature of the reading
+                kap_end = kap + np.nan_to_num(kc * CENTRIFUGE_T_REF_K / t_end_k)
+                kap_a = kap + np.nan_to_num(kc * CENTRIFUGE_T_REF_K / t_k)
+        f = (1.0 + kap_end * np.nan_to_num(v_end) ** 2) / (1.0 + kap_a * np.nan_to_num(v_a) ** 2)
         with np.errstate(invalid="ignore", divide="ignore"):
             corrected = t_k * p / p_a * f - T_ZERO_C_TO_K
         ok = np.isfinite(corrected) & (p_a > 0.3) & (p > 0.3)
@@ -1488,6 +1594,8 @@ def _assemble_model(
     outlap_corner_lookup: dict[tuple[str, str, str], dict[str, float]] | None = None,
     raw_car_entries: EntryLookups | None = None,
     kappa_within_lap: dict[str, Any] | None = None,
+    kappa_by_compound: list[dict[str, Any]] | None = None,
+    kappa_centrifuge: dict[str, dict[str, float]] | None = None,
 ) -> dict[str, Any]:
     """Build the in-memory model dict that matches the JSON artifact schema.
 
@@ -1600,13 +1708,51 @@ def _assemble_model(
             # (m/s) is lower by the factor (1 + kappa * V^2).
             "speed_pressure": {
                 "form": "P_read = P_gas / (1 + kappa * V_ms^2)",
-                "kappa_by_car": {k: float(v) for k, v in (kappa_by_car or {}).items()},
+                # with a computed centrifuge (below) this is the whole at its
+                # reference temperature, the mean of the axles: what a reader
+                # of one kappa per car expects
+                "kappa_by_car": {
+                    k: float(v)
+                    + (
+                        0.5
+                        * sum(
+                            (kappa_centrifuge or {}).get(k, {}).get(a, 0.0)
+                            for a in ("front", "rear")
+                        )
+                    )
+                    for k, v in (kappa_by_car or {}).items()
+                },
                 "fitted": bool(kappa_by_car),
                 # only when kappa was read within the lap and held in the fit
                 # (statespace.within_lap_kappa, #417); absent otherwise
                 **(
                     {"source": "within_lap", "within_lap": kappa_within_lap}
                     if kappa_within_lap
+                    else {}
+                ),
+                # only when it was read per compound too: a session of a held
+                # (car, compound) carried that kappa, any other the car's
+                **(
+                    {"source": "centrifuge_stack", "by_car_compound": kappa_by_compound}
+                    if kappa_by_compound
+                    else {}
+                ),
+                # only under "centrifuge_stack": kappa = kappa_c * T_ref / T +
+                # kappa_x, the first computed per tyre from its stated size
+                # (energy_balance.centrifuge_kappa), the second measured on
+                # top of it; "within_lap" and "by_car_compound" above are
+                # then readings of kappa_x
+                **(
+                    {
+                        "source": "centrifuge_stack",
+                        "form": (
+                            "P_read = P_rest / (1 + (kappa_c * T_ref_K / T_gas_K + kappa_x) "
+                            "* V_ms^2)"
+                        ),
+                        "centrifuge": _centrifuge_block(kappa_centrifuge),
+                        "kappa_x_by_car": {k: float(v) for k, v in (kappa_by_car or {}).items()},
+                    }
+                    if kappa_centrifuge
                     else {}
                 ),
             },

@@ -60,6 +60,55 @@ def speed_pressure_factor(v_ms: np.ndarray | float, kappa: float) -> np.ndarray:
     return np.asarray(1.0 + kappa * v * v)
 
 
+#: Specific gas constant of dry air, J/(kg·K).
+R_AIR_J_PER_KG_K = 287.05
+#: The gas temperature the centrifuge's κ is quoted at; it goes as 1/T.
+CENTRIFUGE_T_REF_K = 320.0
+#: From the tyre's outer surface in to the gas: tread and carcass.
+TREAD_TO_GAS_M = 0.012
+#: Rolling radius over the unloaded outer radius (wheel speed = v / r_roll).
+ROLLING_RADIUS_FACTOR = 0.975
+#: How far inside the bead seat a rim's well lies (the sensitivity case for
+#: a valve-mounted sensor, which sits between the bead seat and the well).
+RIM_WELL_DROP_M = 0.015
+
+
+def centrifuge_kappa(
+    rim_radius_m: float,
+    outer_radius_m: float,
+    t_gas_k: float = CENTRIFUGE_T_REF_K,
+    sensor_radius_m: float | None = None,
+) -> float:
+    """The computed part of the speed-pressure constant: the centrifuge.
+
+    The gas in a rolling tyre turns with it as a solid body, so its pressure
+    rises outwards, ``dP/dr = ρ·ω²·r``. The mass of gas is fixed, so the
+    volume-mean pressure is the pressure at rest; a sensor at radius ``r_s``
+    inside the mean reads below it by the factor ``1 + κ_c·v²`` with::
+
+        κ_c = (⟨r²⟩ − r_s²) / (2 · R · T · r_roll²)
+
+    (``ρ/P = 1/(R·T)``, ``ω = v / r_roll``, first order in the small
+    quantity). The gas is taken as a rectangular annulus from the bead seat
+    (the rim radius) out to :data:`TREAD_TO_GAS_M` under the tread, so
+    ``⟨r²⟩ = (r_in² + r_out²)/2``; ``r_roll`` is
+    :data:`ROLLING_RADIUS_FACTOR` × the outer radius. The sensor is at the
+    bead seat unless ``sensor_radius_m`` says otherwise (a valve-mounted
+    sensor sits between the bead seat and the rim well,
+    :data:`RIM_WELL_DROP_M` further in). Per (m/s)²; it goes as ``1/T``.
+    """
+    r_in = float(rim_radius_m)
+    r_out = float(outer_radius_m) - TREAD_TO_GAS_M
+    r_s = r_in if sensor_radius_m is None else float(sensor_radius_m)
+    r_roll = ROLLING_RADIUS_FACTOR * float(outer_radius_m)
+    if not (0.0 < r_in < r_out) or t_gas_k <= 0.0:
+        raise ValueError(
+            f"not a tyre: rim {rim_radius_m} m, outer {outer_radius_m} m, T {t_gas_k} K"
+        )
+    mean_r2 = 0.5 * (r_in**2 + r_out**2)
+    return (mean_r2 - r_s**2) / (2.0 * R_AIR_J_PER_KG_K * float(t_gas_k) * r_roll**2)
+
+
 def gas_temperature_at_speed_c(
     t_anchor_c: np.ndarray,
     p_anchor_bar: np.ndarray,
